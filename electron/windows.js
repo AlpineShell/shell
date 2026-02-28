@@ -1,7 +1,9 @@
-const { ipcMain } = require('electron')
+const { ipcMain, BrowserWindow } = require('electron')
 const { exec } = require('child_process')
 const fs = require('fs')
 const path = require('path')
+
+let lastPath = null
 
 function getWallpaperPath() {
   return new Promise((resolve) => {
@@ -15,8 +17,7 @@ function getWallpaperPath() {
   })
 }
 
-async function getWallpaper() {
-  const wallpaperPath = await getWallpaperPath()
+function encodeWallpaper(wallpaperPath) {
   if (!wallpaperPath || !fs.existsSync(wallpaperPath)) return null
 
   const ext = path.extname(wallpaperPath).slice(1).toLowerCase()
@@ -25,8 +26,28 @@ async function getWallpaper() {
   return `data:${mime};base64,${data}`
 }
 
+function broadcast(channel, data) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(channel, data)
+  }
+}
+
+function startWatching() {
+  setInterval(async () => {
+    const currentPath = await getWallpaperPath()
+    if (currentPath !== lastPath) {
+      lastPath = currentPath
+      broadcast('windows/wallpaper-changed', encodeWallpaper(currentPath))
+    }
+  }, 5000)
+}
+
 function registerAll() {
-  ipcMain.handle('windows/wallpaper', () => getWallpaper())
+  ipcMain.handle('windows/wallpaper', async () => {
+    lastPath = await getWallpaperPath()
+    return encodeWallpaper(lastPath)
+  })
+  startWatching()
 }
 
 module.exports = { registerAll }

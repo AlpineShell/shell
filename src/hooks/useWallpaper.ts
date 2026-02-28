@@ -5,6 +5,7 @@ export function useWallpaper() {
 
   useEffect(() => {
     window.shell.windows.wallpaper().then(setWallpaper)
+    window.shell.windows.onWallpaperChanged(setWallpaper)
   }, [])
 
   return wallpaper
