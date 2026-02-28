@@ -1,5 +1,5 @@
 import { useWallpaper } from './hooks/useWallpaper'
-import TaskBar from './components/Taskbar'
+import TopBar from './components/topBar'
 
 function App() {
   const wallpaper = useWallpaper()
@@ -9,8 +9,8 @@ function App() {
       className="w-screen flex flex-col h-screen bg-cover bg-center"
       style={wallpaper ? { backgroundImage: `url('${wallpaper}')` } : undefined}
     >
+      <TopBar />
       <div className='h-full'></div>
-      <TaskBar />
     </div>
   )
 }

@@ -1,5 +1,13 @@
 export {}
 
+interface OpenApp {
+  id: number
+  name: string
+  title: string
+  path: string
+  icon: string
+}
+
 interface WifiSignal {
   signal: number | null
   connected: boolean
@@ -16,6 +24,8 @@ declare global {
       windows: {
         wallpaper: () => Promise<string | null>
         onWallpaperChanged: (callback: (data: string | null) => void) => void
+        openApps: () => Promise<OpenApp[]>
+        onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => void
       }
       network: {
         wifiSignal: () => Promise<WifiSignal>
