@@ -13,4 +13,10 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('network/wifi-signal-changed', (_, data) => callback(data))
     },
   },
+  system: {
+    bluetooth: () => ipcRenderer.invoke('system/bluetooth'),
+    onBluetoothChanged: (callback) => {
+      ipcRenderer.on('system/bluetooth-changed', (_, data) => callback(data))
+    },
+  },
 })

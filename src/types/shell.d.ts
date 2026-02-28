@@ -5,6 +5,11 @@ interface WifiSignal {
   connected: boolean
 }
 
+interface BluetoothState {
+  enabled: boolean
+  connected: boolean
+}
+
 declare global {
   interface Window {
     shell: {
@@ -15,6 +20,10 @@ declare global {
       network: {
         wifiSignal: () => Promise<WifiSignal>
         onWifiSignalChanged: (callback: (data: WifiSignal) => void) => void
+      }
+      system: {
+        bluetooth: () => Promise<BluetoothState>
+        onBluetoothChanged: (callback: (data: BluetoothState) => void) => void
       }
     }
   }

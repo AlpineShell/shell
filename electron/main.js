@@ -3,6 +3,7 @@ const path = require('path')
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
 const network = require('./modules/network')
+const bluetooth = require('./modules/bluetooth')
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -18,6 +19,6 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  ipc.register(wallpaper, network)
+  ipc.register(wallpaper, network, bluetooth)
   createWindow()
 })
