@@ -6,5 +6,11 @@ contextBridge.exposeInMainWorld('shell', {
     onWallpaperChanged: (callback) => {
       ipcRenderer.on('windows/wallpaper-changed', (_, data) => callback(data))
     },
-  }
+  },
+  network: {
+    wifiSignal: () => ipcRenderer.invoke('network/wifi-signal'),
+    onWifiSignalChanged: (callback) => {
+      ipcRenderer.on('network/wifi-signal-changed', (_, data) => callback(data))
+    },
+  },
 })

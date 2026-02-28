@@ -2,6 +2,7 @@ const { app, BrowserWindow } = require('electron')
 const path = require('path')
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
+const network = require('./modules/network')
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -17,6 +18,6 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  ipc.register(wallpaper)
+  ipc.register(wallpaper, network)
   createWindow()
 })

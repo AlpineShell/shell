@@ -1,5 +1,5 @@
 import { useWallpaper } from './hooks/useWallpaper'
-import TaskBar from './components/Taskbar/taskbar'
+import TaskBar from './components/Taskbar'
 
 function App() {
   const wallpaper = useWallpaper()
