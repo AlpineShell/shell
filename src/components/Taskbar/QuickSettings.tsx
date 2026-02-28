@@ -5,7 +5,8 @@ function WifiIcon({ size }: { size: number }) {
     const { signal, connected } = useWifiSignal()
 
     if (!connected) return <WifiOff size={size} />
-    if (signal === null || signal === 0) return <WifiZero size={size} />
+    if (signal === null) return <Wifi size={size} />
+    if (signal === 0) return <WifiZero size={size} />
     if (signal <= 33) return <WifiLow size={size} />
     if (signal <= 66) return <Wifi size={size} />
     return <WifiHigh size={size} />

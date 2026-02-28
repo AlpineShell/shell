@@ -28,7 +28,7 @@ async function getWifiSignal() {
   if (!connected) return { signal: null, connected: false }
 
   const signal = await getSignalStrength()
-  return { signal: signal ?? 100, connected: true }
+  return { signal, connected: true }
 }
 
 module.exports = {
