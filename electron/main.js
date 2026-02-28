@@ -1,6 +1,7 @@
 const { app, BrowserWindow } = require('electron')
 const path = require('path')
-const windows = require('./windows')
+const ipc = require('./ipc')
+const wallpaper = require('./modules/wallpaper')
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -10,12 +11,12 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-    }
+    },
   })
   win.loadURL('http://localhost:5173')
 }
 
 app.whenReady().then(() => {
-  windows.registerAll()
+  ipc.register(wallpaper)
   createWindow()
 })
