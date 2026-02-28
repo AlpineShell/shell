@@ -1,14 +1,20 @@
 @import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@theme {
+  --color-systemBg: rgba(255, 255, 255, 0.7);
 }
 
-body {
-  overflow: hidden;
-  width: 100vw;
-  height: 100vh;
-  font-family: system-ui, sans-serif;
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    font-family: system-ui, sans-serif;
+  }
 }
