@@ -1,4 +1,4 @@
-import { Bluetooth, BluetoothOff, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
+import { Bluetooth, BluetoothConnected, BluetoothOff, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
 import { useBluetooth } from "../hooks/useBluetooth";
 import { useWifiSignal } from "../hooks/useWifiSignal";
 
@@ -14,9 +14,10 @@ function WifiIcon() {
 }
 
 function BluetoothIcon() {
-    const { enabled } = useBluetooth();
+    const { enabled, connected } = useBluetooth();
 
     if (!enabled) return <BluetoothOff color="white" size={14} />;
+    if (connected) return <BluetoothConnected color="white" size={14} />;
     return <Bluetooth color="white" size={14} />;
 }
 
