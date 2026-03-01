@@ -15,7 +15,7 @@ export default function Clock() {
     const date = `${months[now.getMonth()]} ${now.getDate()}`;
 
     return (
-        <div className="text-white text-[13px] flex -mt-0.75 hover:cursor-pointer rounded-full px-2 hover:bg-white/10 h-full items-center">
+        <div className="text-white text-[13px] flex hover:cursor-pointer rounded-full px-2 hover:bg-white/10 h-full items-center">
             {time} {date}
         </div>
     );
