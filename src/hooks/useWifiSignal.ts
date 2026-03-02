@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
 
-interface WifiSignal {
+interface NetworkStatus {
   signal: number | null
   connected: boolean
+  type: 'wifi' | 'ethernet'
 }
 
-export function useWifiSignal() {
-  const [wifi, setWifi] = useState<WifiSignal>({ signal: null, connected: false })
+export function useNetworkStatus() {
+  const [network, setNetwork] = useState<NetworkStatus>({ signal: null, connected: false, type: 'wifi' })
 
   useEffect(() => {
-    window.shell.network.wifiSignal().then(setWifi)
-    window.shell.network.onWifiSignalChanged(setWifi)
+    window.shell.network.wifiSignal().then(setNetwork)
+    window.shell.network.onWifiSignalChanged(setNetwork)
   }, [])
 
-  return wifi
+  return network
 }

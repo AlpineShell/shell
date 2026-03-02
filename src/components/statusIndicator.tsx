@@ -1,9 +1,13 @@
-import { Bluetooth, BluetoothConnected, BluetoothOff, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
+import { Bluetooth, BluetoothConnected, BluetoothOff, EthernetPort, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
 import { useBluetooth } from "../hooks/useBluetooth";
-import { useWifiSignal } from "../hooks/useWifiSignal";
+import { useNetworkStatus } from "../hooks/useWifiSignal";
 
-function WifiIcon() {
-    const { signal, connected } = useWifiSignal();
+function NetworkIcon() {
+    const { signal, connected, type } = useNetworkStatus();
+
+    if (type === 'ethernet') {
+        return <EthernetPort color="white" size={14} />;
+    }
 
     if (!connected) return <WifiOff color="white" size={14} />;
     if (signal === null) return <Wifi color="white" size={14} />;
@@ -25,7 +29,7 @@ export default function StatusIndicator() {
     return (
         <div className="bg-white/10 flex px-2 rounded-full py-0.5 items-center gap-1">
             <BluetoothIcon />
-            <WifiIcon />
+            <NetworkIcon />
         </div>
     );
 }

@@ -8,9 +8,10 @@ interface OpenApp {
   icon: string
 }
 
-interface WifiSignal {
+interface NetworkStatus {
   signal: number | null
   connected: boolean
+  type: 'wifi' | 'ethernet'
 }
 
 interface BluetoothState {
@@ -28,8 +29,8 @@ declare global {
         onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => void
       }
       network: {
-        wifiSignal: () => Promise<WifiSignal>
-        onWifiSignalChanged: (callback: (data: WifiSignal) => void) => void
+        wifiSignal: () => Promise<NetworkStatus>
+        onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => void
       }
       system: {
         bluetooth: () => Promise<BluetoothState>
