@@ -9,10 +9,7 @@ const {
   registerAppBar,
   unregisterAppBar,
   unregisterAll,
-  reassertPosition,
-  CALLBACK_MSG,
-  ABN_POSCHANGED,
-  ABN_FULLSCREENAPP,
+  isSettingWorkArea,
 } = require('./modules/appbar')
 
 const BASE_URL = 'http://localhost:5173'
@@ -44,6 +41,13 @@ function createDesktopWindow(display) {
   return win
 }
 
+function forceShellBounds(shell) {
+  if (!shell) return
+  const { x, y, width, height } = shell.display.bounds
+  if (!shell.desktop.isDestroyed()) shell.desktop.setBounds({ x, y, width, height })
+  if (!shell.topBar.isDestroyed()) shell.topBar.setBounds({ x, y, width, height: TOP_BAR_HEIGHT })
+}
+
 function createTopBarWindow(display) {
   const { x, y, width } = display.bounds
 
@@ -73,18 +77,10 @@ function createTopBarWindow(display) {
       console.error(`[main] Failed to register appbar on display ${display.id}:`, err)
     }
 
-    try {
-      win.hookWindowMessage(CALLBACK_MSG, (wParam) => {
-        const notification = wParam.readUInt32LE(0)
-        if (notification === ABN_POSCHANGED) {
-          reassertPosition(win)
-        } else if (notification === ABN_FULLSCREENAPP) {
-          win.setAlwaysOnTop(true, 'pop-up-menu')
-        }
-      })
-    } catch (err) {
-      console.error(`[main] Failed to hook window message on display ${display.id}:`, err)
-    }
+    setTimeout(() => {
+      const shell = [...shells.values()].find(s => s.topBar === win)
+      if (shell) forceShellBounds(shell)
+    }, 300)
   })
 
   return win
@@ -122,7 +118,6 @@ function repositionShell(display) {
   const { x, y, width, height } = display.bounds
 
   shell.desktop.setBounds({ x, y, width, height })
-
   shell.topBar.setBounds({ x, y, width, height: TOP_BAR_HEIGHT })
 
   try {
@@ -131,6 +126,8 @@ function repositionShell(display) {
   } catch (err) {
     console.error(`[main] Failed to re-register appbar on display ${display.id}:`, err)
   }
+
+  setTimeout(() => forceShellBounds(shell), 300)
 
   shell.display = display
 }
@@ -152,19 +149,17 @@ app.whenReady().then(() => {
     destroyShellForDisplay(oldDisplay.id)
   })
 
-  setInterval(() => {
-    for (const shell of shells.values()) {
-      if (!shell.topBar.isDestroyed()) {
-        try {
-          reassertPosition(shell.topBar)
-        } catch (err) { /* ignore */ }
-      }
-    }
-  }, 30_000)
-
   screen.on('display-metrics-changed', (_event, display, changedMetrics) => {
+    if (isSettingWorkArea()) return
+
+    if (changedMetrics.length === 1 && changedMetrics[0] === 'workArea') {
+      const shell = shells.get(display.id)
+      if (shell) forceShellBounds(shell)
+      return
+    }
+
     console.log(`[main] Display metrics changed: ${display.id} [${changedMetrics.join(', ')}]`)
-    if (changedMetrics.includes('bounds') || changedMetrics.includes('workArea') || changedMetrics.includes('scaleFactor')) {
+    if (changedMetrics.includes('bounds') || changedMetrics.includes('scaleFactor')) {
       repositionShell(display)
     }
   })
