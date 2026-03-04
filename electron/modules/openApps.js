@@ -14,17 +14,8 @@ const QUERY_PS1 = path.join(TEMP, 'alpine_query_apps.ps1')
 
 let queryReady = false
 
-// Compiles a C# helper DLL once so that every poll loads it cheaply (~10ms)
-// instead of recompiling C# on every poll (~500ms).
-// Filters mirrors what the Windows taskbar uses:
-//   - IsWindowVisible: window must be visible
-//   - WS_EX_TOOLWINDOW (0x80): excludes TextInputHost and other floating tool panels
-//   - DWMWA_CLOAKED (14): excludes UWP processes hidden behind ApplicationFrameHost
 async function compileDll() {
   try { fs.unlinkSync(DLL_PATH) } catch {}
-
-  // Single-quoted here-string (@'...'@) means no PS variable interpolation —
-  // safe for C# source that contains double-quotes and curly braces
   const compileScript =
     `Add-Type -Language CSharp -TypeDefinition @'\n` +
     `using System;\n` +
@@ -75,7 +66,6 @@ async function parseApps(stdout) {
   const shellPid = process.pid
   const candidates = raw.filter((p) => p.path && p.id !== shellPid)
 
-  // One icon per exe path (groups multiple windows from the same process)
   const seen = new Set()
   const unique = []
   for (const p of candidates) {
@@ -101,8 +91,6 @@ async function parseApps(stdout) {
   return apps.filter((a) => a.icon !== null)
 }
 
-// Falls back to a simple title check if the DLL hasn't compiled yet
-// (e.g. on the very first IPC call while compilation is still running)
 const FALLBACK_CMD =
   `$r = Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | ` +
   `ForEach-Object { $p = $null; try { $p = $_.MainModule.FileName } catch {}; ` +
@@ -140,7 +128,7 @@ module.exports = {
     },
   },
   start(broadcast) {
-    compileDll() // async, runs in background while interval starts
+    compileDll()
 
     setInterval(async () => {
       const apps = await getOpenApps()
