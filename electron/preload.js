@@ -1,5 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+contextBridge.exposeInMainWorld('topbar', {
+  setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
+})
+
 contextBridge.exposeInMainWorld('shell', {
   windows: {
     wallpaper: () => ipcRenderer.invoke('windows/wallpaper'),

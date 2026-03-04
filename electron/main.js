@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen } = require('electron')
+const { app, BrowserWindow, screen, ipcMain } = require('electron')
 const path = require('path')
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
@@ -68,7 +68,14 @@ function createTopBarWindow(display) {
   })
 
   win.setAlwaysOnTop(true, 'pop-up-menu')
+  win.setIgnoreMouseEvents(true, { forward: true })
   win.loadURL(`${BASE_URL}?mode=topbar`)
+
+  ipcMain.on('topbar/set-ignore-mouse', (event, ignore) => {
+    if (event.sender === win.webContents && !win.isDestroyed()) {
+      win.setIgnoreMouseEvents(ignore, { forward: true })
+    }
+  })
 
   win.webContents.once('did-finish-load', () => {
     try {
