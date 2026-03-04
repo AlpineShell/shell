@@ -5,7 +5,15 @@ const wallpaper = require('./modules/wallpaper')
 const network = require('./modules/network')
 const bluetooth = require('./modules/bluetooth')
 const openApps = require('./modules/openApps')
-const { registerAppBar, unregisterAppBar, unregisterAll } = require('./modules/appbar')
+const {
+  registerAppBar,
+  unregisterAppBar,
+  unregisterAll,
+  reassertPosition,
+  CALLBACK_MSG,
+  ABN_POSCHANGED,
+  ABN_FULLSCREENAPP,
+} = require('./modules/appbar')
 
 const BASE_URL = 'http://localhost:5173'
 const TOP_BAR_HEIGHT = 24
@@ -63,6 +71,19 @@ function createTopBarWindow(display) {
       registerAppBar(win, display, TOP_BAR_HEIGHT)
     } catch (err) {
       console.error(`[main] Failed to register appbar on display ${display.id}:`, err)
+    }
+
+    try {
+      win.hookWindowMessage(CALLBACK_MSG, (wParam) => {
+        const notification = wParam.readUInt32LE(0)
+        if (notification === ABN_POSCHANGED) {
+          reassertPosition(win)
+        } else if (notification === ABN_FULLSCREENAPP) {
+          win.setAlwaysOnTop(true, 'pop-up-menu')
+        }
+      })
+    } catch (err) {
+      console.error(`[main] Failed to hook window message on display ${display.id}:`, err)
     }
   })
 
@@ -130,6 +151,16 @@ app.whenReady().then(() => {
     console.log(`[main] Display removed: ${oldDisplay.id}`)
     destroyShellForDisplay(oldDisplay.id)
   })
+
+  setInterval(() => {
+    for (const shell of shells.values()) {
+      if (!shell.topBar.isDestroyed()) {
+        try {
+          reassertPosition(shell.topBar)
+        } catch (err) { /* ignore */ }
+      }
+    }
+  }, 30_000)
 
   screen.on('display-metrics-changed', (_event, display, changedMetrics) => {
     console.log(`[main] Display metrics changed: ${display.id} [${changedMetrics.join(', ')}]`)
