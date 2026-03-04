@@ -28,6 +28,8 @@ function createDesktopWindow(display) {
     skipTaskbar: true,
     focusable: false,
     transparent: false,
+    roundedCorners: false,
+    thickFrame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
