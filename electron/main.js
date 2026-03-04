@@ -73,11 +73,14 @@ function createTopBarWindow(display) {
   win.setIgnoreMouseEvents(true, { forward: true })
   win.loadURL(`${BASE_URL}?mode=topbar`)
 
-  ipcMain.on('topbar/set-ignore-mouse', (event, ignore) => {
-    if (event.sender === win.webContents && !win.isDestroyed()) {
+  const onIgnoreMouse = (event, ignore) => {
+    if (win.isDestroyed()) return
+    if (event.sender === win.webContents) {
       win.setIgnoreMouseEvents(ignore, { forward: true })
     }
-  })
+  }
+  ipcMain.on('topbar/set-ignore-mouse', onIgnoreMouse)
+  win.on('closed', () => ipcMain.removeListener('topbar/set-ignore-mouse', onIgnoreMouse))
 
   win.webContents.once('did-finish-load', () => {
     try {
