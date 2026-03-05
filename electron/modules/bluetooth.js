@@ -25,10 +25,10 @@ function getConnectedDevices() {
     exec(
       'powershell -NoProfile -Command "Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq \'OK\' } | Select-Object -ExpandProperty Name"',
       (err, stdout) => {
-        if (err || !stdout.trim()) return resolve(false)
+        if (err || !stdout.trim()) return resolve([])
         const devices = stdout.trim().split('\n').map(d => d.trim()).filter(Boolean)
         const userDevices = devices.filter(name => !SYSTEM_PATTERNS.some(p => p.test(name)))
-        resolve(userDevices.length > 0)
+        resolve(userDevices)
       }
     )
   })
@@ -36,10 +36,10 @@ function getConnectedDevices() {
 
 async function getBluetoothState() {
   const enabled = await getRadioEnabled()
-  if (!enabled) return { enabled: false, connected: false }
+  if (!enabled) return { enabled: false, connected: false, devices: [] }
 
-  const connected = await getConnectedDevices()
-  return { enabled: true, connected }
+  const devices = await getConnectedDevices()
+  return { enabled: true, connected: devices.length > 0, devices }
 }
 
 module.exports = {

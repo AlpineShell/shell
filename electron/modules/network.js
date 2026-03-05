@@ -2,6 +2,7 @@ const { exec } = require('child_process')
 
 let lastSignal = undefined
 let lastType = undefined
+let lastSsid = undefined
 
 function getAdapterStatus() {
   return new Promise((resolve) => {
@@ -25,25 +26,29 @@ function getEthernetStatus() {
   })
 }
 
-function getSignalStrength() {
+function getWifiInfo() {
   return new Promise((resolve) => {
     exec('netsh wlan show interfaces', (err, stdout) => {
-      if (err || !stdout) return resolve(null)
-      const match = stdout.match(/Signal\s+:\s+(\d+)%/)
-      resolve(match ? parseInt(match[1], 10) : null)
+      if (err || !stdout) return resolve({ signal: null, ssid: null })
+      const signalMatch = stdout.match(/Signal\s+:\s+(\d+)%/)
+      const ssidMatch = stdout.match(/^\s+SSID\s+:\s+(.+)/m)
+      resolve({
+        signal: signalMatch ? parseInt(signalMatch[1], 10) : null,
+        ssid: ssidMatch ? ssidMatch[1].trim() : null,
+      })
     })
   })
 }
 
 async function getNetworkStatus() {
   const ethernet = await getEthernetStatus()
-  if (ethernet) return { signal: null, connected: true, type: 'ethernet' }
+  if (ethernet) return { signal: null, connected: true, type: 'ethernet', ssid: null }
 
   const wifiConnected = await getAdapterStatus()
-  if (!wifiConnected) return { signal: null, connected: false, type: 'wifi' }
+  if (!wifiConnected) return { signal: null, connected: false, type: 'wifi', ssid: null }
 
-  const signal = await getSignalStrength()
-  return { signal, connected: true, type: 'wifi' }
+  const { signal, ssid } = await getWifiInfo()
+  return { signal, connected: true, type: 'wifi', ssid }
 }
 
 module.exports = {
@@ -54,9 +59,10 @@ module.exports = {
   start(broadcast) {
     setInterval(async () => {
       const current = await getNetworkStatus()
-      if (current.signal !== lastSignal || current.type !== lastType) {
+      if (current.signal !== lastSignal || current.type !== lastType || current.ssid !== lastSsid) {
         lastSignal = current.signal
         lastType = current.type
+        lastSsid = current.ssid
         broadcast('network/wifi-signal-changed', current)
       }
     }, 10000)

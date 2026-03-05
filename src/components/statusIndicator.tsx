@@ -4,9 +4,7 @@ import { useBluetooth } from "../hooks/useBluetooth";
 import { useNetworkStatus } from "../hooks/useWifiSignal";
 import ControlCenter from "./controllCenter";
 
-function NetworkIcon() {
-    const { signal, connected, type } = useNetworkStatus();
-
+function NetworkIcon({ signal, connected, type }: { signal: number | null; connected: boolean; type: string }) {
     if (type === 'ethernet') {
         return <EthernetPort color="white" size={14} />;
     }
@@ -19,9 +17,7 @@ function NetworkIcon() {
     return <WifiZero color="white" size={14} />;
 }
 
-function BluetoothIcon() {
-    const { enabled, connected } = useBluetooth();
-
+function BluetoothIcon({ enabled, connected }: { enabled: boolean; connected: boolean }) {
     if (!enabled) return <BluetoothOff color="white" size={14} />;
     if (connected) return <BluetoothConnected color="white" size={14} />;
     return <Bluetooth color="white" size={14} />;
@@ -30,6 +26,8 @@ function BluetoothIcon() {
 export default function StatusIndicator() {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
+    const network = useNetworkStatus();
+    const bluetooth = useBluetooth();
 
     useEffect(() => {
         if (open) {
@@ -63,8 +61,8 @@ export default function StatusIndicator() {
                 className="bg-white/10 flex px-2 rounded-full py-0.5 items-center gap-1 cursor-pointer"
                 onClick={() => setOpen(!open)}
             >
-                <BluetoothIcon />
-                <NetworkIcon />
+                <BluetoothIcon enabled={bluetooth.enabled} connected={bluetooth.connected} />
+                <NetworkIcon signal={network.signal} connected={network.connected} type={network.type} />
             </div>
             {open && (
                 <>
@@ -73,7 +71,7 @@ export default function StatusIndicator() {
                         onMouseDown={() => setOpen(false)}
                     />
                     <div className="absolute top-full right-0 mt-1 z-50">
-                        <ControlCenter />
+                        <ControlCenter network={network} bluetooth={bluetooth} />
                     </div>
                 </>
             )}
