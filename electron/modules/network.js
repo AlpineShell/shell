@@ -6,7 +6,7 @@ let lastType = undefined
 function getAdapterStatus() {
   return new Promise((resolve) => {
     exec(
-      'powershell -NoProfile -Command "Get-NetAdapter | Where-Object { $_.Name -match \'Wi-Fi|WLAN\' } | Select-Object -First 1 -ExpandProperty Status"',
+      'powershell -NoProfile -Command "Get-NetAdapter | Where-Object { $_.Name -match \'Wi-?Fi|WLAN\' } | Where-Object { $_.Status -eq \'Up\' } | Select-Object -First 1 -ExpandProperty Status"',
       (err, stdout) => {
         resolve(!err && stdout.trim() === 'Up')
       }
