@@ -11,24 +11,14 @@ function getRadioEnabled() {
   })
 }
 
-const SYSTEM_PATTERNS = [
-  /Microsoft/i,
-  /RFCOMM/i,
-  /Enumerator/i,
-  /Auflistung/i,
-  /Bluetooth Device/i,
-  /TP-Link Bluetooth/i,
-]
-
 function getConnectedDevices() {
   return new Promise((resolve) => {
     exec(
-      'powershell -NoProfile -Command "Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq \'OK\' } | Select-Object -ExpandProperty Name"',
+      'powershell -NoProfile -Command "Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq \'OK\' -and $_.InstanceId -match \'^BTHENUM\\\\Dev_\' } | Select-Object -ExpandProperty FriendlyName"',
       (err, stdout) => {
         if (err || !stdout.trim()) return resolve([])
-        const devices = stdout.trim().split('\n').map(d => d.trim()).filter(Boolean)
-        const userDevices = devices.filter(name => !SYSTEM_PATTERNS.some(p => p.test(name)))
-        resolve(userDevices)
+        const devices = [...new Set(stdout.trim().split('\n').map(d => d.trim()).filter(Boolean))]
+        resolve(devices)
       }
     )
   })
