@@ -12,7 +12,7 @@ export default function TopBar() {
         <div className="w-full flex justify-between items-center h-6 bg-[#3F3F3F]/20">
             <div></div>
             <div
-                className="flex items-center -mt-0.5 gap-1"
+                className="flex items-center gap-1"
                 onMouseEnter={() => window.topbar.setIgnoreMouseEvents(false)}
                 onMouseLeave={() => window.topbar.setIgnoreMouseEvents(true)}
             >
