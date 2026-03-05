@@ -67,9 +67,15 @@ export default function StatusIndicator() {
                 <NetworkIcon />
             </div>
             {open && (
-                <div className="absolute top-full right-0 mt-1 z-50">
-                    <ControlCenter />
-                </div>
+                <>
+                    <div
+                        className="fixed inset-0 z-40"
+                        onMouseDown={() => setOpen(false)}
+                    />
+                    <div className="absolute top-full right-0 mt-1 z-50">
+                        <ControlCenter />
+                    </div>
+                </>
             )}
         </div>
     );
