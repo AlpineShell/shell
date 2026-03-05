@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('topbar', {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
+  setHeight: (height) => ipcRenderer.send('topbar/set-height', height),
 })
 
 contextBridge.exposeInMainWorld('shell', {

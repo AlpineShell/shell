@@ -32,6 +32,14 @@ export default function StatusIndicator() {
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (open) {
+            window.topbar.setHeight(500);
+        } else {
+            window.topbar.setHeight(24);
+        }
+    }, [open]);
+
+    useEffect(() => {
         if (!open) return;
         function handleClick(e: MouseEvent) {
             if (ref.current && !ref.current.contains(e.target as Node)) {

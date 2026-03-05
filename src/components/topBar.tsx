@@ -3,7 +3,7 @@ import StatusIndicator from "./statusIndicator";
 
 declare global {
     interface Window {
-        topbar: { setIgnoreMouseEvents: (ignore: boolean) => void };
+        topbar: { setIgnoreMouseEvents: (ignore: boolean) => void; setHeight: (height: number) => void };
     }
 }
 

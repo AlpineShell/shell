@@ -79,8 +79,19 @@ function createTopBarWindow(display) {
       win.setIgnoreMouseEvents(ignore, { forward: true })
     }
   }
+  const onSetHeight = (event, height) => {
+    if (win.isDestroyed()) return
+    if (event.sender === win.webContents) {
+      const bounds = win.getBounds()
+      win.setBounds({ ...bounds, height })
+    }
+  }
   ipcMain.on('topbar/set-ignore-mouse', onIgnoreMouse)
-  win.on('closed', () => ipcMain.removeListener('topbar/set-ignore-mouse', onIgnoreMouse))
+  ipcMain.on('topbar/set-height', onSetHeight)
+  win.on('closed', () => {
+    ipcMain.removeListener('topbar/set-ignore-mouse', onIgnoreMouse)
+    ipcMain.removeListener('topbar/set-height', onSetHeight)
+  })
 
   win.webContents.once('did-finish-load', () => {
     try {
