@@ -31,9 +31,9 @@ function ControlItem({ label, sublabel, Icon }: { label: string; sublabel?: stri
             {active ? (
                 <div className="flex gap-2 text-sm items-center">
                     <Icon color="white" size={15} />
-                    <div className="flex flex-col">
+                    <div className="flex flex-col gap-0">
                         <span>{label}</span>
-                        <span className="text-xs text-white/60">{sublabel}</span>
+                        <span className="text-xs text-white/60 -mt-0.5">{sublabel}</span>
                     </div>
                 </div>
             ) : (
