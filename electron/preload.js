@@ -3,6 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('topbar', {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
   setHeight: (height) => ipcRenderer.send('topbar/set-height', height),
+  color: () => ipcRenderer.invoke('topbar/color'),
+  onColorChanged: (callback) => {
+    ipcRenderer.on('topbar/color-changed', (_, data) => callback(data))
+  },
 })
 
 contextBridge.exposeInMainWorld('shell', {

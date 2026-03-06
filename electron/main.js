@@ -5,6 +5,7 @@ const wallpaper = require('./modules/wallpaper')
 const network = require('./modules/network')
 const bluetooth = require('./modules/bluetooth')
 const openApps = require('./modules/openApps')
+const topbarColor = require('./modules/topbarColor')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -156,7 +157,7 @@ function repositionShell(display) {
 }
 
 app.whenReady().then(() => {
-  ipc.register(wallpaper, network, bluetooth, openApps)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor)
 
   for (const display of screen.getAllDisplays()) {
     createShellForDisplay(display)
