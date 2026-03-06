@@ -4,6 +4,46 @@
   --color-systemBg: rgba(255, 255, 255, 0.7);
 }
 
+.cc-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 10px;
+  border-radius: 8px;
+  background: linear-gradient(
+    to right,
+    white var(--slider-progress, 50%),
+    rgba(255, 255, 255, 0.2) var(--slider-progress, 50%)
+  );
+  outline: none;
+  cursor: pointer;
+}
+
+.cc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0;
+  height: 0;
+}
+
+.cc-slider::-moz-range-thumb {
+  width: 0;
+  height: 0;
+  border: none;
+  background: transparent;
+}
+
+.cc-slider::-moz-range-progress {
+  background: white;
+  height: 16px;
+  border-radius: 8px;
+}
+
+.cc-slider::-moz-range-track {
+  background: rgba(255, 255, 255, 0.2);
+  height: 16px;
+  border-radius: 8px;
+}
+
 @layer base {
   * {
     margin: 0;

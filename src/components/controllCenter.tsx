@@ -1,4 +1,5 @@
-import { Bluetooth, ChevronRight, Wifi } from "lucide-react";
+import { useState } from "react";
+import { Bluetooth, ChevronRight, Sun, Volume2, Wifi } from "lucide-react";
 
 interface ControlCenterProps {
     network: { connected: boolean; ssid: string | null };
@@ -17,9 +18,13 @@ export default function ControlCenter({ network, bluetooth }: ControlCenterProps
     }
 
     return (
-        <div className="bg-[#1f262d] p-4 gap-5 flex flex-col rounded-xl h-fit w-65 shadow-2xl">
-            <ControlItem label="Wi-Fi" sublabel={wifiLabel} Icon={Wifi} />
-            <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} />
+        <div className="bg-[#1f262d] border-[0.5px] border-[#313a46] p-3 gap-2 flex flex-col rounded-xl h-fit w-65 shadow-2xl">
+            <div className="gap-4 mb-1 flex flex-col">
+                <ControlItem label="Wi-Fi" sublabel={wifiLabel} Icon={Wifi} />
+                <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} />
+            </div>
+            <Slider Icon={Volume2} />
+            <Slider Icon={Sun} />
         </div>
     )
 }
@@ -43,6 +48,24 @@ function ControlItem({ label, sublabel, Icon }: { label: string; sublabel?: stri
                 </div>
             )}
             <ChevronRight color={active ? "white" : "rgba(255,255,255,0.6)"} size={15} />
+        </div>
+    )
+}
+
+function Slider({ Icon }: { Icon: React.FC<{ color: string; size: number }> }) {
+    const [value, setValue] = useState(45);
+    return (
+        <div className="flex bg-[#3F3F3F]/20 p-3 rounded-full text-white items-center gap-3">
+            <div className="shrink-0"><Icon color="white" size={15} /></div>
+            <input
+                type="range"
+                min={0}
+                max={100}
+                value={value}
+                onChange={(e) => setValue(Number(e.target.value))}
+                className="cc-slider w-full"
+                style={{ '--slider-progress': `${value}%` } as React.CSSProperties}
+            />
         </div>
     )
 }
