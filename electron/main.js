@@ -73,7 +73,7 @@ function createTopBarWindow(display) {
     },
   })
 
-  win.setAlwaysOnTop(true, 'pop-up-menu')
+  win.setAlwaysOnTop(false)
   win.setIgnoreMouseEvents(true)
   win.loadURL(`${BASE_URL}?mode=topbar`)
 
