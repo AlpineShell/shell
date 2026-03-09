@@ -65,6 +65,7 @@ function createTopBarWindow(display) {
     skipTaskbar: true,
     focusable: true,
     transparent: true,
+    thickFrame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -73,15 +74,34 @@ function createTopBarWindow(display) {
   })
 
   win.setAlwaysOnTop(true, 'pop-up-menu')
-  win.setIgnoreMouseEvents(true, { forward: true })
+  win.setIgnoreMouseEvents(true)
   win.loadURL(`${BASE_URL}?mode=topbar`)
 
-  const onIgnoreMouse = (event, ignore) => {
+  // Main-process cursor tracking replaces { forward: true } to avoid
+  // click-through issues with transparent layered windows on Windows.
+  const INTERACTIVE_WIDTH = 160
+  let ignoring = true
+
+  const cursorTracker = setInterval(() => {
     if (win.isDestroyed()) return
-    if (event.sender === win.webContents) {
-      win.setIgnoreMouseEvents(ignore, { forward: true })
+    const bounds = win.getBounds()
+    const cursor = screen.getCursorScreenPoint()
+
+    const isExpanded = bounds.height > TOP_BAR_HEIGHT
+    const inBounds = cursor.y >= bounds.y && cursor.y < bounds.y + bounds.height &&
+                     cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width
+    const inInteractive = inBounds &&
+      (isExpanded || cursor.x >= bounds.x + bounds.width - INTERACTIVE_WIDTH)
+
+    if (inInteractive && ignoring) {
+      ignoring = false
+      win.setIgnoreMouseEvents(false)
+    } else if (!inInteractive && !ignoring) {
+      ignoring = true
+      win.setIgnoreMouseEvents(true)
     }
-  }
+  }, 50)
+
   const onSetHeight = (event, height) => {
     if (win.isDestroyed()) return
     if (event.sender === win.webContents) {
@@ -89,10 +109,9 @@ function createTopBarWindow(display) {
       win.setBounds({ ...bounds, height })
     }
   }
-  ipcMain.on('topbar/set-ignore-mouse', onIgnoreMouse)
   ipcMain.on('topbar/set-height', onSetHeight)
   win.on('closed', () => {
-    ipcMain.removeListener('topbar/set-ignore-mouse', onIgnoreMouse)
+    clearInterval(cursorTracker)
     ipcMain.removeListener('topbar/set-height', onSetHeight)
   })
 

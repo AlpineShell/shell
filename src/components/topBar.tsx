@@ -31,11 +31,7 @@ export default function TopBar() {
             style={{ backgroundColor: bgColor }}
         >
             <div></div>
-            <div
-                className="flex items-center gap-1"
-                onMouseEnter={() => window.topbar.setIgnoreMouseEvents(false)}
-                onMouseLeave={() => window.topbar.setIgnoreMouseEvents(true)}
-            >
+            <div className="flex items-center gap-1">
                 <StatusIndicator />
                 <Clock />
             </div>
