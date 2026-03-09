@@ -35,6 +35,12 @@ declare global {
       system: {
         bluetooth: () => Promise<BluetoothState>
         onBluetoothChanged: (callback: (data: BluetoothState) => void) => void
+        volume: () => Promise<number>
+        setVolume: (value: number) => Promise<number>
+        onVolumeChanged: (callback: (data: number) => void) => void
+        brightness: () => Promise<number>
+        setBrightness: (value: number) => Promise<number>
+        onBrightnessChanged: (callback: (data: number) => void) => void
       }
     }
   }

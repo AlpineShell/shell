@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Bluetooth, BluetoothConnected, BluetoothOff, EthernetPort, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
 import { useBluetooth } from "../hooks/useBluetooth";
+import { useBrightness } from "../hooks/useBrightness";
+import { useVolume } from "../hooks/useVolume";
 import { useNetworkStatus } from "../hooks/useWifiSignal";
 import ControlCenter from "./controllCenter";
 
@@ -28,6 +30,8 @@ export default function StatusIndicator() {
     const ref = useRef<HTMLDivElement>(null);
     const network = useNetworkStatus();
     const bluetooth = useBluetooth();
+    const [volume, setVolume] = useVolume();
+    const [brightness, setBrightness] = useBrightness();
 
     useEffect(() => {
         if (open) {
@@ -71,7 +75,7 @@ export default function StatusIndicator() {
                         onMouseDown={() => setOpen(false)}
                     />
                     <div className="absolute top-full right-0 mt-1 z-50">
-                        <ControlCenter network={network} bluetooth={bluetooth} />
+                        <ControlCenter network={network} bluetooth={bluetooth} volume={volume} setVolume={setVolume} brightness={brightness} setBrightness={setBrightness} />
                     </div>
                 </>
             )}

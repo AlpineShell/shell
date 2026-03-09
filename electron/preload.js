@@ -31,5 +31,15 @@ contextBridge.exposeInMainWorld('shell', {
     onBluetoothChanged: (callback) => {
       ipcRenderer.on('system/bluetooth-changed', (_, data) => callback(data))
     },
+    volume: () => ipcRenderer.invoke('system/volume-get'),
+    setVolume: (value) => ipcRenderer.invoke('system/volume-set', value),
+    onVolumeChanged: (callback) => {
+      ipcRenderer.on('system/volume-changed', (_, data) => callback(data))
+    },
+    brightness: () => ipcRenderer.invoke('system/brightness-get'),
+    setBrightness: (value) => ipcRenderer.invoke('system/brightness-set', value),
+    onBrightnessChanged: (callback) => {
+      ipcRenderer.on('system/brightness-changed', (_, data) => callback(data))
+    },
   },
 })

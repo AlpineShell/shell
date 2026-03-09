@@ -1,12 +1,15 @@
-import { useState } from "react";
 import { Bluetooth, ChevronRight, Sun, Volume2, Wifi } from "lucide-react";
 
 interface ControlCenterProps {
     network: { connected: boolean; ssid: string | null };
     bluetooth: { enabled: boolean; connected: boolean; devices: string[] };
+    volume: number;
+    setVolume: (value: number) => void;
+    brightness: number;
+    setBrightness: (value: number) => void;
 }
 
-export default function ControlCenter({ network, bluetooth }: ControlCenterProps) {
+export default function ControlCenter({ network, bluetooth, volume, setVolume, brightness, setBrightness }: ControlCenterProps) {
 
     const wifiLabel = network.connected ? (network.ssid ?? "Connected") : undefined;
 
@@ -24,8 +27,8 @@ export default function ControlCenter({ network, bluetooth }: ControlCenterProps
                 <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} />
             </div>
             <div className="flex flex-col gap-2">
-                <Slider Icon={Volume2} />
-                <Slider Icon={Sun} />
+                <Slider Icon={Volume2} value={volume} onChange={setVolume} />
+                <Slider Icon={Sun} value={brightness} onChange={setBrightness} />
             </div>
         </div>
     )
@@ -54,8 +57,7 @@ function ControlItem({ label, sublabel, Icon }: { label: string; sublabel?: stri
     )
 }
 
-function Slider({ Icon }: { Icon: React.FC<{ color: string; size: number }> }) {
-    const [value, setValue] = useState(45);
+function Slider({ Icon, value, onChange }: { Icon: React.FC<{ color: string; size: number }>; value: number; onChange: (value: number) => void }) {
     return (
         <div className="flex bg-[#3F3F3F]/20 p-3 rounded-md text-white items-center gap-3">
             <div className="shrink-0"><Icon color="white" size={15} /></div>
@@ -64,7 +66,7 @@ function Slider({ Icon }: { Icon: React.FC<{ color: string; size: number }> }) {
                 min={0}
                 max={100}
                 value={value}
-                onChange={(e) => setValue(Number(e.target.value))}
+                onChange={(e) => onChange(Number(e.target.value))}
                 className="cc-slider w-full"
                 style={{ '--slider-progress': `${value}%` } as React.CSSProperties}
             />
