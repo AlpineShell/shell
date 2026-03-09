@@ -19,7 +19,7 @@ function setBrightness(value) {
   return new Promise((resolve) => {
     const clamped = Math.max(0, Math.min(100, Math.round(value)))
     exec(
-      `powershell -NoProfile -Command "(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods).WmiSetBrightness(1, ${clamped})"`,
+      `powershell -NoProfile -Command "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, ${clamped})"`,
       () => resolve(clamped)
     )
   })
