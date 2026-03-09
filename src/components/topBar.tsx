@@ -14,14 +14,14 @@ declare global {
 }
 
 export default function TopBar() {
-    const [bgColor, setBgColor] = useState("rgba(63, 63, 63, 0.2)");
+    const [bgColor, setBgColor] = useState("rgba(63, 63, 63, 1)");
 
     useEffect(() => {
         window.topbar.color().then((color) => {
-            if (color) setBgColor(`rgba(${color.r}, ${color.g}, ${color.b}, 0.8)`);
+            if (color) setBgColor(`rgba(${color.r}, ${color.g}, ${color.b}, 1)`);
         });
         window.topbar.onColorChanged((color) => {
-            setBgColor(`rgba(${color.r}, ${color.g}, ${color.b}, 0.8)`);
+            setBgColor(`rgba(${color.r}, ${color.g}, ${color.b}, 1)`);
         });
     }, []);
 
