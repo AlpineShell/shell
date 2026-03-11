@@ -4,6 +4,12 @@
   --color-systemBg: rgba(255, 255, 255, 0.7);
 }
 
+@property --slider-progress {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 50%;
+}
+
 .cc-slider {
   -webkit-appearance: none;
   appearance: none;
@@ -16,6 +22,7 @@
   );
   outline: none;
   cursor: pointer;
+  transition: --slider-progress 0.15s ease-out;
 }
 
 .cc-slider::-webkit-slider-thumb {

@@ -134,25 +134,9 @@ function sampleDesktop(topBarWin, scaleFactor) {
 }
 
 /**
- * Sample the right portion of the title bar (near window control buttons).
- * This avoids Chrome tab highlights which are on the left/center of the title bar.
- */
-function sampleTitleBarRight(topBarWin, scaleFactor) {
-  const b = getTopBarPhysBounds(topBarWin)
-  // Window controls are ~138px at 100% DPI (3 buttons x 46px).
-  // Sample a 40px strip just to the left of the controls.
-  const offset = Math.round(180 * scaleFactor)
-  const width = Math.min(Math.round(40 * scaleFactor), b.right - b.left)
-  const x = Math.max(b.left, b.right - offset)
-  const y = b.top + Math.round((TOP_BAR_HEIGHT + 2) * scaleFactor)
-  return sampleColorAt(x, y, width)
-}
-
-/**
  * Get topbar color for a display:
- * - If a maximized foreground window is on this display → use its DWM caption
- *   color, or fall back to sampling the right side of the title bar
- * - Otherwise → sample the desktop/wallpaper below the topbar
+ * - If a maximized foreground window is on this display → use its DWM caption color
+ * - Otherwise → sample the area just below the topbar (title bar or desktop)
  */
 function getColorForDisplay(shell) {
   if (shell.topBar.isDestroyed()) return null
@@ -162,14 +146,11 @@ function getColorForDisplay(shell) {
   const fgHwnd = GetForegroundWindow()
   if (fgHwnd && fgHwnd !== 0 && !isOwnWindow(fgHwnd) && IsZoomed(fgHwnd)) {
     if (getMonitorHandle(fgHwnd) === topBarMon) {
-      // Maximized foreground window on this display
       const caption = getCaptionColor(fgHwnd)
       if (caption) return caption
-      return sampleTitleBarRight(shell.topBar, scaleFactor)
     }
   }
 
-  // No maximized window on this display — use desktop color
   return sampleDesktop(shell.topBar, scaleFactor)
 }
 

@@ -1,5 +1,6 @@
 const koffi = require('koffi')
 const { exec } = require('child_process')
+const { screen } = require('electron')
 
 // -- Win32 API setup --
 const user32 = koffi.load('user32.dll')
@@ -7,15 +8,9 @@ const user32 = koffi.load('user32.dll')
 let dxva2
 try { dxva2 = koffi.load('dxva2.dll') } catch (_) { dxva2 = null }
 
-// Callback prototype for EnumDisplayMonitors
-const MonitorEnumProc = koffi.proto(
-  '__stdcall', 'MonitorEnumProc', 'int',
-  ['uintptr_t', 'uintptr_t', 'void *', 'intptr_t']
-)
-
-const EnumDisplayMonitors = user32.func(
-  '__stdcall', 'EnumDisplayMonitors', 'int',
-  ['uintptr_t', 'void *', 'MonitorEnumProc *', 'intptr_t']
+const MonitorFromRect = user32.func(
+  '__stdcall', 'MonitorFromRect', 'uintptr_t',
+  ['void *', 'uint32']
 )
 const GetMonitorInfoW = user32.func(
   '__stdcall', 'GetMonitorInfoW', 'int',
@@ -82,15 +77,21 @@ function cleanName(physName, deviceName, index) {
   return `Display ${index + 1}`
 }
 
-// -- Monitor enumeration via Win32 --
+// -- Monitor enumeration using Electron screen + MonitorFromRect --
+const MONITOR_DEFAULTTONEAREST = 0x02
+
 function enumLogicalMonitors() {
+  const displays = screen.getAllDisplays()
   const handles = []
-  const cb = koffi.register((hMon) => {
-    handles.push(toNum(hMon))
-    return 1
-  }, MonitorEnumProc)
-  EnumDisplayMonitors(0, null, cb, 0)
-  koffi.unregister(cb)
+  for (const d of displays) {
+    const rect = Buffer.alloc(16)
+    rect.writeInt32LE(d.bounds.x, 0)
+    rect.writeInt32LE(d.bounds.y, 4)
+    rect.writeInt32LE(d.bounds.x + d.bounds.width, 8)
+    rect.writeInt32LE(d.bounds.y + d.bounds.height, 12)
+    const h = toNum(MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST))
+    if (h) handles.push(h)
+  }
   return handles
 }
 
