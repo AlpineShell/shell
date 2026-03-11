@@ -1,4 +1,4 @@
-import { House, LogOut, Power, RotateCcw } from "lucide-react";
+import { CircleDashed, House, LogOut, Power, RotateCcw } from "lucide-react";
 import PopupMenu from "./popupMenu";
 
 function MenuItem({ label, Icon, onClick }: { label: string; Icon: React.FC<{ color: string; size: number }>; onClick: () => void }) {
@@ -19,7 +19,7 @@ export default function SystemMenu() {
             align="left"
             trigger={
                 <div className="flex px-2 py-0.5 items-center cursor-pointer">
-                    <House color="white" size={14} />
+                    <CircleDashed color="white" size={14} />
                 </div>
             }
         >
