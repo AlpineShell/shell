@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Bluetooth, ChevronRight, Sun, Volume2, Wifi } from "lucide-react";
 
 interface ControlCenterProps {
@@ -60,6 +61,7 @@ function ControlItem({ label, sublabel, Icon }: { label: string; sublabel?: stri
 }
 
 function Slider({ Icon, value, onChange, label }: { Icon: React.FC<{ color: string; size: number }>; value: number; onChange: (value: number) => void; label?: string }) {
+    const dragging = useRef(false);
     return (
         <div className="flex flex-col gap-1">
             {label && <span className="text-[11px] text-white/50 ml-1">{label}</span>}
@@ -70,8 +72,11 @@ function Slider({ Icon, value, onChange, label }: { Icon: React.FC<{ color: stri
                 min={0}
                 max={100}
                 value={value}
+                onPointerDown={() => { dragging.current = true }}
+                onPointerUp={() => { dragging.current = false }}
+                onLostPointerCapture={() => { dragging.current = false }}
                 onChange={(e) => onChange(Number(e.target.value))}
-                className="cc-slider w-full"
+                className={`cc-slider w-full ${dragging.current ? 'dragging' : 'animate'}`}
                 style={{ '--slider-progress': `${value}%` } as React.CSSProperties}
             />
             </div>
