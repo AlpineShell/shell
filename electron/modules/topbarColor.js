@@ -204,6 +204,6 @@ module.exports = {
           shell.topBar.webContents.send('topbar/color-changed', color)
         }
       }
-    }), 500)
+    }), 100)
   },
 }
