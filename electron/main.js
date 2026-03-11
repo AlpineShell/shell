@@ -8,6 +8,7 @@ const openApps = require('./modules/openApps')
 const topbarColor = require('./modules/topbarColor')
 const volume = require('./modules/volume')
 const brightness = require('./modules/brightness')
+const power = require('./modules/power')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -79,7 +80,8 @@ function createTopBarWindow(display) {
 
   // Main-process cursor tracking replaces { forward: true } to avoid
   // click-through issues with transparent layered windows on Windows.
-  const INTERACTIVE_WIDTH = 160
+  const INTERACTIVE_RIGHT = 160
+  const INTERACTIVE_LEFT = 40
   let ignoring = true
 
   const cursorTracker = setInterval(() => {
@@ -90,8 +92,10 @@ function createTopBarWindow(display) {
     const isExpanded = bounds.height > TOP_BAR_HEIGHT
     const inBounds = cursor.y >= bounds.y && cursor.y < bounds.y + bounds.height &&
                      cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width
+    const inLeftZone = cursor.x < bounds.x + INTERACTIVE_LEFT
+    const inRightZone = cursor.x >= bounds.x + bounds.width - INTERACTIVE_RIGHT
     const inInteractive = inBounds &&
-      (isExpanded || cursor.x >= bounds.x + bounds.width - INTERACTIVE_WIDTH)
+      (isExpanded || inLeftZone || inRightZone)
 
     if (inInteractive && ignoring) {
       ignoring = false
@@ -178,7 +182,7 @@ function repositionShell(display) {
 }
 
 app.whenReady().then(() => {
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power)
   topbarColor.setShells(shells)
 
   for (const display of screen.getAllDisplays()) {

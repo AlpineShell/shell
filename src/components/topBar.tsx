@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Clock from "./clock";
 import StatusIndicator from "./statusIndicator";
+import SystemMenu from "./systemMenu";
 
 declare global {
     interface Window {
@@ -30,7 +31,9 @@ export default function TopBar() {
             className="w-full flex justify-between items-center h-6 transition-colors duration-300"
             style={{ backgroundColor: bgColor }}
         >
-            <div></div>
+            <div className="flex items-center gap-1">
+                <SystemMenu />
+            </div>
             <div className="flex items-center gap-1">
                 <StatusIndicator />
                 <Clock />

@@ -1,0 +1,57 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+
+interface PopupMenuProps {
+    trigger: ReactNode;
+    children: ReactNode;
+    align?: "left" | "right";
+}
+
+export default function PopupMenu({ trigger, children, align = "left" }: PopupMenuProps) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (open) {
+            window.topbar.setHeight(500);
+        } else {
+            window.topbar.setHeight(24);
+        }
+    }, [open]);
+
+    useEffect(() => {
+        if (!open) return;
+        function handleClick(e: MouseEvent) {
+            if (ref.current && !ref.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        }
+        function handleBlur() {
+            setOpen(false);
+        }
+        document.addEventListener("mousedown", handleClick);
+        window.addEventListener("blur", handleBlur);
+        return () => {
+            document.removeEventListener("mousedown", handleClick);
+            window.removeEventListener("blur", handleBlur);
+        };
+    }, [open]);
+
+    return (
+        <div className="relative" ref={ref}>
+            <div className="cursor-pointer" onClick={() => setOpen(!open)}>
+                {trigger}
+            </div>
+            {open && (
+                <>
+                    <div
+                        className="fixed inset-0 z-40"
+                        onMouseDown={() => setOpen(false)}
+                    />
+                    <div className={`fixed top-6 mt-1 z-50 ${align === "right" ? "right-1" : "left-1"}`}>
+                        {children}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}

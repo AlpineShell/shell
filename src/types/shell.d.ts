@@ -51,6 +51,7 @@ declare global {
         getMonitors: () => Promise<MonitorInfo[]>
         setMonitorBrightness: (id: string, value: number) => Promise<number>
         onMonitorsChanged: (callback: (data: MonitorInfo[]) => void) => void
+        powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
       }
     }
   }

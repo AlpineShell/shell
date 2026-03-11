@@ -46,5 +46,6 @@ contextBridge.exposeInMainWorld('shell', {
     onMonitorsChanged: (callback) => {
       ipcRenderer.on('system/monitors-changed', (_, data) => callback(data))
     },
+    powerAction: (action) => ipcRenderer.invoke('system/power-action', action),
   },
 })
