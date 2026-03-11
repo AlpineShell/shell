@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
 
-export function useBrightness() {
-  const [brightness, setBrightness] = useState(50)
+export function useMonitors() {
+  const [monitors, setMonitors] = useState<MonitorInfo[]>([])
 
   useEffect(() => {
-    window.shell.system.brightness().then(setBrightness)
-    window.shell.system.onBrightnessChanged(setBrightness)
+    window.shell.system.getMonitors().then(setMonitors)
+    window.shell.system.onMonitorsChanged(setMonitors)
   }, [])
 
-  const set = (value: number) => {
-    setBrightness(value)
-    window.shell.system.setBrightness(value)
+  const setBrightness = (id: string, value: number) => {
+    setMonitors(prev =>
+      prev.map(m => (m.id === id ? { ...m, brightness: value } : m))
+    )
+    window.shell.system.setMonitorBrightness(id, value)
   }
 
-  return [brightness, set] as const
+  return { monitors, setBrightness }
 }

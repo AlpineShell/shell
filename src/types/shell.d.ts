@@ -20,6 +20,13 @@ interface BluetoothState {
 }
 
 declare global {
+  interface MonitorInfo {
+    id: string
+    name: string
+    type: 'internal' | 'external'
+    brightness: number
+  }
+
   interface Window {
     shell: {
       windows: {
@@ -41,6 +48,9 @@ declare global {
         brightness: () => Promise<number>
         setBrightness: (value: number) => Promise<number>
         onBrightnessChanged: (callback: (data: number) => void) => void
+        getMonitors: () => Promise<MonitorInfo[]>
+        setMonitorBrightness: (id: string, value: number) => Promise<number>
+        onMonitorsChanged: (callback: (data: MonitorInfo[]) => void) => void
       }
     }
   }

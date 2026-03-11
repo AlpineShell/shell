@@ -5,11 +5,11 @@ interface ControlCenterProps {
     bluetooth: { enabled: boolean; connected: boolean; devices: string[] };
     volume: number;
     setVolume: (value: number) => void;
-    brightness: number;
-    setBrightness: (value: number) => void;
+    monitors: MonitorInfo[];
+    setMonitorBrightness: (id: string, value: number) => void;
 }
 
-export default function ControlCenter({ network, bluetooth, volume, setVolume, brightness, setBrightness }: ControlCenterProps) {
+export default function ControlCenter({ network, bluetooth, volume, setVolume, monitors, setMonitorBrightness }: ControlCenterProps) {
 
     const wifiLabel = network.connected ? (network.ssid ?? "Connected") : undefined;
 
@@ -28,7 +28,9 @@ export default function ControlCenter({ network, bluetooth, volume, setVolume, b
             </div>
             <div className="flex flex-col gap-2">
                 <Slider Icon={Volume2} value={volume} onChange={setVolume} />
-                <Slider Icon={Sun} value={brightness} onChange={setBrightness} />
+                {monitors.map(m => (
+                    <Slider key={m.id} Icon={Sun} value={m.brightness} onChange={(v) => setMonitorBrightness(m.id, v)} label={monitors.length > 1 ? m.name : undefined} />
+                ))}
             </div>
         </div>
     )
@@ -57,9 +59,11 @@ function ControlItem({ label, sublabel, Icon }: { label: string; sublabel?: stri
     )
 }
 
-function Slider({ Icon, value, onChange }: { Icon: React.FC<{ color: string; size: number }>; value: number; onChange: (value: number) => void }) {
+function Slider({ Icon, value, onChange, label }: { Icon: React.FC<{ color: string; size: number }>; value: number; onChange: (value: number) => void; label?: string }) {
     return (
-        <div className="flex bg-[#3F3F3F]/20 p-3 rounded-md text-white items-center gap-3">
+        <div className="flex flex-col gap-1">
+            {label && <span className="text-[11px] text-white/50 ml-1">{label}</span>}
+            <div className="flex bg-[#3F3F3F]/20 p-3 rounded-md text-white items-center gap-3">
             <div className="shrink-0"><Icon color="white" size={15} /></div>
             <input
                 type="range"
@@ -70,6 +74,7 @@ function Slider({ Icon, value, onChange }: { Icon: React.FC<{ color: string; siz
                 className="cc-slider w-full"
                 style={{ '--slider-progress': `${value}%` } as React.CSSProperties}
             />
+            </div>
         </div>
     )
 }
