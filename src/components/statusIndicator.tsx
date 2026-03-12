@@ -28,7 +28,7 @@ function BluetoothIcon({ enabled, connected }: { enabled: boolean; connected: bo
 export default function StatusIndicator() {
     const network = useNetworkStatus();
     const bluetooth = useBluetooth();
-    const [volume, setVolume] = useVolume();
+    const { volume, setVolume, muted, toggleMute } = useVolume();
     const { monitors, setBrightness: setMonitorBrightness } = useMonitors();
 
     return (
@@ -41,7 +41,7 @@ export default function StatusIndicator() {
                 </div>
             }
         >
-            <ControlCenter network={network} bluetooth={bluetooth} volume={volume} setVolume={setVolume} monitors={monitors} setMonitorBrightness={setMonitorBrightness} />
+            <ControlCenter network={network} bluetooth={bluetooth} volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute} monitors={monitors} setMonitorBrightness={setMonitorBrightness} />
         </PopupMenu>
     );
 }

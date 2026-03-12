@@ -67,10 +67,35 @@ public class Audio {
         var guid = Guid.Empty;
         vol.SetMasterVolumeLevelScalar(level, ref guid);
     }
+    public static bool GetMute() {
+        var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
+        IMMDevice dev;
+        enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
+        var iid = typeof(IAudioEndpointVolume).GUID;
+        object ppv;
+        dev.Activate(ref iid, 1, IntPtr.Zero, out ppv);
+        var vol = (IAudioEndpointVolume)ppv;
+        bool muted;
+        vol.GetMute(out muted);
+        return muted;
+    }
+    public static void SetMute(bool mute) {
+        var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
+        IMMDevice dev;
+        enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
+        var iid = typeof(IAudioEndpointVolume).GUID;
+        object ppv;
+        dev.Activate(ref iid, 1, IntPtr.Zero, out ppv);
+        var vol = (IAudioEndpointVolume)ppv;
+        var guid = Guid.Empty;
+        vol.SetMute(mute, ref guid);
+    }
 }
 "@
 
 switch ($Action) {
     "get" { [math]::Round([Audio]::GetVolume() * 100) }
     "set" { [Audio]::SetVolume($Value / 100.0) }
+    "getMute" { [Audio]::GetMute() }
+    "setMute" { [Audio]::SetMute($Value -ne 0) }
 }

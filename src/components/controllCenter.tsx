@@ -1,16 +1,18 @@
 import { useRef } from "react";
-import { Bluetooth, ChevronRight, Sun, Volume2, Wifi } from "lucide-react";
+import { Bluetooth, ChevronRight, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
 
 interface ControlCenterProps {
     network: { connected: boolean; ssid: string | null };
     bluetooth: { enabled: boolean; connected: boolean; devices: string[] };
     volume: number;
     setVolume: (value: number) => void;
+    muted: boolean;
+    toggleMute: () => void;
     monitors: MonitorInfo[];
     setMonitorBrightness: (id: string, value: number) => void;
 }
 
-export default function ControlCenter({ network, bluetooth, volume, setVolume, monitors, setMonitorBrightness }: ControlCenterProps) {
+export default function ControlCenter({ network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness }: ControlCenterProps) {
 
     const wifiLabel = network.connected ? (network.ssid ?? "Connected") : undefined;
 
@@ -28,7 +30,7 @@ export default function ControlCenter({ network, bluetooth, volume, setVolume, m
                 <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} />
             </div>
             <div className="flex flex-col gap-2">
-                <Slider Icon={Volume2} value={volume} onChange={setVolume} />
+                <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} />
                 {monitors.map(m => (
                     <Slider key={m.id} Icon={Sun} value={m.brightness} onChange={(v) => setMonitorBrightness(m.id, v)} label={monitors.length > 1 ? m.name : undefined} />
                 ))}
@@ -60,13 +62,13 @@ function ControlItem({ label, sublabel, Icon }: { label: string; sublabel?: stri
     )
 }
 
-function Slider({ Icon, value, onChange, label }: { Icon: React.FC<{ color: string; size: number }>; value: number; onChange: (value: number) => void; label?: string }) {
+function Slider({ Icon, value, onChange, label, onIconClick, muted }: { Icon: React.FC<{ color: string; size: number }>; value: number; onChange: (value: number) => void; label?: string; onIconClick?: () => void; muted?: boolean }) {
     const dragging = useRef(false);
     return (
         <div className="flex flex-col gap-1">
             {label && <span className="text-[11px] text-white/50 ml-1">{label}</span>}
             <div className="flex bg-[#3F3F3F]/20 p-3 rounded-md text-white items-center gap-3">
-            <div className="shrink-0"><Icon color="white" size={15} /></div>
+            <div className={`shrink-0 ${onIconClick ? 'cursor-pointer' : ''}`} onClick={onIconClick}><Icon color={muted ? "rgba(255,255,255,0.4)" : "white"} size={15} /></div>
             <input
                 type="range"
                 min={0}

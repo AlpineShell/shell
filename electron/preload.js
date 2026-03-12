@@ -41,6 +41,11 @@ contextBridge.exposeInMainWorld('shell', {
     onVolumeChanged: (callback) => {
       ipcRenderer.on('system/volume-changed', (_, data) => callback(data))
     },
+    mute: () => ipcRenderer.invoke('system/mute-get'),
+    setMute: (muted) => ipcRenderer.invoke('system/mute-set', muted),
+    onMuteChanged: (callback) => {
+      ipcRenderer.on('system/mute-changed', (_, data) => callback(data))
+    },
     brightness: () => ipcRenderer.invoke('system/brightness-get'),
     setBrightness: (value) => ipcRenderer.invoke('system/brightness-set', value),
     onBrightnessChanged: (callback) => {

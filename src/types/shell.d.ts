@@ -45,6 +45,9 @@ declare global {
         volume: () => Promise<number>
         setVolume: (value: number) => Promise<number>
         onVolumeChanged: (callback: (data: number) => void) => void
+        mute: () => Promise<boolean>
+        setMute: (muted: boolean) => Promise<boolean>
+        onMuteChanged: (callback: (data: boolean) => void) => void
         brightness: () => Promise<number>
         setBrightness: (value: number) => Promise<number>
         onBrightnessChanged: (callback: (data: number) => void) => void

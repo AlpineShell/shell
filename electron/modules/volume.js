@@ -14,6 +14,7 @@ let commandQueue = []
 let busy = false
 let lastSetTime = 0
 let lastVolume = undefined
+let lastMute = undefined
 
 function initPS() {
   if (psReady) return psReady
@@ -86,10 +87,28 @@ async function setVolume(value) {
   return clamped
 }
 
+async function getMute() {
+  try {
+    const result = await runCmd('[Audio]::GetMute()')
+    return result.trim() === 'True'
+  } catch {
+    return false
+  }
+}
+
+async function setMute(muted) {
+  lastSetTime = Date.now()
+  commandQueue = commandQueue.filter(c => !c.cmd.startsWith('[Audio]::SetMute'))
+  await runCmd(`[Audio]::SetMute($${muted ? 'true' : 'false'})`)
+  return muted
+}
+
 module.exports = {
   handlers: {
     'system/volume-get': () => getVolume(),
     'system/volume-set': (_event, value) => setVolume(value),
+    'system/mute-get': () => getMute(),
+    'system/mute-set': (_event, muted) => setMute(muted),
   },
 
   start(broadcast) {
@@ -103,6 +122,11 @@ module.exports = {
       if (current !== lastVolume) {
         lastVolume = current
         broadcast('system/volume-changed', current)
+      }
+      const currentMute = await getMute()
+      if (currentMute !== lastMute) {
+        lastMute = currentMute
+        broadcast('system/mute-changed', currentMute)
       }
     }, 1000)
   },
