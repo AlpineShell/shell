@@ -23,7 +23,7 @@ export default function SystemMenu() {
                 </div>
             }
         >
-            <div className="bg-[#1f262d] border-[0.5px] border-[#313a46] p-1.5 flex flex-col rounded-xl w-48 shadow-2xl">
+            <div className="p-1.5 flex flex-col w-48 shadow-2xl">
                 <MenuItem label="Log Out" Icon={LogOut} onClick={() => window.shell.system.powerAction('logout')} />
                 <MenuItem label="Restart" Icon={RotateCcw} onClick={() => window.shell.system.powerAction('restart')} />
                 <MenuItem label="Shut Down" Icon={Power} onClick={() => window.shell.system.powerAction('shutdown')} />

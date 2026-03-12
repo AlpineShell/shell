@@ -24,7 +24,7 @@ export default function ControlCenter({ network, bluetooth, volume, setVolume, m
     }
 
     return (
-        <div className="bg-[#1f262d] border-[0.5px] border-[#313a46] p-3 gap-3 flex flex-col rounded-xl h-fit w-65 shadow-2xl">
+        <div className="p-3 gap-3 flex flex-col rounded-xl h-fit w-65 shadow-2xl">
             <div className="gap-3 mb-1 flex flex-col">
                 <ControlItem label="Wi-Fi" sublabel={wifiLabel} Icon={Wifi} />
                 <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} />
