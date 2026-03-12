@@ -1,12 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useShellState } from './useShellState'
 
 export function useOpenApps() {
-  const [apps, setApps] = useState<OpenApp[]>([])
-
-  useEffect(() => {
-    window.shell.windows.openApps().then(setApps)
-    window.shell.windows.onOpenAppsChanged(setApps)
-  }, [])
-
-  return apps
+  return useShellState<OpenApp[]>(
+    [],
+    window.shell.windows.openApps,
+    window.shell.windows.onOpenAppsChanged
+  )
 }

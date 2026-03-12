@@ -1,18 +1,9 @@
-import { useEffect, useState } from 'react'
-
-interface BluetoothState {
-  enabled: boolean
-  connected: boolean
-  devices: string[]
-}
+import { useShellState } from './useShellState'
 
 export function useBluetooth() {
-  const [bluetooth, setBluetooth] = useState<BluetoothState>({ enabled: false, connected: false, devices: [] })
-
-  useEffect(() => {
-    window.shell.system.bluetooth().then(setBluetooth)
-    window.shell.system.onBluetoothChanged(setBluetooth)
-  }, [])
-
-  return bluetooth
+  return useShellState<BluetoothState>(
+    { enabled: false, connected: false, devices: [] },
+    window.shell.system.bluetooth,
+    window.shell.system.onBluetoothChanged
+  )
 }

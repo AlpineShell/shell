@@ -3,18 +3,6 @@ import Clock from "./clock";
 import StatusIndicator from "./statusIndicator";
 import SystemMenu from "./systemMenu";
 
-declare global {
-    interface Window {
-        topbar: {
-            setIgnoreMouseEvents: (ignore: boolean) => void;
-            setHeight: (height: number) => void;
-            color: () => Promise<{ r: number; g: number; b: number } | null>;
-            onColorChanged: (callback: (color: { r: number; g: number; b: number }) => void) => void;
-            onCloseMenus: (callback: () => void) => void;
-        };
-    }
-}
-
 export default function TopBar() {
     const [bgColor, setBgColor] = useState("rgba(63, 63, 63, 1)");
 

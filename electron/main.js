@@ -78,8 +78,6 @@ function createTopBarWindow(display) {
   win.setIgnoreMouseEvents(true)
   win.loadURL(`${BASE_URL}?mode=topbar`)
 
-  // Main-process cursor tracking replaces { forward: true } to avoid
-  // click-through issues with transparent layered windows on Windows.
   const INTERACTIVE_RIGHT = 160
   const INTERACTIVE_LEFT = 40
   let ignoring = true
@@ -103,7 +101,6 @@ function createTopBarWindow(display) {
     } else if (!inInteractive && !ignoring) {
       ignoring = true
       win.setIgnoreMouseEvents(true)
-      // With focusable:false, blur won't fire — close menus when cursor leaves
       if (isExpanded) {
         win.webContents.send('topbar/close-menus')
       }
@@ -115,7 +112,6 @@ function createTopBarWindow(display) {
     if (event.sender === win.webContents) {
       const bounds = win.getBounds()
       win.setBounds({ ...bounds, height })
-      // Bring topbar above other windows when menu is open, restore when closed
       win.setAlwaysOnTop(height > TOP_BAR_HEIGHT)
     }
   }

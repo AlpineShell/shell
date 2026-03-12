@@ -2,7 +2,7 @@ const koffi = require('koffi')
 const { exec } = require('child_process')
 const { screen } = require('electron')
 
-// -- Win32 API setup --
+
 const user32 = koffi.load('user32.dll')
 
 let dxva2
@@ -46,17 +46,17 @@ if (dxva2) {
   )
 }
 
-// PHYSICAL_MONITOR struct: HANDLE (8 bytes) + WCHAR[128] (256 bytes) = 264 bytes
+
 const HANDLE_SIZE = 8
 const PHYS_MON_SIZE = HANDLE_SIZE + 128 * 2
-// MONITORINFOEXW: cbSize(4) + rcMonitor(16) + rcWork(16) + dwFlags(4) + szDevice(64) = 104
+
 const MONINFO_SIZE = 104
 
-// -- State --
+
 let monitors = []    // internal cache with handles
 let lastStateJson = null
 
-// -- Helpers --
+
 function readWideString(buf, offset, maxChars) {
   for (let i = 0; i < maxChars; i++) {
     if (buf.readUInt16LE(offset + i * 2) === 0)
@@ -77,7 +77,7 @@ function cleanName(physName, deviceName, index) {
   return `Display ${index + 1}`
 }
 
-// -- Monitor enumeration using Electron screen + MonitorFromRect --
+
 const MONITOR_DEFAULTTONEAREST = 0x02
 
 function enumLogicalMonitors() {
@@ -136,7 +136,7 @@ function destroyAllHandles() {
   }
 }
 
-// -- DDC/CI brightness (external monitors) --
+
 function ddcGetBrightness(hPhysical) {
   const min = Buffer.alloc(4), cur = Buffer.alloc(4), max = Buffer.alloc(4)
   if (!GetMonitorBrightnessAPI(hPhysical, min, cur, max)) return null
@@ -151,7 +151,7 @@ function ddcSetBrightness(hPhysical, rawValue) {
   return !!SetMonitorBrightnessAPI(hPhysical, rawValue)
 }
 
-// -- WMI brightness (built-in laptop display) --
+
 function wmiGetBrightness() {
   return new Promise((resolve) => {
     exec(
@@ -175,7 +175,7 @@ function wmiSetBrightness(value) {
   })
 }
 
-// -- Core: full enumeration --
+
 async function enumerate() {
   destroyAllHandles()
   const newMonitors = []
@@ -224,7 +224,7 @@ async function enumerate() {
   return publicState()
 }
 
-// -- Core: quick refresh (no re-enumeration, reuse cached handles) --
+
 async function refresh() {
   let changed = false
 
@@ -254,7 +254,7 @@ async function refresh() {
   return changed
 }
 
-// -- Set brightness for a specific monitor --
+
 async function setMonitorBrightness(id, value) {
   const clamped = Math.max(0, Math.min(100, Math.round(value)))
   const m = monitors.find(x => x.id === id)
@@ -280,14 +280,13 @@ function publicState() {
   }))
 }
 
-// -- Module export --
+
 module.exports = {
   handlers: {
     'system/monitors-get': () => enumerate(),
     'system/monitor-brightness-set': (_event, { id, value }) =>
       setMonitorBrightness(id, value),
 
-    // Legacy single-monitor API (backward compat)
     'system/brightness-get': async () => {
       if (!monitors.length) await enumerate()
       return monitors[0]?.brightness ?? 50
@@ -300,13 +299,11 @@ module.exports = {
   },
 
   start(broadcast) {
-    // Initial enumeration
     enumerate().then(state => {
       lastStateJson = JSON.stringify(state)
       broadcast('system/monitors-changed', state)
     })
 
-    // Quick brightness refresh every 5 seconds (reuses cached handles)
     setInterval(async () => {
       if (await refresh()) {
         const state = publicState()
@@ -315,7 +312,6 @@ module.exports = {
       }
     }, 5000)
 
-    // Full re-enumeration every 60 seconds (detects new/removed monitors)
     setInterval(() => {
       enumerate().then(state => {
         const json = JSON.stringify(state)

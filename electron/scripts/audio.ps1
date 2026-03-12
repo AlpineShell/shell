@@ -44,51 +44,36 @@ interface IMMDeviceEnumerator {
 class MMDeviceEnumeratorComObject {}
 
 public class Audio {
-    public static float GetVolume() {
+    private static IAudioEndpointVolume GetEndpointVolume() {
         var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
         IMMDevice dev;
         enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
         var iid = typeof(IAudioEndpointVolume).GUID;
         object ppv;
         dev.Activate(ref iid, 1, IntPtr.Zero, out ppv);
-        var vol = (IAudioEndpointVolume)ppv;
+        return (IAudioEndpointVolume)ppv;
+    }
+
+    public static float GetVolume() {
         float level;
-        vol.GetMasterVolumeLevelScalar(out level);
+        GetEndpointVolume().GetMasterVolumeLevelScalar(out level);
         return level;
     }
+
     public static void SetVolume(float level) {
-        var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
-        IMMDevice dev;
-        enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
-        var iid = typeof(IAudioEndpointVolume).GUID;
-        object ppv;
-        dev.Activate(ref iid, 1, IntPtr.Zero, out ppv);
-        var vol = (IAudioEndpointVolume)ppv;
         var guid = Guid.Empty;
-        vol.SetMasterVolumeLevelScalar(level, ref guid);
+        GetEndpointVolume().SetMasterVolumeLevelScalar(level, ref guid);
     }
+
     public static bool GetMute() {
-        var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
-        IMMDevice dev;
-        enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
-        var iid = typeof(IAudioEndpointVolume).GUID;
-        object ppv;
-        dev.Activate(ref iid, 1, IntPtr.Zero, out ppv);
-        var vol = (IAudioEndpointVolume)ppv;
         bool muted;
-        vol.GetMute(out muted);
+        GetEndpointVolume().GetMute(out muted);
         return muted;
     }
+
     public static void SetMute(bool mute) {
-        var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
-        IMMDevice dev;
-        enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
-        var iid = typeof(IAudioEndpointVolume).GUID;
-        object ppv;
-        dev.Activate(ref iid, 1, IntPtr.Zero, out ppv);
-        var vol = (IAudioEndpointVolume)ppv;
         var guid = Guid.Empty;
-        vol.SetMute(mute, ref guid);
+        GetEndpointVolume().SetMute(mute, ref guid);
     }
 }
 "@

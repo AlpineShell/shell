@@ -3,7 +3,7 @@ const koffi = require('koffi')
 const user32 = koffi.load('user32.dll')
 const gdi32 = koffi.load('gdi32.dll')
 
-// GDI pixel sampling
+
 const GetDC = user32.func('__stdcall', 'GetDC', 'uintptr_t', ['uintptr_t'])
 const ReleaseDC = user32.func('__stdcall', 'ReleaseDC', 'int', ['uintptr_t', 'uintptr_t'])
 const CreateCompatibleDC = gdi32.func('__stdcall', 'CreateCompatibleDC', 'uintptr_t', ['uintptr_t'])
@@ -14,16 +14,16 @@ const DeleteObject = gdi32.func('__stdcall', 'DeleteObject', 'int', ['uintptr_t'
 const DeleteDC = gdi32.func('__stdcall', 'DeleteDC', 'int', ['uintptr_t'])
 const GetDIBits = gdi32.func('__stdcall', 'GetDIBits', 'int', ['uintptr_t', 'uintptr_t', 'uint32', 'uint32', 'void *', 'void *', 'uint32'])
 
-// DPI awareness
+
 const SetThreadDpiAwarenessContext = user32.func('__stdcall', 'SetThreadDpiAwarenessContext', 'intptr_t', ['intptr_t'])
 const GetWindowRect = user32.func('__stdcall', 'GetWindowRect', 'int', ['uintptr_t', 'void *'])
 
-// Window state detection
+
 const GetForegroundWindow = user32.func('__stdcall', 'GetForegroundWindow', 'uintptr_t', [])
 const IsZoomed = user32.func('__stdcall', 'IsZoomed', 'int', ['uintptr_t'])
 const MonitorFromWindow = user32.func('__stdcall', 'MonitorFromWindow', 'uintptr_t', ['uintptr_t', 'uint32'])
 
-// DWM title bar color (Windows 11)
+
 let DwmGetWindowAttribute = null
 try {
   const dwmapi = koffi.load('dwmapi.dll')
@@ -57,18 +57,18 @@ function getMonitorHandle(hwnd) {
   return typeof h === 'bigint' ? Number(h) : h
 }
 
-/** Try DwmGetWindowAttribute(DWMWA_CAPTION_COLOR) for the real title bar color */
+
 function getCaptionColor(hwnd) {
   if (!DwmGetWindowAttribute) return null
   const buf = Buffer.alloc(4)
   const hr = DwmGetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, buf, 4)
   if (hr !== 0) return null
   const val = buf.readUInt32LE(0)
-  if (val >= 0xFFFFFFFE) return null // COLOR_DEFAULT or COLOR_NONE
+  if (val >= 0xFFFFFFFE) return null
   return { r: val & 0xFF, g: (val >> 8) & 0xFF, b: (val >> 16) & 0xFF }
 }
 
-/** Check if hwnd belongs to one of our own Electron windows */
+
 function isOwnWindow(hwnd) {
   if (!shellsRef) return false
   for (const shell of shellsRef.values()) {
@@ -78,7 +78,7 @@ function isOwnWindow(hwnd) {
   return false
 }
 
-/** Sample a horizontal strip and average the color */
+
 function sampleColorAt(physX, physY, physWidth) {
   if (physWidth <= 0) return null
   const screenDC = GetDC(0)
@@ -128,17 +128,13 @@ function getTopBarPhysBounds(topBarWin) {
   return { left: buf.readInt32LE(0), top: buf.readInt32LE(4), right: buf.readInt32LE(8), bottom: buf.readInt32LE(12) }
 }
 
-/** Sample the desktop/wallpaper area just below the topbar (full width) */
+
 function sampleDesktop(topBarWin, scaleFactor) {
   const b = getTopBarPhysBounds(topBarWin)
   return sampleColorAt(b.left, b.top + Math.round((TOP_BAR_HEIGHT + 2) * scaleFactor), b.right - b.left)
 }
 
-/**
- * Get topbar color for a display:
- * - If a maximized foreground window is on this display → use its DWM caption color
- * - Otherwise → sample the area just below the topbar (title bar or desktop)
- */
+
 function getColorForDisplay(shell) {
   if (shell.topBar.isDestroyed()) return null
   const scaleFactor = shell.display.scaleFactor || 1
@@ -147,7 +143,6 @@ function getColorForDisplay(shell) {
 
   const fgHwnd = GetForegroundWindow()
 
-  // If our own window is focused, return cached caption color to avoid color flash
   if (fgHwnd && isOwnWindow(fgHwnd)) {
     const cached = lastCaptionColors.get(displayId)
     if (cached) return cached
@@ -163,7 +158,6 @@ function getColorForDisplay(shell) {
     }
   }
 
-  // No maximized window — sample desktop and clear caption cache
   lastCaptionColors.delete(displayId)
   return sampleDesktop(shell.topBar, scaleFactor)
 }

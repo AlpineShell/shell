@@ -12,11 +12,19 @@ interface NetworkStatus {
   signal: number | null
   connected: boolean
   type: 'wifi' | 'ethernet'
+  ssid: string | null
 }
 
 interface BluetoothState {
   enabled: boolean
   connected: boolean
+  devices: string[]
+}
+
+interface TopBarColor {
+  r: number
+  g: number
+  b: number
 }
 
 declare global {
@@ -28,6 +36,13 @@ declare global {
   }
 
   interface Window {
+    topbar: {
+      setIgnoreMouseEvents: (ignore: boolean) => void
+      setHeight: (height: number) => void
+      color: () => Promise<TopBarColor | null>
+      onColorChanged: (callback: (color: TopBarColor) => void) => void
+      onCloseMenus: (callback: () => void) => void
+    }
     shell: {
       windows: {
         wallpaper: () => Promise<string | null>

@@ -5,7 +5,6 @@ const fs = require('fs')
 const SCRIPT_PATH = path.join(__dirname, '..', 'scripts', 'audio.ps1')
 const DELIM = '__AUDIO_DONE__'
 
-// -- Persistent PowerShell process (compiles C# once, then instant commands) --
 let ps = null
 let psReady = null
 let pendingResolve = null
@@ -39,7 +38,6 @@ function initPS() {
 
     ps.on('exit', () => { ps = null; psReady = null; busy = false })
 
-    // Compile the C# Audio class once at startup
     const script = fs.readFileSync(SCRIPT_PATH, 'utf8')
     const switchIdx = script.indexOf('\nswitch')
     const typeDef = switchIdx > 0 ? script.substring(0, switchIdx) : script
@@ -81,7 +79,6 @@ async function getVolume() {
 async function setVolume(value) {
   const clamped = Math.max(0, Math.min(100, Math.round(value)))
   lastSetTime = Date.now()
-  // Drop any queued set commands — only the latest value matters
   commandQueue = commandQueue.filter(c => !c.cmd.startsWith('[Audio]::SetVolume'))
   await runCmd(`[Audio]::SetVolume(${clamped} / 100.0)`)
   return clamped
@@ -112,11 +109,9 @@ module.exports = {
   },
 
   start(broadcast) {
-    // Pre-warm the persistent PowerShell process
     initPS()
 
     setInterval(async () => {
-      // Skip poll briefly after a set to avoid stale-value snap-back
       if (Date.now() - lastSetTime < 1500) return
       const current = await getVolume()
       if (current !== lastVolume) {

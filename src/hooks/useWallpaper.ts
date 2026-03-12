@@ -1,12 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useShellState } from './useShellState'
 
 export function useWallpaper() {
-  const [wallpaper, setWallpaper] = useState<string | null>(null)
-
-  useEffect(() => {
-    window.shell.windows.wallpaper().then(setWallpaper)
-    window.shell.windows.onWallpaperChanged(setWallpaper)
-  }, [])
-
-  return wallpaper
+  return useShellState<string | null>(
+    null,
+    window.shell.windows.wallpaper,
+    window.shell.windows.onWallpaperChanged
+  )
 }

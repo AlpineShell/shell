@@ -1,9 +1,9 @@
 import { Bluetooth, BluetoothConnected, BluetoothOff, EthernetPort, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
 import { useBluetooth } from "../hooks/useBluetooth";
-import { useMonitors } from "../hooks/useBrightness";
+import { useMonitors } from "../hooks/useMonitors";
 import { useVolume } from "../hooks/useVolume";
-import { useNetworkStatus } from "../hooks/useWifiSignal";
-import ControlCenter from "./controllCenter";
+import { useNetworkStatus } from "../hooks/useNetwork";
+import ControlCenter from "./controlCenter";
 import PopupMenu from "./popupMenu";
 
 function NetworkIcon({ signal, connected, type }: { signal: number | null; connected: boolean; type: string }) {

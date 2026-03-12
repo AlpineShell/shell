@@ -1,31 +1,24 @@
-const { exec } = require('child_process')
+const { runPowerShell } = require('../powershell')
 
 let lastState = undefined
 
-function getRadioEnabled() {
-  return new Promise((resolve) => {
-    exec(
-      'powershell -NoProfile -Command "((Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq \'OK\' }).Count -gt 0)"',
-      (err, stdout) => resolve(!err && stdout.trim() === 'True')
-    )
-  })
+function isRadioEnabled() {
+  return runPowerShell(
+    "((Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' }).Count -gt 0)"
+  ).then((output) => output === 'True')
 }
 
 function getConnectedDevices() {
-  return new Promise((resolve) => {
-    exec(
-      'powershell -NoProfile -Command "Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq \'OK\' -and $_.InstanceId -match \'^BTHENUM\\\\Dev_\' } | Select-Object -ExpandProperty FriendlyName"',
-      (err, stdout) => {
-        if (err || !stdout.trim()) return resolve([])
-        const devices = [...new Set(stdout.trim().split('\n').map(d => d.trim()).filter(Boolean))]
-        resolve(devices)
-      }
-    )
+  return runPowerShell(
+    "Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.InstanceId -match '^BTHENUM\\\\Dev_' } | Select-Object -ExpandProperty FriendlyName"
+  ).then((output) => {
+    if (!output) return []
+    return [...new Set(output.split('\n').map(d => d.trim()).filter(Boolean))]
   })
 }
 
 async function getBluetoothState() {
-  const enabled = await getRadioEnabled()
+  const enabled = await isRadioEnabled()
   if (!enabled) return { enabled: false, connected: false, devices: [] }
 
   const devices = await getConnectedDevices()
