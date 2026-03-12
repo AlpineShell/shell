@@ -7,6 +7,11 @@ contextBridge.exposeInMainWorld('topbar', {
   onColorChanged: (callback) => {
     ipcRenderer.on('topbar/color-changed', (_, data) => callback(data))
   },
+  onCloseMenus: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('topbar/close-menus', handler)
+    return () => ipcRenderer.removeListener('topbar/close-menus', handler)
+  },
 })
 
 contextBridge.exposeInMainWorld('shell', {

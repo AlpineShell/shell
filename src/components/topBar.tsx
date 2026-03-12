@@ -10,6 +10,7 @@ declare global {
             setHeight: (height: number) => void;
             color: () => Promise<{ r: number; g: number; b: number } | null>;
             onColorChanged: (callback: (color: { r: number; g: number; b: number }) => void) => void;
+            onCloseMenus: (callback: () => void) => void;
         };
     }
 }

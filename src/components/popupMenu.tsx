@@ -25,14 +25,11 @@ export default function PopupMenu({ trigger, children, align = "left" }: PopupMe
                 setOpen(false);
             }
         }
-        function handleBlur() {
-            setOpen(false);
-        }
         document.addEventListener("mousedown", handleClick);
-        window.addEventListener("blur", handleBlur);
+        const removeCloseListener = window.topbar.onCloseMenus(() => setOpen(false));
         return () => {
             document.removeEventListener("mousedown", handleClick);
-            window.removeEventListener("blur", handleBlur);
+            removeCloseListener();
         };
     }, [open]);
 

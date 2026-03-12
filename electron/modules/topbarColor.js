@@ -39,6 +39,7 @@ const DWMWA_CAPTION_COLOR = 35
 
 let shellsRef = null
 const lastColors = new Map()
+const lastCaptionColors = new Map()
 
 function withDpiAwareness(fn) {
   let old = null
@@ -142,15 +143,28 @@ function getColorForDisplay(shell) {
   if (shell.topBar.isDestroyed()) return null
   const scaleFactor = shell.display.scaleFactor || 1
   const topBarMon = getMonitorHandle(getHwnd(shell.topBar))
+  const displayId = shell.display.id
 
   const fgHwnd = GetForegroundWindow()
+
+  // If our own window is focused, return cached caption color to avoid color flash
+  if (fgHwnd && isOwnWindow(fgHwnd)) {
+    const cached = lastCaptionColors.get(displayId)
+    if (cached) return cached
+  }
+
   if (fgHwnd && fgHwnd !== 0 && !isOwnWindow(fgHwnd) && IsZoomed(fgHwnd)) {
     if (getMonitorHandle(fgHwnd) === topBarMon) {
       const caption = getCaptionColor(fgHwnd)
-      if (caption) return caption
+      if (caption) {
+        lastCaptionColors.set(displayId, caption)
+        return caption
+      }
     }
   }
 
+  // No maximized window — sample desktop and clear caption cache
+  lastCaptionColors.delete(displayId)
   return sampleDesktop(shell.topBar, scaleFactor)
 }
 

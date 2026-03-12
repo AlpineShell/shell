@@ -64,7 +64,7 @@ function createTopBarWindow(display) {
     resizable: false,
     movable: false,
     skipTaskbar: true,
-    focusable: true,
+    focusable: false,
     transparent: true,
     thickFrame: false,
     webPreferences: {
@@ -103,6 +103,10 @@ function createTopBarWindow(display) {
     } else if (!inInteractive && !ignoring) {
       ignoring = true
       win.setIgnoreMouseEvents(true)
+      // With focusable:false, blur won't fire — close menus when cursor leaves
+      if (isExpanded) {
+        win.webContents.send('topbar/close-menus')
+      }
     }
   }, 50)
 
@@ -111,6 +115,8 @@ function createTopBarWindow(display) {
     if (event.sender === win.webContents) {
       const bounds = win.getBounds()
       win.setBounds({ ...bounds, height })
+      // Bring topbar above other windows when menu is open, restore when closed
+      win.setAlwaysOnTop(height > TOP_BAR_HEIGHT)
     }
   }
   ipcMain.on('topbar/set-height', onSetHeight)
