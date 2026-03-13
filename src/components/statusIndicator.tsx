@@ -38,7 +38,7 @@ export default function StatusIndicator() {
         <PopupMenu
             align="right"
             trigger={
-                <div className={`${darkText ? "bg-black/4" : "bg-white/10"} flex px-2 rounded-full py-0.5 items-center gap-1 transition-colors duration-300`}>
+                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full py-0.5 items-center gap-1 transition-colors duration-300`}>
                     <BluetoothIcon enabled={bluetooth.enabled} connected={bluetooth.connected} color={iconColor} />
                     <NetworkIcon signal={network.signal} connected={network.connected} type={network.type} color={iconColor} />
                 </div>
