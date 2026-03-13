@@ -46,7 +46,7 @@ export default function PopupMenu({ trigger, children, align = "left" }: PopupMe
                         className="fixed inset-0 z-40"
                         onMouseDown={() => setOpen(false)}
                     />
-                    <div className={`absolute ${darkText ? "bg-[#ffffff]" : "bg-[#2d2d2d]"} rounded-lg top-full mt-1 z-50 ${align === "right" ? "right-0" : "left-0 ml-1"}`}>
+                    <div className={`absolute ${darkText ? "bg-[#ffffff] border border-black/15" : "bg-[#2d2d2d]"} rounded-lg overflow-hidden top-full mt-1 z-50 ${align === "right" ? "right-0" : "left-0 ml-1"}`}>
                         {children}
                     </div>
                 </>
