@@ -53,8 +53,9 @@ const PHYS_MON_SIZE = HANDLE_SIZE + 128 * 2
 const MONINFO_SIZE = 104
 
 
-let monitors = []    // internal cache with handles
+let monitors = []
 let lastStateJson = null
+let hasInternalDisplay = null
 
 
 function readWideString(buf, offset, maxChars) {
@@ -78,11 +79,26 @@ function cleanName(physName, deviceName, index) {
 }
 
 
+function detectInternalDisplay() {
+  return new Promise((resolve) => {
+    exec(
+      'powershell -NoProfile -Command "(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorConnectionParams).VideoOutputTechnology"',
+      (err, stdout) => {
+        if (err) return resolve(false)
+        const values = stdout.trim().split(/\r?\n/).map(v => parseInt(v.trim(), 10)).filter(v => !isNaN(v))
+        resolve(values.some(v => v === 16 || v === 2147483648 || v === 6 || v === 11 || v === 13))
+      }
+    )
+  })
+}
+
+
 const MONITOR_DEFAULTTONEAREST = 0x02
 
 function enumLogicalMonitors() {
   const displays = screen.getAllDisplays()
-  const handles = []
+  const results = []
+  const seen = new Set()
   for (const d of displays) {
     const rect = Buffer.alloc(16)
     rect.writeInt32LE(d.bounds.x, 0)
@@ -90,9 +106,12 @@ function enumLogicalMonitors() {
     rect.writeInt32LE(d.bounds.x + d.bounds.width, 8)
     rect.writeInt32LE(d.bounds.y + d.bounds.height, 12)
     const h = toNum(MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST))
-    if (h) handles.push(h)
+    if (h && !seen.has(h)) {
+      seen.add(h)
+      results.push(h)
+    }
   }
-  return handles
+  return results
 }
 
 function getDeviceName(hMon) {
@@ -141,7 +160,6 @@ function ddcGetBrightness(hPhysical) {
   const min = Buffer.alloc(4), cur = Buffer.alloc(4), max = Buffer.alloc(4)
   if (!GetMonitorBrightnessAPI(hPhysical, min, cur, max)) return null
   return {
-    min: min.readUInt32LE(0),
     current: cur.readUInt32LE(0),
     max: max.readUInt32LE(0),
   }
@@ -208,16 +226,20 @@ async function enumerate() {
     }
   }
 
-  const wmiBrightness = await wmiGetBrightness()
-  if (wmiBrightness !== null) {
-    newMonitors.push({
-      id: 'internal',
-      name: 'Built-in Display',
-      type: 'internal',
-      brightness: wmiBrightness,
-      hPhysical: null,
-      ddcMax: null,
-    })
+  if (hasInternalDisplay === null) hasInternalDisplay = await detectInternalDisplay()
+
+  if (hasInternalDisplay) {
+    const wmiBrightness = await wmiGetBrightness()
+    if (wmiBrightness !== null) {
+      newMonitors.push({
+        id: 'internal',
+        name: 'Built-in Display',
+        type: 'internal',
+        brightness: wmiBrightness,
+        hPhysical: null,
+        ddcMax: null,
+      })
+    }
   }
 
   monitors = newMonitors

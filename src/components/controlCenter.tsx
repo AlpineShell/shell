@@ -34,7 +34,7 @@ export default function ControlCenter({ network, bluetooth, volume, setVolume, m
             <div className="flex flex-col gap-2">
                 <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
                 {monitors.map(m => (
-                    <Slider key={m.id} Icon={Sun} value={m.brightness} onChange={(v) => setMonitorBrightness(m.id, v)} label={monitors.length > 1 ? m.name : undefined} darkText={darkText} />
+                    <Slider key={m.id} Icon={Sun} value={m.brightness} onChange={(v) => setMonitorBrightness(m.id, v)} darkText={darkText} />
                 ))}
             </div>
         </div>
