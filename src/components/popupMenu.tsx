@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTopBarDarkText } from "./topBarThemeContext";
 
 interface PopupMenuProps {
     trigger: ReactNode;
@@ -7,6 +8,7 @@ interface PopupMenuProps {
 }
 
 export default function PopupMenu({ trigger, children, align = "left" }: PopupMenuProps) {
+    const darkText = useTopBarDarkText();
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
 
@@ -44,7 +46,7 @@ export default function PopupMenu({ trigger, children, align = "left" }: PopupMe
                         className="fixed inset-0 z-40"
                         onMouseDown={() => setOpen(false)}
                     />
-                    <div className={`absolute bg-[#2d2d2d] rounded-lg top-full mt-1 z-50 ${align === "right" ? "right-0" : "left-0 ml-1"}`}>
+                    <div className={`absolute ${darkText ? "bg-[#f0f0f0]" : "bg-[#2d2d2d]"} rounded-lg top-full mt-1 z-50 ${align === "right" ? "right-0" : "left-0 ml-1"}`}>
                         {children}
                     </div>
                 </>

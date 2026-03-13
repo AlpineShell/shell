@@ -58,6 +58,22 @@
   border-radius: 8px;
 }
 
+.cc-slider-light {
+  background: linear-gradient(
+    to right,
+    black var(--slider-progress, 50%),
+    rgba(0, 0, 0, 0.15) var(--slider-progress, 50%)
+  );
+}
+
+.cc-slider-light::-moz-range-progress {
+  background: black;
+}
+
+.cc-slider-light::-moz-range-track {
+  background: rgba(0, 0, 0, 0.15);
+}
+
 @layer base {
   * {
     margin: 0;

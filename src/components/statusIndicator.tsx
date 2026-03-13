@@ -5,39 +5,42 @@ import { useVolume } from "../hooks/useVolume";
 import { useNetworkStatus } from "../hooks/useNetwork";
 import ControlCenter from "./controlCenter";
 import PopupMenu from "./popupMenu";
+import { useTopBarDarkText } from "./topBarThemeContext";
 
-function NetworkIcon({ signal, connected, type }: { signal: number | null; connected: boolean; type: string }) {
+function NetworkIcon({ signal, connected, type, color }: { signal: number | null; connected: boolean; type: string; color: string }) {
     if (type === 'ethernet') {
-        return <EthernetPort color="white" size={14} />;
+        return <EthernetPort color={color} size={14} />;
     }
 
-    if (!connected) return <WifiOff color="white" size={14} />;
-    if (signal === null) return <Wifi color="white" size={14} />;
-    if (signal >= 70) return <Wifi color="white" size={14} />;
-    if (signal >= 40) return <WifiHigh color="white" size={14} />;
-    if (signal >= 10) return <WifiLow color="white" size={14} />;
-    return <WifiZero color="white" size={14} />;
+    if (!connected) return <WifiOff color={color} size={14} />;
+    if (signal === null) return <Wifi color={color} size={14} />;
+    if (signal >= 70) return <Wifi color={color} size={14} />;
+    if (signal >= 40) return <WifiHigh color={color} size={14} />;
+    if (signal >= 10) return <WifiLow color={color} size={14} />;
+    return <WifiZero color={color} size={14} />;
 }
 
-function BluetoothIcon({ enabled, connected }: { enabled: boolean; connected: boolean }) {
-    if (!enabled) return <BluetoothOff color="white" size={14} />;
-    if (connected) return <BluetoothConnected color="white" size={14} />;
-    return <Bluetooth color="white" size={14} />;
+function BluetoothIcon({ enabled, connected, color }: { enabled: boolean; connected: boolean; color: string }) {
+    if (!enabled) return <BluetoothOff color={color} size={14} />;
+    if (connected) return <BluetoothConnected color={color} size={14} />;
+    return <Bluetooth color={color} size={14} />;
 }
 
 export default function StatusIndicator() {
+    const darkText = useTopBarDarkText();
     const network = useNetworkStatus();
     const bluetooth = useBluetooth();
     const { volume, setVolume, muted, toggleMute } = useVolume();
     const { monitors, setBrightness: setMonitorBrightness } = useMonitors();
+    const iconColor = darkText ? "black" : "white";
 
     return (
         <PopupMenu
             align="right"
             trigger={
-                <div className="bg-white/10 flex px-2 rounded-full py-0.5 items-center gap-1">
-                    <BluetoothIcon enabled={bluetooth.enabled} connected={bluetooth.connected} />
-                    <NetworkIcon signal={network.signal} connected={network.connected} type={network.type} />
+                <div className={`${darkText ? "bg-black/4" : "bg-white/10"} flex px-2 rounded-full py-0.5 items-center gap-1 transition-colors duration-300`}>
+                    <BluetoothIcon enabled={bluetooth.enabled} connected={bluetooth.connected} color={iconColor} />
+                    <NetworkIcon signal={network.signal} connected={network.connected} type={network.type} color={iconColor} />
                 </div>
             }
         >

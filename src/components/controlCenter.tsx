@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { Bluetooth, ChevronRight, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
+import { useTopBarDarkText } from "./topBarThemeContext";
 
 interface ControlCenterProps {
     network: { connected: boolean; ssid: string | null };
@@ -13,6 +14,7 @@ interface ControlCenterProps {
 }
 
 export default function ControlCenter({ network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness }: ControlCenterProps) {
+    const darkText = useTopBarDarkText();
 
     const wifiLabel = network.connected ? (network.ssid ?? "Connected") : undefined;
 
@@ -26,49 +28,53 @@ export default function ControlCenter({ network, bluetooth, volume, setVolume, m
     return (
         <div className="p-3 gap-3 flex flex-col rounded-xl h-fit w-65 shadow-2xl">
             <div className="gap-3 mb-1 flex flex-col">
-                <ControlItem label="Wi-Fi" sublabel={wifiLabel} Icon={Wifi} />
-                <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} />
+                <ControlItem label="Wi-Fi" sublabel={wifiLabel} Icon={Wifi} darkText={darkText} />
+                <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} darkText={darkText} />
             </div>
             <div className="flex flex-col gap-2">
-                <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} />
+                <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
                 {monitors.map(m => (
-                    <Slider key={m.id} Icon={Sun} value={m.brightness} onChange={(v) => setMonitorBrightness(m.id, v)} label={monitors.length > 1 ? m.name : undefined} />
+                    <Slider key={m.id} Icon={Sun} value={m.brightness} onChange={(v) => setMonitorBrightness(m.id, v)} label={monitors.length > 1 ? m.name : undefined} darkText={darkText} />
                 ))}
             </div>
         </div>
     )
 }
 
-function ControlItem({ label, sublabel, Icon }: { label: string; sublabel?: string; Icon: React.FC<{ color: string; size: number }> }) {
+function ControlItem({ label, sublabel, Icon, darkText }: { label: string; sublabel?: string; Icon: React.FC<{ color: string; size: number }>; darkText: boolean }) {
     const active = !!sublabel;
+    const color = darkText ? "black" : "white";
+    const dimColor = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)";
     return (
-        <div className="flex cursor-pointer justify-between items-center text-white">
+        <div className={`flex cursor-pointer justify-between items-center ${darkText ? "text-black" : "text-white"}`}>
             {active ? (
                 <div className="flex gap-2 text-sm items-center">
-                    <Icon color="white" size={15} />
+                    <Icon color={color} size={15} />
                     <div className="flex flex-col gap-0">
                         <span>{label}</span>
-                        <span className="text-xs text-white/60 -mt-0.5">{sublabel}</span>
+                        <span className={`text-xs ${darkText ? "text-black/60" : "text-white/60"} -mt-0.5`}>{sublabel}</span>
                     </div>
                 </div>
             ) : (
-                <div className="flex gap-2 text-sm items-center text-white/60">
-                    <Icon color="rgba(255,255,255,0.6)" size={15} />
+                <div className={`flex gap-2 text-sm items-center ${darkText ? "text-black/60" : "text-white/60"}`}>
+                    <Icon color={dimColor} size={15} />
                     {label}
                 </div>
             )}
-            <ChevronRight color={active ? "white" : "rgba(255,255,255,0.6)"} size={15} />
+            <ChevronRight color={active ? color : dimColor} size={15} />
         </div>
     )
 }
 
-function Slider({ Icon, value, onChange, label, onIconClick, muted }: { Icon: React.FC<{ color: string; size: number }>; value: number; onChange: (value: number) => void; label?: string; onIconClick?: () => void; muted?: boolean }) {
+function Slider({ Icon, value, onChange, label, onIconClick, muted, darkText }: { Icon: React.FC<{ color: string; size: number }>; value: number; onChange: (value: number) => void; label?: string; onIconClick?: () => void; muted?: boolean; darkText: boolean }) {
     const dragging = useRef(false);
+    const color = darkText ? "black" : "white";
+    const mutedColor = darkText ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.4)";
     return (
         <div className="flex flex-col gap-1">
-            {label && <span className="text-[11px] text-white/50 ml-1">{label}</span>}
-            <div className="flex bg-[#3F3F3F]/20 p-3 rounded-md text-white items-center gap-3">
-            <div className={`shrink-0 ${onIconClick ? 'cursor-pointer' : ''}`} onClick={onIconClick}><Icon color={muted ? "rgba(255,255,255,0.4)" : "white"} size={15} /></div>
+            {label && <span className={`text-[11px] ${darkText ? "text-black/50" : "text-white/50"} ml-1`}>{label}</span>}
+            <div className={`flex ${darkText ? "bg-black/5" : "bg-[#3F3F3F]/20"} p-3 rounded-md ${darkText ? "text-black" : "text-white"} items-center gap-3`}>
+            <div className={`shrink-0 ${onIconClick ? 'cursor-pointer' : ''}`} onClick={onIconClick}><Icon color={muted ? mutedColor : color} size={15} /></div>
             <input
                 type="range"
                 min={0}
@@ -78,7 +84,7 @@ function Slider({ Icon, value, onChange, label, onIconClick, muted }: { Icon: Re
                 onPointerUp={() => { dragging.current = false }}
                 onLostPointerCapture={() => { dragging.current = false }}
                 onChange={(e) => onChange(Number(e.target.value))}
-                className={`cc-slider w-full ${dragging.current ? 'dragging' : 'animate'}`}
+                className={`cc-slider w-full ${dragging.current ? 'dragging' : 'animate'} ${darkText ? 'cc-slider-light' : ''}`}
                 style={{ '--slider-progress': `${value}%` } as React.CSSProperties}
             />
             </div>
