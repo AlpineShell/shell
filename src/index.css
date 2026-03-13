@@ -61,17 +61,18 @@
 .cc-slider-light {
   background: linear-gradient(
     to right,
-    black var(--slider-progress, 50%),
-    rgba(0, 0, 0, 0.15) var(--slider-progress, 50%)
+    white var(--slider-progress, 50%),
+    rgba(0, 0, 0, 0.08) var(--slider-progress, 50%)
   );
+  border: 0.2px solid rgba(150, 150, 150, 0.452);
 }
 
 .cc-slider-light::-moz-range-progress {
-  background: black;
+  background: white;
 }
 
 .cc-slider-light::-moz-range-track {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.08);
 }
 
 @layer base {
