@@ -1,6 +1,6 @@
 # Alpine Shell
 
-A Windows desktop shell
+A Windows desktop shell.
 
 ## Requirements
 
