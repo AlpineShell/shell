@@ -27,20 +27,19 @@ interface TopBarColor {
   b: number
 }
 
-interface AltTabWindow {
-  hwnd: number
-  title: string
-  processName: string
-  icon: string
-  thumbnail: string
-}
-
-interface AltTabShowPayload {
-  windows: AltTabWindow[]
-  selectedIndex: number
-}
-
 declare global {
+  interface AltTabWindow {
+    hwnd: number
+    title: string
+    processName: string
+    icon: string
+    thumbnail: string
+  }
+
+  interface AltTabShowPayload {
+    windows: AltTabWindow[]
+    selectedIndex: number
+  }
   interface MonitorInfo {
     id: string
     name: string

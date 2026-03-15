@@ -37,7 +37,7 @@ export default function AltTabSwitcher() {
   }
 
   return (
-    <div className="w-screen h-screen flex items-start mt-15 justify-center">
+    <div className="w-screen h-screen flex items-start mt-10 justify-center">
       <div
         className="flex gap-2 p-3 rounded-2xl"
       >
