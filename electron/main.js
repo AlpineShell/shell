@@ -12,6 +12,7 @@ const power = require('./modules/power')
 const setup = require('./modules/setup')
 let altTab = null
 try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
+const { processAutostart } = require('./modules/autostart')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -225,6 +226,7 @@ function createAltTabWindow() {
 }
 
 app.whenReady().then(() => {
+  processAutostart()
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab, setup)
   topbarColor.setShells(shells)
 
