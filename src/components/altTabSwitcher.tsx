@@ -7,7 +7,7 @@ function WindowEntry({ window, selected }: { window: AltTabWindow; selected: boo
         selected ? 'ring-white' : 'ring-gray-500/50'
       }`}
     >
-      <div className="flex items-center gap-2 px-2.5 py-1.5">
+      <div className="flex items-center gap-2 px-1.5 py-1.5">
         {window.icon && (
           <img src={window.icon} alt="" className="w-4 h-4 shrink-0" draggable={false} />
         )}
