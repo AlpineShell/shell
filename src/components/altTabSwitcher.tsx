@@ -39,7 +39,7 @@ export default function AltTabSwitcher() {
   return (
     <div className="w-screen h-screen flex items-start mt-10 justify-center">
       <div
-        className="flex gap-2 p-3 rounded-md shadow-2xs"
+        className="flex flex-wrap gap-2 p-3 rounded-md shadow-2xs max-w-[90vw]"
       >
         {windows.map((w, i) => (
           <WindowEntry key={w.hwnd} window={w} selected={i === selectedIndex} />
