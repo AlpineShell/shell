@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld('alttab', {
   activate: (hwnd) => ipcRenderer.invoke('alttab/activate', hwnd),
 })
 
+contextBridge.exposeInMainWorld('setup', {
+  status: () => ipcRenderer.invoke('setup/status'),
+  install: (options) => ipcRenderer.invoke('setup/install', options),
+  skip: () => ipcRenderer.invoke('setup/skip'),
+})
+
 contextBridge.exposeInMainWorld('shell', {
   windows: {
     wallpaper: () => ipcRenderer.invoke('windows/wallpaper'),

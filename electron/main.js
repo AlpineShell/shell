@@ -9,6 +9,7 @@ const topbarColor = require('./modules/topbarColor')
 const volume = require('./modules/volume')
 const brightness = require('./modules/brightness')
 const power = require('./modules/power')
+const setup = require('./modules/setup')
 let altTab = null
 try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
 const {
@@ -18,7 +19,13 @@ const {
   isSettingWorkArea,
 } = require('./modules/appbar')
 
-const BASE_URL = 'http://localhost:5173'
+const isDev = !app.isPackaged
+const BASE_URL = isDev ? 'http://localhost:5173' : null
+
+function getURL(mode) {
+  if (isDev) return `${BASE_URL}?mode=${mode}`
+  return `file://${path.join(__dirname, '..', 'dist', 'index.html')}?mode=${mode}`
+}
 const TOP_BAR_HEIGHT = 24
 
 const shells = new Map()
@@ -44,7 +51,7 @@ function createDesktopWindow(display) {
   })
 
   win.setAlwaysOnTop(false)
-  win.loadURL(`${BASE_URL}?mode=desktop`)
+  win.loadURL(getURL('desktop'))
 
   return win
 }
@@ -78,7 +85,7 @@ function createTopBarWindow(display) {
 
   win.setAlwaysOnTop(false)
   win.setIgnoreMouseEvents(true)
-  win.loadURL(`${BASE_URL}?mode=topbar`)
+  win.loadURL(getURL('topbar'))
 
   const INTERACTIVE_RIGHT = 160
   const INTERACTIVE_LEFT = 40
@@ -207,7 +214,7 @@ function createAltTabWindow() {
   })
 
   win.setAlwaysOnTop(true, 'screen-saver')
-  win.loadURL(`${BASE_URL}?mode=alttab`)
+  win.loadURL(getURL('alttab'))
 
   win.webContents.once('did-finish-load', () => {
     win.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
@@ -218,7 +225,7 @@ function createAltTabWindow() {
 }
 
 app.whenReady().then(() => {
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab, setup)
   topbarColor.setShells(shells)
 
   const altTabWindow = createAltTabWindow()

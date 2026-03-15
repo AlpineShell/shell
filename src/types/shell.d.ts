@@ -47,7 +47,28 @@ declare global {
     brightness: number
   }
 
+  interface SetupOptions {
+    cursor: boolean
+  }
+
+  interface SetupResult {
+    shell: boolean
+    startup: boolean
+    cursor: boolean
+  }
+
+  interface SetupStatus {
+    isShell: boolean
+    hasStartup: boolean
+    hasCursor: boolean
+  }
+
   interface Window {
+    setup: {
+      status: () => Promise<SetupStatus>
+      install: (options: SetupOptions) => Promise<SetupResult>
+      skip: () => Promise<void>
+    }
     alttab: {
       onShow: (callback: (data: AltTabShowPayload) => void) => void
       onHide: (callback: () => void) => void
