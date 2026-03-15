@@ -3,7 +3,7 @@ import { useAltTab } from '../hooks/useAltTab'
 function WindowEntry({ window, selected }: { window: AltTabWindow; selected: boolean }) {
   return (
     <div
-      className={`rounded-xl ring-1 overflow-hidden shrink-0 bg-[#122134] w-50 ${
+      className={`rounded-md ring-1 overflow-hidden shrink-0 bg-[#122134] w-50 ${
         selected ? 'ring-white' : 'ring-gray-500/50'
       }`}
     >
@@ -39,7 +39,7 @@ export default function AltTabSwitcher() {
   return (
     <div className="w-screen h-screen flex items-start mt-10 justify-center">
       <div
-        className="flex gap-2 p-3 rounded-2xl shadow-2xs"
+        className="flex gap-2 p-3 rounded-md shadow-2xs"
       >
         {windows.map((w, i) => (
           <WindowEntry key={w.hwnd} window={w} selected={i === selectedIndex} />
