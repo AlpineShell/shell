@@ -13,20 +13,18 @@ function WindowEntry({ window, selected }: { window: AltTabWindow; selected: boo
         )}
         <span className="text-white text-xs truncate">{window.processName}</span>
       </div>
-      {window.thumbnail ? (
-        <img
-          src={window.thumbnail}
-          alt=""
-          className="w-full object-cover"
-          draggable={false}
-        />
-      ) : (
-        <div className="w-full h-28 flex items-center justify-center bg-white/5">
-          {window.icon && (
-            <img src={window.icon} alt="" className="w-12 h-12 opacity-60" draggable={false} />
-          )}
-        </div>
-      )}
+      <div className="w-full h-31 flex items-center justify-center bg-[#122134]">
+        {window.thumbnail ? (
+          <img
+            src={window.thumbnail}
+            alt=""
+            className="max-w-full max-h-full object-contain"
+            draggable={false}
+          />
+        ) : window.icon ? (
+          <img src={window.icon} alt="" className="w-12 h-12 opacity-60" draggable={false} />
+        ) : null}
+      </div>
     </div>
   )
 }
