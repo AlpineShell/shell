@@ -9,6 +9,8 @@ const topbarColor = require('./modules/topbarColor')
 const volume = require('./modules/volume')
 const brightness = require('./modules/brightness')
 const power = require('./modules/power')
+let altTab = null
+try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
 const {
   registerAppBar,
   unregisterAppBar,
@@ -183,9 +185,38 @@ function repositionShell(display) {
   shell.display = display
 }
 
+function createAltTabWindow() {
+  const win = new BrowserWindow({
+    width: 400,
+    height: 600,
+    frame: false,
+    resizable: false,
+    movable: false,
+    skipTaskbar: true,
+    focusable: false,
+    transparent: true,
+    thickFrame: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.loadURL(`${BASE_URL}?mode=alttab`)
+
+  return win
+}
+
 app.whenReady().then(() => {
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab)
   topbarColor.setShells(shells)
+
+  const altTabWindow = createAltTabWindow()
+  altTab.setOverlayWindow(altTabWindow)
+  altTab.setShells(shells)
 
   for (const display of screen.getAllDisplays()) {
     createShellForDisplay(display)

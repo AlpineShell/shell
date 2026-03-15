@@ -27,6 +27,19 @@ interface TopBarColor {
   b: number
 }
 
+interface AltTabWindow {
+  hwnd: number
+  title: string
+  processName: string
+  icon: string
+  thumbnail: string
+}
+
+interface AltTabShowPayload {
+  windows: AltTabWindow[]
+  selectedIndex: number
+}
+
 declare global {
   interface MonitorInfo {
     id: string
@@ -36,6 +49,12 @@ declare global {
   }
 
   interface Window {
+    alttab: {
+      onShow: (callback: (data: AltTabShowPayload) => void) => void
+      onHide: (callback: () => void) => void
+      onSelectionChanged: (callback: (index: number) => void) => void
+      activate: (hwnd: number) => Promise<void>
+    }
     topbar: {
       setIgnoreMouseEvents: (ignore: boolean) => void
       setHeight: (height: number) => void

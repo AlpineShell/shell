@@ -14,6 +14,19 @@ contextBridge.exposeInMainWorld('topbar', {
   },
 })
 
+contextBridge.exposeInMainWorld('alttab', {
+  onShow: (callback) => {
+    ipcRenderer.on('alttab/show', (_, data) => callback(data))
+  },
+  onHide: (callback) => {
+    ipcRenderer.on('alttab/hide', () => callback())
+  },
+  onSelectionChanged: (callback) => {
+    ipcRenderer.on('alttab/selection-changed', (_, index) => callback(index))
+  },
+  activate: (hwnd) => ipcRenderer.invoke('alttab/activate', hwnd),
+})
+
 contextBridge.exposeInMainWorld('shell', {
   windows: {
     wallpaper: () => ipcRenderer.invoke('windows/wallpaper'),
