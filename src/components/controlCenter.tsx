@@ -48,11 +48,11 @@ function ControlItem({ label, sublabel, Icon, darkText }: { label: string; subla
     return (
         <div className={`flex cursor-pointer justify-between items-center ${darkText ? "text-black" : "text-white"}`}>
             {active ? (
-                <div className="flex gap-2 text-sm items-center">
-                    <Icon color={color} size={15} />
+                <div className="flex mx-1 gap-3 text-sm items-center">
+                    <Icon color={color} size={17} />
                     <div className="flex flex-col gap-0">
-                        <span>{label}</span>
-                        <span className={`text-xs ${darkText ? "text-black/60" : "text-white/60"} -mt-0.5`}>{sublabel}</span>
+                        <span className="text-xs">{label}</span>
+                        <span className={`text-[13px] ${darkText ? "text-black/60" : "text-white/60"} -mt-0.5`}>{sublabel}</span>
                     </div>
                 </div>
             ) : (
