@@ -197,15 +197,22 @@ function createAltTabWindow() {
     transparent: true,
     thickFrame: false,
     show: false,
+    paintWhenInitiallyHidden: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false,
     },
   })
 
   win.setAlwaysOnTop(true, 'screen-saver')
   win.loadURL(`${BASE_URL}?mode=alttab`)
+
+  win.webContents.once('did-finish-load', () => {
+    win.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
+    win.showInactive()
+  })
 
   return win
 }

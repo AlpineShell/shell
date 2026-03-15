@@ -252,6 +252,11 @@ function activateWindow(hwnd) {
   keybd_event(0xA4, 0, 2, 0)
 }
 
+function moveOffscreen() {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return
+  overlayWindow.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
+}
+
 function showSwitcher() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
 
@@ -267,7 +272,7 @@ function showSwitcher() {
 
   overlayWindow.setBounds({ x, y, width, height })
 
-  overlayWindow.showInactive()
+  if (!overlayWindow.isVisible()) overlayWindow.showInactive()
   overlayWindow.webContents.send('alttab/show', { windows: windowList, selectedIndex })
 }
 
@@ -275,8 +280,8 @@ function hideSwitcher() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
   switcherActive = false
   windowList = []
-  overlayWindow.hide()
   overlayWindow.webContents.send('alttab/hide')
+  moveOffscreen()
 }
 
 function cycleSelection(forward) {
