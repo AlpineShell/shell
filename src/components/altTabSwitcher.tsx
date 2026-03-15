@@ -13,12 +13,12 @@ function WindowEntry({ window, selected }: { window: AltTabWindow; selected: boo
         )}
         <span className="text-white text-xs truncate">{window.processName}</span>
       </div>
-      <div className="w-full h-31 flex items-center justify-center bg-[#122134]">
+      <div className="w-full h-31 flex items-center pb-1 justify-center bg-[#122134]">
         {window.thumbnail ? (
           <img
             src={window.thumbnail}
             alt=""
-            className="max-w-full max-h-full object-contain"
+            className="max-w-full rounded-md max-h-full object-contain"
             draggable={false}
           />
         ) : window.icon ? (
@@ -39,7 +39,7 @@ export default function AltTabSwitcher() {
   return (
     <div className="w-screen h-screen flex items-start mt-10 justify-center">
       <div
-        className="flex gap-2 p-3 rounded-2xl"
+        className="flex gap-2 p-3 rounded-2xl shadow-2xs"
       >
         {windows.map((w, i) => (
           <WindowEntry key={w.hwnd} window={w} selected={i === selectedIndex} />
