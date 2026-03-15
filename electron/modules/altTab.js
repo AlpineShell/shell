@@ -81,6 +81,7 @@ let selectedIndex = 0
 let windowList = []
 
 const iconCache = new Map()
+const thumbnailCache = new Map()
 
 function getHwnd(win) {
   return win.getNativeWindowHandle().readUInt32LE(0)
@@ -161,33 +162,18 @@ function enumTaskWindows() {
 }
 
 function captureWindowThumbnail(hwnd) {
-  let srcWidth, srcHeight, left, top
+  if (IsIconic(hwnd)) return thumbnailCache.get(hwnd) || null
 
-  if (IsIconic(hwnd)) {
-    const placementBuf = Buffer.alloc(44)
-    placementBuf.writeUInt32LE(44, 0)
-    if (!GetWindowPlacement(hwnd, placementBuf)) return null
-    const rcLeft = placementBuf.readInt32LE(28)
-    const rcTop = placementBuf.readInt32LE(32)
-    const rcRight = placementBuf.readInt32LE(36)
-    const rcBottom = placementBuf.readInt32LE(40)
-    left = rcLeft
-    top = rcTop
-    srcWidth = rcRight - rcLeft
-    srcHeight = rcBottom - rcTop
-  } else {
-    const rectBuf = Buffer.alloc(16)
-    GetWindowRect(hwnd, rectBuf)
-    left = rectBuf.readInt32LE(0)
-    top = rectBuf.readInt32LE(4)
-    srcWidth = rectBuf.readInt32LE(8) - left
-    srcHeight = rectBuf.readInt32LE(12) - top
-  }
-
-  if (srcWidth <= 0 || srcHeight <= 0) return null
+  const rectBuf = Buffer.alloc(16)
+  GetWindowRect(hwnd, rectBuf)
+  const left = rectBuf.readInt32LE(0)
+  const top = rectBuf.readInt32LE(4)
+  const srcWidth = rectBuf.readInt32LE(8) - left
+  const srcHeight = rectBuf.readInt32LE(12) - top
+  if (srcWidth <= 0 || srcHeight <= 0) return thumbnailCache.get(hwnd) || null
 
   const screenDC = GetDC(0)
-  if (!screenDC) return null
+  if (!screenDC) return thumbnailCache.get(hwnd) || null
   const memDC = CreateCompatibleDC(screenDC)
   const bmp = CreateCompatibleBitmap(screenDC, srcWidth, srcHeight)
   const oldBmp = SelectObject(memDC, bmp)
@@ -205,7 +191,7 @@ function captureWindowThumbnail(hwnd) {
     biHeader.writeUInt16LE(32, 14)
 
     const pixelData = Buffer.alloc(srcWidth * srcHeight * 4)
-    if (!GetDIBits(memDC, bmp, 0, srcHeight, pixelData, biHeader, 0)) return null
+    if (!GetDIBits(memDC, bmp, 0, srcHeight, pixelData, biHeader, 0)) return thumbnailCache.get(hwnd) || null
 
     for (let i = 0; i < pixelData.length; i += 4) {
       const b = pixelData[i]
@@ -216,9 +202,11 @@ function captureWindowThumbnail(hwnd) {
     const img = nativeImage.createFromBitmap(pixelData, { width: srcWidth, height: srcHeight })
     const scale = Math.min(THUMBNAIL_MAX_WIDTH / srcWidth, THUMBNAIL_MAX_HEIGHT / srcHeight, 1.0)
     const resized = img.resize({ width: Math.round(srcWidth * scale), height: Math.round(srcHeight * scale), quality: 'good' })
-    return resized.toDataURL()
+    const dataUrl = resized.toDataURL()
+    thumbnailCache.set(hwnd, dataUrl)
+    return dataUrl
   } catch (_) {
-    return null
+    return thumbnailCache.get(hwnd) || null
   } finally {
     SelectObject(memDC, oldBmp)
     DeleteObject(bmp)
