@@ -33,8 +33,15 @@ export default function ControlCenter({ network, bluetooth, volume, setVolume, m
             </div>
             <div className="flex flex-col gap-2">
                 <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
-                {monitors.map(m => (
-                    <Slider key={m.id} Icon={Sun} value={m.brightness} onChange={(v) => setMonitorBrightness(m.id, v)} darkText={darkText} />
+                {monitors.map((m, i) => (
+                    <Slider
+                        key={m.id}
+                        Icon={monitors.length > 1 ? undefined : Sun}
+                        iconSrc={monitors.length > 1 ? `/icons/monitor/Monitor ${i + 1}.svg` : undefined}
+                        value={m.brightness}
+                        onChange={(v) => setMonitorBrightness(m.id, v)}
+                        darkText={darkText}
+                    />
                 ))}
             </div>
         </div>
@@ -66,7 +73,7 @@ function ControlItem({ label, sublabel, Icon, darkText }: { label: string; subla
     )
 }
 
-function Slider({ Icon, value, onChange, label, onIconClick, muted, darkText }: { Icon: React.FC<{ color: string; size: number }>; value: number; onChange: (value: number) => void; label?: string; onIconClick?: () => void; muted?: boolean; darkText: boolean }) {
+function Slider({ Icon, iconSrc, value, onChange, label, onIconClick, muted, darkText }: { Icon?: React.FC<{ color: string; size: number }>; iconSrc?: string; value: number; onChange: (value: number) => void; label?: string; onIconClick?: () => void; muted?: boolean; darkText: boolean }) {
     const dragging = useRef(false);
     const color = darkText ? "black" : "white";
     const mutedColor = darkText ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.4)";
@@ -74,7 +81,13 @@ function Slider({ Icon, value, onChange, label, onIconClick, muted, darkText }: 
         <div className="flex flex-col gap-1">
             {label && <span className={`text-[11px] ${darkText ? "text-black/50" : "text-white/50"} ml-1`}>{label}</span>}
             <div className={`flex ${darkText ? "bg-black/5" : "bg-[#3F3F3F]/20"} p-3 rounded-md ${darkText ? "text-black" : "text-white"} items-center gap-3`}>
-            <div className={`shrink-0 ${onIconClick ? 'cursor-pointer' : ''}`} onClick={onIconClick}><Icon color={muted ? mutedColor : color} size={15} /></div>
+            <div className={`shrink-0 ${onIconClick ? 'cursor-pointer' : ''}`} onClick={onIconClick}>
+                {iconSrc ? (
+                    <img src={iconSrc} alt="" className="w-3.75 h-3.75" style={{ filter: darkText ? 'brightness(0)' : 'brightness(0) invert(1)' }} draggable={false} />
+                ) : Icon ? (
+                    <Icon color={muted ? mutedColor : color} size={15} />
+                ) : null}
+            </div>
             <input
                 type="range"
                 min={0}
