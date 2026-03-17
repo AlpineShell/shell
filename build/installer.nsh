@@ -121,7 +121,6 @@ FunctionEnd
 !macro customInstall
   ${If} $DoShell == ${BST_CHECKED}
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "Shell" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
-    WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Run" "AlpineShell" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
 
     ReadRegStr $0 HKCU "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "Shell"
     ${If} $0 != "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
@@ -161,9 +160,10 @@ FunctionEnd
   FileClose $0
 
   ${If} $DoShell == ${BST_CHECKED}
-    FileOpen $0 "$APPDATA\${PRODUCT_NAME}\.kill-explorer" w
-    FileWrite $0 "1"
-    FileClose $0
+    MessageBox MB_YESNO|MB_ICONQUESTION "Alpine Shell has been set as your default desktop environment.$\r$\n$\r$\nA restart is required for the changes to take effect.$\r$\n$\r$\nRestart now?" IDYES doRestart IDNO skipRestart
+    doRestart:
+      nsExec::ExecToLog 'shutdown /r /t 5 /c "Restarting to apply Alpine Shell as your desktop environment."'
+    skipRestart:
   ${EndIf}
 !macroend
 

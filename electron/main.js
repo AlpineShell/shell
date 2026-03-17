@@ -1,7 +1,5 @@
 const { app, BrowserWindow, screen, ipcMain } = require('electron')
 const path = require('path')
-const fs = require('fs')
-const { execSync } = require('child_process')
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
 const network = require('./modules/network')
@@ -227,20 +225,7 @@ function createAltTabWindow() {
   return win
 }
 
-function killExplorerIfFlagged() {
-  const flagPath = path.join(app.getPath('userData'), '.kill-explorer')
-  if (!fs.existsSync(flagPath)) return
-  fs.unlinkSync(flagPath)
-  try {
-    execSync('taskkill /f /im explorer.exe', { windowsHide: true })
-    console.log('[main] Killed explorer.exe after fresh install')
-  } catch (e) {
-    console.log('[main] explorer.exe was not running or could not be killed:', e.message)
-  }
-}
-
 app.whenReady().then(() => {
-  killExplorerIfFlagged()
   processAutostart()
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab, setup)
   topbarColor.setShells(shells)
