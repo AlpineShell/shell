@@ -106,12 +106,14 @@ function getStartupFolderEntries() {
 function launchMsixApps(entries) {
   if (entries.length === 0) return
 
-  const launches = entries.map(e => `[AppLauncher]::Launch("${e.aumid}")`).join('\n')
+  const launches = entries.map(e => `$pids += [AppLauncher]::Launch("${e.aumid}")`).join('\n')
 
   const script = `Add-Type -TypeDefinition @"
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 [ComImport, Guid("2e941141-7f97-4756-ba1d-9decde894a3d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IApplicationActivationManager {
@@ -125,15 +127,37 @@ class ApplicationActivationManager : IApplicationActivationManager {
 }
 
 public class AppLauncher {
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
     public static uint Launch(string aumid) {
         var mgr = new ApplicationActivationManager();
         uint pid;
         mgr.ActivateApplication(aumid, null, 0, out pid);
         return pid;
     }
+
+    public static void MinimizeByPid(uint pid) {
+        try {
+            var proc = Process.GetProcessById((int)pid);
+            for (int i = 0; i < 20; i++) {
+                if (proc.MainWindowHandle != IntPtr.Zero) {
+                    ShowWindow(proc.MainWindowHandle, 2);
+                    return;
+                }
+                Thread.Sleep(250);
+                proc.Refresh();
+            }
+        } catch {}
+    }
 }
 "@
+$pids = @()
 ${launches}
+Start-Sleep -Milliseconds 500
+foreach ($p in $pids) {
+    [AppLauncher]::MinimizeByPid($p)
+}
 `
 
   const tmpFile = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'alpine-msix-launch.ps1')
