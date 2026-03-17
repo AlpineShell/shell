@@ -55,12 +55,14 @@ declare global {
     shell: boolean
     startup: boolean
     cursor: boolean
+    gpoBlocked: boolean
   }
 
   interface SetupStatus {
     isShell: boolean
     hasStartup: boolean
     hasCursor: boolean
+    gpoBlocked: boolean
   }
 
   interface Window {

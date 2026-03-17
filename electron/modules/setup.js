@@ -87,6 +87,16 @@ function setStartup() {
   regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', appPath)
 }
 
+function hasGpoShellOverride() {
+  const policyShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System', 'Shell')
+  return policyShell !== null
+}
+
+function verifyShellWrite() {
+  const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
+  return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
+}
+
 function getSetupStatus() {
   const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
   const startupEntry = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell')
@@ -96,6 +106,7 @@ function getSetupStatus() {
     isShell: currentShell !== null && currentShell !== 'explorer.exe',
     hasStartup: startupEntry !== null,
     hasCursor: currentCursor === 'Alpine Shell',
+    gpoBlocked: hasGpoShellOverride(),
   }
 }
 
@@ -113,12 +124,19 @@ module.exports = {
   handlers: {
     'setup/status': () => getSetupStatus(),
     'setup/install': (_event, options) => {
-      const results = { shell: false, startup: false, cursor: false }
+      const results = { shell: false, startup: false, cursor: false, gpoBlocked: false }
       try {
+        if (hasGpoShellOverride()) {
+          console.error('[setup] Group Policy override detected — shell replacement may not take effect')
+          results.gpoBlocked = true
+        }
         setAsShell()
         setStartup()
-        results.shell = true
+        results.shell = verifyShellWrite()
         results.startup = true
+        if (!results.shell) {
+          console.error('[setup] Shell registry write did not persist — possible policy or permission issue')
+        }
       } catch (e) {
         console.error('[setup] Shell/startup error:', e.message)
       }

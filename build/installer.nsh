@@ -8,16 +8,29 @@ Var /GLOBAL CheckboxCursor
 Var /GLOBAL DoShell
 Var /GLOBAL DoCursor
 Var /GLOBAL ShowAdvanced
+Var /GLOBAL GpoBlocked
 
 !macro customPageAfterChangeDir
   Page custom mainPageCreate mainPageLeave
   Page custom advancedPageCreate advancedPageLeave
 !macroend
 
+Function checkGpoShellOverride
+  StrCpy $GpoBlocked 0
+  nsExec::ExecToStack 'reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v Shell'
+  Pop $0
+  Pop $1
+  ${If} $0 == 0
+    StrCpy $GpoBlocked 1
+  ${EndIf}
+FunctionEnd
+
 Function mainPageCreate
   StrCpy $DoShell ${BST_CHECKED}
   StrCpy $DoCursor ${BST_CHECKED}
   StrCpy $ShowAdvanced 0
+
+  Call checkGpoShellOverride
 
   nsDialogs::Create 1018
   Pop $0
@@ -34,11 +47,18 @@ Function mainPageCreate
   ${NSD_CreateLabel} 0 30u 100% 24u "Set Alpine Shell as your default desktop environment and optionally install a custom cursor."
   Pop $0
 
-  ${NSD_CreateButton} 0 70u 130u 22u "Install Preset"
+  ${If} $GpoBlocked == 1
+    ${NSD_CreateLabel} 0 56u 100% 12u "Warning: A Group Policy on this machine may prevent shell replacement."
+    Pop $0
+    CreateFont $1 "$(^Font)" 9 700
+    SendMessage $0 ${WM_SETFONT} $1 1
+  ${EndIf}
+
+  ${NSD_CreateButton} 0 76u 130u 22u "Install Preset"
   Pop $0
   ${NSD_OnClick} $0 onPresetClick
 
-  ${NSD_CreateButton} 140u 70u 130u 22u "Advanced"
+  ${NSD_CreateButton} 140u 76u 130u 22u "Advanced"
   Pop $0
   ${NSD_OnClick} $0 onAdvancedClick
 
@@ -102,6 +122,11 @@ FunctionEnd
   ${If} $DoShell == ${BST_CHECKED}
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "Shell" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Run" "AlpineShell" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
+
+    ReadRegStr $0 HKCU "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "Shell"
+    ${If} $0 != "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+      MessageBox MB_OK|MB_ICONEXCLAMATION "Shell replacement could not be applied. A Group Policy or system restriction may be blocking this change."
+    ${EndIf}
   ${EndIf}
 
   ${If} $DoCursor == ${BST_CHECKED}
@@ -134,6 +159,12 @@ FunctionEnd
   FileOpen $0 "$APPDATA\${PRODUCT_NAME}\.setup-complete" w
   FileWrite $0 "installed"
   FileClose $0
+
+  ${If} $DoShell == ${BST_CHECKED}
+    FileOpen $0 "$APPDATA\${PRODUCT_NAME}\.kill-explorer" w
+    FileWrite $0 "1"
+    FileClose $0
+  ${EndIf}
 !macroend
 
 !else
