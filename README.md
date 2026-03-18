@@ -9,7 +9,7 @@ A Windows desktop shell.
 
 ## Getting Started
 
-```bash
+```bash 
 npm install
 npm start
 ```
