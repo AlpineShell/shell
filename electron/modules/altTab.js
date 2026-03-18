@@ -215,19 +215,22 @@ function captureWindowThumbnail(hwnd) {
   }
 }
 
-function getIconSync(exePath) {
+async function getIcon(exePath) {
   if (!exePath) return ''
   const key = exePath.toLowerCase()
   if (iconCache.has(key)) return iconCache.get(key) || ''
-  app.getFileIcon(exePath, { size: 'normal' }).then((icon) => {
-    iconCache.set(key, icon.toDataURL())
-  }).catch(() => {
+  try {
+    const icon = await app.getFileIcon(exePath, { size: 'normal' })
+    const dataUrl = icon.toDataURL()
+    iconCache.set(key, dataUrl)
+    return dataUrl
+  } catch {
     iconCache.set(key, null)
-  })
-  return ''
+    return ''
+  }
 }
 
-function buildWindowListSync() {
+async function buildWindowList() {
   const hwnds = enumTaskWindows()
   const results = []
   for (const hwnd of hwnds) {
@@ -238,7 +241,7 @@ function buildWindowListSync() {
     const pid = pidBuf.readUInt32LE(0)
     const exePath = getProcessPath(pid)
     const processName = exePath ? exePath.split('\\').pop().replace(/\.exe$/i, '') : 'Unknown'
-    const icon = getIconSync(exePath)
+    const icon = await getIcon(exePath)
     const thumbnail = captureWindowThumbnail(hwnd)
     results.push({ hwnd, title, processName, icon, thumbnail: thumbnail || '' })
   }
@@ -257,10 +260,10 @@ function moveOffscreen() {
   overlayWindow.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
 }
 
-function showSwitcher() {
+async function showSwitcher() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
 
-  windowList = buildWindowListSync()
+  windowList = await buildWindowList()
   if (windowList.length === 0) return
 
   selectedIndex = windowList.length > 1 ? 1 : 0

@@ -226,7 +226,6 @@ function createAltTabWindow() {
 }
 
 app.whenReady().then(() => {
-  processAutostart()
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab, setup)
   topbarColor.setShells(shells)
 
@@ -237,6 +236,8 @@ app.whenReady().then(() => {
   for (const display of screen.getAllDisplays()) {
     createShellForDisplay(display)
   }
+
+  processAutostart()
 
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)

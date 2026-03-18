@@ -20,6 +20,16 @@ const STARTUP_FOLDERS = [
   path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'StartUp'),
 ]
 
+const ALPINE_DATA = path.join(process.env.APPDATA, 'Alpine Shell')
+const MSIX_CACHE_FILE = path.join(ALPINE_DATA, 'msix-startup-cache.json')
+const MSIX_EXE_CACHE = path.join(ALPINE_DATA, 'msix-launcher.exe')
+const scriptsDir = process.resourcesPath
+  ? path.join(process.resourcesPath, 'scripts')
+  : path.join(__dirname, '..', 'scripts')
+const MSIX_LAUNCHER_SRC = path.join(scriptsDir, 'msixLauncher.cs')
+const MSIX_QUERY = path.join(scriptsDir, 'msixQuery.ps1')
+const CSC_PATH = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'
+
 function isShellReplacement() {
   const hives = [
     'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon',
@@ -103,73 +113,6 @@ function getStartupFolderEntries() {
   return entries
 }
 
-function launchMsixApps(entries) {
-  if (entries.length === 0) return
-
-  const launches = entries.map(e => `$pids += [AppLauncher]::Launch("${e.aumid}")`).join('\n')
-
-  const script = `Add-Type -TypeDefinition @"
-using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
-using System.Threading;
-
-[ComImport, Guid("2e941141-7f97-4756-ba1d-9decde894a3d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-interface IApplicationActivationManager {
-    IntPtr ActivateApplication([In, MarshalAs(UnmanagedType.LPWStr)] string appUserModelId, [In, MarshalAs(UnmanagedType.LPWStr)] string arguments, [In] int options, [Out] out uint processId);
-}
-
-[ComImport, Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
-class ApplicationActivationManager : IApplicationActivationManager {
-    [MethodImpl(MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime)]
-    public extern IntPtr ActivateApplication([In, MarshalAs(UnmanagedType.LPWStr)] string appUserModelId, [In, MarshalAs(UnmanagedType.LPWStr)] string arguments, [In] int options, [Out] out uint processId);
-}
-
-public class AppLauncher {
-    [DllImport("user32.dll")]
-    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    public static uint Launch(string aumid) {
-        var mgr = new ApplicationActivationManager();
-        uint pid;
-        mgr.ActivateApplication(aumid, null, 0, out pid);
-        return pid;
-    }
-
-    public static void MinimizeByPid(uint pid) {
-        try {
-            var proc = Process.GetProcessById((int)pid);
-            for (int i = 0; i < 20; i++) {
-                if (proc.MainWindowHandle != IntPtr.Zero) {
-                    ShowWindow(proc.MainWindowHandle, 2);
-                    return;
-                }
-                Thread.Sleep(250);
-                proc.Refresh();
-            }
-        } catch {}
-    }
-}
-"@
-$pids = @()
-${launches}
-Start-Sleep -Milliseconds 500
-foreach ($p in $pids) {
-    [AppLauncher]::MinimizeByPid($p)
-}
-`
-
-  const tmpFile = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'alpine-msix-launch.ps1')
-  fs.writeFileSync(tmpFile, script, 'utf8')
-
-  exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tmpFile}"`, { windowsHide: true }, (err, stdout, stderr) => {
-    fs.unlink(tmpFile, () => {})
-    if (err) console.error('[autostart] Failed to launch MSIX apps:', err.message, stderr)
-    else console.log('[autostart] MSIX apps launched:', stdout.trim())
-  })
-}
-
 function launchEntry(entry) {
   try {
     if (entry.isShortcut) {
@@ -184,9 +127,45 @@ function launchEntry(entry) {
   }
 }
 
-function getMsixStartupEntries() {
-  const entries = []
+function getMsixCached() {
+  try {
+    if (!fs.existsSync(MSIX_CACHE_FILE)) return null
+    return JSON.parse(fs.readFileSync(MSIX_CACHE_FILE, 'utf8'))
+  } catch {
+    return null
+  }
+}
 
+function refreshMsixCache() {
+  exec(
+    `powershell -NoProfile -ExecutionPolicy Bypass -File "${MSIX_QUERY}"`,
+    { windowsHide: true, encoding: 'utf8', timeout: 30000 },
+    (err, stdout) => {
+      if (err) {
+        console.error('[autostart] Failed to refresh MSIX cache:', err.message)
+        return
+      }
+
+      const entries = []
+      for (const line of stdout.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        const [aumid, displayName] = trimmed.split('|')
+        if (!aumid) continue
+        entries.push({ name: displayName || aumid.split('!')[0], aumid })
+      }
+
+      try {
+        fs.writeFileSync(MSIX_CACHE_FILE, JSON.stringify(entries, null, 2), 'utf8')
+        console.log(`[autostart] MSIX cache updated: ${entries.length} entries`)
+      } catch (e) {
+        console.error('[autostart] Failed to write MSIX cache:', e.message)
+      }
+    }
+  )
+}
+
+function getMsixStartupEntries() {
   try {
     const script = `Get-AppxPackage | ForEach-Object {
   $pkg = $_
@@ -214,26 +193,58 @@ function getMsixStartupEntries() {
 
     try { fs.unlinkSync(tmpFile) } catch {}
 
+    const entries = []
     for (const line of result.split('\n')) {
       const trimmed = line.trim()
       if (!trimmed) continue
-
       const [aumid, displayName] = trimmed.split('|')
       if (!aumid) continue
-
-      const name = displayName || aumid.split('!')[0]
-
-      entries.push({
-        name,
-        aumid,
-        isMsix: true,
-      })
+      entries.push({ name: displayName || aumid.split('!')[0], aumid })
     }
+
+    return entries
   } catch (e) {
     console.error('[autostart] Failed to query MSIX startup tasks:', e.message)
+    return []
   }
+}
 
-  return entries
+function ensureMsixLauncher() {
+  if (fs.existsSync(MSIX_EXE_CACHE)) return MSIX_EXE_CACHE
+  if (!fs.existsSync(CSC_PATH)) {
+    console.error('[autostart] csc.exe not found, cannot compile MSIX launcher')
+    return null
+  }
+  try {
+    fs.mkdirSync(path.dirname(MSIX_EXE_CACHE), { recursive: true })
+    execSync(`"${CSC_PATH}" /nologo /optimize /target:exe /out:"${MSIX_EXE_CACHE}" "${MSIX_LAUNCHER_SRC}"`, {
+      windowsHide: true,
+      encoding: 'utf8',
+    })
+    console.log('[autostart] Compiled MSIX launcher exe')
+    return MSIX_EXE_CACHE
+  } catch (e) {
+    console.error('[autostart] Failed to compile MSIX launcher:', e.message)
+    return null
+  }
+}
+
+function launchMsixApps(entries) {
+  if (entries.length === 0) return
+
+  const exePath = ensureMsixLauncher()
+  if (!exePath) return
+
+  const aumids = entries.map(e => `"${e.aumid}"`).join(' ')
+
+  exec(
+    `"${exePath}" ${aumids}`,
+    { windowsHide: true },
+    (err, stdout, stderr) => {
+      if (err) console.error('[autostart] MSIX launch error:', err.message, stderr)
+      else console.log('[autostart] MSIX launch complete:', stdout.trim())
+    }
+  )
 }
 
 function getScheduledLogonTasks() {
@@ -284,13 +295,12 @@ function processAutostart() {
     return
   }
 
-  console.log('[autostart] Alpine Shell is the default shell, processing startup entries...')
+  console.log('[autostart] Processing startup entries...')
 
   const runEntries = getRunEntries(RUN_KEYS)
   const runOnceEntries = getRunEntries(RUN_ONCE_KEYS)
   const folderEntries = getStartupFolderEntries()
   const scheduledEntries = getScheduledLogonTasks()
-  const msixEntries = getMsixStartupEntries()
 
   for (const entry of runOnceEntries) {
     deleteRunOnceEntry(entry.registryKey, entry.name)
@@ -302,10 +312,23 @@ function processAutostart() {
     launchEntry(entry)
   }
 
-  launchMsixApps(msixEntries)
+  const cached = getMsixCached()
 
-  const total = launchableEntries.length + msixEntries.length
-  console.log(`[autostart] Processed ${total} autostart entries (${runEntries.length} registry, ${runOnceEntries.length} run-once, ${folderEntries.length} startup folder, ${scheduledEntries.length} scheduled tasks, ${msixEntries.length} MSIX)`)
+  if (cached && cached.length > 0) {
+    console.log(`[autostart] Launching ${cached.length} MSIX apps from cache...`)
+    launchMsixApps(cached)
+    refreshMsixCache()
+  } else {
+    console.log('[autostart] No MSIX cache, querying packages (first boot)...')
+    const msixEntries = getMsixStartupEntries()
+    try {
+      fs.mkdirSync(path.dirname(MSIX_CACHE_FILE), { recursive: true })
+      fs.writeFileSync(MSIX_CACHE_FILE, JSON.stringify(msixEntries, null, 2), 'utf8')
+    } catch {}
+    launchMsixApps(msixEntries)
+  }
+
+  console.log(`[autostart] Launched ${launchableEntries.length} classic entries (${runEntries.length} registry, ${runOnceEntries.length} run-once, ${folderEntries.length} startup folder, ${scheduledEntries.length} scheduled tasks)`)
 }
 
 module.exports = { processAutostart }

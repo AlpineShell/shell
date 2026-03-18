@@ -49,6 +49,10 @@
       {
         "from": "public/cursor",
         "to": "cursor"
+      },
+      {
+        "from": "electron/scripts",
+        "to": "scripts"
       }
     ],
     "win": {
