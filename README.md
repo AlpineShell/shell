@@ -9,7 +9,7 @@ A Windows desktop shell.
 
 ## Getting Started
 
-```bash 
+```bash
 npm install
 npm start
 ```
@@ -19,7 +19,7 @@ This starts both the Vite dev server and Electron. The shell will appear on all 
 ## Development
 
 ```bash
-npm start
+bun start
 ```
 
 ## Code Standards
