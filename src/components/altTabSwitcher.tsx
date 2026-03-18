@@ -1,11 +1,16 @@
+import { useState } from 'react'
 import { useAltTab } from '../hooks/useAltTab'
 
 function WindowEntry({ window, selected }: { window: AltTabWindow; selected: boolean }) {
+  const [thumbWidth, setThumbWidth] = useState(200)
+  const cardWidth = Math.max(100, Math.min(200, thumbWidth))
+
   return (
     <div
-      className={`rounded-md ring-1 overflow-hidden shrink-0 bg-[#122134] w-50 ${
+      className={`rounded-md ring-1 overflow-hidden shrink-0 bg-[#122134] ${
         selected ? 'ring-white' : 'ring-gray-500/50'
       }`}
+      style={{ width: cardWidth }}
     >
       <div className="flex items-center gap-2 px-1.5 py-1.5">
         {window.icon && (
@@ -20,6 +25,11 @@ function WindowEntry({ window, selected }: { window: AltTabWindow; selected: boo
             alt=""
             className="max-w-full rounded-md max-h-full object-contain"
             draggable={false}
+            onLoad={(e) => {
+              const img = e.currentTarget
+              const aspect = img.naturalWidth / img.naturalHeight
+              setThumbWidth(Math.round(124 * aspect))
+            }}
           />
         ) : window.icon ? (
           <img src={window.icon} alt="" className="w-12 h-12 opacity-60" draggable={false} />
