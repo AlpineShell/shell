@@ -274,6 +274,7 @@ async function showSwitcher() {
   const { x, y, width, height } = display.bounds
 
   overlayWindow.setBounds({ x, y, width, height })
+  overlayWindow.setAlwaysOnTop(true, 'screen-saver')
 
   if (!overlayWindow.isVisible()) overlayWindow.showInactive()
   overlayWindow.webContents.send('alttab/show', { windows: windowList, selectedIndex })
