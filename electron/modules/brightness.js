@@ -332,7 +332,7 @@ module.exports = {
         lastStateJson = JSON.stringify(state)
         broadcast('system/monitors-changed', state)
       }
-    }, 5000)
+    }, 15000)
 
     setInterval(() => {
       enumerate().then(state => {

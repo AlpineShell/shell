@@ -36,7 +36,15 @@ function initPS() {
       }
     })
 
-    ps.on('exit', () => { ps = null; psReady = null; busy = false })
+    ps.on('exit', () => {
+      console.error('[volume] PowerShell process exited unexpectedly')
+      ps = null
+      psReady = null
+      busy = false
+      if (pendingResolve) { pendingResolve(''); pendingResolve = null }
+      for (const { resolve } of commandQueue) resolve('')
+      commandQueue = []
+    })
 
     const script = fs.readFileSync(SCRIPT_PATH, 'utf8')
     const switchIdx = script.indexOf('\nswitch')

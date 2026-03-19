@@ -1,45 +1,32 @@
 const { exec } = require('child_process')
-const { runPowerShell } = require('../powershell')
+const path = require('path')
 
 let lastSignal = undefined
 let lastType = undefined
 let lastSsid = undefined
 
-function isWifiAdapterUp() {
-  return runPowerShell(
-    "Get-NetAdapter | Where-Object { $_.Name -match 'Wi-?Fi|WLAN' } | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1 -ExpandProperty Status"
-  ).then((output) => output === 'Up')
-}
+const scriptPath = path.join(__dirname, '..', 'scripts', 'networkStatus.ps1')
 
-function isEthernetConnected() {
-  return runPowerShell(
-    "Get-NetAdapter | Where-Object { $_.Name -match 'Ethernet|LAN' -and $_.PhysicalMediaType -ne 'Unspecified' } | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1 -ExpandProperty Name"
-  ).then((output) => output.length > 0)
-}
-
-function getWifiDetails() {
+function getNetworkStatus() {
   return new Promise((resolve) => {
-    exec('netsh wlan show interfaces', (err, stdout) => {
-      if (err || !stdout) return resolve({ signal: null, ssid: null })
-      const signalMatch = stdout.match(/Signal\s+:\s+(\d+)%/)
-      const ssidMatch = stdout.match(/^\s+SSID\s+:\s+(.+)/m)
-      resolve({
-        signal: signalMatch ? parseInt(signalMatch[1], 10) : null,
-        ssid: ssidMatch ? ssidMatch[1].trim() : null,
-      })
-    })
+    exec(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
+      (err, stdout) => {
+        if (err || !stdout) return resolve({ signal: null, connected: false, type: 'wifi', ssid: null })
+        try {
+          const parsed = JSON.parse(stdout.trim())
+          resolve({
+            signal: parsed.signal ?? null,
+            connected: !!parsed.connected,
+            type: parsed.type || 'wifi',
+            ssid: parsed.ssid || null,
+          })
+        } catch {
+          resolve({ signal: null, connected: false, type: 'wifi', ssid: null })
+        }
+      }
+    )
   })
-}
-
-async function getNetworkStatus() {
-  const ethernet = await isEthernetConnected()
-  if (ethernet) return { signal: null, connected: true, type: 'ethernet', ssid: null }
-
-  const wifiUp = await isWifiAdapterUp()
-  if (!wifiUp) return { signal: null, connected: false, type: 'wifi', ssid: null }
-
-  const { signal, ssid } = await getWifiDetails()
-  return { signal, connected: true, type: 'wifi', ssid }
 }
 
 module.exports = {
