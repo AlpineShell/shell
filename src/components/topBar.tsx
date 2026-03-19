@@ -3,7 +3,7 @@ import Clock from "./clock";
 import StatusIndicator from "./statusIndicator";
 import SystemMenu from "./systemMenu";
 import { ThemeProvider } from "./themeContext";
-import MediaStatus from "./media-status";
+import MediaStatus from "./mediaStatus";
 import MicrophoneStatus from "./microphoneStatus";
 
 function parseRgb(rgba: string): [number, number, number] {
@@ -44,8 +44,8 @@ export default function TopBar() {
                     <SystemMenu />
                 </div>
                 <div className="flex items-center gap-1 mr-1">
-                    <MicrophoneStatus />
                     <MediaStatus />
+                    <MicrophoneStatus />
                     <StatusIndicator />
                     <Clock />
                 </div>
