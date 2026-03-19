@@ -3,6 +3,7 @@ import Clock from "./clock";
 import StatusIndicator from "./statusIndicator";
 import SystemMenu from "./systemMenu";
 import { TopBarThemeProvider } from "./topBarThemeContext";
+import Status from "./status";
 
 function parseRgb(rgba: string): [number, number, number] {
     const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
@@ -41,7 +42,8 @@ export default function TopBar() {
                 <div className="flex items-center gap-1">
                     <SystemMenu />
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 mr-1">
+                    <Status />
                     <StatusIndicator />
                     <Clock />
                 </div>
