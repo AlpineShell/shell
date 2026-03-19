@@ -28,6 +28,12 @@ interface TopBarColor {
 }
 
 declare global {
+  interface MediaPlayback {
+    title: string | null
+    artist: string | null
+    playing: boolean
+  }
+
   interface AltTabWindow {
     hwnd: number
     title: string
@@ -111,6 +117,10 @@ declare global {
         setMonitorBrightness: (id: string, value: number) => Promise<number>
         onMonitorsChanged: (callback: (data: MonitorInfo[]) => void) => void
         powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
+      }
+      media: {
+        session: () => Promise<MediaPlayback>
+        onSessionChanged: (callback: (data: MediaPlayback) => void) => void
       }
     }
   }
