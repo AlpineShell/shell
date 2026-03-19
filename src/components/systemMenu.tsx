@@ -1,6 +1,6 @@
 import { CircleDashed, LogOut, Power, RotateCcw } from "lucide-react";
 import PopupMenu from "./popupMenu";
-import { useTopBarDarkText } from "./topBarThemeContext";
+import { useDarkText } from "./themeContext";
 
 function MenuItem({ label, Icon, onClick, darkText }: { label: string; Icon: React.FC<{ color: string; size: number }>; onClick: () => void; darkText: boolean }) {
     return (
@@ -15,7 +15,7 @@ function MenuItem({ label, Icon, onClick, darkText }: { label: string; Icon: Rea
 }
 
 export default function SystemMenu() {
-    const darkText = useTopBarDarkText();
+    const darkText = useDarkText();
 
     return (
         <PopupMenu

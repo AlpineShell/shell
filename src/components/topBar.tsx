@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import Clock from "./clock";
 import StatusIndicator from "./statusIndicator";
 import SystemMenu from "./systemMenu";
-import { TopBarThemeProvider } from "./topBarThemeContext";
+import { ThemeProvider } from "./themeContext";
+import MediaStatus from "./mediaStatus";
+import MicrophoneStatus from "./microphoneStatus";
 
 function parseRgb(rgba: string): [number, number, number] {
     const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
@@ -33,7 +35,7 @@ export default function TopBar() {
     }, [bgColor]);
 
     return (
-        <TopBarThemeProvider value={darkText}>
+        <ThemeProvider value={darkText}>
             <div
                 className="w-full flex justify-between items-center h-6 transition-colors duration-300"
                 style={{ backgroundColor: bgColor }}
@@ -41,11 +43,13 @@ export default function TopBar() {
                 <div className="flex items-center gap-1">
                     <SystemMenu />
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 mr-1">
+                    <MediaStatus />
+                    <MicrophoneStatus />
                     <StatusIndicator />
                     <Clock />
                 </div>
             </div>
-        </TopBarThemeProvider>
+        </ThemeProvider>
     );
 }

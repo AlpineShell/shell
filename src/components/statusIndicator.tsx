@@ -5,7 +5,7 @@ import { useVolume } from "../hooks/useVolume";
 import { useNetworkStatus } from "../hooks/useNetwork";
 import ControlCenter from "./controlCenter";
 import PopupMenu from "./popupMenu";
-import { useTopBarDarkText } from "./topBarThemeContext";
+import { useDarkText } from "./themeContext";
 
 function NetworkIcon({ signal, connected, type, color }: { signal: number | null; connected: boolean; type: string; color: string }) {
     if (type === 'ethernet') {
@@ -27,7 +27,7 @@ function BluetoothIcon({ enabled, connected, color }: { enabled: boolean; connec
 }
 
 export default function StatusIndicator() {
-    const darkText = useTopBarDarkText();
+    const darkText = useDarkText();
     const network = useNetworkStatus();
     const bluetooth = useBluetooth();
     const { volume, setVolume, muted, toggleMute } = useVolume();
