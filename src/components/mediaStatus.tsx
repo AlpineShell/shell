@@ -11,7 +11,7 @@ export default function MediaStatus() {
     const label = media.artist ? `${media.title} - ${media.artist}` : media.title;
 
     return (
-        <div className={`flex items-center h-4.5 gap-2 ${darkText ? "bg-green-600/20" : "bg-green-900"} px-2 max-w-50 rounded-full text-[12px] leading-none ${darkText ? "text-black" : "text-white"} transition-colors duration-300`}>
+        <div className={`flex items-center h-4.5 gap-2 bg-green-900 px-2 max-w-50 rounded-full text-[12px] leading-none text-white transition-colors duration-300`}>
             <AudioLines size={13} className="shrink-0" />
             <span className="truncate">
                 {label}
