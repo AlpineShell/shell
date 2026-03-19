@@ -82,5 +82,9 @@ contextBridge.exposeInMainWorld('shell', {
     onSessionChanged: (callback) => {
       ipcRenderer.on('media/session-changed', (_, data) => callback(data))
     },
+    microphone: () => ipcRenderer.invoke('media/microphone'),
+    onMicrophoneChanged: (callback) => {
+      ipcRenderer.on('media/microphone-changed', (_, data) => callback(data))
+    },
   },
 })

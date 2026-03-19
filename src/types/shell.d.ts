@@ -34,6 +34,11 @@ declare global {
     playing: boolean
   }
 
+  interface MicrophoneStatus {
+    active: boolean
+    apps: string[]
+  }
+
   interface AltTabWindow {
     hwnd: number
     title: string
@@ -121,6 +126,8 @@ declare global {
       media: {
         session: () => Promise<MediaPlayback>
         onSessionChanged: (callback: (data: MediaPlayback) => void) => void
+        microphone: () => Promise<MicrophoneStatus>
+        onMicrophoneChanged: (callback: (data: MicrophoneStatus) => void) => void
       }
     }
   }
