@@ -1,7 +1,6 @@
 import { useWallpaper } from './hooks/useWallpaper'
 import TopBar from './components/topBar'
 import AltTabSwitcher from './components/altTabSwitcher'
-import Setup from './components/setup'
 
 function getMode(): 'topbar' | 'desktop' | 'alttab' | 'setup' {
   const params = new URLSearchParams(window.location.search)
@@ -39,20 +38,11 @@ function AltTabApp() {
   )
 }
 
-function SetupApp() {
-  return (
-    <div className="w-screen h-screen bg-[#1a1a2e]">
-      <Setup />
-    </div>
-  )
-}
-
 function App() {
   const mode = getMode()
 
   if (mode === 'topbar') return <TopBarApp />
   if (mode === 'alttab') return <AltTabApp />
-  if (mode === 'setup') return <SetupApp />
   return <DesktopApp />
 }
 
