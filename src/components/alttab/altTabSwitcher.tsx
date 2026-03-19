@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAltTab } from '../hooks/useAltTab'
+import { useAltTab } from '../../hooks/useAltTab'
 
 function WindowEntry({ window, selected }: { window: AltTabWindow; selected: boolean }) {
   const [thumbWidth, setThumbWidth] = useState(200)

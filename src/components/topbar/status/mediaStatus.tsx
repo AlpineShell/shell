@@ -1,6 +1,6 @@
 import { AudioLines } from "lucide-react";
-import { useMediaSession } from "../hooks/useMediaSession";
-import { useDarkText } from "./themeContext";
+import { useMediaSession } from "../../../hooks/useMediaSession";
+import { useDarkText } from "../../themeContext";
 
 export default function MediaStatus() {
     const darkText = useDarkText();

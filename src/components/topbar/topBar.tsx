@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Clock from "./clock";
-import StatusIndicator from "./statusIndicator";
+import StatusIndicator from "./status/statusIndicator";
 import SystemMenu from "./systemMenu";
-import { ThemeProvider } from "./themeContext";
-import MediaStatus from "./mediaStatus";
-import MicrophoneStatus from "./microphoneStatus";
+import { ThemeProvider } from "../themeContext";
+import MediaStatus from "./status/mediaStatus";
+import MicrophoneStatus from "./status/microphoneStatus";
 
 function parseRgb(rgba: string): [number, number, number] {
     const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);

@@ -1,6 +1,6 @@
 import { CircleDashed, LogOut, Power, RotateCcw } from "lucide-react";
-import PopupMenu from "./popupMenu";
-import { useDarkText } from "./themeContext";
+import PopupMenu from "./shared/popupMenu";
+import { useDarkText } from "../themeContext";
 
 function MenuItem({ label, Icon, onClick, darkText }: { label: string; Icon: React.FC<{ color: string; size: number }>; onClick: () => void; darkText: boolean }) {
     return (

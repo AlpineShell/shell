@@ -1,6 +1,6 @@
 import { Mic } from "lucide-react";
-import { useMicrophone } from "../hooks/useMicrophone";
-import { useDarkText } from "./themeContext";
+import { useMicrophone } from "../../../hooks/useMicrophone";
+import { useDarkText } from "../../themeContext";
 
 export default function MicrophoneStatus() {
     const darkText = useDarkText();

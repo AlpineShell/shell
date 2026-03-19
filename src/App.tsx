@@ -1,6 +1,6 @@
 import { useWallpaper } from './hooks/useWallpaper'
-import TopBar from './components/topBar'
-import AltTabSwitcher from './components/altTabSwitcher'
+import TopBar from './components/topbar/topBar'
+import AltTabSwitcher from './components/alttab/altTabSwitcher'
 
 function getMode(): 'topbar' | 'desktop' | 'alttab' | 'setup' {
   const params = new URLSearchParams(window.location.search)

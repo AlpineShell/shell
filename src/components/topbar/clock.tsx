@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useDarkText } from "./themeContext";
+import { useDarkText } from "../themeContext";
 
 export default function Clock() {
     const darkText = useDarkText();

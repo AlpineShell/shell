@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Bluetooth, ChevronRight, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
-import { useDarkText } from "./themeContext";
+import { useDarkText } from "../../themeContext";
 
 interface ControlCenterProps {
     network: { connected: boolean; ssid: string | null };
