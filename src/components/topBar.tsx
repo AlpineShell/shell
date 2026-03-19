@@ -3,7 +3,7 @@ import Clock from "./clock";
 import StatusIndicator from "./statusIndicator";
 import SystemMenu from "./systemMenu";
 import { ThemeProvider } from "./themeContext";
-import Status from "./status";
+import MediaStatus from "./media-status";
 
 function parseRgb(rgba: string): [number, number, number] {
     const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
@@ -43,7 +43,7 @@ export default function TopBar() {
                     <SystemMenu />
                 </div>
                 <div className="flex items-center gap-1 mr-1">
-                    <Status />
+                    <MediaStatus />
                     <StatusIndicator />
                     <Clock />
                 </div>
