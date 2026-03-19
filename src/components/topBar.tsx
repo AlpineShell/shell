@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Clock from "./clock";
 import StatusIndicator from "./statusIndicator";
 import SystemMenu from "./systemMenu";
-import { TopBarThemeProvider } from "./topBarThemeContext";
+import { ThemeProvider } from "./themeContext";
 import Status from "./status";
 
 function parseRgb(rgba: string): [number, number, number] {
@@ -34,7 +34,7 @@ export default function TopBar() {
     }, [bgColor]);
 
     return (
-        <TopBarThemeProvider value={darkText}>
+        <ThemeProvider value={darkText}>
             <div
                 className="w-full flex justify-between items-center h-6 transition-colors duration-300"
                 style={{ backgroundColor: bgColor }}
@@ -48,6 +48,6 @@ export default function TopBar() {
                     <Clock />
                 </div>
             </div>
-        </TopBarThemeProvider>
+        </ThemeProvider>
     );
 }

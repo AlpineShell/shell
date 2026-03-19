@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useTopBarDarkText } from "./topBarThemeContext";
+import { useDarkText } from "./themeContext";
 
 interface PopupMenuProps {
     trigger: ReactNode;
@@ -8,7 +8,7 @@ interface PopupMenuProps {
 }
 
 export default function PopupMenu({ trigger, children, align = "left" }: PopupMenuProps) {
-    const darkText = useTopBarDarkText();
+    const darkText = useDarkText();
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
 

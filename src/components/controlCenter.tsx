@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Bluetooth, ChevronRight, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
-import { useTopBarDarkText } from "./topBarThemeContext";
+import { useDarkText } from "./themeContext";
 
 interface ControlCenterProps {
     network: { connected: boolean; ssid: string | null };
@@ -14,7 +14,7 @@ interface ControlCenterProps {
 }
 
 export default function ControlCenter({ network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness }: ControlCenterProps) {
-    const darkText = useTopBarDarkText();
+    const darkText = useDarkText();
 
     const wifiLabel = network.connected ? (network.ssid ?? "Connected") : undefined;
 

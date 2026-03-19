@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { useTopBarDarkText } from "./topBarThemeContext";
+import { useDarkText } from "./themeContext";
 
 export default function Clock() {
-    const darkText = useTopBarDarkText();
+    const darkText = useDarkText();
     const [now, setNow] = useState(new Date());
 
     useEffect(() => {
