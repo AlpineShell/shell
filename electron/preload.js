@@ -50,7 +50,10 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('network/wifi-signal-changed', (_, data) => callback(data))
     },
     wifiScan: () => ipcRenderer.invoke('network/wifi-scan'),
-    wifiConnect: (ssid) => ipcRenderer.invoke('network/wifi-connect', { ssid }),
+    onWifiScanUpdated: (callback) => {
+      ipcRenderer.on('network/wifi-scan-updated', (_, data) => callback(data))
+    },
+    wifiConnect: (ssid, password) => ipcRenderer.invoke('network/wifi-connect', { ssid, password }),
     wifiDisconnect: () => ipcRenderer.invoke('network/wifi-disconnect'),
   },
   system: {

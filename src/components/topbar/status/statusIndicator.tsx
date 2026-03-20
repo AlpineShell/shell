@@ -73,7 +73,13 @@ export default function StatusIndicator() {
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { scanAll(); }, []);
+    useEffect(() => {
+        scanAll();
+        window.shell.network.onWifiScanUpdated((data) => {
+            setWifiNetworks(data);
+            setWifiScanning(false);
+        });
+    }, []);
 
     return (
         <PopupMenu
