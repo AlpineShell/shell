@@ -16,7 +16,6 @@ interface ControlCenterProps {
 
 function batteryLabel(battery: BatteryStatus): string | undefined {
     if (battery.percent === null) return undefined;
-    if (battery.charging) return `${battery.percent}% Charging`;
     return `${battery.percent}%`;
 }
 
@@ -60,6 +59,15 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                     />
                 ))}
             </div>
+            {battery.hasBattery && (() => {
+                const BattIcon = batteryIcon(battery.percent, battery.charging);
+                return (
+                    <div className={`flex items-center justify-end gap-1.5 text-sm ${darkText ? "text-black" : "text-white"}`}>
+                        <span className="text-[13px]">{batteryLabel(battery) ?? "Battery"}</span>
+                        <BattIcon color={darkText ? "black" : "white"} size={18} />
+                    </div>
+                );
+            })()}
         </div>
     )
 }
