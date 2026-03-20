@@ -3,6 +3,7 @@ const { exec } = require('child_process')
 const path = require('path')
 
 const scanScriptPath = path.join(__dirname, '..', 'scripts', 'bluetoothScan.ps1')
+const toggleScriptPath = path.join(__dirname, '..', 'scripts', 'bluetoothToggle.ps1')
 
 let lastState = undefined
 
@@ -46,15 +47,32 @@ function scanBluetoothDevices() {
   })
 }
 
-function openBluetoothSettings() {
-  exec('start ms-settings:bluetooth')
+function toggleBluetoothDevice(instanceId, action) {
+  return new Promise((resolve) => {
+    exec(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${toggleScriptPath}" -InstanceId "${instanceId}" -Action "${action}"`,
+      (err, stdout) => {
+        if (err || !stdout) return resolve({ success: false })
+        try {
+          resolve(JSON.parse(stdout.trim()))
+        } catch {
+          resolve({ success: false })
+        }
+      }
+    )
+  })
+}
+
+function openBluetoothPairing() {
+  exec('DevicePairingWizard.exe')
 }
 
 module.exports = {
   handlers: {
     'system/bluetooth': () => getBluetoothState(),
     'system/bluetooth-scan': () => scanBluetoothDevices(),
-    'system/bluetooth-settings': () => openBluetoothSettings(),
+    'system/bluetooth-toggle': (_event, { instanceId, action }) => toggleBluetoothDevice(instanceId, action),
+    'system/bluetooth-settings': () => openBluetoothPairing(),
   },
 
   start(broadcast) {

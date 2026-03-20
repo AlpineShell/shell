@@ -133,6 +133,7 @@ declare global {
         bluetooth: () => Promise<BluetoothState>
         onBluetoothChanged: (callback: (data: BluetoothState) => void) => void
         bluetoothScan: () => Promise<BluetoothDevice[]>
+        bluetoothToggle: (instanceId: string, action: 'connect' | 'disconnect') => Promise<{ success: boolean }>
         bluetoothOpenSettings: () => Promise<void>
         volume: () => Promise<number>
         setVolume: (value: number) => Promise<number>

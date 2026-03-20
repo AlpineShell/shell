@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('system/bluetooth-changed', (_, data) => callback(data))
     },
     bluetoothScan: () => ipcRenderer.invoke('system/bluetooth-scan'),
+    bluetoothToggle: (instanceId, action) => ipcRenderer.invoke('system/bluetooth-toggle', { instanceId, action }),
     bluetoothOpenSettings: () => ipcRenderer.invoke('system/bluetooth-settings'),
     volume: () => ipcRenderer.invoke('system/volume-get'),
     setVolume: (value) => ipcRenderer.invoke('system/volume-set', value),
