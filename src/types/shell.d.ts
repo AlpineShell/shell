@@ -51,6 +51,12 @@ declare global {
     windows: AltTabWindow[]
     selectedIndex: number
   }
+  interface BatteryStatus {
+    percent: number | null
+    charging: boolean
+    hasBattery: boolean
+  }
+
   interface MonitorInfo {
     id: string
     name: string
@@ -122,6 +128,8 @@ declare global {
         setMonitorBrightness: (id: string, value: number) => Promise<number>
         onMonitorsChanged: (callback: (data: MonitorInfo[]) => void) => void
         powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
+        battery: () => Promise<BatteryStatus>
+        onBatteryChanged: (callback: (data: BatteryStatus) => void) => void
       }
       media: {
         session: () => Promise<MediaPlayback>

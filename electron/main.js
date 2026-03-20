@@ -12,6 +12,7 @@ const power = require('./modules/power')
 const setup = require('./modules/setup')
 const mediaSession = require('./modules/mediaSession')
 const microphone = require('./modules/microphone')
+const battery = require('./modules/battery')
 let altTab = null
 try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
 const { processAutostart } = require('./modules/autostart')
@@ -228,7 +229,7 @@ function createAltTabWindow() {
 }
 
 app.whenReady().then(() => {
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab, setup, mediaSession, microphone)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery)
   topbarColor.setShells(shells)
 
   const altTabWindow = createAltTabWindow()

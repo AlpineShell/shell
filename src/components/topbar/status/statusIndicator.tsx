@@ -1,4 +1,5 @@
-import { Bluetooth, BluetoothConnected, BluetoothOff, EthernetPort, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
+import { Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, BluetoothConnected, BluetoothOff, EthernetPort, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
+import { useBattery } from "../../../hooks/useBattery";
 import { useBluetooth } from "../../../hooks/useBluetooth";
 import { useMonitors } from "../../../hooks/useMonitors";
 import { useVolume } from "../../../hooks/useVolume";
@@ -26,8 +27,18 @@ function BluetoothIcon({ enabled, connected, color }: { enabled: boolean; connec
     return <Bluetooth color={color} size={14} />;
 }
 
+function BatteryIcon({ percent, charging, color }: { percent: number | null; charging: boolean; color: string }) {
+    if (charging) return <BatteryCharging className="ml-0.5" color={color} size={16} />;
+    if (percent === null) return <Battery color={color} className="ml-0.5" size={16} />;
+    if (percent >= 80) return <BatteryFull color={color} className="ml-0.5" size={16} />;
+    if (percent >= 40) return <BatteryMedium color={color} className="ml-0.5" size={16} />;
+    if (percent >= 15) return <BatteryLow color={color} className="ml-0.5" size={16} />;
+    return <BatteryWarning color={color} className="ml-0.5" size={16} />
+}
+
 export default function StatusIndicator() {
     const darkText = useDarkText();
+    const battery = useBattery();
     const network = useNetworkStatus();
     const bluetooth = useBluetooth();
     const { volume, setVolume, muted, toggleMute } = useVolume();
@@ -41,10 +52,11 @@ export default function StatusIndicator() {
                 <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full py-0.5 items-center gap-1 transition-colors duration-300`}>
                     <BluetoothIcon enabled={bluetooth.enabled} connected={bluetooth.connected} color={iconColor} />
                     <NetworkIcon signal={network.signal} connected={network.connected} type={network.type} color={iconColor} />
+                    {battery.hasBattery && <BatteryIcon percent={battery.percent} charging={battery.charging} color={iconColor} />}
                 </div>
             }
         >
-            <ControlCenter network={network} bluetooth={bluetooth} volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute} monitors={monitors} setMonitorBrightness={setMonitorBrightness} />
+            <ControlCenter battery={battery} network={network} bluetooth={bluetooth} volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute} monitors={monitors} setMonitorBrightness={setMonitorBrightness} />
         </PopupMenu>
     );
 }

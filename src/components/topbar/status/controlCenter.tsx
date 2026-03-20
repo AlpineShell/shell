@@ -1,8 +1,9 @@
 import { useRef } from "react";
-import { Bluetooth, ChevronRight, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
+import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
 import { useDarkText } from "../../themeContext";
 
 interface ControlCenterProps {
+    battery: BatteryStatus;
     network: { connected: boolean; ssid: string | null };
     bluetooth: { enabled: boolean; connected: boolean; devices: string[] };
     volume: number;
@@ -13,7 +14,22 @@ interface ControlCenterProps {
     setMonitorBrightness: (id: string, value: number) => void;
 }
 
-export default function ControlCenter({ network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness }: ControlCenterProps) {
+function batteryLabel(battery: BatteryStatus): string | undefined {
+    if (battery.percent === null) return undefined;
+    if (battery.charging) return `${battery.percent}% Charging`;
+    return `${battery.percent}%`;
+}
+
+function batteryIcon(percent: number | null, charging: boolean): React.FC<{ color: string; size: number }> {
+    if (charging) return BatteryCharging;
+    if (percent === null) return BatteryMedium;
+    if (percent >= 80) return BatteryFull;
+    if (percent >= 40) return BatteryMedium;
+    if (percent >= 15) return BatteryLow;
+    return BatteryWarning;
+}
+
+export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness }: ControlCenterProps) {
     const darkText = useDarkText();
 
     const wifiLabel = network.connected ? (network.ssid ?? "Connected") : undefined;
