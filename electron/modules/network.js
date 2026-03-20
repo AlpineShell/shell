@@ -31,6 +31,7 @@ function getNetworkStatus() {
 }
 
 function scanWifiNetworks() {
+  exec('netsh wlan scan', () => {})
   return new Promise((resolve) => {
     exec(
       `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}"`,

@@ -13,10 +13,13 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
 
+    const onOpenRef = useRef(onOpen);
+    onOpenRef.current = onOpen;
+
     useEffect(() => {
         if (open) {
             window.topbar.setHeight(500);
-            onOpen?.();
+            onOpenRef.current?.();
         } else {
             window.topbar.setHeight(24);
         }
