@@ -2,6 +2,8 @@ $currentSsid = $null
 $iface = (netsh wlan show interfaces) -join "`n"
 if ($iface -match '(?m)^\s+SSID\s+:\s+(.+)') { $currentSsid = $Matches[1].Trim() }
 
+netsh wlan scan 2>$null | Out-Null
+Start-Sleep -Milliseconds 500
 $output = netsh wlan show networks mode=bssid
 $networks = @()
 $current = $null

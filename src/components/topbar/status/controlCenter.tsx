@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
 import { useDarkText } from "../../themeContext";
 import WifiMenu from "./wifiMenu";
@@ -14,6 +14,12 @@ interface ControlCenterProps {
     toggleMute: () => void;
     monitors: MonitorInfo[];
     setMonitorBrightness: (id: string, value: number) => void;
+    wifiNetworks: WifiNetwork[];
+    wifiScanning: boolean;
+    scanWifi: () => void;
+    btDevices: BluetoothDevice[];
+    btScanning: boolean;
+    scanBluetooth: () => void;
 }
 
 function batteryLabel(battery: BatteryStatus): string | undefined {
@@ -32,41 +38,9 @@ function batteryIcon(percent: number | null, charging: boolean): React.FC<{ colo
 
 type View = 'main' | 'wifi' | 'bluetooth';
 
-export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness }: ControlCenterProps) {
+export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness, wifiNetworks, wifiScanning, scanWifi, btDevices, btScanning, scanBluetooth }: ControlCenterProps) {
     const darkText = useDarkText();
     const [view, setView] = useState<View>('main');
-
-    const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([]);
-    const [wifiScanning, setWifiScanning] = useState(true);
-    const [btDevices, setBtDevices] = useState<BluetoothDevice[]>([]);
-    const [btScanning, setBtScanning] = useState(true);
-
-    function scanWifi() {
-        setWifiScanning(true);
-        window.shell.network.wifiScan().then((result) => {
-            setWifiNetworks(result);
-            setWifiScanning(false);
-        });
-    }
-
-    function scanBluetooth() {
-        setBtScanning(true);
-        window.shell.system.bluetoothScan().then((result) => {
-            setBtDevices(result);
-            setBtScanning(false);
-        });
-    }
-
-    useEffect(() => {
-        window.shell.network.wifiScan().then((result) => {
-            setWifiNetworks(result);
-            setWifiScanning(false);
-        });
-        window.shell.system.bluetoothScan().then((result) => {
-            setBtDevices(result);
-            setBtScanning(false);
-        });
-    }, []);
 
     const wifiLabel = network.connected ? (network.ssid ?? "Connected") : undefined;
 

@@ -5,9 +5,10 @@ interface PopupMenuProps {
     trigger: ReactNode;
     children: ReactNode;
     align?: "left" | "right";
+    onOpen?: () => void;
 }
 
-export default function PopupMenu({ trigger, children, align = "left" }: PopupMenuProps) {
+export default function PopupMenu({ trigger, children, align = "left", onOpen }: PopupMenuProps) {
     const darkText = useDarkText();
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -15,6 +16,7 @@ export default function PopupMenu({ trigger, children, align = "left" }: PopupMe
     useEffect(() => {
         if (open) {
             window.topbar.setHeight(500);
+            onOpen?.();
         } else {
             window.topbar.setHeight(24);
         }

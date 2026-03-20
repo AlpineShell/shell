@@ -34,13 +34,14 @@ function scanWifiNetworks() {
   return new Promise((resolve) => {
     exec(
       `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}"`,
+      { timeout: 10000 },
       (err, stdout) => {
-        if (err || !stdout) return resolve([])
+        if (err || !stdout) return resolve(null)
         try {
           const parsed = JSON.parse(stdout.trim())
           resolve(Array.isArray(parsed) ? parsed : [parsed])
         } catch {
-          resolve([])
+          resolve(null)
         }
       }
     )

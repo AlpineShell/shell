@@ -240,7 +240,7 @@ app.whenReady().then(() => {
     createShellForDisplay(display)
   }
 
-  processAutostart()
+  if (!isDev) processAutostart()
 
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)

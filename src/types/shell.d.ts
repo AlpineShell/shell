@@ -124,7 +124,7 @@ declare global {
       network: {
         wifiSignal: () => Promise<NetworkStatus>
         onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => void
-        wifiScan: () => Promise<WifiNetwork[]>
+        wifiScan: () => Promise<WifiNetwork[] | null>
         wifiConnect: (ssid: string) => Promise<{ success: boolean }>
         wifiDisconnect: () => Promise<{ success: boolean }>
       }

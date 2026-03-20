@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, BluetoothConnected, BluetoothOff, EthernetPort, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
 import { useBattery } from "../../../hooks/useBattery";
 import { useBluetooth } from "../../../hooks/useBluetooth";
@@ -45,9 +46,39 @@ export default function StatusIndicator() {
     const { monitors, setBrightness: setMonitorBrightness } = useMonitors();
     const iconColor = darkText ? "black" : "white";
 
+    const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([]);
+    const [wifiScanning, setWifiScanning] = useState(false);
+    const [btDevices, setBtDevices] = useState<BluetoothDevice[]>([]);
+    const [btScanning, setBtScanning] = useState(false);
+
+    function scanWifi() {
+        setWifiScanning(true);
+        window.shell.network.wifiScan().then((result) => {
+            if (result) setWifiNetworks(result);
+            setWifiScanning(false);
+        });
+    }
+
+    function scanBluetooth() {
+        setBtScanning(true);
+        window.shell.system.bluetoothScan().then((result) => {
+            setBtDevices(result);
+            setBtScanning(false);
+        });
+    }
+
+    function scanAll() {
+        scanWifi();
+        scanBluetooth();
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { scanAll(); }, []);
+
     return (
         <PopupMenu
             align="right"
+            onOpen={scanAll}
             trigger={
                 <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full py-0.5 items-center gap-1 transition-colors duration-300`}>
                     <BluetoothIcon enabled={bluetooth.enabled} connected={bluetooth.connected} color={iconColor} />
@@ -56,7 +87,13 @@ export default function StatusIndicator() {
                 </div>
             }
         >
-            <ControlCenter battery={battery} network={network} bluetooth={bluetooth} volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute} monitors={monitors} setMonitorBrightness={setMonitorBrightness} />
+            <ControlCenter
+                battery={battery} network={network} bluetooth={bluetooth}
+                volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute}
+                monitors={monitors} setMonitorBrightness={setMonitorBrightness}
+                wifiNetworks={wifiNetworks} wifiScanning={wifiScanning} scanWifi={scanWifi}
+                btDevices={btDevices} btScanning={btScanning} scanBluetooth={scanBluetooth}
+            />
         </PopupMenu>
     );
 }
