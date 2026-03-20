@@ -1,4 +1,8 @@
 const { runPowerShell } = require('../powershell')
+const { exec } = require('child_process')
+const path = require('path')
+
+const scanScriptPath = path.join(__dirname, '..', 'scripts', 'bluetoothScan.ps1')
 
 let lastState = undefined
 
@@ -25,9 +29,32 @@ async function getBluetoothState() {
   return { enabled: true, connected: devices.length > 0, devices }
 }
 
+function scanBluetoothDevices() {
+  return new Promise((resolve) => {
+    exec(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}"`,
+      (err, stdout) => {
+        if (err || !stdout) return resolve([])
+        try {
+          const parsed = JSON.parse(stdout.trim())
+          resolve(Array.isArray(parsed) ? parsed : [parsed])
+        } catch {
+          resolve([])
+        }
+      }
+    )
+  })
+}
+
+function openBluetoothSettings() {
+  exec('start ms-settings:bluetooth')
+}
+
 module.exports = {
   handlers: {
     'system/bluetooth': () => getBluetoothState(),
+    'system/bluetooth-scan': () => scanBluetoothDevices(),
+    'system/bluetooth-settings': () => openBluetoothSettings(),
   },
 
   start(broadcast) {

@@ -1,6 +1,8 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
 import { useDarkText } from "../../themeContext";
+import WifiMenu from "./wifiMenu";
+import BluetoothMenu from "./bluetoothMenu";
 
 interface ControlCenterProps {
     battery: BatteryStatus;
@@ -28,8 +30,43 @@ function batteryIcon(percent: number | null, charging: boolean): React.FC<{ colo
     return BatteryWarning;
 }
 
+type View = 'main' | 'wifi' | 'bluetooth';
+
 export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness }: ControlCenterProps) {
     const darkText = useDarkText();
+    const [view, setView] = useState<View>('main');
+
+    const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([]);
+    const [wifiScanning, setWifiScanning] = useState(true);
+    const [btDevices, setBtDevices] = useState<BluetoothDevice[]>([]);
+    const [btScanning, setBtScanning] = useState(true);
+
+    function scanWifi() {
+        setWifiScanning(true);
+        window.shell.network.wifiScan().then((result) => {
+            setWifiNetworks(result);
+            setWifiScanning(false);
+        });
+    }
+
+    function scanBluetooth() {
+        setBtScanning(true);
+        window.shell.system.bluetoothScan().then((result) => {
+            setBtDevices(result);
+            setBtScanning(false);
+        });
+    }
+
+    useEffect(() => {
+        window.shell.network.wifiScan().then((result) => {
+            setWifiNetworks(result);
+            setWifiScanning(false);
+        });
+        window.shell.system.bluetoothScan().then((result) => {
+            setBtDevices(result);
+            setBtScanning(false);
+        });
+    }, []);
 
     const wifiLabel = network.connected ? (network.ssid ?? "Connected") : undefined;
 
@@ -40,44 +77,67 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
             : bluetooth.devices[0] ?? "Connected";
     }
 
+    const mainRef = useRef<HTMLDivElement>(null);
+    const subRef = useRef<HTMLDivElement>(null);
+    const [height, setHeight] = useState<number | undefined>(undefined);
+
+    useEffect(() => {
+        requestAnimationFrame(() => {
+            const el = view === 'main' ? mainRef.current : subRef.current;
+            if (el) setHeight(el.offsetHeight);
+        });
+    }, [view, wifiNetworks, btDevices, wifiScanning, btScanning]);
+
     return (
-        <div className="p-3 gap-3 flex flex-col h-fit w-65">
-            <div className="gap-3 mb-1 flex flex-col">
-                <ControlItem label="Wi-Fi" sublabel={wifiLabel} Icon={Wifi} darkText={darkText} />
-                <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} darkText={darkText} />
-            </div>
-            <div className="flex flex-col gap-2">
-                <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
-                {monitors.map((m, i) => (
-                    <Slider
-                        key={m.id}
-                        Icon={monitors.length > 1 ? undefined : Sun}
-                        iconSrc={monitors.length > 1 ? `/icons/monitor/Monitor ${i + 1}.svg` : undefined}
-                        value={m.brightness}
-                        onChange={(v) => setMonitorBrightness(m.id, v)}
-                        darkText={darkText}
-                    />
-                ))}
-            </div>
-            {battery.hasBattery && (() => {
-                const BattIcon = batteryIcon(battery.percent, battery.charging);
-                return (
-                    <div className={`flex items-center justify-end gap-1.5 text-sm ${darkText ? "text-black" : "text-white"}`}>
-                        <span className="text-[13px]">{batteryLabel(battery) ?? "Battery"}</span>
-                        <BattIcon color={darkText ? "black" : "white"} size={18} />
+        <div className="overflow-hidden w-65 transition-[height] duration-200 ease-in-out" style={{ height: height ? `${height}px` : 'auto' }}>
+            <div
+                className="flex transition-transform duration-200 ease-in-out"
+                style={{ transform: view === 'main' ? 'translateX(0)' : 'translateX(-100%)' }}
+            >
+                <div ref={mainRef} className="p-3 gap-3 flex flex-col h-fit w-65 shrink-0">
+                    <div className="gap-3 mb-1 flex flex-col">
+                        <ControlItem label="Wi-Fi" sublabel={wifiLabel} Icon={Wifi} darkText={darkText} onClick={() => setView('wifi')} />
+                        <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} darkText={darkText} onClick={() => setView('bluetooth')} />
                     </div>
-                );
-            })()}
+                    <div className="flex flex-col gap-2">
+                        <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
+                        {monitors.map((m, i) => (
+                            <Slider
+                                key={m.id}
+                                Icon={monitors.length > 1 ? undefined : Sun}
+                                iconSrc={monitors.length > 1 ? `/icons/monitor/Monitor ${i + 1}.svg` : undefined}
+                                value={m.brightness}
+                                onChange={(v) => setMonitorBrightness(m.id, v)}
+                                darkText={darkText}
+                            />
+                        ))}
+                    </div>
+                    {battery.hasBattery && (() => {
+                        const BattIcon = batteryIcon(battery.percent, battery.charging);
+                        return (
+                            <div className={`flex items-center justify-end gap-1.5 text-sm ${darkText ? "text-black" : "text-white"}`}>
+                                <span className="text-[13px]">{batteryLabel(battery) ?? "Battery"}</span>
+                                <BattIcon color={darkText ? "black" : "white"} size={18} />
+                            </div>
+                        );
+                    })()}
+                </div>
+
+                <div ref={subRef} className="w-65 shrink-0 self-start">
+                    {view === 'wifi' && <WifiMenu networks={wifiNetworks} scanning={wifiScanning} onScan={scanWifi} onBack={() => setView('main')} darkText={darkText} />}
+                    {view === 'bluetooth' && <BluetoothMenu devices={btDevices} scanning={btScanning} onScan={scanBluetooth} onBack={() => setView('main')} darkText={darkText} />}
+                </div>
+            </div>
         </div>
     )
 }
 
-function ControlItem({ label, sublabel, Icon, darkText }: { label: string; sublabel?: string; Icon: React.FC<{ color: string; size: number }>; darkText: boolean }) {
+function ControlItem({ label, sublabel, Icon, darkText, onClick }: { label: string; sublabel?: string; Icon: React.FC<{ color: string; size: number }>; darkText: boolean; onClick?: () => void }) {
     const active = !!sublabel;
     const color = darkText ? "black" : "white";
     const dimColor = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)";
     return (
-        <div className={`flex cursor-pointer justify-between items-center ${darkText ? "text-black" : "text-white"}`}>
+        <div className={`flex cursor-pointer justify-between items-center ${darkText ? "text-black" : "text-white"}`} onClick={onClick}>
             {active ? (
                 <div className="flex mx-1 gap-3 text-sm items-center">
                     <Icon color={color} size={17} />

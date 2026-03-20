@@ -28,6 +28,19 @@ interface TopBarColor {
 }
 
 declare global {
+  interface WifiNetwork {
+    ssid: string
+    signal: number
+    security: string
+    connected: boolean
+  }
+
+  interface BluetoothDevice {
+    name: string
+    instanceId: string
+    connected: boolean
+  }
+
   interface MediaPlayback {
     title: string | null
     artist: string | null
@@ -111,10 +124,15 @@ declare global {
       network: {
         wifiSignal: () => Promise<NetworkStatus>
         onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => void
+        wifiScan: () => Promise<WifiNetwork[]>
+        wifiConnect: (ssid: string) => Promise<{ success: boolean }>
+        wifiDisconnect: () => Promise<{ success: boolean }>
       }
       system: {
         bluetooth: () => Promise<BluetoothState>
         onBluetoothChanged: (callback: (data: BluetoothState) => void) => void
+        bluetoothScan: () => Promise<BluetoothDevice[]>
+        bluetoothOpenSettings: () => Promise<void>
         volume: () => Promise<number>
         setVolume: (value: number) => Promise<number>
         onVolumeChanged: (callback: (data: number) => void) => void

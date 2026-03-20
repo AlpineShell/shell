@@ -49,12 +49,17 @@ contextBridge.exposeInMainWorld('shell', {
     onWifiSignalChanged: (callback) => {
       ipcRenderer.on('network/wifi-signal-changed', (_, data) => callback(data))
     },
+    wifiScan: () => ipcRenderer.invoke('network/wifi-scan'),
+    wifiConnect: (ssid) => ipcRenderer.invoke('network/wifi-connect', { ssid }),
+    wifiDisconnect: () => ipcRenderer.invoke('network/wifi-disconnect'),
   },
   system: {
     bluetooth: () => ipcRenderer.invoke('system/bluetooth'),
     onBluetoothChanged: (callback) => {
       ipcRenderer.on('system/bluetooth-changed', (_, data) => callback(data))
     },
+    bluetoothScan: () => ipcRenderer.invoke('system/bluetooth-scan'),
+    bluetoothOpenSettings: () => ipcRenderer.invoke('system/bluetooth-settings'),
     volume: () => ipcRenderer.invoke('system/volume-get'),
     setVolume: (value) => ipcRenderer.invoke('system/volume-set', value),
     onVolumeChanged: (callback) => {

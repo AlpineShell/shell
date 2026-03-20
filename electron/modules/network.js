@@ -6,6 +6,7 @@ let lastType = undefined
 let lastSsid = undefined
 
 const scriptPath = path.join(__dirname, '..', 'scripts', 'networkStatus.ps1')
+const scanScriptPath = path.join(__dirname, '..', 'scripts', 'wifiScan.ps1')
 
 function getNetworkStatus() {
   return new Promise((resolve) => {
@@ -29,9 +30,45 @@ function getNetworkStatus() {
   })
 }
 
+function scanWifiNetworks() {
+  return new Promise((resolve) => {
+    exec(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}"`,
+      (err, stdout) => {
+        if (err || !stdout) return resolve([])
+        try {
+          const parsed = JSON.parse(stdout.trim())
+          resolve(Array.isArray(parsed) ? parsed : [parsed])
+        } catch {
+          resolve([])
+        }
+      }
+    )
+  })
+}
+
+function wifiConnect(ssid) {
+  return new Promise((resolve) => {
+    exec(`netsh wlan connect name="${ssid}"`, (err) => {
+      resolve({ success: !err })
+    })
+  })
+}
+
+function wifiDisconnect() {
+  return new Promise((resolve) => {
+    exec('netsh wlan disconnect', (err) => {
+      resolve({ success: !err })
+    })
+  })
+}
+
 module.exports = {
   handlers: {
     'network/wifi-signal': () => getNetworkStatus(),
+    'network/wifi-scan': () => scanWifiNetworks(),
+    'network/wifi-connect': (_event, { ssid }) => wifiConnect(ssid),
+    'network/wifi-disconnect': () => wifiDisconnect(),
   },
 
   start(broadcast) {
