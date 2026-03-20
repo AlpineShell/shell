@@ -34,5 +34,5 @@ foreach ($n in $networks) {
     }
 }
 
-$sorted = $unique | Sort-Object { if ($_.connected) { 0 } else { 1 } }, { -$_.signal }
+$sorted = $unique | Sort-Object { if ($_.connected) { 0 } else { 1 } }, { if ($_.security -eq 'Open') { 1 } else { 0 } }, { -$_.signal }
 ConvertTo-Json -InputObject @($sorted) -Compress
