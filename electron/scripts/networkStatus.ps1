@@ -10,10 +10,10 @@ if (-not $wifi) {
     exit
 }
 
-$iface = netsh wlan show interfaces
+$iface = (netsh wlan show interfaces) -join "`n"
 $signal = $null
 $ssid = $null
-if ($iface -match 'Signal\s+:\s+(\d+)%') { $signal = [int]$Matches[1] }
-if ($iface -match '^\s+SSID\s+:\s+(.+)') { $ssid = $Matches[1].Trim() }
+if ($iface -match '(\d+)%') { $signal = [int]$Matches[1] }
+if ($iface -match '(?m)^\s+SSID\s+:\s+(.+)') { $ssid = $Matches[1].Trim() }
 
 @{ signal = $signal; connected = $true; type = 'wifi'; ssid = $ssid } | ConvertTo-Json -Compress
