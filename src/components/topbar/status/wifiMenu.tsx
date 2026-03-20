@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, Loader2, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, RefreshCw } from "lucide-react";
+import { ChevronLeft, Loader2, Lock, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, RefreshCw } from "lucide-react";
 
 function SignalIcon({ signal, color, size }: { signal: number; color: string; size: number }) {
     if (signal >= 70) return <Wifi color={color} size={size} />;
@@ -77,9 +77,7 @@ export default function WifiMenu({ networks, scanning, onScan, onBack, darkText 
                             </div>
                             <div className="flex items-center gap-2">
                                 {connecting === network.ssid && <Loader2 color={dimColor} size={12} className="animate-spin" />}
-                                {network.security !== "Open" && (
-                                    <span className={`text-[10px] ${darkText ? "text-black/30" : "text-white/30"}`}>{network.security}</span>
-                                )}
+                                {network.security !== "Open" && <Lock color={dimColor} size={12} />}
                             </div>
                         </div>
                     ))}
