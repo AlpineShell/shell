@@ -72,7 +72,7 @@ export default function BluetoothMenu({ devices, scanning, onScan, onBack, darkT
                                         <span className={`text-[11px] -mt-0.5 ${darkText ? "text-black/50" : "text-white/50"}`}>
                                             {toggling
                                                 ? (device.connected ? "Disconnecting..." : "Connecting...")
-                                                : (device.connected ? "Connected" : "Not Connected")
+                                                : (device.connected ? "Connected" : "Paired")
                                             }
                                         </span>
                                     </div>

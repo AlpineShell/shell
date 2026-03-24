@@ -39,6 +39,7 @@ declare global {
     name: string
     instanceId: string
     connected: boolean
+    paired: boolean
   }
 
   interface MediaPlayback {

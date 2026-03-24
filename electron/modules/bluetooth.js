@@ -15,7 +15,7 @@ function isRadioEnabled() {
 
 function getConnectedDevices() {
   return runPowerShell(
-    "Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.InstanceId -match '^BTHENUM\\\\Dev_' } | Select-Object -ExpandProperty FriendlyName"
+    "$d=0x02000000;Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.InstanceId -match '^BTHENUM\\\\Dev_' } | Where-Object { -not ((Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName 'DEVPKEY_Device_DevNodeStatus' -ErrorAction SilentlyContinue).Data -band $d) } | Select-Object -ExpandProperty FriendlyName"
   ).then((output) => {
     if (!output) return []
     return [...new Set(output.split('\n').map(d => d.trim()).filter(Boolean))]

@@ -1,28 +1,26 @@
+$DN_DEVICE_DISCONNECTED = 0x02000000
+
 $devices = Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue |
     Where-Object { $_.InstanceId -match '^BTHENUM\\Dev_' } |
-    Select-Object FriendlyName, InstanceId
-
-$serviceInstances = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
-    Where-Object { $_.InstanceId -match 'BTHENUM\\{.*}_Dev_([0-9a-f]{12})' }
-
-$connectedAddresses = @{}
-foreach ($s in $serviceInstances) {
-    if ($s.InstanceId -match '_Dev_([0-9a-f]{12})') {
-        $connectedAddresses[$Matches[1]] = $true
-    }
-}
+    Select-Object FriendlyName, InstanceId, Status
 
 $result = @()
 $seen = @{}
 foreach ($d in $devices) {
     if ($seen[$d.FriendlyName]) { continue }
     $seen[$d.FriendlyName] = $true
-    $addr = ''
-    if ($d.InstanceId -match 'Dev_([0-9a-f]{12})') { $addr = $Matches[1] }
+
+    $devNodeStatus = (Get-PnpDeviceProperty -InstanceId $d.InstanceId `
+        -KeyName 'DEVPKEY_Device_DevNodeStatus' -ErrorAction SilentlyContinue).Data
+
+    $isDisconnected = ($devNodeStatus -band $DN_DEVICE_DISCONNECTED) -ne 0
+    $isConnected = (-not $isDisconnected) -and ($d.Status -eq 'OK')
+
     $result += @{
         name = $d.FriendlyName
         instanceId = $d.InstanceId
-        connected = $connectedAddresses.ContainsKey($addr)
+        connected = $isConnected
+        paired = -not $isConnected
     }
 }
 
