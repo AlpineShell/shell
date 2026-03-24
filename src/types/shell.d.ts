@@ -46,6 +46,8 @@ declare global {
     title: string | null
     artist: string | null
     playing: boolean
+    thumbnail: string | null
+    thumbnailType: string | null
   }
 
   interface MicrophoneStatus {
@@ -155,6 +157,7 @@ declare global {
       media: {
         session: () => Promise<MediaPlayback>
         onSessionChanged: (callback: (data: MediaPlayback) => void) => void
+        control: (action: 'play' | 'pause' | 'toggle' | 'next' | 'previous') => Promise<{ success: boolean }>
         microphone: () => Promise<MicrophoneStatus>
         onMicrophoneChanged: (callback: (data: MicrophoneStatus) => void) => void
       }

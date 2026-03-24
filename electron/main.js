@@ -91,7 +91,7 @@ function createTopBarWindow(display) {
   win.setIgnoreMouseEvents(true)
   win.loadURL(getURL('topbar'))
 
-  const INTERACTIVE_RIGHT = 160
+  const INTERACTIVE_RIGHT = 400
   const INTERACTIVE_LEFT = 40
   let ignoring = true
 
