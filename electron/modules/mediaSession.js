@@ -21,7 +21,7 @@ function initPS() {
   psReady = new Promise((resolveInit) => {
     ps = spawn('powershell', [
       '-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', '-'
-    ], { stdio: ['pipe', 'pipe', 'pipe'] })
+    ], { stdio: ['pipe', 'pipe', 'ignore'] })
 
     ps.stdout.on('data', (chunk) => {
       outputBuf += chunk.toString()
@@ -34,15 +34,6 @@ function initPS() {
           pendingResolve = null
           r(result)
         }
-      }
-    })
-
-    let stderrBuf = ''
-    ps.stderr.on('data', (chunk) => {
-      stderrBuf += chunk.toString()
-      while (stderrBuf.includes('__MEDIA_EVENT__')) {
-        stderrBuf = stderrBuf.replace('__MEDIA_EVENT__', '')
-        scheduleEventBroadcast()
       }
     })
 
@@ -81,7 +72,33 @@ async function runCmd(cmd) {
   })
 }
 
-function parseSession(raw) {
+let lastThumbnail = null
+let lastThumbnailType = null
+
+async function getMediaInfoFast() {
+  const raw = await runCmd('MediaInfoFast')
+  if (!raw) return { title: null, artist: null, playing: false }
+  try {
+    const parsed = JSON.parse(raw)
+    return { title: parsed.title || null, artist: parsed.artist || null, playing: !!parsed.playing }
+  } catch {
+    return { title: null, artist: null, playing: false }
+  }
+}
+
+async function getMediaThumbnail() {
+  const raw = await runCmd('MediaThumbnail')
+  if (!raw) return { thumbnail: null, thumbnailType: null }
+  try {
+    const parsed = JSON.parse(raw)
+    return { thumbnail: parsed.thumbnail || null, thumbnailType: parsed.thumbnailType || null }
+  } catch {
+    return { thumbnail: null, thumbnailType: null }
+  }
+}
+
+async function getMediaSession() {
+  const raw = await runCmd('MediaInfo')
   if (!raw) return { title: null, artist: null, playing: false, thumbnail: null, thumbnailType: null }
   try {
     const parsed = JSON.parse(raw)
@@ -97,49 +114,69 @@ function parseSession(raw) {
   }
 }
 
-async function getMediaSession() {
-  const raw = await runCmd('MediaInfo')
-  return parseSession(raw)
-}
-
 async function mediaControl(action) {
   const raw = await runCmd(`MediaControl '${action}'`)
   try { return JSON.parse(raw) } catch { return { success: false } }
 }
 
 let broadcastRef = null
-let eventTimer = null
 
-function broadcastState() {
+function broadcastFast() {
   if (!broadcastRef) return
-  getMediaSession().then((current) => {
+  getMediaInfoFast().then((current) => {
     if (current.title !== lastTitle || current.artist !== lastArtist || current.playing !== lastPlaying) {
+      const titleChanged = current.title !== lastTitle
       lastTitle = current.title
       lastArtist = current.artist
       lastPlaying = current.playing
-      broadcastRef('media/session-changed', current)
+      broadcastRef('media/session-changed', {
+        ...current,
+        thumbnail: lastThumbnail,
+        thumbnailType: lastThumbnailType,
+      })
+      if (titleChanged) {
+        getMediaThumbnail().then((thumb) => {
+          lastThumbnail = thumb.thumbnail
+          lastThumbnailType = thumb.thumbnailType
+          broadcastRef('media/session-changed', {
+            title: lastTitle,
+            artist: lastArtist,
+            playing: lastPlaying,
+            ...thumb,
+          })
+        })
+      }
     }
   })
 }
 
-function scheduleEventBroadcast() {
-  if (eventTimer) clearTimeout(eventTimer)
-  eventTimer = setTimeout(() => {
-    eventTimer = null
-    broadcastState()
-  }, 50)
-}
-
 function pollUntilDifferent(key, prevValue, attempts) {
   if (attempts <= 0 || !broadcastRef) return
-  getMediaSession().then((current) => {
+  getMediaInfoFast().then((current) => {
     if (current[key] !== prevValue) {
+      const titleChanged = current.title !== lastTitle
       lastTitle = current.title
       lastArtist = current.artist
       lastPlaying = current.playing
-      broadcastRef('media/session-changed', current)
+      broadcastRef('media/session-changed', {
+        ...current,
+        thumbnail: lastThumbnail,
+        thumbnailType: lastThumbnailType,
+      })
+      if (titleChanged) {
+        getMediaThumbnail().then((thumb) => {
+          lastThumbnail = thumb.thumbnail
+          lastThumbnailType = thumb.thumbnailType
+          broadcastRef('media/session-changed', {
+            title: lastTitle,
+            artist: lastArtist,
+            playing: lastPlaying,
+            ...thumb,
+          })
+        })
+      }
     } else {
-      setTimeout(() => pollUntilDifferent(key, prevValue, attempts - 1), 150)
+      setTimeout(() => pollUntilDifferent(key, prevValue, attempts - 1), 100)
     }
   })
 }
@@ -152,9 +189,9 @@ module.exports = {
       const prevPlaying = lastPlaying
       const result = await mediaControl(action)
       if (action === 'next' || action === 'previous') {
-        setTimeout(() => pollUntilDifferent('title', prevTitle, 10), 150)
+        setTimeout(() => pollUntilDifferent('title', prevTitle, 15), 100)
       } else {
-        setTimeout(() => pollUntilDifferent('playing', prevPlaying, 10), 150)
+        setTimeout(() => pollUntilDifferent('playing', prevPlaying, 10), 100)
       }
       return result
     },
@@ -163,6 +200,13 @@ module.exports = {
   start(broadcast) {
     broadcastRef = broadcast
     initPS()
-    setInterval(broadcastState, 10000)
+    getMediaSession().then((initial) => {
+      lastTitle = initial.title
+      lastArtist = initial.artist
+      lastPlaying = initial.playing
+      lastThumbnail = initial.thumbnail
+      lastThumbnailType = initial.thumbnailType
+    })
+    setInterval(broadcastFast, 1000)
   },
 }

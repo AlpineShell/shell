@@ -6,16 +6,17 @@ import PopupMenu from "../shared/popupMenu";
 import MediaMenu from "./mediaMenu";
 
 const BAR_BASES = [0.4, 0.8, 0.55, 1.0, 0.5];
-const BAR_OFFSETS = [0.6, 0.3, 0.5, 0.2, 0.7];
+const BAR_OFFSETS = [0.15, 0.05, 0.1, 0.0, 0.12];
 const MIN_H = 2;
 const MAX_H = 13;
 
 function MusicBars({ peak }: { peak: number }) {
+    const boosted = Math.min(1, Math.sqrt(peak) * 1.8);
     return (
         <svg width={13} height={13} viewBox="0 0 13 13" className="shrink-0">
             {BAR_BASES.map((base, i) => {
-                const t = Math.min(1, peak * 1.5 + BAR_OFFSETS[i] * peak);
-                const h = MIN_H + (MAX_H - MIN_H) * base * t;
+                const t = Math.min(1, boosted + BAR_OFFSETS[i]);
+                const h = Math.max(3, MIN_H + (MAX_H - MIN_H) * base * t);
                 const x = 1 + i * 2.5;
                 return (
                     <rect
@@ -24,7 +25,7 @@ function MusicBars({ peak }: { peak: number }) {
                         y={(13 - h) / 2}
                         width={1.5}
                         height={h}
-                        rx={0.75}
+                        rx={0.5}
                         fill="white"
                         style={{ transition: 'y 80ms linear, height 80ms linear' }}
                     />

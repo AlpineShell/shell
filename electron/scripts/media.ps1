@@ -13,24 +13,6 @@ $global:smtcMgr = $task.Result
 $global:asTaskGeneric = $asTaskGeneric
 $global:typeName = $typeName
 $global:asTaskBool = $asTaskGeneric.MakeGenericMethod([bool])
-try {
-    $session = $global:smtcMgr.GetCurrentSession()
-    if ($session) {
-        $session.add_MediaPropertiesChanged({
-            [Console]::Error.WriteLine('__MEDIA_EVENT__')
-            [Console]::Error.Flush()
-        })
-        $session.add_PlaybackInfoChanged({
-            [Console]::Error.WriteLine('__MEDIA_EVENT__')
-            [Console]::Error.Flush()
-        })
-    }
-    $global:smtcMgr.add_CurrentSessionChanged({
-        [Console]::Error.WriteLine('__MEDIA_EVENT__')
-        [Console]::Error.Flush()
-    })
-} catch {}
-
 function global:MediaControl($action) {
     $session = $global:smtcMgr.GetCurrentSession()
     if ($null -eq $session) { return '{"success":false}' }
@@ -47,7 +29,21 @@ function global:MediaControl($action) {
     return (@{ success = $t.Result } | ConvertTo-Json -Compress)
 }
 
-function global:MediaInfo() {
+function global:MediaInfoFast() {
+    $session = $global:smtcMgr.GetCurrentSession()
+    if ($null -eq $session) { return '{}' }
+    $asTask2Generic = ([type]$global:typeName).GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
+    $asTask2 = $asTask2Generic.MakeGenericMethod([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+    $infoOp = $session.TryGetMediaPropertiesAsync()
+    $task2 = $asTask2.Invoke($null, @($infoOp))
+    $null = $task2.Wait(-1)
+    $props = $task2.Result
+    $playback = $session.GetPlaybackInfo()
+    $status = $playback.PlaybackStatus
+    return (@{ title = $props.Title; artist = $props.Artist; playing = ($status -eq 4) } | ConvertTo-Json -Compress)
+}
+
+function global:MediaThumbnail() {
     $session = $global:smtcMgr.GetCurrentSession()
     if ($null -eq $session) { return '{}' }
     $asTask2Generic = ([type]$global:typeName).GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
@@ -76,7 +72,11 @@ function global:MediaInfo() {
             $stream.Dispose()
         } catch {}
     }
-    $playback = $session.GetPlaybackInfo()
-    $status = $playback.PlaybackStatus
-    return (@{ title = $props.Title; artist = $props.Artist; playing = ($status -eq 4); thumbnail = $thumbnail; thumbnailType = $thumbnailType } | ConvertTo-Json -Compress)
+    return (@{ thumbnail = $thumbnail; thumbnailType = $thumbnailType } | ConvertTo-Json -Compress)
+}
+
+function global:MediaInfo() {
+    $fast = MediaInfoFast | ConvertFrom-Json
+    $thumb = MediaThumbnail | ConvertFrom-Json
+    return (@{ title = $fast.title; artist = $fast.artist; playing = $fast.playing; thumbnail = $thumb.thumbnail; thumbnailType = $thumb.thumbnailType } | ConvertTo-Json -Compress)
 }
