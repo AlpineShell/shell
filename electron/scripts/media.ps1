@@ -1,5 +1,8 @@
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime]
+$null = [Windows.Storage.Streams.IRandomAccessStreamWithContentType, Windows.Storage.Streams, ContentType=WindowsRuntime]
+$global:asStreamMethod = [type]'System.IO.WindowsRuntimeStreamExtensions' |
+    ForEach-Object { $_.GetMethod('AsStream', [type[]]@([Windows.Storage.Streams.IRandomAccessStream])) }
 $asyncOp = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()
 $typeName = 'System.WindowsRuntimeSystemExtensions'
 $asTaskGeneric = ([type]$typeName).GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
@@ -62,8 +65,9 @@ function global:MediaInfo() {
             $streamTask = $asTaskStream.Invoke($null, @($streamOp))
             $null = $streamTask.Wait(-1)
             $stream = $streamTask.Result
-            $thumbnailType = $stream.ContentType
-            $netStream = [System.IO.WindowsRuntimeStreamExtensions]::AsStream($stream)
+            $ct = $stream.ContentType
+            if ($ct) { $thumbnailType = $ct }
+            $netStream = $global:asStreamMethod.Invoke($null, @($stream))
             $memStream = New-Object System.IO.MemoryStream
             $netStream.CopyTo($memStream)
             $thumbnail = [Convert]::ToBase64String($memStream.ToArray())

@@ -10,7 +10,7 @@ export default function MediaMenu({ media, darkText }: MediaMenuProps) {
     const dimColor = darkText ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)";
 
     return (
-        <div className="w-64 p-4 flex flex-col gap-3">
+        <div className="w-80 p-2 flex justify-between items-center gap-3">
             <div className="flex gap-3 items-center">
                 {media.thumbnail ? (
                     <img
@@ -33,21 +33,21 @@ export default function MediaMenu({ media, darkText }: MediaMenuProps) {
                     </span>
                 </div>
             </div>
-            <div className="flex items-center justify-center gap-5">
+            <div className="flex items-center justify-center gap-5 mr-2">
                 <button onClick={() => media.control('previous')} className="cursor-pointer">
                     <SkipBack color={color} size={16} fill={color} />
                 </button>
+                <button onClick={() => media.control('next')} className="cursor-pointer">
+                    <SkipForward color={color} size={16} fill={color} />
+                </button>
                 <button
                     onClick={() => media.control('toggle')}
-                    className={`cursor-pointer w-8 h-8 rounded-full flex items-center justify-center ${darkText ? "bg-black/10 hover:bg-black/15" : "bg-white/10 hover:bg-white/15"} transition-colors`}
+                    className={`cursor-pointer ml-1 rounded-full flex items-center justify-center ${darkText ? "bg-black/10 hover:bg-black/15" : "bg-white/10 hover:bg-white/15"} transition-colors`}
                 >
                     {media.playing
                         ? <Pause color={color} size={16} fill={color} />
                         : <Play color={color} size={16} fill={color} />
                     }
-                </button>
-                <button onClick={() => media.control('next')} className="cursor-pointer">
-                    <SkipForward color={color} size={16} fill={color} />
                 </button>
             </div>
         </div>
