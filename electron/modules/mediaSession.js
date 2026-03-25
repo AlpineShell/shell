@@ -21,7 +21,7 @@ function initPS() {
   psReady = new Promise((resolveInit) => {
     ps = spawn('powershell', [
       '-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', '-'
-    ], { stdio: ['pipe', 'pipe', 'ignore'] })
+    ], { stdio: ['pipe', 'pipe', 'pipe'] })
 
     ps.stdout.on('data', (chunk) => {
       outputBuf += chunk.toString()
@@ -34,6 +34,15 @@ function initPS() {
           pendingResolve = null
           r(result)
         }
+      }
+    })
+
+    let stderrBuf = ''
+    ps.stderr.on('data', (chunk) => {
+      stderrBuf += chunk.toString()
+      while (stderrBuf.includes('__MEDIA_EVENT__')) {
+        stderrBuf = stderrBuf.replace('__MEDIA_EVENT__', '')
+        scheduleEventBroadcast()
       }
     })
 
@@ -99,6 +108,7 @@ async function mediaControl(action) {
 }
 
 let broadcastRef = null
+let eventTimer = null
 
 function broadcastState() {
   if (!broadcastRef) return
@@ -112,12 +122,40 @@ function broadcastState() {
   })
 }
 
+function scheduleEventBroadcast() {
+  if (eventTimer) clearTimeout(eventTimer)
+  eventTimer = setTimeout(() => {
+    eventTimer = null
+    broadcastState()
+  }, 50)
+}
+
+function pollUntilDifferent(key, prevValue, attempts) {
+  if (attempts <= 0 || !broadcastRef) return
+  getMediaSession().then((current) => {
+    if (current[key] !== prevValue) {
+      lastTitle = current.title
+      lastArtist = current.artist
+      lastPlaying = current.playing
+      broadcastRef('media/session-changed', current)
+    } else {
+      setTimeout(() => pollUntilDifferent(key, prevValue, attempts - 1), 150)
+    }
+  })
+}
+
 module.exports = {
   handlers: {
     'media/session': () => getMediaSession(),
     'media/control': async (_event, action) => {
+      const prevTitle = lastTitle
+      const prevPlaying = lastPlaying
       const result = await mediaControl(action)
-      setTimeout(broadcastState, 300)
+      if (action === 'next' || action === 'previous') {
+        setTimeout(() => pollUntilDifferent('title', prevTitle, 10), 150)
+      } else {
+        setTimeout(() => pollUntilDifferent('playing', prevPlaying, 10), 150)
+      }
       return result
     },
   },
@@ -125,6 +163,6 @@ module.exports = {
   start(broadcast) {
     broadcastRef = broadcast
     initPS()
-    setInterval(broadcastState, 3000)
+    setInterval(broadcastState, 10000)
   },
 }

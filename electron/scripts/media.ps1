@@ -10,6 +10,23 @@ $global:smtcMgr = $task.Result
 $global:asTaskGeneric = $asTaskGeneric
 $global:typeName = $typeName
 $global:asTaskBool = $asTaskGeneric.MakeGenericMethod([bool])
+try {
+    $session = $global:smtcMgr.GetCurrentSession()
+    if ($session) {
+        $session.add_MediaPropertiesChanged({
+            [Console]::Error.WriteLine('__MEDIA_EVENT__')
+            [Console]::Error.Flush()
+        })
+        $session.add_PlaybackInfoChanged({
+            [Console]::Error.WriteLine('__MEDIA_EVENT__')
+            [Console]::Error.Flush()
+        })
+    }
+    $global:smtcMgr.add_CurrentSessionChanged({
+        [Console]::Error.WriteLine('__MEDIA_EVENT__')
+        [Console]::Error.Flush()
+    })
+} catch {}
 
 function global:MediaControl($action) {
     $session = $global:smtcMgr.GetCurrentSession()

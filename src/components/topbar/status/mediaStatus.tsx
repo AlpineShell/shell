@@ -15,6 +15,7 @@ export default function MediaStatus() {
     return (
         <PopupMenu
             align="right"
+            onOpen={() => window.shell.media.session().then(media.update)}
             trigger={
                 <div className={`flex items-center h-4.5 gap-2 ${media.playing ? (darkText ? "bg-green-800/80" : "bg-green-900") : (darkText ? "bg-black/10" : "bg-white/10")} px-2 max-w-50 rounded-full text-[12px] leading-none ${media.playing ? "text-white" : (darkText ? "text-black/70" : "text-white/70")} transition-colors duration-300`}>
                     <AudioLines size={13} className="shrink-0" />

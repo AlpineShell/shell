@@ -17,5 +17,7 @@ export function useMediaSession() {
     window.shell.media.control(action)
   }, [])
 
-  return { ...state, control }
+  const update = useCallback((data: MediaPlayback) => setState(data), [])
+
+  return { ...state, control, update }
 }
