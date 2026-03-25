@@ -11,7 +11,7 @@ export default function MediaMenu({ media, darkText }: MediaMenuProps) {
 
     return (
         <div className="w-80 p-2 flex justify-between items-center gap-3">
-            <div className="flex gap-3 items-center">
+            <div className="flex gap-3 items-center min-w-0 overflow-hidden">
                 {media.thumbnail ? (
                     <img
                         src={`data:${media.thumbnailType ?? "image/jpeg"};base64,${media.thumbnail}`}
@@ -33,7 +33,7 @@ export default function MediaMenu({ media, darkText }: MediaMenuProps) {
                     </span>
                 </div>
             </div>
-            <div className="flex items-center justify-center gap-5 mr-2">
+            <div className="flex items-center justify-center gap-5 mr-2 shrink-0">
                 <button onClick={() => media.control('previous')} className="cursor-pointer">
                     <SkipBack color={color} size={16} fill={color} />
                 </button>
