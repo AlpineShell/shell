@@ -26,6 +26,11 @@ interface IAudioEndpointVolume {
     int GetVolumeRange(out float pflVolumeMindB, out float pflVolumeMaxdB, out float pflVolumeIncrementdB);
 }
 
+[Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IAudioMeterInformation {
+    [PreserveSig] int GetPeakValue(out float pfPeak);
+}
+
 [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IMMDevice {
     [PreserveSig] int Activate(ref Guid iid, int dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
@@ -74,6 +79,18 @@ public class Audio {
     public static void SetMute(bool mute) {
         var guid = Guid.Empty;
         GetEndpointVolume().SetMute(mute, ref guid);
+    }
+
+    public static float GetPeak() {
+        var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
+        IMMDevice dev;
+        enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
+        var iid = typeof(IAudioMeterInformation).GUID;
+        object ppv;
+        dev.Activate(ref iid, 1, IntPtr.Zero, out ppv);
+        float peak;
+        ((IAudioMeterInformation)ppv).GetPeakValue(out peak);
+        return peak;
     }
 }
 "@

@@ -108,16 +108,47 @@ async function setMute(muted) {
   return muted
 }
 
+let peakListeners = 0
+let peakInterval = null
+
+async function getPeak() {
+  try {
+    const result = await runCmd('[Math]::Round([Audio]::GetPeak(), 3)')
+    return parseFloat(result) || 0
+  } catch {
+    return 0
+  }
+}
+
+function startPeakMeter(broadcast) {
+  if (peakInterval) return
+  peakInterval = setInterval(async () => {
+    if (peakListeners <= 0) return
+    const peak = await getPeak()
+    broadcast('system/audio-peak', peak)
+  }, 66)
+}
+
+function stopPeakMeter() {
+  if (peakInterval) {
+    clearInterval(peakInterval)
+    peakInterval = null
+  }
+}
+
 module.exports = {
   handlers: {
     'system/volume-get': () => getVolume(),
     'system/volume-set': (_event, value) => setVolume(value),
     'system/mute-get': () => getMute(),
     'system/mute-set': (_event, muted) => setMute(muted),
+    'system/peak-subscribe': () => { peakListeners++; return true },
+    'system/peak-unsubscribe': () => { peakListeners = Math.max(0, peakListeners - 1); return true },
   },
 
   start(broadcast) {
     initPS()
+    startPeakMeter(broadcast)
 
     setInterval(async () => {
       if (Date.now() - lastSetTime < 1500) return

@@ -144,6 +144,9 @@ declare global {
         mute: () => Promise<boolean>
         setMute: (muted: boolean) => Promise<boolean>
         onMuteChanged: (callback: (data: boolean) => void) => void
+        subscribePeak: () => Promise<boolean>
+        unsubscribePeak: () => Promise<boolean>
+        onAudioPeak: (callback: (peak: number) => void) => void
         brightness: () => Promise<number>
         setBrightness: (value: number) => Promise<number>
         onBrightnessChanged: (callback: (data: number) => void) => void
