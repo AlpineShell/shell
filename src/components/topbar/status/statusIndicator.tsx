@@ -79,6 +79,9 @@ export default function StatusIndicator() {
             setWifiNetworks(data);
             setWifiScanning(false);
         });
+        window.shell.system.onBluetoothDevicesChanged((data) => {
+            setBtDevices(data);
+        });
     }, []);
 
     return (

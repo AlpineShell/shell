@@ -6,6 +6,7 @@ const scanScriptPath = path.join(__dirname, '..', 'scripts', 'bluetoothScan.ps1'
 const toggleScriptPath = path.join(__dirname, '..', 'scripts', 'bluetoothToggle.ps1')
 
 let lastState = undefined
+let broadcastRef = null
 
 function isRadioEnabled() {
   return runPowerShell(
@@ -15,7 +16,7 @@ function isRadioEnabled() {
 
 function getConnectedDevices() {
   return runPowerShell(
-    "$d=0x02000000;Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.InstanceId -match '^BTHENUM\\\\Dev_' } | Where-Object { -not ((Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName 'DEVPKEY_Device_DevNodeStatus' -ErrorAction SilentlyContinue).Data -band $d) } | Select-Object -ExpandProperty FriendlyName"
+    "$ag=@('0000110B','0000111E','0000110E','0000110C');$svcs=Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match 'BTHENUM' -and $_.InstanceId -notmatch '^BTHENUM\\\\Dev_' -and $_.Status -eq 'OK' };$hexes=@{};foreach($s in $svcs){foreach($g in $ag){if($s.InstanceId -match $g -and $s.InstanceId -match '([0-9a-fA-F]{12})'){$hexes[$Matches[1]]=$true;break}}};Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match '^BTHENUM\\\\Dev_([0-9a-fA-F]{12})' -and $hexes[$Matches[1]] } | Select-Object -ExpandProperty FriendlyName"
   ).then((output) => {
     if (!output) return []
     return [...new Set(output.split('\n').map(d => d.trim()).filter(Boolean))]
@@ -71,11 +72,25 @@ module.exports = {
   handlers: {
     'system/bluetooth': () => getBluetoothState(),
     'system/bluetooth-scan': () => scanBluetoothDevices(),
-    'system/bluetooth-toggle': (_event, { instanceId, action }) => toggleBluetoothDevice(instanceId, action),
+    'system/bluetooth-toggle': async (_event, { instanceId, action }) => {
+      const result = await toggleBluetoothDevice(instanceId, action)
+      const delay = action === 'disconnect' ? 1500 : 3000
+      setTimeout(async () => {
+        const [state, devices] = await Promise.all([
+          getBluetoothState(),
+          scanBluetoothDevices(),
+        ])
+        lastState = `${state.enabled}:${state.connected}`
+        broadcastRef?.('system/bluetooth-changed', state)
+        broadcastRef?.('system/bluetooth-devices-changed', devices)
+      }, delay)
+      return result
+    },
     'system/bluetooth-settings': () => openBluetoothPairing(),
   },
 
   start(broadcast) {
+    broadcastRef = broadcast
     setInterval(async () => {
       const current = await getBluetoothState()
       const key = `${current.enabled}:${current.connected}`
