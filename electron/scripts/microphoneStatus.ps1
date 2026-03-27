@@ -1,4 +1,6 @@
 $results = @()
+$runningProcesses = @{}
+Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $runningProcesses[$_.Name.ToLower()] = $true }
 
 $paths = @(
     'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone',
@@ -14,7 +16,10 @@ foreach ($basePath in $paths) {
             if ($name -match '#') {
                 $name = ($name -split '#')[-1]
             }
-            $results += $name
+            $processName = $name -replace '\.exe$', ''
+            if ($runningProcesses.ContainsKey($processName.ToLower())) {
+                $results += $name
+            }
         }
 }
 
