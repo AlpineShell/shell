@@ -25,6 +25,7 @@ interface TopBarColor {
   r: number
   g: number
   b: number
+  darkText: boolean
 }
 
 declare global {
