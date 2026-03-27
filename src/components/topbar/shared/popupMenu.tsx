@@ -21,7 +21,6 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
 
     useEffect(() => {
         if (open) {
-            window.topbar.setHeight(500);
             onOpenRef.current?.();
         } else {
             window.topbar.setHeight(24);
@@ -46,7 +45,10 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
         clearTimeout(closeTimer.current);
         clearTimeout(closeAnimTimer.current);
         setClosing(false);
-        if (!open) setOpen(true);
+        if (!open) {
+            window.topbar.setHeight(500);
+            setOpen(true);
+        }
     }
 
     function handleLeave() {
