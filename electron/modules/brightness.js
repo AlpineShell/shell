@@ -149,12 +149,15 @@ function destroyPhysicalHandle(handle) {
   try { DestroyPhysicalMonitorsAPI(1, buf) } catch (_) {}
 }
 
-function destroyAllHandles() {
-  for (const m of monitors) {
-    if (m.hPhysical) destroyPhysicalHandle(m.hPhysical)
+
+function withPhysicalMonitor(hMon, fn) {
+  const physMonitors = getPhysicalMonitors(hMon)
+  try {
+    return fn(physMonitors)
+  } finally {
+    for (const p of physMonitors) destroyPhysicalHandle(p.handle)
   }
 }
-
 
 function ddcGetBrightness(hPhysical) {
   const min = Buffer.alloc(4), cur = Buffer.alloc(4), max = Buffer.alloc(4)
@@ -195,34 +198,31 @@ function wmiSetBrightness(value) {
 
 
 async function enumerate() {
-  destroyAllHandles()
   const newMonitors = []
 
   if (dxva2) {
     for (const hMon of enumLogicalMonitors()) {
       const deviceName = getDeviceName(hMon)
-      for (const phys of getPhysicalMonitors(hMon)) {
-        try {
-          const b = ddcGetBrightness(phys.handle)
-          if (b) {
-            const brightness = b.max > 0
-              ? Math.round((b.current / b.max) * 100)
-              : b.current
-            newMonitors.push({
-              id: deviceName || `ddc-${newMonitors.length}`,
-              name: cleanName(phys.name, deviceName, newMonitors.length),
-              type: 'external',
-              brightness,
-              hPhysical: phys.handle,
-              ddcMax: b.max || 100,
-            })
-          } else {
-            destroyPhysicalHandle(phys.handle)
-          }
-        } catch (_) {
-          destroyPhysicalHandle(phys.handle)
+      withPhysicalMonitor(hMon, (physMonitors) => {
+        for (const phys of physMonitors) {
+          try {
+            const b = ddcGetBrightness(phys.handle)
+            if (b) {
+              const brightness = b.max > 0
+                ? Math.round((b.current / b.max) * 100)
+                : b.current
+              newMonitors.push({
+                id: deviceName || `ddc-${newMonitors.length}`,
+                name: cleanName(phys.name, deviceName, newMonitors.length),
+                type: 'external',
+                brightness,
+                hMon,
+                ddcMax: b.max || 100,
+              })
+            }
+          } catch (_) {}
         }
-      }
+      })
     }
   }
 
@@ -236,7 +236,7 @@ async function enumerate() {
         name: 'Built-in Display',
         type: 'internal',
         brightness: wmiBrightness,
-        hPhysical: null,
+        hMon: null,
         ddcMax: null,
       })
     }
@@ -251,16 +251,20 @@ async function refresh() {
   let changed = false
 
   for (const m of monitors) {
-    if (m.type === 'external' && m.hPhysical) {
-      try {
-        const b = ddcGetBrightness(m.hPhysical)
-        if (b) {
-          const val = b.max > 0
-            ? Math.round((b.current / b.max) * 100)
-            : b.current
-          if (val !== m.brightness) { m.brightness = val; changed = true }
+    if (m.type === 'external' && m.hMon) {
+      withPhysicalMonitor(m.hMon, (physMonitors) => {
+        for (const phys of physMonitors) {
+          try {
+            const b = ddcGetBrightness(phys.handle)
+            if (b) {
+              const val = b.max > 0
+                ? Math.round((b.current / b.max) * 100)
+                : b.current
+              if (val !== m.brightness) { m.brightness = val; changed = true }
+            }
+          } catch (_) {}
         }
-      } catch (_) {}
+      })
     }
   }
 
@@ -284,9 +288,11 @@ async function setMonitorBrightness(id, value) {
 
   if (m.type === 'internal') {
     await wmiSetBrightness(clamped)
-  } else if (m.hPhysical) {
+  } else if (m.hMon) {
     const rawValue = Math.round((clamped / 100) * (m.ddcMax || 100))
-    ddcSetBrightness(m.hPhysical, rawValue)
+    withPhysicalMonitor(m.hMon, (physMonitors) => {
+      for (const phys of physMonitors) ddcSetBrightness(phys.handle, rawValue)
+    })
   }
 
   m.brightness = clamped
