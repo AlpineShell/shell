@@ -42,7 +42,7 @@ export default function MediaMenu({ media, darkText }: MediaMenuProps) {
                 </button>
                 <button
                     onClick={() => media.control('toggle')}
-                    className={`cursor-pointer ml-1 rounded-full flex items-center justify-center ${darkText ? "bg-black/10 hover:bg-black/15" : "bg-white/10 hover:bg-white/15"} transition-colors`}
+                    className={`cursor-pointer ml-1 rounded-full flex items-center justify-center transition-colors`}
                 >
                     {media.playing
                         ? <Pause color={color} size={16} fill={color} />
