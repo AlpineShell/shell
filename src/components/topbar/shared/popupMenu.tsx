@@ -91,7 +91,7 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
             </div>
             {open && createPortal(
                 <div
-                    className={`z-[5] ${closing ? "menu-exit" : "menu-enter"}`}
+                    className={`z-[5] mt-[2px] ${closing ? "menu-exit" : "menu-enter"}`}
                     style={popupStyle}
                     onMouseEnter={handleEnter}
                     onMouseLeave={handleLeave}
