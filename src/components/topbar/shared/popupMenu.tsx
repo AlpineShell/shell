@@ -54,7 +54,7 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
         if (!open) {
             if (forceCloseActive) forceCloseActive();
             window.topbar.setHeight(500);
-            setOpen(true);
+            requestAnimationFrame(() => setOpen(true));
         }
         forceCloseActive = () => {
             clearTimeout(closeTimer.current);
@@ -72,7 +72,7 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
     return (
         <div
             className="relative flex items-center self-stretch"
-            style={open ? { backgroundColor: BG } : {}}
+            style={{ backgroundColor: open ? BG : 'transparent', transition: 'background-color 120ms ease' }}
             onMouseEnter={handleEnter}
             onMouseLeave={handleLeave}
         >
