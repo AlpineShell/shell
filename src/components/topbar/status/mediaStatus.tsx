@@ -42,21 +42,28 @@ export default function MediaStatus() {
 
     if (!media.title) return null;
 
-    const label = media.artist ? `${media.title} - ${media.artist}` : media.title;
-
     return (
         <PopupMenu
             align="right"
             onOpen={() => window.shell.media.session().then(media.update)}
             trigger={
-                <div className={`flex items-center h-4.5 gap-1.5 ${darkText ? "bg-green-800/80" : "bg-green-900"} px-2 max-w-50 rounded-full text-[12px] leading-none text-white`}>
-                    {media.playing
-                        ? <MusicBars peak={peak} />
-                        : <AudioLines size={13} className="shrink-0" />
-                    }
-                    <span className="truncate">
-                        {label}
-                    </span>
+                <div className={`flex items-center gap-1.5 h-4.5 px-1.5 rounded-full ${darkText ? "hover:bg-black/5" : "hover:bg-white/10"} transition-colors`}>
+                    {media.thumbnail ? (
+                        <img
+                            src={`data:${media.thumbnailType ?? "image/jpeg"};base64,${media.thumbnail}`}
+                            className="w-3.5 h-3.5 rounded-[3px] object-cover shrink-0"
+                            draggable={false}
+                        />
+                    ) : media.playing ? (
+                        <MusicBars peak={peak} />
+                    ) : (
+                        <AudioLines size={13} color={darkText ? "black" : "white"} className="shrink-0" />
+                    )}
+                    {media.appName && (
+                        <span className={`text-[12px] leading-none ${darkText ? "text-black" : "text-white"}`}>
+                            {media.appName}
+                        </span>
+                    )}
                 </div>
             }
         >

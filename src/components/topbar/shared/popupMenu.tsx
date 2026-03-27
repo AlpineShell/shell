@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useDarkText } from "../../themeContext";
+
+const BG = "rgb(31,32,32)";
+const CORNER = 10;
 
 interface PopupMenuProps {
     trigger: ReactNode;
@@ -9,9 +11,10 @@ interface PopupMenuProps {
 }
 
 export default function PopupMenu({ trigger, children, align = "left", onOpen }: PopupMenuProps) {
-    const darkText = useDarkText();
     const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
+    const [closing, setClosing] = useState(false);
+    const closeTimer = useRef<ReturnType<typeof setTimeout>>();
+    const closeAnimTimer = useRef<ReturnType<typeof setTimeout>>();
 
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
@@ -27,34 +30,55 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
 
     useEffect(() => {
         if (!open) return;
-        function handleClick(e: MouseEvent) {
-            if (ref.current && !ref.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
-        }
-        document.addEventListener("mousedown", handleClick);
-        const removeCloseListener = window.topbar.onCloseMenus(() => setOpen(false));
-        return () => {
-            document.removeEventListener("mousedown", handleClick);
-            removeCloseListener();
-        };
+        const removeCloseListener = window.topbar.onCloseMenus(() => triggerClose());
+        return () => removeCloseListener();
     }, [open]);
 
+    function triggerClose() {
+        setClosing(true);
+        closeAnimTimer.current = setTimeout(() => {
+            setOpen(false);
+            setClosing(false);
+        }, 100);
+    }
+
+    function handleEnter() {
+        clearTimeout(closeTimer.current);
+        clearTimeout(closeAnimTimer.current);
+        setClosing(false);
+        if (!open) setOpen(true);
+    }
+
+    function handleLeave() {
+        closeTimer.current = setTimeout(() => triggerClose(), 80);
+    }
+
     return (
-        <div className="relative" ref={ref}>
-            <div className="cursor-pointer" onClick={() => setOpen(!open)}>
+        <div
+            className="relative flex items-center self-stretch"
+            style={open ? { backgroundColor: BG } : {}}
+            onMouseEnter={handleEnter}
+            onMouseLeave={handleLeave}
+        >
+            <div className="cursor-pointer">
                 {trigger}
             </div>
             {open && (
-                <>
+                <div
+                    className={`absolute top-full z-50 ${align === "right" ? "right-0" : "left-0"} ${closing ? "menu-exit" : "menu-enter"}`}
+                >
                     <div
-                        className="fixed inset-0 z-40"
-                        onMouseDown={() => setOpen(false)}
+                        className="absolute top-0 right-full"
+                        style={{ width: CORNER, height: CORNER, background: `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
                     />
-                    <div className={`ring-gray-500/50 ring-1 absolute ${darkText ? "bg-[#ffffff] border border-black/15" : "bg-[#2d2d2d]"} rounded-lg overflow-hidden top-full mt-1 z-50 ${align === "right" ? "right-0" : "left-0 ml-1"}`}>
+                    <div
+                        className="absolute top-0 left-full"
+                        style={{ width: CORNER, height: CORNER, background: `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
+                    />
+                    <div className="overflow-hidden rounded-b-xl shadow-xl" style={{ backgroundColor: BG }}>
                         {children}
                     </div>
-                </>
+                </div>
             )}
         </div>
     );

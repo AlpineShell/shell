@@ -131,7 +131,7 @@ function getTopBarPhysBounds(topBarWin) {
 
 function sampleDesktop(topBarWin, scaleFactor) {
   const b = getTopBarPhysBounds(topBarWin)
-  return sampleColorAt(b.left, b.top + Math.round((TOP_BAR_HEIGHT + 2) * scaleFactor), b.right - b.left)
+  return sampleColorAt(b.left, b.top + Math.round((TOP_BAR_HEIGHT / 2) * scaleFactor), b.right - b.left)
 }
 
 

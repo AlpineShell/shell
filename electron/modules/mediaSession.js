@@ -14,6 +14,7 @@ let busy = false
 
 let lastTitle = null
 let lastArtist = null
+let lastAppName = null
 let lastPlaying = false
 
 function initPS() {
@@ -77,12 +78,12 @@ let lastThumbnailType = null
 
 async function getMediaInfoFast() {
   const raw = await runCmd('MediaInfoFast')
-  if (!raw) return { title: null, artist: null, playing: false }
+  if (!raw) return { title: null, artist: null, appName: null, playing: false }
   try {
     const parsed = JSON.parse(raw)
-    return { title: parsed.title || null, artist: parsed.artist || null, playing: !!parsed.playing }
+    return { title: parsed.title || null, artist: parsed.artist || null, appName: parsed.appName || null, playing: !!parsed.playing }
   } catch {
-    return { title: null, artist: null, playing: false }
+    return { title: null, artist: null, appName: null, playing: false }
   }
 }
 
@@ -99,18 +100,19 @@ async function getMediaThumbnail() {
 
 async function getMediaSession() {
   const raw = await runCmd('MediaInfo')
-  if (!raw) return { title: null, artist: null, playing: false, thumbnail: null, thumbnailType: null }
+  if (!raw) return { title: null, artist: null, appName: null, playing: false, thumbnail: null, thumbnailType: null }
   try {
     const parsed = JSON.parse(raw)
     return {
       title: parsed.title || null,
       artist: parsed.artist || null,
+      appName: parsed.appName || null,
       playing: !!parsed.playing,
       thumbnail: parsed.thumbnail || null,
       thumbnailType: parsed.thumbnailType || null,
     }
   } catch {
-    return { title: null, artist: null, playing: false, thumbnail: null, thumbnailType: null }
+    return { title: null, artist: null, appName: null, playing: false, thumbnail: null, thumbnailType: null }
   }
 }
 
@@ -128,6 +130,7 @@ function broadcastFast() {
       const titleChanged = current.title !== lastTitle
       lastTitle = current.title
       lastArtist = current.artist
+      lastAppName = current.appName
       lastPlaying = current.playing
       broadcastRef('media/session-changed', {
         ...current,
@@ -141,6 +144,7 @@ function broadcastFast() {
           broadcastRef('media/session-changed', {
             title: lastTitle,
             artist: lastArtist,
+            appName: lastAppName,
             playing: lastPlaying,
             ...thumb,
           })
@@ -157,6 +161,7 @@ function pollUntilDifferent(key, prevValue, attempts) {
       const titleChanged = current.title !== lastTitle
       lastTitle = current.title
       lastArtist = current.artist
+      lastAppName = current.appName
       lastPlaying = current.playing
       broadcastRef('media/session-changed', {
         ...current,
@@ -170,6 +175,7 @@ function pollUntilDifferent(key, prevValue, attempts) {
           broadcastRef('media/session-changed', {
             title: lastTitle,
             artist: lastArtist,
+            appName: lastAppName,
             playing: lastPlaying,
             ...thumb,
           })
@@ -203,6 +209,7 @@ module.exports = {
     getMediaSession().then((initial) => {
       lastTitle = initial.title
       lastArtist = initial.artist
+      lastAppName = initial.appName
       lastPlaying = initial.playing
       lastThumbnail = initial.thumbnail
       lastThumbnailType = initial.thumbnailType

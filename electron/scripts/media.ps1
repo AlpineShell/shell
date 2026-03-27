@@ -40,7 +40,13 @@ function global:MediaInfoFast() {
     $props = $task2.Result
     $playback = $session.GetPlaybackInfo()
     $status = $playback.PlaybackStatus
-    return (@{ title = $props.Title; artist = $props.Artist; playing = ($status -eq 4) } | ConvertTo-Json -Compress)
+    $appId = $session.SourceAppUserModelId
+    $appName = if ($appId) {
+        $leaf = ($appId -split '[\\!]' | Select-Object -Last 1)
+        if ($leaf -match '\.exe$') { $leaf -replace '\.exe$', '' }
+        else { ($appId -split '[\\!_]' | Select-Object -First 1) }
+    } else { $null }
+    return (@{ title = $props.Title; artist = $props.Artist; playing = ($status -eq 4); appName = $appName } | ConvertTo-Json -Compress)
 }
 
 function global:MediaThumbnail() {
@@ -78,5 +84,5 @@ function global:MediaThumbnail() {
 function global:MediaInfo() {
     $fast = MediaInfoFast | ConvertFrom-Json
     $thumb = MediaThumbnail | ConvertFrom-Json
-    return (@{ title = $fast.title; artist = $fast.artist; playing = $fast.playing; thumbnail = $thumb.thumbnail; thumbnailType = $thumb.thumbnailType } | ConvertTo-Json -Compress)
+    return (@{ title = $fast.title; artist = $fast.artist; appName = $fast.appName; playing = $fast.playing; thumbnail = $thumb.thumbnail; thumbnailType = $thumb.thumbnailType } | ConvertTo-Json -Compress)
 }
