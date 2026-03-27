@@ -6,15 +6,17 @@ const CORNER = 12;
 
 let forceCloseActive: (() => void) | null = null;
 
+const SCREEN_PAD = 16;
+
 interface PopupMenuProps {
     trigger: ReactNode;
     children: ReactNode;
-    align?: "left" | "right";
     onOpen?: () => void;
 }
 
-export default function PopupMenu({ trigger, children, align = "left", onOpen }: PopupMenuProps) {
+export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps) {
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const popupRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [closing, setClosing] = useState(false);
     const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
@@ -36,6 +38,16 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
 
     useEffect(() => {
         if (!open) return;
+        repositionPopup();
+        const popup = popupRef.current;
+        if (!popup) return;
+        const observer = new ResizeObserver(() => repositionPopup());
+        observer.observe(popup);
+        return () => observer.disconnect();
+    }, [open]);
+
+    useEffect(() => {
+        if (!open) return;
         const remove = window.topbar.onCloseMenus(() => triggerClose());
         return () => remove();
     }, [open]);
@@ -49,6 +61,17 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
         }, 100);
     }
 
+    function repositionPopup() {
+        const wrapper = wrapperRef.current;
+        const popup = popupRef.current;
+        if (!wrapper || !popup) return;
+        const rect = wrapper.getBoundingClientRect();
+        const popupWidth = popup.offsetWidth;
+        const centerX = rect.left + rect.width / 2;
+        const left = Math.max(SCREEN_PAD, Math.min(centerX - popupWidth / 2, window.innerWidth - popupWidth - SCREEN_PAD));
+        setPopupStyle({ position: "fixed", top: rect.bottom, left });
+    }
+
     function handleEnter() {
         clearTimeout(closeTimer.current);
         clearTimeout(closeAnimTimer.current);
@@ -57,10 +80,8 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
             if (forceCloseActive) forceCloseActive();
             if (wrapperRef.current) {
                 const rect = wrapperRef.current.getBoundingClientRect();
-                const style: React.CSSProperties = { position: "fixed", top: rect.bottom };
-                if (align === "right") style.right = window.innerWidth - rect.right;
-                else style.left = rect.left;
-                setPopupStyle(style);
+                const centerX = rect.left + rect.width / 2;
+                setPopupStyle({ position: "fixed", top: rect.bottom, left: centerX });
             }
             window.topbar.setHeight(500);
             requestAnimationFrame(() => setOpen(true));
@@ -91,6 +112,7 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
             </div>
             {open && createPortal(
                 <div
+                    ref={popupRef}
                     className={`z-[5] mt-0.5 ${closing ? "menu-exit" : "menu-enter"}`}
                     style={popupStyle}
                     onMouseEnter={handleEnter}

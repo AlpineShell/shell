@@ -86,7 +86,6 @@ export default function StatusIndicator() {
 
     return (
         <PopupMenu
-            align="right"
             onOpen={scanAll}
             trigger={
                 <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full py-0.5 items-center gap-1 transition-colors duration-300`}>
