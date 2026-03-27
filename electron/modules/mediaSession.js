@@ -1,6 +1,23 @@
 const { spawn } = require('child_process')
+const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
+
+const iconCache = new Map()
+
+async function getAppIcon(appId) {
+    if (!appId) return null
+    if (iconCache.has(appId)) return iconCache.get(appId)
+    try {
+        const icon = await app.getFileIcon(`shell:AppsFolder\\${appId}`, { size: 'normal' })
+        const b64 = icon.toPNG().toString('base64')
+        iconCache.set(appId, b64)
+        return b64
+    } catch {
+        iconCache.set(appId, null)
+        return null
+    }
+}
 
 const SCRIPT_PATH = path.join(__dirname, '..', 'scripts', 'media.ps1')
 const DELIM = '__MEDIA_DONE__'
@@ -81,7 +98,8 @@ async function getMediaInfoFast() {
   if (!raw) return { title: null, artist: null, appName: null, playing: false }
   try {
     const parsed = JSON.parse(raw)
-    return { title: parsed.title || null, artist: parsed.artist || null, appName: parsed.appName || null, playing: !!parsed.playing }
+    const appIcon = await getAppIcon(parsed.appId || null)
+    return { title: parsed.title || null, artist: parsed.artist || null, appName: parsed.appName || null, appIcon, playing: !!parsed.playing }
   } catch {
     return { title: null, artist: null, appName: null, playing: false }
   }

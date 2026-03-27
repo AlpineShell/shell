@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 
-const initialState: MediaPlayback = { title: null, artist: null, playing: false, thumbnail: null, thumbnailType: null }
+const initialState: MediaPlayback = { title: null, artist: null, appName: null, appIcon: null, playing: false, thumbnail: null, thumbnailType: null }
 
 export function useMediaSession() {
   const [state, setState] = useState<MediaPlayback>(initialState)

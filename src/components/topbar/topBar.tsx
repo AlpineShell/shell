@@ -9,7 +9,7 @@ export default function TopBar() {
     return (
         <ThemeProvider value={false}>
             <div
-                className="w-full flex justify-between items-center h-6 bg-[#1F2020]"
+                className="w-full flex justify-between items-center h-6 bg-[#1F2020] relative z-10"
             >
                 <div className="flex items-center gap-1">
                     <SystemMenu />

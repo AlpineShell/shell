@@ -1,8 +1,8 @@
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 const BG = "rgb(31,32,32)";
 const CORNER = 12;
-const GAP = 2;
 
 let forceCloseActive: (() => void) | null = null;
 
@@ -14,8 +14,10 @@ interface PopupMenuProps {
 }
 
 export default function PopupMenu({ trigger, children, align = "left", onOpen }: PopupMenuProps) {
+    const wrapperRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [closing, setClosing] = useState(false);
+    const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
     const closeTimer = useRef<ReturnType<typeof setTimeout>>();
     const closeAnimTimer = useRef<ReturnType<typeof setTimeout>>();
     const suppressHeight = useRef(false);
@@ -53,6 +55,13 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
         setClosing(false);
         if (!open) {
             if (forceCloseActive) forceCloseActive();
+            if (wrapperRef.current) {
+                const rect = wrapperRef.current.getBoundingClientRect();
+                const style: React.CSSProperties = { position: "fixed", top: rect.bottom };
+                if (align === "right") style.right = window.innerWidth - rect.right;
+                else style.left = rect.left;
+                setPopupStyle(style);
+            }
             window.topbar.setHeight(500);
             requestAnimationFrame(() => setOpen(true));
         }
@@ -71,31 +80,35 @@ export default function PopupMenu({ trigger, children, align = "left", onOpen }:
 
     return (
         <div
+            ref={wrapperRef}
             className="relative flex items-center self-stretch"
-            style={{ backgroundColor: open ? BG : 'transparent', transition: 'background-color 120ms ease' }}
+            style={{ backgroundColor: open ? BG : "transparent", transition: "background-color 120ms ease" }}
             onMouseEnter={handleEnter}
             onMouseLeave={handleLeave}
         >
             <div className="cursor-pointer">
                 {trigger}
             </div>
-            {open && (
+            {open && createPortal(
                 <div
-                    className={`absolute z-50 ${align === "right" ? "right-0" : "left-0"} ${closing ? "menu-exit" : "menu-enter"}`}
-                    style={{ top: `calc(100% + ${GAP}px)` }}
+                    className={`z-[5] ${closing ? "menu-exit" : "menu-enter"}`}
+                    style={popupStyle}
+                    onMouseEnter={handleEnter}
+                    onMouseLeave={handleLeave}
                 >
                     <div
-                        className="absolute right-full"
-                        style={{ top: -GAP, width: CORNER, height: CORNER + GAP, background: `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
+                        className="absolute top-0 right-full"
+                        style={{ width: CORNER, height: CORNER, background: `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
                     />
                     <div
-                        className="absolute left-full"
-                        style={{ top: -GAP, width: CORNER, height: CORNER + GAP, background: `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
+                        className="absolute top-0 left-full"
+                        style={{ width: CORNER, height: CORNER, background: `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
                     />
                     <div className="overflow-hidden rounded-b-xl shadow-xl" style={{ backgroundColor: BG }}>
                         {children}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

@@ -43,10 +43,9 @@ function global:MediaInfoFast() {
     $appId = $session.SourceAppUserModelId
     $appName = if ($appId) {
         $leaf = ($appId -split '[\\!]' | Select-Object -Last 1)
-        if ($leaf -match '\.exe$') { $leaf -replace '\.exe$', '' }
-        else { ($appId -split '[\\!_]' | Select-Object -First 1) }
+        if ($leaf -match '\.exe$') { $leaf -replace '\.exe$', '' } else { $leaf }
     } else { $null }
-    return (@{ title = $props.Title; artist = $props.Artist; playing = ($status -eq 4); appName = $appName } | ConvertTo-Json -Compress)
+    return (@{ title = $props.Title; artist = $props.Artist; playing = ($status -eq 4); appName = $appName; appId = $appId } | ConvertTo-Json -Compress)
 }
 
 function global:MediaThumbnail() {

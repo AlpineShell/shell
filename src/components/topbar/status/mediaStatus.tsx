@@ -1,4 +1,3 @@
-import { AudioLines } from "lucide-react";
 import { useAudioPeak } from "../../../hooks/useAudioPeak";
 import { useMediaSession } from "../../../hooks/useMediaSession";
 import { useDarkText } from "../../themeContext";
@@ -13,7 +12,7 @@ const MAX_H = 13;
 function MusicBars({ peak }: { peak: number }) {
     const boosted = Math.min(1, Math.sqrt(peak) * 1.8);
     return (
-        <svg width={13} height={13} viewBox="0 0 13 13" className="shrink-0">
+        <svg width={16} height={16} viewBox="0 0 13 13" className="shrink-0">
             {BAR_BASES.map((base, i) => {
                 const t = Math.min(1, boosted + BAR_OFFSETS[i]);
                 const h = Math.max(3, MIN_H + (MAX_H - MIN_H) * base * t);
@@ -47,23 +46,11 @@ export default function MediaStatus() {
             align="right"
             onOpen={() => window.shell.media.session().then(media.update)}
             trigger={
-                <div className={`flex items-center gap-1.5 h-4.5 px-1.5 rounded-full ${darkText ? "hover:bg-black/5" : "hover:bg-white/10"} transition-colors`}>
-                    {media.thumbnail ? (
-                        <img
-                            src={`data:${media.thumbnailType ?? "image/jpeg"};base64,${media.thumbnail}`}
-                            className="w-3.5 h-3.5 rounded-[3px] object-cover shrink-0"
-                            draggable={false}
-                        />
-                    ) : media.playing ? (
-                        <MusicBars peak={peak} />
-                    ) : (
-                        <AudioLines size={13} color={darkText ? "black" : "white"} className="shrink-0" />
-                    )}
-                    {media.appName && (
-                        <span className={`text-[12px] leading-none ${darkText ? "text-black" : "text-white"}`}>
-                            {media.appName}
-                        </span>
-                    )}
+                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full py-0.5 items-center gap-1.5`}>
+                    <MusicBars peak={peak} />
+                    <span className={`text-[12px] leading-none max-w-24 truncate ${darkText ? "text-black" : "text-white"}`}>
+                        {media.title}
+                    </span>
                 </div>
             }
         >

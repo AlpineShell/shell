@@ -46,6 +46,7 @@ declare global {
     title: string | null
     artist: string | null
     appName: string | null
+    appIcon: string | null
     playing: boolean
     thumbnail: string | null
     thumbnailType: string | null
