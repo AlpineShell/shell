@@ -12,7 +12,7 @@ const MAX_H = 13;
 function MusicBars({ peak }: { peak: number }) {
     const boosted = Math.min(1, Math.sqrt(peak) * 1.8);
     return (
-        <svg width={16} height={16} viewBox="0 0 13 13" className="shrink-0">
+        <svg width={14} height={14} viewBox="0 0 13 13" className="shrink-0">
             {BAR_BASES.map((base, i) => {
                 const t = Math.min(1, boosted + BAR_OFFSETS[i]);
                 const h = Math.max(3, MIN_H + (MAX_H - MIN_H) * base * t);
@@ -45,7 +45,7 @@ export default function MediaStatus() {
         <PopupMenu
             onOpen={() => window.shell.media.session().then(media.update)}
             trigger={
-                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full py-0.5 items-center gap-1.5`}>
+                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-5 items-center gap-1.5`}>
                     <MusicBars peak={peak} />
                     <span className={`text-[12px] leading-none max-w-24 truncate ${darkText ? "text-black" : "text-white"}`}>
                         {media.title}

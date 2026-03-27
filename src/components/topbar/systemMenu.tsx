@@ -20,7 +20,7 @@ export default function SystemMenu() {
     return (
         <PopupMenu
             trigger={
-                <div className="flex px-2 py-0.5 items-center cursor-pointer">
+                <div className="flex px-2 h-5 items-center cursor-pointer">
                     <CircleDashed color={darkText ? "black" : "white"} size={14} />
                 </div>
             }
