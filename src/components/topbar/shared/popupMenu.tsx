@@ -6,7 +6,7 @@ const CORNER = 12;
 
 let forceCloseActive: (() => void) | null = null;
 
-const SCREEN_PAD = 16;
+const SCREEN_PAD = 0;
 
 interface PopupMenuProps {
     trigger: ReactNode;
