@@ -16,7 +16,7 @@ function isRadioEnabled() {
 
 function getConnectedDevices() {
   return runPowerShell(
-    "$ag=@('0000110B','0000111E','0000110E','0000110C');$svcs=Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match 'BTHENUM' -and $_.InstanceId -notmatch '^BTHENUM\\\\Dev_' -and $_.Status -eq 'OK' };$hexes=@{};foreach($s in $svcs){foreach($g in $ag){if($s.InstanceId -match $g -and $s.InstanceId -match '([0-9a-fA-F]{12})'){$hexes[$Matches[1]]=$true;break}}};Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match '^BTHENUM\\\\Dev_([0-9a-fA-F]{12})' -and $hexes[$Matches[1]] } | Select-Object -ExpandProperty FriendlyName"
+    "$ag=@('0000110B','0000111E','0000110E','0000110C');$svcs=Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match 'BTHENUM' -and $_.InstanceId -notmatch '^BTHENUM\\\\Dev_' -and $_.Status -eq 'OK' };$hexes=@{};foreach($s in $svcs){foreach($g in $ag){if($s.InstanceId -match $g -and $s.InstanceId -match '&([0-9a-fA-F]{12})_'){$hexes[$Matches[1]]=$true;break}}};Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match '^BTHENUM\\\\Dev_([0-9a-fA-F]{12})' -and $hexes[$Matches[1]] } | Select-Object -ExpandProperty FriendlyName"
   ).then((output) => {
     if (!output) return []
     return [...new Set(output.split('\n').map(d => d.trim()).filter(Boolean))]
