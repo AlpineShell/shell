@@ -230,7 +230,6 @@ function createAltTabWindow() {
 
 app.whenReady().then(() => {
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery)
-  topbarColor.setShells(shells)
 
   const altTabWindow = createAltTabWindow()
   altTab.setOverlayWindow(altTabWindow)

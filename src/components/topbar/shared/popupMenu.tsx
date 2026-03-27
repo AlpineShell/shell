@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTopbarBg } from "../../themeContext";
 
-const BG = "rgb(31,32,32)";
 const CORNER = 12;
 
 let forceCloseActive: (() => void) | null = null;
@@ -15,6 +15,7 @@ interface PopupMenuProps {
 }
 
 export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps) {
+    const BG = useTopbarBg();
     const wrapperRef = useRef<HTMLDivElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
