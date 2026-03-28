@@ -28,6 +28,10 @@ interface TopBarColor {
   darkText: boolean
 }
 
+interface ForegroundColorData extends TopBarColor {
+  displayId: number
+}
+
 declare global {
   interface WifiNetwork {
     ssid: string
@@ -70,6 +74,12 @@ declare global {
     windows: AltTabWindow[]
     selectedIndex: number
   }
+
+  interface ScreenshotShowPayload {
+    image: string
+    width: number
+    height: number
+  }
   interface BatteryStatus {
     percent: number | null
     charging: boolean
@@ -107,6 +117,12 @@ declare global {
       install: (options: SetupOptions) => Promise<SetupResult>
       skip: () => Promise<void>
     }
+    screenshot: {
+      onShow: (callback: (data: ScreenshotShowPayload) => void) => void
+      onHide: (callback: () => void) => void
+      regionSelected: (region: { x: number; y: number; width: number; height: number }) => Promise<void>
+      cancel: () => Promise<void>
+    }
     alttab: {
       onShow: (callback: (data: AltTabShowPayload) => void) => void
       onHide: (callback: () => void) => void
@@ -118,6 +134,8 @@ declare global {
       setHeight: (height: number) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => void
+      foregroundColor: () => Promise<ForegroundColorData | null>
+      onForegroundColorChanged: (callback: (color: ForegroundColorData | null) => void) => void
       onCloseMenus: (callback: () => void) => void
     }
     shell: {

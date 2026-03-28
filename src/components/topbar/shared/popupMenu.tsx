@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useTopbarBg } from "../../themeContext";
+import { useTopbarBg, useDarkText, useFullscreenWindow, useMenuOpenChange } from "../../themeContext";
 
 const CORNER = 12;
 
@@ -16,6 +16,10 @@ interface PopupMenuProps {
 
 export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps) {
     const BG = useTopbarBg();
+    const darkText = useDarkText();
+    const fullscreenWindow = useFullscreenWindow();
+    const borderColor = fullscreenWindow ? (darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)") : null;
+    const onMenuOpenChange = useMenuOpenChange();
     const wrapperRef = useRef<HTMLDivElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
@@ -32,17 +36,31 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         if (open) {
             onOpenRef.current?.();
         } else {
+            onMenuOpenChange(false);
             if (!suppressHeight.current) window.topbar.setHeight(24);
             suppressHeight.current = false;
         }
     }, [open]);
 
+    function reportMenuBounds() {
+        requestAnimationFrame(() => {
+            if (popupRef.current) {
+                const rect = popupRef.current.getBoundingClientRect();
+                onMenuOpenChange(true, { left: rect.left - CORNER, right: rect.right + CORNER });
+            }
+        });
+    }
+
     useEffect(() => {
         if (!open) return;
         repositionPopup();
+        reportMenuBounds();
         const popup = popupRef.current;
         if (!popup) return;
-        const observer = new ResizeObserver(() => repositionPopup());
+        const observer = new ResizeObserver(() => {
+            repositionPopup();
+            reportMenuBounds();
+        });
         observer.observe(popup);
         return () => observer.disconnect();
     }, [open]);
@@ -114,21 +132,44 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             {open && createPortal(
                 <div
                     ref={popupRef}
-                    className={`z-[5] mt-0.5 ${closing ? "menu-exit" : "menu-enter"}`}
+                    className={`z-5 ${fullscreenWindow ? "" : "mt-0.5"} ${closing ? "menu-exit" : "menu-enter"}`}
                     style={popupStyle}
                     onMouseEnter={handleEnter}
                     onMouseLeave={handleLeave}
                 >
                     <div
                         className="absolute top-0 right-full"
-                        style={{ width: CORNER, height: CORNER, background: `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
+                        style={{ width: CORNER, height: CORNER, background: borderColor
+                            ? `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${BG} ${CORNER + 0.5}px)`
+                            : `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
                     />
                     <div
                         className="absolute top-0 left-full"
-                        style={{ width: CORNER, height: CORNER, background: `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
+                        style={{ width: CORNER, height: CORNER, background: borderColor
+                            ? `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${BG} ${CORNER + 0.5}px)`
+                            : `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
                     />
-                    <div className="overflow-hidden rounded-b-xl shadow-xl" style={{ backgroundColor: BG }}>
-                        {children}
+                    <div style={{ position: "relative" }}>
+                        <div
+                            className="overflow-hidden rounded-b-xl shadow-xl"
+                            style={{ backgroundColor: BG }}
+                        >
+                            {children}
+                        </div>
+                        {borderColor && (
+                            <div style={{
+                                position: "absolute",
+                                top: CORNER,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                borderLeft: `0.5px solid ${borderColor}`,
+                                borderRight: `0.5px solid ${borderColor}`,
+                                borderBottom: `0.5px solid ${borderColor}`,
+                                borderRadius: "0 0 12px 12px",
+                                pointerEvents: "none",
+                            }} />
+                        )}
                     </div>
                 </div>,
                 document.body

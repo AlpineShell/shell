@@ -88,7 +88,7 @@ export default function StatusIndicator() {
         <PopupMenu
             onOpen={scanAll}
             trigger={
-                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-5 items-center gap-1 transition-colors duration-300`}>
+                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-4.5 items-center gap-1 transition-colors duration-300`}>
                     <BluetoothIcon enabled={bluetooth.enabled} connected={bluetooth.connected} color={iconColor} />
                     <NetworkIcon signal={network.signal} connected={network.connected} type={network.type} color={iconColor} />
                     {battery.hasBattery && <BatteryIcon percent={battery.percent} charging={battery.charging} color={iconColor} />}

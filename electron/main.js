@@ -6,6 +6,7 @@ const network = require('./modules/network')
 const bluetooth = require('./modules/bluetooth')
 const openApps = require('./modules/openApps')
 const topbarColor = require('./modules/topbarColor')
+const foregroundColor = require('./modules/foregroundColor')
 const volume = require('./modules/volume')
 const brightness = require('./modules/brightness')
 const power = require('./modules/power')
@@ -26,9 +27,10 @@ const {
 const isDev = !app.isPackaged
 const BASE_URL = isDev ? 'http://localhost:5173' : null
 
-function getURL(mode) {
-  if (isDev) return `${BASE_URL}?mode=${mode}`
-  return `file://${path.join(__dirname, '..', 'dist', 'index.html')}?mode=${mode}`
+function getURL(mode, displayId) {
+  const params = displayId != null ? `mode=${mode}&displayId=${displayId}` : `mode=${mode}`
+  if (isDev) return `${BASE_URL}?${params}`
+  return `file://${path.join(__dirname, '..', 'dist', 'index.html')}?${params}`
 }
 const TOP_BAR_HEIGHT = 24
 
@@ -89,7 +91,7 @@ function createTopBarWindow(display) {
 
   win.setAlwaysOnTop(false)
   win.setIgnoreMouseEvents(true)
-  win.loadURL(getURL('topbar'))
+  win.loadURL(getURL('topbar', display.id))
 
   const INTERACTIVE_RIGHT = 400
   const INTERACTIVE_LEFT = 40
@@ -229,7 +231,7 @@ function createAltTabWindow() {
 }
 
 app.whenReady().then(() => {
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery)
 
   const altTabWindow = createAltTabWindow()
   altTab.setOverlayWindow(altTabWindow)

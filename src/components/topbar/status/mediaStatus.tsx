@@ -45,7 +45,7 @@ export default function MediaStatus() {
         <PopupMenu
             onOpen={() => window.shell.media.session().then(media.update)}
             trigger={
-                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-5 items-center gap-1.5`}>
+                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-4.5 items-center gap-1.5`}>
                     <MusicBars peak={peak} />
                     <span className={`text-[12px] leading-none max-w-24 truncate ${darkText ? "text-black" : "text-white"}`}>
                         {media.title}
