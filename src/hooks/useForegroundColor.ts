@@ -9,16 +9,22 @@ export function useForegroundColor() {
     useEffect(() => {
         const id = displayIdRef.current
 
-        function handleData(data: ForegroundColorData | null) {
-            if (data && data.displayId === id) {
+        function handleUpdate(data: ForegroundColorBroadcast) {
+            if (data.displayId !== id) return
+            if ('r' in data) {
                 setColor({ r: data.r, g: data.g, b: data.b, darkText: data.darkText })
             } else {
                 setColor(null)
             }
         }
 
-        window.topbar.foregroundColor().then(handleData)
-        window.topbar.onForegroundColorChanged(handleData)
+        window.topbar.foregroundColor().then((list) => {
+            const match = list.find((d) => d.displayId === id)
+            if (match) {
+                setColor({ r: match.r, g: match.g, b: match.b, darkText: match.darkText })
+            }
+        })
+        window.topbar.onForegroundColorChanged(handleUpdate)
     }, [])
 
     return color

@@ -32,6 +32,8 @@ interface ForegroundColorData extends TopBarColor {
   displayId: number
 }
 
+type ForegroundColorBroadcast = ForegroundColorData | { displayId: number }
+
 declare global {
   interface WifiNetwork {
     ssid: string
@@ -134,9 +136,9 @@ declare global {
       setHeight: (height: number) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => void
-      foregroundColor: () => Promise<ForegroundColorData | null>
-      onForegroundColorChanged: (callback: (color: ForegroundColorData | null) => void) => void
-      onCloseMenus: (callback: () => void) => void
+      foregroundColor: () => Promise<ForegroundColorData[]>
+      onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => void
+      onCloseMenus: (callback: () => void) => () => void
     }
     shell: {
       windows: {

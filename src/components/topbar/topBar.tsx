@@ -34,13 +34,13 @@ export default function TopBar() {
                 onMouseEnter={() => setHovered(true)}
                 onMouseLeave={() => setHovered(false)}
             >
-                {showBorder && (menuGap ? (
+                {fullscreenWindow && (menuGap ? (
                     <>
-                        <div style={{ position: "absolute", bottom: 0, left: 0, width: menuGap.left, height: 1, backgroundColor: borderColor }} />
-                        <div style={{ position: "absolute", bottom: 0, left: menuGap.right, right: 0, height: 1, backgroundColor: borderColor }} />
+                        <div style={{ position: "absolute", bottom: 0, left: 0, width: menuGap.left, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
+                        <div style={{ position: "absolute", bottom: 0, left: menuGap.right, right: 0, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
                     </>
                 ) : (
-                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 1, backgroundColor: borderColor }} />
+                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
                 ))}
                 <div className="flex items-center gap-1 relative z-1 self-stretch">
                     <SystemMenu />

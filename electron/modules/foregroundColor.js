@@ -18,15 +18,19 @@ const DeleteDC = gdi32.func('__stdcall', 'DeleteDC', 'int', ['uintptr_t'])
 const DeleteObject = gdi32.func('__stdcall', 'DeleteObject', 'int', ['uintptr_t'])
 const GetDpiForWindow = user32.func('__stdcall', 'GetDpiForWindow', 'uint32', ['uintptr_t'])
 
+const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
+const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
+
 const SRCCOPY = 0x00CC0020
 
-let lastState = { color: null, displayId: null }
+const perDisplay = new Map()
+const pendingDisplay = new Map()
+const hwndPerDisplay = new Map()
 
-function statesEqual(a, b) {
-  if (a.displayId !== b.displayId) return false
-  if (a.color === b.color) return true
-  if (!a.color || !b.color) return false
-  return a.color.r === b.color.r && a.color.g === b.color.g && a.color.b === b.color.b
+function colorEqual(a, b) {
+  if (a === b) return true
+  if (!a || !b) return false
+  return a.r === b.r && a.g === b.g && a.b === b.b
 }
 
 function sampleTitleBarColor(hwnd) {
@@ -96,35 +100,48 @@ function getDisplayIdForWindow(hwnd) {
   return display.id
 }
 
-function update(broadcast) {
-  const hwnd = GetForegroundWindow()
-
-  if (!hwnd || !IsZoomed(hwnd)) {
-    const newState = { color: null, displayId: null }
-    if (!statesEqual(newState, lastState)) {
-      lastState = newState
-      broadcast('topbar/fg-color-changed', null)
-    }
-    return
+function clearDisplay(displayId, broadcast) {
+  hwndPerDisplay.delete(displayId)
+  pendingDisplay.delete(displayId)
+  if (perDisplay.has(displayId)) {
+    perDisplay.delete(displayId)
+    broadcast('topbar/fg-color-changed', { displayId })
   }
+}
+
+function update(broadcast) {
+  for (const [displayId, trackedHwnd] of [...hwndPerDisplay.entries()]) {
+    if (!trackedHwnd || !IsZoomed(trackedHwnd)) {
+      clearDisplay(displayId, broadcast)
+    }
+  }
+
+  const hwnd = GetForegroundWindow()
+  if (!hwnd || !IsZoomed(hwnd)) return
+
+  const displayId = getDisplayIdForWindow(hwnd)
+  if (displayId == null) return
+
+  hwndPerDisplay.set(displayId, hwnd)
 
   const rgb = sampleTitleBarColor(hwnd)
   if (!rgb) {
-    const newState = { color: null, displayId: null }
-    if (!statesEqual(newState, lastState)) {
-      lastState = newState
-      broadcast('topbar/fg-color-changed', null)
-    }
+    clearDisplay(displayId, broadcast)
     return
   }
 
   const lum = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b
-  const displayId = getDisplayIdForWindow(hwnd)
   const color = { r: rgb.r, g: rgb.g, b: rgb.b, darkText: lum > 128 }
-  const newState = { color, displayId }
+  const pending = pendingDisplay.get(displayId)
 
-  if (!statesEqual(newState, lastState)) {
-    lastState = newState
+  if (!colorEqual(pending, color)) {
+    pendingDisplay.set(displayId, color)
+    return
+  }
+
+  const prev = perDisplay.get(displayId)
+  if (!colorEqual(prev, color)) {
+    perDisplay.set(displayId, color)
     broadcast('topbar/fg-color-changed', { ...color, displayId })
   }
 }
@@ -132,8 +149,11 @@ function update(broadcast) {
 module.exports = {
   handlers: {
     'topbar/fg-color': () => {
-      if (!lastState.color) return null
-      return { ...lastState.color, displayId: lastState.displayId }
+      const result = []
+      for (const [displayId, color] of perDisplay) {
+        result.push({ ...color, displayId })
+      }
+      return result
     },
   },
   start(broadcast) {

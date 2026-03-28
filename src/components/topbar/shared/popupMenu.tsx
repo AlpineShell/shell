@@ -25,8 +25,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     const [open, setOpen] = useState(false);
     const [closing, setClosing] = useState(false);
     const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
-    const closeTimer = useRef<ReturnType<typeof setTimeout>>();
-    const closeAnimTimer = useRef<ReturnType<typeof setTimeout>>();
+    const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const closeAnimTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const suppressHeight = useRef(false);
 
     const onOpenRef = useRef(onOpen);
@@ -132,7 +132,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             {open && createPortal(
                 <div
                     ref={popupRef}
-                    className={`z-5 ${fullscreenWindow ? "" : "mt-0.5"} ${closing ? "menu-exit" : "menu-enter"}`}
+                    className={`z-5 ${closing ? "menu-exit" : "menu-enter"}`}
                     style={popupStyle}
                     onMouseEnter={handleEnter}
                     onMouseLeave={handleLeave}
