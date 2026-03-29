@@ -3,6 +3,11 @@ const { shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
+const BLOCKED_EXECUTABLES = [
+  'explorer.exe',
+  'explorer',
+]
+
 const RUN_KEYS = [
   'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
   'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
@@ -29,6 +34,20 @@ const scriptsDir = process.resourcesPath
 const MSIX_LAUNCHER_SRC = path.join(scriptsDir, 'msixLauncher.cs')
 const MSIX_QUERY = path.join(scriptsDir, 'msixQuery.ps1')
 const CSC_PATH = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'
+
+function isBlockedEntry(entry) {
+  const cmd = entry.command.replace(/"/g, '').toLowerCase()
+  const basename = path.basename(cmd.split(/\s+/)[0])
+  return BLOCKED_EXECUTABLES.some(blocked => basename === blocked || basename === blocked + '.exe')
+}
+
+function disableExplorerRestart() {
+  try {
+    execSync('reg add "HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" /v RestartApps /t REG_DWORD /d 0 /f', { windowsHide: true, encoding: 'utf8' })
+  } catch {
+  }
+  console.log('[autostart] Explorer restart prevention applied')
+}
 
 function isShellReplacement() {
   const hives = [
@@ -306,7 +325,16 @@ function processAutostart() {
     deleteRunOnceEntry(entry.registryKey, entry.name)
   }
 
-  const launchableEntries = [...runEntries, ...runOnceEntries, ...folderEntries, ...scheduledEntries]
+  const allEntries = [...runEntries, ...runOnceEntries, ...folderEntries, ...scheduledEntries]
+  const launchableEntries = allEntries.filter(entry => {
+    if (isBlockedEntry(entry)) {
+      console.log(`[autostart] Blocked: ${entry.name} (${entry.command})`)
+      return false
+    }
+    return true
+  })
+
+  disableExplorerRestart()
 
   for (const entry of launchableEntries) {
     launchEntry(entry)
@@ -329,6 +357,7 @@ function processAutostart() {
   }
 
   console.log(`[autostart] Launched ${launchableEntries.length} classic entries (${runEntries.length} registry, ${runOnceEntries.length} run-once, ${folderEntries.length} startup folder, ${scheduledEntries.length} scheduled tasks)`)
+
 }
 
 module.exports = { processAutostart }

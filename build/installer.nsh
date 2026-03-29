@@ -126,6 +126,14 @@ FunctionEnd
     ${If} $0 != "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
       MessageBox MB_OK|MB_ICONEXCLAMATION "Shell replacement could not be applied. A Group Policy or system restriction may be blocking this change."
     ${EndIf}
+
+    WriteRegDWORD HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "AutoRestartShell" 0
+
+    WriteRegDWORD HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "EnableXamlStartMenu" 0
+
+    nsExec::ExecToLog 'reg add "HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v RestartApps /t REG_DWORD /d 0 /f'
+
+    nsExec::ExecToLog 'schtasks /change /tn "\Microsoft\Windows\Application Experience\StartupAppTask" /disable'
   ${EndIf}
 
   ${If} $DoCursor == ${BST_CHECKED}
@@ -172,6 +180,11 @@ FunctionEnd
 !macro customUnInstall
   WriteRegStr HKCU "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "Shell" "explorer.exe"
   DeleteRegValue HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Run" "AlpineShell"
+
+  WriteRegDWORD HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "AutoRestartShell" 1
+  DeleteRegValue HKCU "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "RestartApps"
+  DeleteRegValue HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "EnableXamlStartMenu"
+  nsExec::ExecToLog 'schtasks /change /tn "\Microsoft\Windows\Application Experience\StartupAppTask" /enable'
 
   WriteRegStr HKCU "Control Panel\Cursors" "" ""
   DeleteRegValue HKCU "Control Panel\Cursors" "Arrow"
