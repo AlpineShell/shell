@@ -198,10 +198,8 @@ function captureWindowThumbnail(hwnd) {
     const pixelData = Buffer.alloc(srcWidth * srcHeight * 4)
     if (!GetDIBits(memDC, bmp, 0, srcHeight, pixelData, biHeader, 0)) return thumbnailCache.get(hwnd) || null
 
-    for (let i = 0; i < pixelData.length; i += 4) {
-      const b = pixelData[i]
-      pixelData[i] = pixelData[i + 2]
-      pixelData[i + 2] = b
+    for (let i = 3; i < pixelData.length; i += 4) {
+      pixelData[i] = 255
     }
 
     const img = nativeImage.createFromBitmap(pixelData, { width: srcWidth, height: srcHeight })
