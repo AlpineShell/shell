@@ -260,7 +260,6 @@ function createScreenshotWindow() {
 
   win.webContents.once('did-finish-load', () => {
     win.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
-    win.showInactive()
   })
 
   return win
