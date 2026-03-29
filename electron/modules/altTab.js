@@ -59,6 +59,9 @@ const VK_ESCAPE = 0x1B
 const VK_LMENU = 0xA4
 const VK_RMENU = 0xA5
 const VK_SHIFT = 0x10
+const VK_S = 0x53
+const VK_LWIN = 0x5B
+const VK_RWIN = 0x5C
 const SW_RESTORE = 9
 const SRCCOPY = 0x00CC0020
 const PW_RENDERFULLCONTENT = 2
@@ -74,6 +77,8 @@ let overlayWindow = null
 let shellsRef = null
 let hookHandle = null
 let hookCallbackPointer = null
+let screenshotCallback = null
+let screenshotCancelCallback = null
 
 let altIsDown = false
 let switcherActive = false
@@ -340,6 +345,20 @@ function hookCallback(nCode, wParam, lParam) {
       }
     }
 
+    if (vkCode === VK_S && isKeyDown) {
+      const shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) !== 0
+      const winDown = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      if (shiftDown && winDown && screenshotCallback) {
+        setImmediate(() => screenshotCallback())
+        return 1
+      }
+    }
+
+    if (vkCode === VK_ESCAPE && isKeyDown && screenshotCancelCallback) {
+      const handled = screenshotCancelCallback()
+      if (handled) return 1
+    }
+
     if (vkCode === VK_ESCAPE && isKeyDown && switcherActive) {
       hideSwitcher()
       altIsDown = false
@@ -387,6 +406,11 @@ module.exports = {
 
   setShells(shells) {
     shellsRef = shells
+  },
+
+  onScreenshot(callback, cancelCallback) {
+    screenshotCallback = callback
+    screenshotCancelCallback = cancelCallback
   },
 
   start(_broadcast) {

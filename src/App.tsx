@@ -1,12 +1,14 @@
 import { useWallpaper } from './hooks/useWallpaper'
 import TopBar from './components/topbar/topBar'
 import AltTabSwitcher from './components/alttab/altTabSwitcher'
+import ScreenshotOverlay from './components/screenshot/screenshotOverlay'
 
-function getMode(): 'topbar' | 'desktop' | 'alttab' | 'setup' {
+function getMode(): 'topbar' | 'desktop' | 'alttab' | 'screenshot' | 'setup' {
   const params = new URLSearchParams(window.location.search)
   const mode = params.get('mode')
   if (mode === 'topbar') return 'topbar'
   if (mode === 'alttab') return 'alttab'
+  if (mode === 'screenshot') return 'screenshot'
   if (mode === 'setup') return 'setup'
   return 'desktop'
 }
@@ -38,11 +40,20 @@ function AltTabApp() {
   )
 }
 
+function ScreenshotApp() {
+  return (
+    <div className="w-screen h-screen bg-transparent">
+      <ScreenshotOverlay />
+    </div>
+  )
+}
+
 function App() {
   const mode = getMode()
 
   if (mode === 'topbar') return <TopBarApp />
   if (mode === 'alttab') return <AltTabApp />
+  if (mode === 'screenshot') return <ScreenshotApp />
   return <DesktopApp />
 }
 

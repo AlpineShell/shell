@@ -16,6 +16,8 @@ const microphone = require('./modules/microphone')
 const battery = require('./modules/battery')
 let altTab = null
 try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
+let screenshot = null
+try { screenshot = require('./modules/screenshot') } catch (e) { console.error('[main] screenshot load error:', e.message) }
 const { processAutostart } = require('./modules/autostart')
 const {
   registerAppBar,
@@ -230,12 +232,55 @@ function createAltTabWindow() {
   return win
 }
 
+function createScreenshotWindow() {
+  const win = new BrowserWindow({
+    width: 1,
+    height: 1,
+    x: -10000,
+    y: -10000,
+    frame: false,
+    resizable: false,
+    movable: false,
+    skipTaskbar: true,
+    focusable: true,
+    transparent: true,
+    thickFrame: false,
+    show: false,
+    paintWhenInitiallyHidden: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      backgroundThrottling: false,
+    },
+  })
+
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.loadURL(getURL('screenshot'))
+
+  win.webContents.once('did-finish-load', () => {
+    win.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
+    win.showInactive()
+  })
+
+  return win
+}
+
 app.whenReady().then(() => {
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, screenshot)
 
   const altTabWindow = createAltTabWindow()
   altTab.setOverlayWindow(altTabWindow)
   altTab.setShells(shells)
+
+  const screenshotWindow = createScreenshotWindow()
+  if (screenshot) {
+    screenshot.setOverlayWindow(screenshotWindow)
+    altTab.onScreenshot(
+      () => screenshot.showOverlay(),
+      () => screenshot.hideOverlay()
+    )
+  }
 
   for (const display of screen.getAllDisplays()) {
     createShellForDisplay(display)

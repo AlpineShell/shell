@@ -18,6 +18,17 @@ contextBridge.exposeInMainWorld('topbar', {
   },
 })
 
+contextBridge.exposeInMainWorld('screenshot', {
+  onShow: (callback) => {
+    ipcRenderer.on('screenshot/show', (_, data) => callback(data))
+  },
+  onHide: (callback) => {
+    ipcRenderer.on('screenshot/hide', () => callback())
+  },
+  regionSelected: (region) => ipcRenderer.invoke('screenshot/region-selected', region),
+  cancel: () => ipcRenderer.invoke('screenshot/cancel'),
+})
+
 contextBridge.exposeInMainWorld('alttab', {
   onShow: (callback) => {
     ipcRenderer.on('alttab/show', (_, data) => callback(data))

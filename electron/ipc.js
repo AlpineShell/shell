@@ -8,6 +8,7 @@ function broadcast(channel, data) {
 
 function register(...modules) {
   for (const mod of modules) {
+    if (!mod) continue
     for (const [channel, handler] of Object.entries(mod.handlers ?? {})) {
       ipcMain.handle(channel, handler)
     }
