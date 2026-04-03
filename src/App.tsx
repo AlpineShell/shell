@@ -2,6 +2,7 @@ import { useWallpaper } from './hooks/useWallpaper'
 import TopBar from './components/topbar/topBar'
 import AltTabSwitcher from './components/alttab/altTabSwitcher'
 import ScreenshotOverlay from './components/screenshot/screenshotOverlay'
+import SetupApp from './components/setup/setupApp'
 
 function getMode(): 'topbar' | 'desktop' | 'alttab' | 'screenshot' | 'setup' {
   const params = new URLSearchParams(window.location.search)
@@ -51,6 +52,7 @@ function ScreenshotApp() {
 function App() {
   const mode = getMode()
 
+  if (mode === 'setup') return <SetupApp />
   if (mode === 'topbar') return <TopBarApp />
   if (mode === 'alttab') return <AltTabApp />
   if (mode === 'screenshot') return <ScreenshotApp />

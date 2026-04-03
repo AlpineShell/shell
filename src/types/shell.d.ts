@@ -96,6 +96,7 @@ declare global {
   }
 
   interface SetupOptions {
+    shell: boolean
     cursor: boolean
   }
 
@@ -104,6 +105,7 @@ declare global {
     startup: boolean
     cursor: boolean
     gpoBlocked: boolean
+    error: string | null
   }
 
   interface SetupStatus {
@@ -118,6 +120,9 @@ declare global {
       status: () => Promise<SetupStatus>
       install: (options: SetupOptions) => Promise<SetupResult>
       skip: () => Promise<void>
+      relaunch: () => Promise<void>
+      restartWindows: () => Promise<void>
+      onProgress: (callback: (step: string) => void) => void
     }
     screenshot: {
       onShow: (callback: (data: ScreenshotShowPayload) => void) => void

@@ -46,6 +46,11 @@ contextBridge.exposeInMainWorld('setup', {
   status: () => ipcRenderer.invoke('setup/status'),
   install: (options) => ipcRenderer.invoke('setup/install', options),
   skip: () => ipcRenderer.invoke('setup/skip'),
+  relaunch: () => ipcRenderer.invoke('setup/relaunch'),
+  restartWindows: () => ipcRenderer.invoke('setup/restart-windows'),
+  onProgress: (callback) => {
+    ipcRenderer.on('setup/progress', (_, step) => callback(step))
+  },
 })
 
 contextBridge.exposeInMainWorld('shell', {

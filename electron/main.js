@@ -19,6 +19,7 @@ try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] a
 let screenshot = null
 try { screenshot = require('./modules/screenshot') } catch (e) { console.error('[main] screenshot load error:', e.message) }
 const { processAutostart } = require('./modules/autostart')
+const installer = require('./modules/installer')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -265,8 +266,49 @@ function createScreenshotWindow() {
   return win
 }
 
-app.whenReady().then(() => {
+function createSetupWindow() {
+  const win = new BrowserWindow({
+    width: 480,
+    height: 560,
+    frame: false,
+    resizable: false,
+    center: true,
+    transparent: false,
+    skipTaskbar: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+
+  win.loadURL(getURL('setup'))
+
+  win.on('closed', () => {
+    app.quit()
+  })
+
+  return win
+}
+
+app.whenReady().then(async () => {
+  if (process.argv.includes('--uninstall')) {
+    installer.uninstall()
+    app.quit()
+    return
+  }
+
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, screenshot)
+
+  if (!isDev && installer.isPortableRun()) {
+    createSetupWindow()
+    return
+  }
+
+  if (!isDev && setup.isFirstRun()) {
+    createSetupWindow()
+    return
+  }
 
   const altTabWindow = createAltTabWindow()
   altTab.setOverlayWindow(altTabWindow)

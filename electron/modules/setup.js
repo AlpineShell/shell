@@ -1,7 +1,8 @@
 const { app } = require('electron')
 const path = require('path')
-const { execSync } = require('child_process')
+const { execSync, execFileSync } = require('child_process')
 const fs = require('fs')
+const installer = require('./installer')
 
 const CURSOR_REGISTRY_MAP = {
   'Arrow': 'Normal Select.cur',
@@ -35,8 +36,7 @@ function getCursorInstallDir() {
 }
 
 function regAdd(keyPath, valueName, value, type = 'REG_SZ') {
-  const cmd = `reg add "${keyPath}" /v "${valueName}" /t ${type} /d "${value}" /f`
-  execSync(cmd, { windowsHide: true })
+  execFileSync('reg', ['add', keyPath, '/v', valueName, '/t', type, '/d', value, '/f'], { windowsHide: true })
 }
 
 function regQuery(keyPath, valueName) {
@@ -75,16 +75,42 @@ function installCursors() {
   execSync('rundll32.exe user32.dll,UpdatePerUserSystemParameters 1, True', { windowsHide: true })
 }
 
+function getShellExePath() {
+  if (app.isPackaged) {
+    return installer.getInstalledExePath()
+  }
+  const electronExe = path.join(__dirname, '..', '..', 'node_modules', 'electron', 'dist', 'electron.exe')
+  return `"${electronExe}" "${path.join(__dirname, '..', '..')}"`
+}
+
 function setAsShell() {
-  const exePath = app.isPackaged ? process.execPath : path.join(__dirname, '..', '..', 'node_modules', 'electron', 'dist', 'electron.exe')
-  const shellValue = app.isPackaged ? exePath : `"${exePath}" "${path.join(__dirname, '..', '..')}"`
+  const shellValue = getShellExePath()
   regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', shellValue)
+
+  try {
+    regAdd('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'AutoRestartShell', '0', 'REG_DWORD')
+  } catch (e) {
+    console.error('[setup] Could not set AutoRestartShell (may need admin):', e.message)
+  }
+
+  regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu', '0', 'REG_DWORD')
+  regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'RestartApps', '0', 'REG_DWORD')
+
+  try {
+    execSync('schtasks /change /tn "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" /disable', { windowsHide: true })
+  } catch (e) {
+    console.error('[setup] Could not disable StartupAppTask:', e.message)
+  }
 }
 
 function setStartup() {
-  const exePath = process.execPath
-  const appPath = app.isPackaged ? `"${exePath}"` : `"${exePath}" "${path.join(__dirname, '..', '..')}"`
-  regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', appPath)
+  if (app.isPackaged) {
+    const exePath = installer.getInstalledExePath()
+    regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', `"${exePath}"`)
+  } else {
+    const exePath = process.execPath
+    regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', `"${exePath}" "${path.join(__dirname, '..', '..')}"`)
+  }
 }
 
 function hasGpoShellOverride() {
@@ -116,47 +142,109 @@ function isFirstRun() {
 }
 
 function markSetupComplete() {
-  const flagPath = path.join(app.getPath('userData'), '.setup-complete')
-  fs.writeFileSync(flagPath, new Date().toISOString())
+  const dir = path.dirname(path.join(app.getPath('userData'), '.setup-complete'))
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(app.getPath('userData'), '.setup-complete'), new Date().toISOString())
+}
+
+let broadcast = null
+const yield_ = () => new Promise(r => setTimeout(r, 50))
+
+function progress(step) {
+  if (broadcast) broadcast('setup/progress', step)
 }
 
 module.exports = {
   handlers: {
     'setup/status': () => getSetupStatus(),
-    'setup/install': (_event, options) => {
-      const results = { shell: false, startup: false, cursor: false, gpoBlocked: false }
-      try {
-        if (hasGpoShellOverride()) {
-          console.error('[setup] Group Policy override detected — shell replacement may not take effect')
-          results.gpoBlocked = true
+    'setup/install': async (_event, options) => {
+      const results = { shell: false, startup: false, cursor: false, gpoBlocked: false, error: null }
+
+      if (installer.isPortableRun()) {
+        try {
+          progress('Copying files...')
+          await yield_()
+          await installer.installFiles()
+
+          progress('Creating shortcut...')
+          await yield_()
+          installer.createShortcuts()
+
+          progress('Registering with Windows...')
+          await yield_()
+          installer.registerUninstaller()
+        } catch (e) {
+          console.error('[setup] File install error:', e.message)
+          results.error = e.message
+          return results
         }
-        setAsShell()
-        setStartup()
-        results.shell = verifyShellWrite()
-        results.startup = true
-        if (!results.shell) {
-          console.error('[setup] Shell registry write did not persist — possible policy or permission issue')
-        }
-      } catch (e) {
-        console.error('[setup] Shell/startup error:', e.message)
       }
+
+      if (options.shell) {
+        try {
+          progress('Configuring desktop environment...')
+          await yield_()
+          if (hasGpoShellOverride()) {
+            console.error('[setup] Group Policy override detected — shell replacement may not take effect')
+            results.gpoBlocked = true
+          }
+          setAsShell()
+          setStartup()
+          results.shell = verifyShellWrite()
+          results.startup = true
+          if (!results.shell) {
+            console.error('[setup] Shell registry write did not persist — possible policy or permission issue')
+          }
+        } catch (e) {
+          console.error('[setup] Shell/startup error:', e.message)
+        }
+      }
+
       if (options.cursor) {
         try {
+          progress('Installing cursor...')
+          await yield_()
           installCursors()
           results.cursor = true
         } catch (e) {
           console.error('[setup] Cursor error:', e.message)
         }
       }
+
       markSetupComplete()
       return results
     },
-    'setup/skip': () => {
+    'setup/skip': async () => {
+      if (installer.isPortableRun()) {
+        try {
+          progress('Copying files...')
+          await yield_()
+          await installer.installFiles()
+          installer.createShortcuts()
+          installer.registerUninstaller()
+        } catch (e) {
+          console.error('[setup] File install error:', e.message)
+        }
+      }
       markSetupComplete()
+    },
+    'setup/relaunch': () => {
+      if (installer.isPortableRun()) {
+        installer.relaunchFromInstalled()
+      } else {
+        app.relaunch()
+        app.exit()
+      }
+    },
+    'setup/restart-windows': () => {
+      execSync('shutdown /r /t 5 /c "Restarting to apply Alpine Shell"', { windowsHide: true })
+      app.exit()
     },
   },
 
   isFirstRun,
 
-  start() {},
+  start(b) {
+    broadcast = b
+  },
 }

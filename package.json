@@ -56,16 +56,12 @@
       }
     ],
     "win": {
-      "target": "nsis",
+      "target": "portable",
+      "icon": "build/icon.ico",
       "requestedExecutionLevel": "asInvoker"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": false,
-      "include": "build/installer.nsh",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "runAfterFinish": false
+    "portable": {
+      "artifactName": "${productName} Setup ${version}.${ext}"
     }
   },
   "overrides": {
