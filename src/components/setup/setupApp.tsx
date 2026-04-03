@@ -64,27 +64,29 @@ export default function SetupApp() {
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col px-10 pb-10 relative z-10">
+      <div className="flex-1 flex flex-col px-10 pt-2 pb-5 relative z-10">
         {page === 'welcome' && (
-          <div className="flex-1 flex flex-col justify-center">
-            <h1 className="text-3xl font-semibold tracking-tight">Alpine Shell</h1>
-            <p className="text-neutral-400 mt-3 text-[15px] leading-relaxed">
-              A modern desktop environment for Windows.
-              <br />
-              Let's get you set up.
-            </p>
-            <button
-              onClick={() => setPage('options')}
-              className="mt-10 w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
-            >
-              Get Started
-            </button>
-            <button
-              onClick={handleSkip}
-              className="mt-3 w-full h-11 text-neutral-500 text-sm hover:text-neutral-300 transition-colors cursor-default"
-            >
-              Skip Setup
-            </button>
+          <div className="flex-1 flex justify-between flex-col">
+            <div>
+              <img src="./AlpineShellLogo.svg" className="w-fit h-10 mb-4" />
+              <p className="text-white text-[19px] leading">
+                Welcome to a faster, cleaner Windows experience
+              </p>
+            </div>
+            <div>
+              <button
+                onClick={() => setPage('options')}
+                className="mt-20 w-full h-11 bg-white cursor-pointer text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors"
+              >
+                Install Preset
+              </button>
+              <button
+                onClick={handleSkip}
+                className="mt-3 w-full h-11 cursor-pointer text-white text-sm hover:text-neutral-300 transition-colors"
+              >
+                Customize Install
+              </button>
+            </div>
           </div>
         )}
 
