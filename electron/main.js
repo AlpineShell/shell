@@ -300,6 +300,11 @@ app.whenReady().then(async () => {
 
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, screenshot)
 
+  if (process.argv.includes('--setup')) {
+    createSetupWindow()
+    return
+  }
+
   if (!isDev && installer.isPortableRun()) {
     createSetupWindow()
     return

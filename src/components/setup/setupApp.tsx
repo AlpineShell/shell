@@ -52,8 +52,9 @@ export default function SetupApp() {
   }
 
   return (
-    <div className="w-screen h-screen bg-neutral-950 text-white flex flex-col overflow-hidden">
-      <div className="h-8 flex items-center justify-end px-2 shrink-0" style={dragRegion}>
+    <div className="w-screen h-screen bg-linear-to-br from-[#001C30] to-[#005896] text-white flex flex-col overflow-hidden relative">
+      <div className="absolute inset-0 opacity-[0.6] mix-blend-overlay pointer-events-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")', backgroundSize: '200px 200px' }} />
+      <div className="h-8 flex items-center justify-end px-2 shrink-0 relative z-10" style={dragRegion}>
         <button
           onClick={() => window.close()}
           className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
@@ -63,7 +64,7 @@ export default function SetupApp() {
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col px-10 pb-10">
+      <div className="flex-1 flex flex-col px-10 pb-10 relative z-10">
         {page === 'welcome' && (
           <div className="flex-1 flex flex-col justify-center">
             <h1 className="text-3xl font-semibold tracking-tight">Alpine Shell</h1>

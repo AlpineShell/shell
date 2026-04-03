@@ -7,6 +7,7 @@
     "dev": "vite",
     "electron": "electron .",
     "start": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron\"",
+    "start:setup": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron . --setup\"",
     "build": "vite build && electron-builder --win"
   },
   "dependencies": {
