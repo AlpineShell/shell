@@ -1,9 +1,13 @@
 const { runPowerShell } = require('../powershell')
 const { exec } = require('child_process')
+const { app } = require('electron')
 const path = require('path')
 
-const scanScriptPath = path.join(__dirname, '..', 'scripts', 'bluetoothScan.ps1')
-const toggleScriptPath = path.join(__dirname, '..', 'scripts', 'bluetoothToggle.ps1')
+const scriptsDir = app.isPackaged
+  ? path.join(process.resourcesPath, 'scripts')
+  : path.join(__dirname, '..', 'scripts')
+const scanScriptPath = path.join(scriptsDir, 'bluetoothScan.ps1')
+const toggleScriptPath = path.join(scriptsDir, 'bluetoothToggle.ps1')
 
 let lastState = undefined
 let broadcastRef = null

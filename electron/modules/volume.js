@@ -1,8 +1,11 @@
 const { spawn } = require('child_process')
+const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
-const SCRIPT_PATH = path.join(__dirname, '..', 'scripts', 'audio.ps1')
+const SCRIPT_PATH = app.isPackaged
+  ? path.join(process.resourcesPath, 'scripts', 'audio.ps1')
+  : path.join(__dirname, '..', 'scripts', 'audio.ps1')
 const DELIM = '__AUDIO_DONE__'
 
 let ps = null

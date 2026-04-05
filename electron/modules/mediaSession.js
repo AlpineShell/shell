@@ -19,7 +19,9 @@ async function getAppIcon(appId) {
     }
 }
 
-const SCRIPT_PATH = path.join(__dirname, '..', 'scripts', 'media.ps1')
+const SCRIPT_PATH = app.isPackaged
+  ? path.join(process.resourcesPath, 'scripts', 'media.ps1')
+  : path.join(__dirname, '..', 'scripts', 'media.ps1')
 const DELIM = '__MEDIA_DONE__'
 
 let ps = null

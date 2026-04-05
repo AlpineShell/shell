@@ -1,12 +1,16 @@
 const { exec } = require('child_process')
+const { app } = require('electron')
 const path = require('path')
 
 let lastSignal = undefined
 let lastType = undefined
 let lastSsid = undefined
 
-const scriptPath = path.join(__dirname, '..', 'scripts', 'networkStatus.ps1')
-const scanScriptPath = path.join(__dirname, '..', 'scripts', 'wifiScan.ps1')
+const scriptsDir = app.isPackaged
+  ? path.join(process.resourcesPath, 'scripts')
+  : path.join(__dirname, '..', 'scripts')
+const scriptPath = path.join(scriptsDir, 'networkStatus.ps1')
+const scanScriptPath = path.join(scriptsDir, 'wifiScan.ps1')
 
 function getNetworkStatus() {
   return new Promise((resolve) => {
