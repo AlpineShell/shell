@@ -112,20 +112,13 @@ function ControlItem({ label, sublabel, Icon, darkText, onClick }: { label: stri
     const dimColor = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)";
     return (
         <div className={`flex cursor-pointer justify-between items-center ${darkText ? "text-black" : "text-white"}`} onClick={onClick}>
-            {active ? (
-                <div className="flex mx-1 gap-3 text-sm items-center">
-                    <Icon color={color} size={17} />
-                    <div className="flex flex-col gap-0">
-                        <span className="text-xs">{label}</span>
-                        <span className={`text-[13px] ${darkText ? "text-black/60" : "text-white/60"} -mt-0.5`}>{sublabel}</span>
-                    </div>
+            <div className="flex mx-1 gap-3 text-sm items-center">
+                <Icon color={active ? color : dimColor} size={17} />
+                <div className="flex flex-col gap-0">
+                    <span className={active ? 'text-xs' : `text-[13px] ${darkText ? 'text-black/60' : 'text-white/60'}`}>{label}</span>
+                    {active && <span className={`text-[13px] ${darkText ? "text-black/60" : "text-white/60"} -mt-0.5`}>{sublabel}</span>}
                 </div>
-            ) : (
-                <div className={`flex gap-2 text-sm items-center ${darkText ? "text-black/60" : "text-white/60"}`}>
-                    <Icon color={dimColor} size={15} />
-                    {label}
-                </div>
-            )}
+            </div>
             <ChevronRight color={active ? color : dimColor} size={15} />
         </div>
     )
