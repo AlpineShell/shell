@@ -44,12 +44,6 @@ export default function SetupApp() {
     setPage(res.error ? 'error' : 'complete')
   }
 
-  async function handleSkip() {
-    setCurrentStep('')
-    setPage('installing')
-    await window.setup.skip()
-    window.setup.relaunch()
-  }
 
   return (
     <div className="w-screen h-screen bg-linear-to-br from-[#001C30] to-[#005896] text-white flex flex-col overflow-hidden relative">
@@ -75,13 +69,13 @@ export default function SetupApp() {
             </div>
             <div>
               <button
-                onClick={() => setPage('options')}
+                onClick={handleInstall}
                 className="mt-20 w-full h-11 bg-white cursor-pointer text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors"
               >
                 Install Preset
               </button>
               <button
-                onClick={handleSkip}
+                onClick={() => setPage('options')}
                 className="mt-3 w-full h-11 cursor-pointer text-white text-sm hover:text-neutral-300 transition-colors"
               >
                 Customize Install
@@ -91,50 +85,54 @@ export default function SetupApp() {
         )}
 
         {page === 'options' && (
-          <div className="flex-1 flex flex-col justify-center">
-            <h1 className="text-2xl font-semibold tracking-tight">Configure</h1>
-            <p className="text-neutral-400 mt-2 text-sm">Choose what to set up.</p>
+          <div className="flex-1 flex justify-between flex-col">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Configure</h1>
+              <p className="text-neutral-400 mt-2 text-sm">Choose what to set up.</p>
 
-            <div className="mt-8 space-y-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-[15px] font-medium">Desktop Environment</div>
-                  <div className="text-sm text-neutral-500 mt-0.5">
-                    Replace Explorer with Alpine Shell
-                  </div>
-                  {status?.gpoBlocked && (
-                    <div className="flex items-center gap-1.5 mt-1.5 text-amber-400 text-xs">
-                      <AlertTriangle size={12} />
-                      <span>Group Policy may prevent this change</span>
+              <div className="mt-8 space-y-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[15px] font-medium">Desktop Environment</div>
+                    <div className="text-sm text-neutral-500 mt-0.5">
+                      Replace Explorer with Alpine Shell
                     </div>
-                  )}
-                </div>
-                <Toggle checked={installShell} onChange={setInstallShell} />
-              </div>
-
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-[15px] font-medium">Custom Cursor</div>
-                  <div className="text-sm text-neutral-500 mt-0.5">
-                    Install the Moga White cursor pack
+                    {status?.gpoBlocked && (
+                      <div className="flex items-center gap-1.5 mt-1.5 text-amber-400 text-xs">
+                        <AlertTriangle size={12} />
+                        <span>Group Policy may prevent this change</span>
+                      </div>
+                    )}
                   </div>
+                  <Toggle checked={installShell} onChange={setInstallShell} />
                 </div>
-                <Toggle checked={installCursor} onChange={setInstallCursor} />
+
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[15px] font-medium">Custom Cursor</div>
+                    <div className="text-sm text-neutral-500 mt-0.5">
+                      Install the Moga White cursor pack
+                    </div>
+                  </div>
+                  <Toggle checked={installCursor} onChange={setInstallCursor} />
+                </div>
               </div>
             </div>
 
-            <button
-              onClick={handleInstall}
-              className="mt-10 w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
-            >
-              Install
-            </button>
-            <button
-              onClick={() => setPage('welcome')}
-              className="mt-3 w-full h-11 text-neutral-500 text-sm hover:text-neutral-300 transition-colors cursor-default"
-            >
-              Back
-            </button>
+            <div>
+              <button
+                onClick={handleInstall}
+                className="w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
+              >
+                Install
+              </button>
+              <button
+                onClick={() => setPage('welcome')}
+                className="mt-3 w-full h-11 text-white text-sm hover:text-neutral-300 transition-colors cursor-default"
+              >
+                Back
+              </button>
+            </div>
           </div>
         )}
 
@@ -149,81 +147,89 @@ export default function SetupApp() {
         )}
 
         {page === 'error' && result && (
-          <div className="flex-1 flex flex-col justify-center">
-            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
-              <X size={24} strokeWidth={2.5} className="text-red-400" />
+          <div className="flex-1 flex justify-between flex-col">
+            <div>
+              <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+                <X size={24} strokeWidth={2.5} className="text-red-400" />
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight mt-5">Installation failed</h1>
+              <p className="text-neutral-500 text-sm mt-2 leading-relaxed">
+                Something went wrong during installation.
+              </p>
+              <p className="mt-3 text-xs text-red-400/80 bg-red-400/5 rounded-lg px-3 py-2 font-mono break-all">
+                {result.error}
+              </p>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight mt-5">Installation failed</h1>
-            <p className="text-neutral-500 text-sm mt-2 leading-relaxed">
-              Something went wrong during installation.
-            </p>
-            <p className="mt-3 text-xs text-red-400/80 bg-red-400/5 rounded-lg px-3 py-2 font-mono break-all">
-              {result.error}
-            </p>
-            <button
-              onClick={() => setPage('options')}
-              className="mt-8 w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
-            >
-              Try Again
-            </button>
-            <button
-              onClick={() => window.close()}
-              className="mt-3 w-full h-11 text-neutral-500 text-sm hover:text-neutral-300 transition-colors cursor-default"
-            >
-              Close
-            </button>
+            <div>
+              <button
+                onClick={() => setPage('options')}
+                className="w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => window.close()}
+                className="mt-3 w-full h-11 text-white text-sm hover:text-neutral-300 transition-colors cursor-default"
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
 
         {page === 'complete' && result && (
-          <div className="flex-1 flex flex-col justify-center">
-            <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
-              <Check size={24} strokeWidth={2.5} />
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight mt-5">Setup complete</h1>
-            <p className="text-neutral-500 text-sm mt-2 leading-relaxed">
-              Restart your computer to start using Alpine Shell.
-            </p>
+          <div className="flex-1 flex justify-between flex-col">
+            <div>
+              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+                <Check size={24} strokeWidth={2.5} />
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight mt-5">Setup complete</h1>
+              <p className="text-neutral-500 text-sm mt-2 leading-relaxed">
+                Restart your computer to start using Alpine Shell.
+              </p>
 
-            <div className="mt-5 space-y-1.5 text-xs text-neutral-600">
-              {result.shell && (
-                <p className="flex items-center gap-2">
-                  <Check size={11} className="text-neutral-500 shrink-0" />
-                  Set as default desktop environment
-                </p>
-              )}
-              {result.startup && (
-                <p className="flex items-center gap-2">
-                  <Check size={11} className="text-neutral-500 shrink-0" />
-                  Added to startup
-                </p>
-              )}
-              {result.cursor && (
-                <p className="flex items-center gap-2">
-                  <Check size={11} className="text-neutral-500 shrink-0" />
-                  Custom cursor installed
-                </p>
-              )}
-              {result.gpoBlocked && (
-                <p className="flex items-center gap-2 text-amber-500">
-                  <AlertTriangle size={11} className="shrink-0" />
-                  Group Policy may have blocked shell replacement
-                </p>
-              )}
+              <div className="mt-5 space-y-1.5 text-xs text-neutral-600">
+                {result.shell && (
+                  <p className="flex items-center gap-2">
+                    <Check size={11} className="text-neutral-500 shrink-0" />
+                    Set as default desktop environment
+                  </p>
+                )}
+                {result.startup && (
+                  <p className="flex items-center gap-2">
+                    <Check size={11} className="text-neutral-500 shrink-0" />
+                    Added to startup
+                  </p>
+                )}
+                {result.cursor && (
+                  <p className="flex items-center gap-2">
+                    <Check size={11} className="text-neutral-500 shrink-0" />
+                    Custom cursor installed
+                  </p>
+                )}
+                {result.gpoBlocked && (
+                  <p className="flex items-center gap-2 text-amber-500">
+                    <AlertTriangle size={11} className="shrink-0" />
+                    Group Policy may have blocked shell replacement
+                  </p>
+                )}
+              </div>
             </div>
 
-            <button
-              onClick={() => window.setup.restartWindows()}
-              className="mt-8 w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
-            >
-              Restart Now
-            </button>
-            <button
-              onClick={() => window.close()}
-              className="mt-3 w-full h-11 text-neutral-500 text-sm hover:text-neutral-300 transition-colors cursor-default"
-            >
-              Restart Later
-            </button>
+            <div>
+              <button
+                onClick={() => window.setup.restartWindows()}
+                className="w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
+              >
+                Restart Now
+              </button>
+              <button
+                onClick={() => window.close()}
+                className="mt-3 w-full h-11 text-white text-sm hover:text-neutral-300 transition-colors cursor-default"
+              >
+                Restart Later
+              </button>
+            </div>
           </div>
         )}
       </div>
