@@ -2,7 +2,9 @@ const { ipcMain, BrowserWindow } = require('electron')
 
 function broadcast(channel, data) {
   for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(channel, data)
+    if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+      win.webContents.send(channel, data)
+    }
   }
 }
 

@@ -298,8 +298,8 @@ function createSettingsWindow() {
     return settingsWin
   }
   settingsWin = new BrowserWindow({
-    width: 820,
-    height: 560,
+    width: 1000,
+    height: 650,
     minWidth: 680,
     minHeight: 480,
     frame: false,
