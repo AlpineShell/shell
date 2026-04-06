@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
+import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Settings, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
 import { useDarkText } from "../../themeContext";
 import WifiMenu from "./wifiMenu";
 import BluetoothMenu from "./bluetoothMenu";
@@ -86,15 +86,24 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                             />
                         ))}
                     </div>
-                    {battery.hasBattery && (() => {
-                        const BattIcon = batteryIcon(battery.percent, battery.charging);
-                        return (
-                            <div className={`flex items-center justify-end gap-1.5 text-sm ${darkText ? "text-black" : "text-white"}`}>
-                                <span className="text-[13px]">{batteryLabel(battery) ?? "Battery"}</span>
-                                <BattIcon color={darkText ? "black" : "white"} size={18} />
-                            </div>
-                        );
-                    })()}
+                    <div className={`flex items-center justify-between gap-1.5 text-sm ${darkText ? "text-black" : "text-white"}`}>
+                        <button
+                            onClick={() => window.shell.windows.openSettings()}
+                            className={`w-6 h-6 flex items-center justify-center rounded-md cursor-pointer transition-colors ${darkText ? "hover:bg-black/10" : "hover:bg-white/10"}`}
+                            aria-label="Open settings"
+                        >
+                            <Settings color={darkText ? "black" : "white"} size={15} />
+                        </button>
+                        {battery.hasBattery && (() => {
+                            const BattIcon = batteryIcon(battery.percent, battery.charging);
+                            return (
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px]">{batteryLabel(battery) ?? "Battery"}</span>
+                                    <BattIcon color={darkText ? "black" : "white"} size={18} />
+                                </div>
+                            );
+                        })()}
+                    </div>
                 </div>
 
                 <div ref={subRef} className="w-65 shrink-0 self-start">

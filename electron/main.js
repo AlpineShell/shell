@@ -291,6 +291,39 @@ function createSetupWindow() {
   return win
 }
 
+let settingsWin = null
+function createSettingsWindow() {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.focus()
+    return settingsWin
+  }
+  settingsWin = new BrowserWindow({
+    width: 820,
+    height: 560,
+    minWidth: 680,
+    minHeight: 480,
+    frame: false,
+    resizable: true,
+    center: true,
+    transparent: false,
+    skipTaskbar: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+  settingsWin.loadURL(getURL('settings'))
+  settingsWin.on('closed', () => {
+    settingsWin = null
+  })
+  return settingsWin
+}
+
+ipcMain.handle('windows/open-settings', () => {
+  createSettingsWindow()
+})
+
 app.whenReady().then(async () => {
   if (process.argv.includes('--uninstall')) {
     installer.uninstall()

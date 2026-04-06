@@ -149,8 +149,11 @@ declare global {
       windows: {
         wallpaper: () => Promise<string | null>
         onWallpaperChanged: (callback: (data: string | null) => void) => void
+        setWallpaper: (filePath: string) => Promise<boolean>
+        pickWallpaper: () => Promise<boolean>
         openApps: () => Promise<OpenApp[]>
         onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => void
+        openSettings: () => Promise<void>
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>

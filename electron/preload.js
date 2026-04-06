@@ -59,10 +59,13 @@ contextBridge.exposeInMainWorld('shell', {
     onWallpaperChanged: (callback) => {
       ipcRenderer.on('windows/wallpaper-changed', (_, data) => callback(data))
     },
+    setWallpaper: (filePath) => ipcRenderer.invoke('windows/wallpaper-set', filePath),
+    pickWallpaper: () => ipcRenderer.invoke('windows/wallpaper-pick'),
     openApps: () => ipcRenderer.invoke('windows/open-apps'),
     onOpenAppsChanged: (callback) => {
       ipcRenderer.on('windows/open-apps-changed', (_, data) => callback(data))
     },
+    openSettings: () => ipcRenderer.invoke('windows/open-settings'),
   },
   network: {
     wifiSignal: () => ipcRenderer.invoke('network/wifi-signal'),
