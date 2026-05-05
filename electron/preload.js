@@ -50,6 +50,12 @@ contextBridge.exposeInMainWorld('launcher', {
   show: () => ipcRenderer.invoke('launcher/show'),
   hide: () => ipcRenderer.invoke('launcher/hide'),
   launch: (id) => ipcRenderer.invoke('launcher/launch', id),
+  getHotkey: () => ipcRenderer.invoke('launcher/hotkey-get'),
+  setHotkey: (hotkey) => ipcRenderer.invoke('launcher/hotkey-set', hotkey),
+  defaultHotkey: () => ipcRenderer.invoke('launcher/hotkey-default'),
+  onHotkeyChanged: (callback) => {
+    ipcRenderer.on('launcher/hotkey-changed', (_, data) => callback(data))
+  },
   onIndexChanged: (callback) => {
     ipcRenderer.on('launcher/index-changed', (_, data) => callback(data))
   },

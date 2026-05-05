@@ -156,6 +156,13 @@ function showLauncher(displayId) {
   broadcastGap(displayId, { left: gapLeft, right: gapRight })
 }
 
+function showFromHotkey() {
+  const { screen } = require('electron')
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+  showLauncher(display.id)
+}
+
 module.exports = {
   handlers: {
     'launcher/index': () => index,
@@ -176,6 +183,7 @@ module.exports = {
   },
   setLauncherWindow,
   setShells,
+  showFromHotkey,
   start(b) {
     broadcast = b
     buildIndex().catch((e) => console.error('[launcher] initial index error:', e.message))

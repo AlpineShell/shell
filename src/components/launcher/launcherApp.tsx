@@ -151,9 +151,13 @@ export default function LauncherApp() {
     : `transform ${ENTER_MS}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${ENTER_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`
 
   return (
-    <div className="w-screen h-screen flex justify-center items-start">
+    <div
+      className="w-screen h-screen flex justify-center items-start"
+      onMouseDown={() => window.launcher.hide()}
+    >
       <div
         className="relative"
+        onMouseDown={(e) => e.stopPropagation()}
         style={{
           width: 600,
           transform: visible ? 'translateY(0)' : 'translateY(-24px)',

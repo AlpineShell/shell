@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import CustomizationPage from './customizationPage'
+import HotkeysPage from './hotkeysPage'
 
-type Page = 'customization' | 'appearance' | 'about'
+type Page = 'customization' | 'hotkeys' | 'appearance' | 'about'
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
 
 const pages: { id: Page; label: string }[] = [
   { id: 'customization', label: 'Customization' },
+  { id: 'hotkeys', label: 'Hotkeys' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'about', label: 'About' },
 ]
@@ -48,6 +50,7 @@ export default function SettingsApp() {
 
         <div className="flex-1 min-w-0 overflow-auto p-6">
           {page === 'customization' && <CustomizationPage />}
+          {page === 'hotkeys' && <HotkeysPage />}
         </div>
       </div>
     </div>

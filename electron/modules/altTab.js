@@ -86,6 +86,11 @@ let switcherActive = false
 let selectedIndex = 0
 let windowList = []
 
+let winLauncherEnabled = false
+let winLauncherCallback = null
+let winDown = false
+let winTapped = false
+
 const iconCache = new Map()
 const thumbnailCache = new Map()
 
@@ -353,6 +358,24 @@ function hookCallback(nCode, wParam, lParam) {
     const isKeyDown = (wp === WM_KEYDOWN || wp === WM_SYSKEYDOWN)
     const isKeyUp = (wp === WM_KEYUP || wp === WM_SYSKEYUP)
 
+    if (winLauncherEnabled) {
+      if (vkCode === VK_LWIN || vkCode === VK_RWIN) {
+        if (isKeyDown && !winDown) {
+          winDown = true
+          winTapped = true
+        } else if (isKeyUp) {
+          const fired = winTapped
+          winDown = false
+          winTapped = false
+          if (fired && winLauncherCallback) {
+            setImmediate(() => winLauncherCallback())
+          }
+        }
+      } else if (isKeyDown && winDown) {
+        winTapped = false
+      }
+    }
+
     if (vkCode === VK_TAB && isKeyDown && altIsDown) {
       const shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) !== 0
       if (!switcherActive) {
@@ -443,6 +466,18 @@ module.exports = {
   onScreenshot(callback, cancelCallback) {
     screenshotCallback = callback
     screenshotCancelCallback = cancelCallback
+  },
+
+  setWinLauncherEnabled(enabled) {
+    winLauncherEnabled = !!enabled
+    if (!winLauncherEnabled) {
+      winDown = false
+      winTapped = false
+    }
+  },
+
+  onWinLauncher(callback) {
+    winLauncherCallback = callback
   },
 
   start(_broadcast) {

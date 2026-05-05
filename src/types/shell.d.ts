@@ -137,6 +137,10 @@ declare global {
       show: () => Promise<void>
       hide: () => Promise<void>
       launch: (id: number) => Promise<{ success: boolean }>
+      getHotkey: () => Promise<string>
+      setHotkey: (hotkey: string) => Promise<string>
+      defaultHotkey: () => Promise<string>
+      onHotkeyChanged: (callback: (hotkey: string) => void) => void
       onIndexChanged: (callback: (data: LauncherItem[]) => void) => void
       onShow: (callback: (data: { displayId: number }) => void) => void
       onStartClose: (callback: () => void) => void

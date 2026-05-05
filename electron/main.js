@@ -15,6 +15,7 @@ const mediaSession = require('./modules/mediaSession')
 const microphone = require('./modules/microphone')
 const battery = require('./modules/battery')
 const launcher = require('./modules/launcher')
+const launcherHotkey = require('./modules/launcherHotkey')
 let altTab = null
 try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
 let screenshot = null
@@ -370,7 +371,10 @@ app.whenReady().then(async () => {
     return
   }
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, screenshot, launcher)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, screenshot, launcher, launcherHotkey)
+
+  launcherHotkey.setAltTabModule(altTab)
+  launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
 
   if (process.argv.includes('--setup')) {
     createSetupWindow()
