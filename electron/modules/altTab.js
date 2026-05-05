@@ -27,6 +27,7 @@ const GetWindowTextLengthW = user32.func('__stdcall', 'GetWindowTextLengthW', 'i
 const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProcessId', 'uint32', ['uintptr_t', 'void *'])
 
 const SetForegroundWindow = user32.func('__stdcall', 'SetForegroundWindow', 'int', ['uintptr_t'])
+const GetForegroundWindow = user32.func('__stdcall', 'GetForegroundWindow', 'uintptr_t', [])
 const ShowWindow = user32.func('__stdcall', 'ShowWindow', 'int', ['uintptr_t', 'int'])
 const IsIconic = user32.func('__stdcall', 'IsIconic', 'int', ['uintptr_t'])
 const keybd_event = user32.func('__stdcall', 'keybd_event', 'void', ['uint8', 'uint8', 'uint32', 'uintptr_t'])
@@ -263,6 +264,39 @@ function moveOffscreen() {
   overlayWindow.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
 }
 
+function getActiveDisplay() {
+  const fgRaw = GetForegroundWindow()
+  const fgHwnd = typeof fgRaw === 'bigint' ? Number(fgRaw) : fgRaw
+
+  if (fgHwnd && !isOwnWindow(fgHwnd)) {
+    const rectBuf = Buffer.alloc(16)
+    if (GetWindowRect(fgHwnd, rectBuf)) {
+      const left = rectBuf.readInt32LE(0)
+      const top = rectBuf.readInt32LE(4)
+      const right = rectBuf.readInt32LE(8)
+      const bottom = rectBuf.readInt32LE(12)
+      if (right > left && bottom > top) {
+        const centerScreen = { x: Math.round((left + right) / 2), y: Math.round((top + bottom) / 2) }
+        let centerDip = centerScreen
+        try {
+          centerDip = screen.screenToDipPoint(centerScreen)
+        } catch {}
+
+        const allDisplays = screen.getAllDisplays()
+        const containing = allDisplays.find((d) =>
+          centerDip.x >= d.bounds.x &&
+          centerDip.x < d.bounds.x + d.bounds.width &&
+          centerDip.y >= d.bounds.y &&
+          centerDip.y < d.bounds.y + d.bounds.height
+        )
+        if (containing) return containing
+        return screen.getDisplayNearestPoint(centerDip)
+      }
+    }
+  }
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+}
+
 async function showSwitcher() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
 
@@ -272,11 +306,11 @@ async function showSwitcher() {
   selectedIndex = windowList.length > 1 ? 1 : 0
   switcherActive = true
 
-  const cursor = screen.getCursorScreenPoint()
-  const display = screen.getDisplayNearestPoint(cursor)
+  const display = getActiveDisplay()
   const { x, y, width, height } = display.bounds
 
-  overlayWindow.setBounds({ x, y, width, height })
+  overlayWindow.setPosition(x, y)
+  overlayWindow.setSize(width, height)
   overlayWindow.setAlwaysOnTop(true, 'screen-saver')
 
   if (!overlayWindow.isVisible()) overlayWindow.showInactive()
