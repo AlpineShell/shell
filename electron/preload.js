@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('topbar', {
     ipcRenderer.on('topbar/close-menus', handler)
     return () => ipcRenderer.removeListener('topbar/close-menus', handler)
   },
+  onLauncherGap: (callback) => {
+    ipcRenderer.on('topbar/launcher-gap', (_, data) => callback(data))
+  },
 })
 
 contextBridge.exposeInMainWorld('screenshot', {
@@ -40,6 +43,25 @@ contextBridge.exposeInMainWorld('alttab', {
     ipcRenderer.on('alttab/selection-changed', (_, index) => callback(index))
   },
   activate: (hwnd) => ipcRenderer.invoke('alttab/activate', hwnd),
+})
+
+contextBridge.exposeInMainWorld('launcher', {
+  index: () => ipcRenderer.invoke('launcher/index'),
+  show: () => ipcRenderer.invoke('launcher/show'),
+  hide: () => ipcRenderer.invoke('launcher/hide'),
+  launch: (id) => ipcRenderer.invoke('launcher/launch', id),
+  onIndexChanged: (callback) => {
+    ipcRenderer.on('launcher/index-changed', (_, data) => callback(data))
+  },
+  onShow: (callback) => {
+    ipcRenderer.on('launcher/show', (_, data) => callback(data))
+  },
+  onStartClose: (callback) => {
+    ipcRenderer.on('launcher/start-close', () => callback())
+  },
+  onHide: (callback) => {
+    ipcRenderer.on('launcher/hide', () => callback())
+  },
 })
 
 contextBridge.exposeInMainWorld('setup', {

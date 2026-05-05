@@ -14,6 +14,7 @@ const setup = require('./modules/setup')
 const mediaSession = require('./modules/mediaSession')
 const microphone = require('./modules/microphone')
 const battery = require('./modules/battery')
+const launcher = require('./modules/launcher')
 let altTab = null
 try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
 let screenshot = null
@@ -98,6 +99,7 @@ function createTopBarWindow(display) {
 
   const INTERACTIVE_RIGHT = 400
   const INTERACTIVE_LEFT = 40
+  const INTERACTIVE_CENTER = 120
   let ignoring = true
 
   const cursorTracker = setInterval(() => {
@@ -110,8 +112,10 @@ function createTopBarWindow(display) {
                      cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width
     const inLeftZone = cursor.x < bounds.x + INTERACTIVE_LEFT
     const inRightZone = cursor.x >= bounds.x + bounds.width - INTERACTIVE_RIGHT
+    const centerX = bounds.x + bounds.width / 2
+    const inCenterZone = cursor.x >= centerX - INTERACTIVE_CENTER / 2 && cursor.x < centerX + INTERACTIVE_CENTER / 2
     const inInteractive = inBounds &&
-      (isExpanded || inLeftZone || inRightZone)
+      (isExpanded || inLeftZone || inRightZone || inCenterZone)
 
     if (inInteractive && ignoring) {
       ignoring = false
@@ -266,6 +270,35 @@ function createScreenshotWindow() {
   return win
 }
 
+function createLauncherWindow() {
+  const win = new BrowserWindow({
+    width: 624,
+    height: 600,
+    x: -10000,
+    y: -10000,
+    frame: false,
+    resizable: false,
+    movable: false,
+    skipTaskbar: true,
+    focusable: true,
+    transparent: true,
+    thickFrame: false,
+    show: false,
+    paintWhenInitiallyHidden: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      backgroundThrottling: false,
+    },
+  })
+
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.loadURL(getURL('launcher'))
+
+  return win
+}
+
 function createSetupWindow() {
   const win = new BrowserWindow({
     width: 480,
@@ -331,7 +364,7 @@ app.whenReady().then(async () => {
     return
   }
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, screenshot)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, screenshot, launcher)
 
   if (process.argv.includes('--setup')) {
     createSetupWindow()
@@ -360,6 +393,10 @@ app.whenReady().then(async () => {
       () => screenshot.hideOverlay()
     )
   }
+
+  const launcherWindow = createLauncherWindow()
+  launcher.setLauncherWindow(launcherWindow)
+  launcher.setShells(shells)
 
   for (const display of screen.getAllDisplays()) {
     createShellForDisplay(display)

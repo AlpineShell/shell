@@ -115,6 +115,14 @@ declare global {
     gpoBlocked: boolean
   }
 
+  interface LauncherItem {
+    id: number
+    name: string
+    lnkPath: string
+    target: string
+    icon: string | null
+  }
+
   interface Window {
     setup: {
       status: () => Promise<SetupStatus>
@@ -123,6 +131,16 @@ declare global {
       relaunch: () => Promise<void>
       restartWindows: () => Promise<void>
       onProgress: (callback: (step: string) => void) => void
+    }
+    launcher: {
+      index: () => Promise<LauncherItem[]>
+      show: () => Promise<void>
+      hide: () => Promise<void>
+      launch: (id: number) => Promise<{ success: boolean }>
+      onIndexChanged: (callback: (data: LauncherItem[]) => void) => void
+      onShow: (callback: (data: { displayId: number }) => void) => void
+      onStartClose: (callback: () => void) => void
+      onHide: (callback: () => void) => void
     }
     screenshot: {
       onShow: (callback: (data: ScreenshotShowPayload) => void) => void
@@ -144,6 +162,7 @@ declare global {
       foregroundColor: () => Promise<ForegroundColorData[]>
       onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => void
       onCloseMenus: (callback: () => void) => () => void
+      onLauncherGap: (callback: (data: { open: boolean; gap: { left: number; right: number } | null }) => void) => void
     }
     shell: {
       windows: {
