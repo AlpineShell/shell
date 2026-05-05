@@ -173,6 +173,7 @@ declare global {
         openApps: () => Promise<OpenApp[]>
         onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => void
         openSettings: () => Promise<void>
+        closeSettings: () => Promise<void>
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>

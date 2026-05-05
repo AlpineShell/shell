@@ -88,6 +88,7 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('windows/open-apps-changed', (_, data) => callback(data))
     },
     openSettings: () => ipcRenderer.invoke('windows/open-settings'),
+    closeSettings: () => ipcRenderer.invoke('windows/close-settings'),
   },
   network: {
     wifiSignal: () => ipcRenderer.invoke('network/wifi-signal'),

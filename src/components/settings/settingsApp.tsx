@@ -21,7 +21,7 @@ export default function SettingsApp() {
       <div className="h-9 flex items-center justify-between px-3 shrink-0 border-b border-white/5" style={dragRegion}>
         <span className="text-xs text-white/60 font-medium">Settings</span>
         <button
-          onClick={() => window.close()}
+          onClick={() => window.shell.windows.closeSettings()}
           className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
           style={noDragRegion}
         >

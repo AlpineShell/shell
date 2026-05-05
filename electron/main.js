@@ -357,6 +357,12 @@ ipcMain.handle('windows/open-settings', () => {
   createSettingsWindow()
 })
 
+ipcMain.handle('windows/close-settings', () => {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.destroy()
+  }
+})
+
 app.whenReady().then(async () => {
   if (process.argv.includes('--uninstall')) {
     installer.uninstall()
