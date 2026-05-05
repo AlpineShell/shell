@@ -1,6 +1,7 @@
 const { app, shell: electronShell, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { forceForeground } = require('./winFocus')
 
 const SCAN_DIRS = [
   path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -143,8 +144,14 @@ function showLauncher(displayId) {
   const y = display.bounds.y + 24
   launcherWindow.setBounds({ x, y, width, height })
   launcherWindow.webContents.send('launcher/show', { displayId })
-  launcherWindow.showInactive()
   launcherWindow.setAlwaysOnTop(true, 'screen-saver')
+  launcherWindow.show()
+  try {
+    const hwnd = launcherWindow.getNativeWindowHandle().readUInt32LE(0)
+    forceForeground(hwnd)
+  } catch (e) {
+    console.error('[launcher] forceForeground error:', e.message)
+  }
   launcherWindow.focus()
 
   if (activeDisplayId != null && activeDisplayId !== displayId) {

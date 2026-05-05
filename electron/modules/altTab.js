@@ -349,9 +349,24 @@ function readVkCode(lParam) {
   return buf.readUInt32LE(0)
 }
 
+function readKeyFlags(lParam) {
+  const lp = typeof lParam === 'bigint' ? Number(lParam) : lParam
+  const buf = Buffer.alloc(4)
+  RtlMoveMemory(buf, lp + 8, 4)
+  return buf.readUInt32LE(0)
+}
+
+const LLKHF_INJECTED = 0x10
+const KEYEVENTF_KEYUP = 0x0002
+
 function hookCallback(nCode, wParam, lParam) {
   try {
     if (nCode < 0) return CallNextHookEx(hookHandle, nCode, wParam, lParam)
+
+    const flags = readKeyFlags(lParam)
+    if (flags & LLKHF_INJECTED) {
+      return CallNextHookEx(hookHandle, nCode, wParam, lParam)
+    }
 
     const vkCode = readVkCode(lParam)
     const wp = Number(wParam)
@@ -368,7 +383,12 @@ function hookCallback(nCode, wParam, lParam) {
           winDown = false
           winTapped = false
           if (fired && winLauncherCallback) {
-            setImmediate(() => winLauncherCallback())
+            setImmediate(() => {
+              keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
+              keybd_event(VK_RWIN, 0, KEYEVENTF_KEYUP, 0)
+              winLauncherCallback()
+            })
+            return 1
           }
         }
       } else if (isKeyDown && winDown) {
