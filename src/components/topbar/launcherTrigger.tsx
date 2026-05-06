@@ -1,9 +1,18 @@
+import { useEffect, useState } from 'react'
 import { Search } from 'lucide-react'
 import { useDarkText } from '../themeContext'
 
 export default function LauncherTrigger() {
   const darkText = useDarkText()
   const color = darkText ? 'black' : 'white'
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    window.topbar.searchIcon().then(setVisible)
+    window.topbar.onSearchIconChanged(setVisible)
+  }, [])
+
+  if (!visible) return null
 
   return (
     <button

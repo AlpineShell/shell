@@ -23,6 +23,7 @@ function colorMatch(a: { r: number; g: number; b: number }, b: { r: number; g: n
 export default function TopBarPage() {
   const [override, setOverride] = useState<{ r: number; g: number; b: number } | null>(null)
   const [palette, setPalette] = useState<{ r: number; g: number; b: number; darkText: boolean }[]>([])
+  const [searchIcon, setSearchIcon] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function TopBarPage() {
       setLoaded(true)
     })
     window.topbar.colorPalette().then(setPalette)
+    window.topbar.searchIcon().then(setSearchIcon)
   }, [])
 
   async function selectColor(color: { r: number; g: number; b: number } | null) {
@@ -82,6 +84,23 @@ export default function TopBarPage() {
             )
           })}
         </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-sm font-medium">Search icon</span>
+          <p className="text-sm text-white/50 mt-0.5">Show the search button in the top bar.</p>
+        </div>
+        <button
+          onClick={() => {
+            const next = !searchIcon
+            setSearchIcon(next)
+            window.topbar.setSearchIcon(next)
+          }}
+          className={`w-9 h-5 rounded-full transition-colors cursor-pointer ${searchIcon ? 'bg-white' : 'bg-white/20'}`}
+        >
+          <div className={`w-4 h-4 rounded-full transition-transform mx-0.5 ${searchIcon ? 'translate-x-3.5 bg-neutral-950' : 'translate-x-0 bg-white/60'}`} />
+        </button>
       </div>
 
       {palette.length > 0 && (

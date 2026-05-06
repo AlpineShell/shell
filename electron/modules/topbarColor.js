@@ -9,6 +9,7 @@ let lastColor = null
 let lastWallpaperPath = null
 let lastPalette = []
 let userOverride = null
+let showSearchIcon = false
 let storePath = null
 let broadcastRef = null
 
@@ -25,6 +26,9 @@ function loadOverride() {
       if (data.color && typeof data.color.r === 'number') {
         userOverride = data.color
       }
+      if (typeof data.showSearchIcon === 'boolean') {
+        showSearchIcon = data.showSearchIcon
+      }
     }
   } catch (e) {
     console.error('[topbarColor] load error:', e.message)
@@ -35,7 +39,7 @@ function saveOverride() {
   try {
     const dir = path.dirname(getStorePath())
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(getStorePath(), JSON.stringify({ color: userOverride }))
+    fs.writeFileSync(getStorePath(), JSON.stringify({ color: userOverride, showSearchIcon }))
   } catch (e) {
     console.error('[topbarColor] save error:', e.message)
   }
@@ -233,6 +237,13 @@ module.exports = {
       return effective
     },
     'topbar/color-palette': () => lastPalette,
+    'topbar/search-icon-get': () => showSearchIcon,
+    'topbar/search-icon-set': (_event, value) => {
+      showSearchIcon = !!value
+      saveOverride()
+      if (broadcastRef) broadcastRef('topbar/search-icon-changed', showSearchIcon)
+      return showSearchIcon
+    },
   },
 
   start(broadcast) {

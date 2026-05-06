@@ -166,6 +166,9 @@ declare global {
       colorOverride: () => Promise<TopBarColor | null>
       setColorOverride: (color: { r: number; g: number; b: number } | null) => Promise<TopBarColor | null>
       colorPalette: () => Promise<TopBarColor[]>
+      searchIcon: () => Promise<boolean>
+      setSearchIcon: (value: boolean) => Promise<boolean>
+      onSearchIconChanged: (callback: (visible: boolean) => void) => void
       foregroundColor: () => Promise<ForegroundColorData[]>
       onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => void
       onCloseMenus: (callback: () => void) => () => void

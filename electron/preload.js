@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld('topbar', {
   colorOverride: () => ipcRenderer.invoke('topbar/color-override-get'),
   setColorOverride: (color) => ipcRenderer.invoke('topbar/color-override-set', color),
   colorPalette: () => ipcRenderer.invoke('topbar/color-palette'),
+  searchIcon: () => ipcRenderer.invoke('topbar/search-icon-get'),
+  setSearchIcon: (value) => ipcRenderer.invoke('topbar/search-icon-set', value),
+  onSearchIconChanged: (callback) => {
+    ipcRenderer.on('topbar/search-icon-changed', (_, data) => callback(data))
+  },
   onCloseMenus: (callback) => {
     const handler = () => callback()
     ipcRenderer.on('topbar/close-menus', handler)
