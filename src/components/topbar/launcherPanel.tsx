@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2 } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 
 const CORNER = 12
@@ -34,6 +34,19 @@ interface LauncherPanelProps {
   onGapChange: (gap: { left: number; right: number } | null) => void
 }
 
+interface ContextAction {
+  label: string
+  icon: typeof ShieldCheck
+  action: (id: number) => void
+  show?: (item: LauncherItem) => boolean
+}
+
+const CONTEXT_ACTIONS: ContextAction[] = [
+  { label: "Run as administrator", icon: ShieldCheck, action: (id) => window.launcher.launchAdmin(id) },
+  { label: "Open file location", icon: FolderOpen, action: (id) => window.launcher.openLocation(id), show: (item) => !!item.lnkPath },
+  { label: "Uninstall", icon: Trash2, action: (id) => window.launcher.uninstall(id) },
+]
+
 export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const bg = useTopbarBg()
   const darkText = useDarkText()
@@ -50,6 +63,8 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const [selected, setSelected] = useState(0)
   const [closing, setClosing] = useState(false)
   const [resultsHeight, setResultsHeight] = useState(0)
+  const [contextOpen, setContextOpen] = useState(false)
+  const [contextSelected, setContextSelected] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
@@ -95,9 +110,16 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     return scored.slice(0, MAX_RESULTS).map((r) => r.item)
   }, [query, items])
 
+  const contextItem = contextOpen ? results[selected] : null
+  const contextActions = useMemo(() => {
+    if (!contextItem) return []
+    return CONTEXT_ACTIONS.filter((a) => !a.show || a.show(contextItem))
+  }, [contextItem])
+
   useEffect(() => {
     if (selected >= results.length) setSelected(0)
-  }, [results, selected])
+    setContextOpen(false)
+  }, [results])
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -107,9 +129,28 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
         setResultsHeight(resultsRef.current.offsetHeight)
       }
     })
-  }, [query, results])
+  }, [query, results, contextOpen])
 
   function handleKey(e: React.KeyboardEvent) {
+    if (contextOpen) {
+      if (e.key === "Escape" || e.key === "ArrowLeft") {
+        e.preventDefault()
+        setContextOpen(false)
+        requestAnimationFrame(() => inputRef.current?.focus())
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setContextSelected((s) => Math.min(s + 1, contextActions.length - 1))
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setContextSelected((s) => Math.max(s - 1, 0))
+      } else if (e.key === "Enter") {
+        e.preventDefault()
+        const action = contextActions[contextSelected]
+        if (action && contextItem) action.action(contextItem.id)
+      }
+      return
+    }
+
     if (e.key === "Escape") {
       e.preventDefault()
       window.launcher.hide()
@@ -119,6 +160,11 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault()
       setSelected((s) => Math.max(s - 1, 0))
+    } else if (e.key === "ArrowRight" && results[selected]) {
+      e.preventDefault()
+      setContextOpen(true)
+      setContextSelected(0)
+      requestAnimationFrame(() => panelRef.current?.focus())
     } else if (e.key === "Enter") {
       e.preventDefault()
       const item = results[selected]
@@ -127,9 +173,12 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   }
 
   useEffect(() => {
+    if (contextOpen) return
     const el = listRef.current?.children[selected] as HTMLElement | undefined
     if (el) el.scrollIntoView({ block: "nearest" })
-  }, [selected])
+  }, [selected, contextOpen])
+
+  const left = Math.round((window.innerWidth - LAUNCHER_WIDTH) / 2)
 
   const cornerBg = borderColor
     ? `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${bg} ${CORNER + 0.5}px)`
@@ -137,8 +186,6 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const cornerBgRight = borderColor
     ? `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${bg} ${CORNER + 0.5}px)`
     : `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${bg} ${CORNER}px)`
-
-  const left = Math.round((window.innerWidth - LAUNCHER_WIDTH) / 2)
 
   return createPortal(
     <div
@@ -148,32 +195,69 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       <div
         ref={panelRef}
         className={`absolute ${closing ? "menu-exit" : "menu-enter"}`}
-        style={{ top: 24, left, width: LAUNCHER_WIDTH }}
+        style={{ top: 24, left, width: LAUNCHER_WIDTH, outline: "none" }}
         onMouseDown={(e) => e.stopPropagation()}
+        onKeyDown={contextOpen ? handleKey : undefined}
+        tabIndex={-1}
       >
         <div className="absolute top-0 right-full" style={{ width: CORNER, height: CORNER, background: cornerBg }} />
         <div className="absolute top-0 left-full" style={{ width: CORNER, height: CORNER, background: cornerBgRight }} />
         <div className="relative">
           <div className="overflow-hidden rounded-b-xl shadow-2xl flex flex-col" style={{ backgroundColor: bg, transition: "background-color 300ms ease" }}>
             <div className={`flex items-center gap-2 px-4 h-12 shrink-0 ${textColor}`}>
-              <Search size={16} className="shrink-0 opacity-60" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={handleKey}
-                placeholder="Search apps"
-                autoFocus
-                className={`flex-1 bg-transparent outline-none text-[15px] ${placeholderColor}`}
-              />
+              {contextOpen ? (
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); setContextOpen(false); requestAnimationFrame(() => inputRef.current?.focus()) }}
+                  className="shrink-0 opacity-60 hover:opacity-100 cursor-pointer"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+              ) : (
+                <Search size={16} className="shrink-0 opacity-60" />
+              )}
+              {contextOpen && contextItem ? (
+                <span className={`flex-1 text-[15px] truncate ${textColor}`}>{contextItem.name}</span>
+              ) : (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKey}
+                  placeholder="Search apps"
+                  autoFocus
+                  className={`flex-1 bg-transparent outline-none text-[15px] ${placeholderColor}`}
+                />
+              )}
             </div>
             <div
               className="overflow-hidden"
               style={{ height: resultsHeight, transition: "height 200ms cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
               <div ref={resultsRef}>
-                {query.trim() && (
+                {contextOpen && contextItem ? (
+                  <>
+                    <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+                    <div className="flex flex-col p-1.5 gap-0.5">
+                      {contextActions.map((action, ci) => {
+                        const Icon = action.icon
+                        return (
+                          <button
+                            key={action.label}
+                            onMouseMove={() => setContextSelected(ci)}
+                            onClick={() => action.action(contextItem.id)}
+                            className={`w-full flex items-center gap-3 px-2.5 h-10 rounded-md text-left text-[13px] cursor-pointer transition-colors ${textColor} ${
+                              ci === contextSelected ? selectedBg : hoverBg
+                            }`}
+                          >
+                            <Icon size={16} className={`shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+                            {action.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : query.trim() ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
                     {results.length > 0 ? (
@@ -181,7 +265,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                         {results.map((item, i) => (
                           <button
                             key={item.id}
-                            onMouseMove={() => setSelected(i)}
+                            onMouseMove={() => { setSelected(i); setContextOpen(false) }}
                             onClick={() => window.launcher.launch(item.id)}
                             className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
                               i === selected ? selectedBg : hoverBg
@@ -200,7 +284,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                       <div className={`px-4 py-4 text-[13px] ${dimText}`}>No results</div>
                     )}
                   </>
-                )}
+                ) : null}
               </div>
             </div>
           </div>

@@ -137,6 +137,9 @@ declare global {
       show: () => Promise<void>
       hide: () => Promise<void>
       launch: (id: number) => Promise<{ success: boolean }>
+      launchAdmin: (id: number) => Promise<{ success: boolean }>
+      uninstall: (id: number) => Promise<{ success: boolean }>
+      openLocation: (id: number) => Promise<{ success: boolean }>
       getHotkey: () => Promise<string>
       setHotkey: (hotkey: string) => Promise<string>
       defaultHotkey: () => Promise<string>

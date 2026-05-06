@@ -312,8 +312,39 @@ module.exports = {
       if (item.lnkPath) {
         electronShell.openPath(item.lnkPath).catch((e) => console.error('[launcher] launch error:', e.message))
       } else if (item.appId) {
-        electronShell.openExternal(`shell:AppsFolder\\${item.appId}`).catch((e) => console.error('[launcher] launch UWP error:', e.message))
+        const { execFile } = require('child_process')
+        execFile('powershell', ['-NoProfile', '-Command', `Start-Process 'shell:AppsFolder\\${item.appId}'`], (e) => { if (e) console.error('[launcher] launch UWP error:', e.message) })
       }
+      return { success: true }
+    },
+    'launcher/launch-admin': (_event, id) => {
+      const item = index.find((i) => i.id === id)
+      if (!item) return { success: false }
+      animatedHide()
+      const target = item.lnkPath || (item.appId ? `shell:AppsFolder\\${item.appId}` : null)
+      if (target) {
+        const { exec } = require('child_process')
+        exec(`powershell -NoProfile -Command "Start-Process '${target.replace(/'/g, "''")}' -Verb RunAs"`)
+      }
+      return { success: true }
+    },
+    'launcher/uninstall': (_event, id) => {
+      const item = index.find((i) => i.id === id)
+      if (!item) return { success: false }
+      animatedHide()
+      if (item.appId) {
+        const family = item.appId.split('!')[0]
+        const { exec } = require('child_process')
+        exec(`powershell -NoProfile -Command "Get-AppxPackage '${family}' | Remove-AppxPackage"`)
+      } else {
+        electronShell.openExternal('ms-settings:appsfeatures')
+      }
+      return { success: true }
+    },
+    'launcher/open-location': (_event, id) => {
+      const item = index.find((i) => i.id === id)
+      if (!item || !item.lnkPath) return { success: false }
+      electronShell.showItemInFolder(item.lnkPath)
       return { success: true }
     },
   },
