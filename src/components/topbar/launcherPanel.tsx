@@ -192,10 +192,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                             ) : (
                               <div className={`w-7 h-7 shrink-0 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
                             )}
-                            <div className="flex flex-col min-w-0">
-                              <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
-                              <span className={`text-[11px] truncate ${dimText}`}>{item.target}</span>
-                            </div>
+                            <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
                           </button>
                         ))}
                       </div>
