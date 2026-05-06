@@ -313,7 +313,11 @@ module.exports = {
         electronShell.openPath(item.lnkPath).catch((e) => console.error('[launcher] launch error:', e.message))
       } else if (item.appId) {
         const { execFile } = require('child_process')
-        execFile('powershell', ['-NoProfile', '-Command', `Start-Process 'shell:AppsFolder\\${item.appId}'`], (e) => { if (e) console.error('[launcher] launch UWP error:', e.message) })
+        const family = item.appId.split('!')[0]
+        const appPart = item.appId.split('!')[1] || ''
+        execFile('powershell', ['-NoProfile', '-Command',
+          `$pkg = Get-AppxPackage | Where-Object { $_.PackageFamilyName -eq '${family.replace(/'/g, "''")}' } | Select-Object -First 1; if ($pkg) { $m = Get-AppxPackageManifest $pkg; $apps = @($m.Package.Applications.Application); $a = if ('${appPart}') { $apps | Where-Object { $_.Id -eq '${appPart}' } | Select-Object -First 1 } else { $apps[0] }; if ($a) { Start-Process (Join-Path $pkg.InstallLocation $a.Executable) } }`
+        ], (e) => { if (e) console.error('[launcher] launch UWP error:', e.message) })
       }
       return { success: true }
     },

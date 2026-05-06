@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 
 const CORNER = 12
@@ -41,6 +41,50 @@ function tryMath(expr: string): string | null {
   } catch {
     return null
   }
+}
+
+interface MapResult {
+  lat: number
+  lon: number
+  display: string
+}
+
+function useAddressLookup(query: string): MapResult | null {
+  const [result, setResult] = useState<MapResult | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useEffect(() => {
+    setResult(null)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    const q = query.trim()
+    if (q.length < 5 || /^[\d\s+\-*/%^(),.*]+$/.test(q)) return
+    if (!/\d/.test(q) || !/[a-zA-ZäöüÄÖÜß]/.test(q)) return
+
+    timerRef.current = setTimeout(() => {
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {
+        headers: { "User-Agent": "AlpineShell/1.0" },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.[0]) {
+            setResult({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name })
+          }
+        })
+        .catch(() => {})
+    }, 400)
+
+    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+  }, [query])
+
+  return result
+}
+
+function staticMapUrl(lat: number, lon: number, width: number, height: number): string {
+  const zoom = 15
+  const x = Math.floor(((lon + 180) / 360) * Math.pow(2, zoom))
+  const latRad = (lat * Math.PI) / 180
+  const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zoom))
+  return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`
 }
 
 interface LauncherPanelProps {
@@ -127,6 +171,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   }, [])
 
   const mathResult = useMemo(() => tryMath(query.trim()), [query])
+  const mapResult = useAddressLookup(query)
 
   const matchedOpenApps = useMemo(() => {
     if (!query.trim()) return []
@@ -151,21 +196,23 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       if (s >= 0) scored.push({ item, s })
     }
     scored.sort((a, b) => b.s - a.s)
-    const taken = (mathResult ? 1 : 0) + matchedOpenApps.length
+    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + matchedOpenApps.length
     const limit = Math.max(1, MAX_RESULTS - taken)
     return scored.slice(0, limit).map((r) => r.item)
-  }, [query, items, mathResult, matchedOpenApps])
+  }, [query, items, mathResult, mapResult, matchedOpenApps])
 
-  const totalCount = (mathResult ? 1 : 0) + matchedOpenApps.length + results.length
   const mathOffset = mathResult ? 1 : 0
-  const openOffset = mathOffset + matchedOpenApps.length
+  const mapOffset = mathOffset + (mapResult ? 1 : 0)
+  const openOffset = mapOffset + matchedOpenApps.length
+  const totalCount = openOffset + results.length
 
   const selectedEntry = useMemo(() => {
     if (mathResult && selected === 0) return { type: "math" as const }
-    if (selected >= mathOffset && selected < openOffset) return { type: "open" as const, app: matchedOpenApps[selected - mathOffset] }
+    if (mapResult && selected === mathOffset) return { type: "map" as const, result: mapResult }
+    if (selected >= mapOffset && selected < openOffset) return { type: "open" as const, app: matchedOpenApps[selected - mapOffset] }
     if (selected >= openOffset) return { type: "app" as const, item: results[selected - openOffset] }
     return null
-  }, [selected, mathResult, matchedOpenApps, results, mathOffset, openOffset])
+  }, [selected, mathResult, mapResult, matchedOpenApps, results, mathOffset, mapOffset, openOffset])
 
   const contextActions = useMemo(() => {
     if (!contextOpen || !selectedEntry) return []
@@ -187,7 +234,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
         setResultsHeight(resultsRef.current.offsetHeight)
       }
     })
-  }, [query, results, contextOpen])
+  }, [query, results, contextOpen, mapResult])
 
   function handleKey(e: React.KeyboardEvent) {
     if (contextOpen) {
@@ -228,6 +275,9 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       if (!selectedEntry) return
       if (selectedEntry.type === "math" && mathResult) {
         navigator.clipboard.writeText(mathResult)
+        window.launcher.hide()
+      } else if (selectedEntry.type === "map") {
+        window.open(`https://www.openstreetmap.org/?mlat=${selectedEntry.result.lat}&mlon=${selectedEntry.result.lon}#map=16/${selectedEntry.result.lat}/${selectedEntry.result.lon}`)
         window.launcher.hide()
       } else if (selectedEntry.type === "open") {
         window.alttab.activate(selectedEntry.app.hwnd)
@@ -342,8 +392,33 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                           <Copy size={13} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
                         </button>
                       )}
+                      {mapResult && (
+                        <button
+                          onMouseMove={() => setSelected(mathOffset)}
+                          onClick={() => { window.open(`https://www.openstreetmap.org/?mlat=${mapResult.lat}&mlon=${mapResult.lon}#map=16/${mapResult.lat}/${mapResult.lon}`); window.launcher.hide() }}
+                          className={`flex items-center gap-3 px-2.5 rounded-md text-left cursor-pointer transition-colors overflow-hidden ${
+                            selected === mathOffset ? selectedBg : hoverBg
+                          }`}
+                          style={{ height: 140 }}
+                        >
+                          <div className="w-full h-full flex flex-col gap-1.5 py-2">
+                            <div className="flex items-center gap-2">
+                              <MapPin size={14} className={`shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+                              <span className={`text-[13px] truncate ${textColor}`}>{mapResult.display.split(",").slice(0, 3).join(",")}</span>
+                            </div>
+                            <div className="flex-1 rounded-md overflow-hidden relative">
+                              <img
+                                src={staticMapUrl(mapResult.lat, mapResult.lon, 256, 256)}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                draggable={false}
+                              />
+                            </div>
+                          </div>
+                        </button>
+                      )}
                       {matchedOpenApps.map((app, i) => {
-                        const idx = mathOffset + i
+                        const idx = mapOffset + i
                         return (
                           <button
                             key={`open-${app.hwnd}`}
