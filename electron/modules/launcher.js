@@ -7,6 +7,7 @@ const { forceForeground } = require('./winFocus')
 const SCAN_DIRS = [
   path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
   path.join(process.env.PROGRAMDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+  path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
 ]
 
 const SKIP_NAMES = new Set([
@@ -42,6 +43,50 @@ function walkLnks(dir, out) {
       out.push(full)
     }
   }
+}
+
+function getUwpApps() {
+  return new Promise((resolve) => {
+    const script = `
+$apps = Get-StartApps | Where-Object { $_.AppID -match '!' }
+foreach ($a in $apps) {
+  $icon = ''
+  try {
+    $family = ($a.AppID -split '!')[0]
+    $pkg = Get-AppxPackage | Where-Object { $_.PackageFamilyName -eq $family } | Select-Object -First 1
+    if ($pkg) {
+      $manifest = Get-AppxPackageManifest -Package $pkg.PackageFullName
+      $logo = $manifest.Package.Properties.Logo
+      $logoDir = Split-Path (Join-Path $pkg.InstallLocation $logo)
+      $logoBase = [System.IO.Path]::GetFileNameWithoutExtension($logo)
+      $logoExt = [System.IO.Path]::GetExtension($logo)
+      $candidates = Get-ChildItem $logoDir -Filter "$logoBase*" -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match '\\.(png|jpg|jpeg)$' } | Sort-Object { $_.Length } -Descending
+      $best = $candidates | Select-Object -First 1
+      if ($best) {
+        $bytes = [System.IO.File]::ReadAllBytes($best.FullName)
+        $icon = [Convert]::ToBase64String($bytes)
+      }
+    }
+  } catch {}
+  Write-Output ($a.Name + '||' + $a.AppID + '||' + $icon)
+}
+`
+    execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 50 * 1024 * 1024 }, (err, stdout) => {
+      if (err) {
+        console.error('[launcher] UWP discovery error:', err.message)
+        return resolve([])
+      }
+      const apps = []
+      for (const line of stdout.trim().split('\n')) {
+        const parts = line.trim().split('||')
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+          const icon = parts[2] && parts[2].length > 10 ? `data:image/png;base64,${parts[2]}` : null
+          apps.push({ name: parts[0].trim(), appId: parts[1].trim(), icon })
+        }
+      }
+      resolve(apps)
+    })
+  })
 }
 
 function extractIcons(paths) {
@@ -111,15 +156,46 @@ async function buildIndex() {
   index = items
   if (broadcast) broadcast('launcher/index-changed', index)
 
-  const icons = await extractIcons(items.map((i) => i.target))
-  let changed = false
-  for (let i = 0; i < items.length; i++) {
-    if (icons[i]) {
-      items[i].icon = icons[i]
-      changed = true
+  getUwpApps().then((uwpApps) => {
+    let added = false
+    for (const uwp of uwpApps) {
+      const dedupeKey = uwp.name.toLowerCase()
+      if (seenNames.has(dedupeKey)) continue
+      seenNames.add(dedupeKey)
+      items.push({
+        id: items.length,
+        name: uwp.name,
+        lnkPath: null,
+        appId: uwp.appId,
+        target: uwp.appId,
+        icon: uwp.icon,
+      })
+      added = true
     }
+    if (added) {
+      items.sort((a, b) => a.name.localeCompare(b.name))
+      for (let i = 0; i < items.length; i++) items[i].id = i
+      index = items
+      if (broadcast) broadcast('launcher/index-changed', index)
+    }
+  }).catch((e) => console.error('[launcher] UWP error:', e.message))
+
+  const iconPaths = items.filter((i) => i.lnkPath).map((i) => i.target)
+  if (iconPaths.length > 0) {
+    const icons = await extractIcons(iconPaths)
+    let iconIdx = 0
+    let changed = false
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].lnkPath) {
+        if (icons[iconIdx]) {
+          items[i].icon = icons[iconIdx]
+          changed = true
+        }
+        iconIdx++
+      }
+    }
+    if (changed && broadcast) broadcast('launcher/index-changed', index)
   }
-  if (changed && broadcast) broadcast('launcher/index-changed', index)
 }
 
 let rebuildTimer = null
@@ -233,7 +309,11 @@ module.exports = {
       const item = index.find((i) => i.id === id)
       if (!item) return { success: false }
       animatedHide()
-      electronShell.openPath(item.lnkPath).catch((e) => console.error('[launcher] launch error:', e.message))
+      if (item.lnkPath) {
+        electronShell.openPath(item.lnkPath).catch((e) => console.error('[launcher] launch error:', e.message))
+      } else if (item.appId) {
+        electronShell.openExternal(`shell:AppsFolder\\${item.appId}`).catch((e) => console.error('[launcher] launch UWP error:', e.message))
+      }
       return { success: true }
     },
   },
