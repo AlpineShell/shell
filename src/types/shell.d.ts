@@ -166,7 +166,6 @@ declare global {
       foregroundColor: () => Promise<ForegroundColorData[]>
       onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => void
       onCloseMenus: (callback: () => void) => () => void
-      onLauncherGap: (callback: (data: { open: boolean; gap: { left: number; right: number } | null }) => void) => void
     }
     shell: {
       windows: {

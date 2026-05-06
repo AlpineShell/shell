@@ -16,9 +16,6 @@ contextBridge.exposeInMainWorld('topbar', {
     ipcRenderer.on('topbar/close-menus', handler)
     return () => ipcRenderer.removeListener('topbar/close-menus', handler)
   },
-  onLauncherGap: (callback) => {
-    ipcRenderer.on('topbar/launcher-gap', (_, data) => callback(data))
-  },
 })
 
 contextBridge.exposeInMainWorld('screenshot', {

@@ -14,18 +14,12 @@ const SKIP_NAMES = new Set([
 
 let index = []
 let broadcast = null
-let launcherWindow = null
 let shells = null
 let activeDisplayId = null
+let activeTopBar = null
+let hideTimeout = null
 
-const LAUNCHER_WINDOW_WIDTH = 624
-
-function broadcastGap(displayId, gap) {
-  if (!shells) return
-  const shell = shells.get(displayId)
-  if (!shell || shell.topBar.isDestroyed()) return
-  shell.topBar.webContents.send('topbar/launcher-gap', { open: gap !== null, gap })
-}
+const LAUNCHER_WIDTH = 600
 
 function shouldSkipShortcut(file) {
   const lower = file.toLowerCase().replace(/\.lnk$/, '')
@@ -109,58 +103,66 @@ function watchScanDirs() {
   }
 }
 
-function setLauncherWindow(win) {
-  launcherWindow = win
-  win.on('blur', () => animatedHide())
-}
-
 function setShells(s) {
   shells = s
 }
 
+function isLauncherActive(win) {
+  return activeTopBar === win
+}
+
 function animatedHide() {
-  if (!launcherWindow || launcherWindow.isDestroyed()) return
-  if (!launcherWindow.isVisible()) return
-  if (activeDisplayId != null) {
-    broadcastGap(activeDisplayId, null)
-    activeDisplayId = null
-  }
-  launcherWindow.webContents.send('launcher/start-close')
-  setTimeout(() => {
-    if (!launcherWindow.isDestroyed() && !launcherWindow.isFocused()) {
-      launcherWindow.webContents.send('launcher/hide')
-      launcherWindow.hide()
-    }
+  if (!activeTopBar || activeTopBar.isDestroyed()) return
+  activeTopBar.webContents.send('launcher/start-close')
+  if (hideTimeout) clearTimeout(hideTimeout)
+  const topBar = activeTopBar
+  activeTopBar = null
+  activeDisplayId = null
+  hideTimeout = setTimeout(() => {
+    hideTimeout = null
+    if (topBar.isDestroyed()) return
+    topBar.webContents.send('launcher/hide')
+    topBar.setFocusable(false)
+    topBar.setAlwaysOnTop(false)
   }, 110)
 }
 
 function showLauncher(displayId) {
-  if (!launcherWindow || launcherWindow.isDestroyed()) return
-  const { screen } = require('electron')
-  const display = screen.getAllDisplays().find((d) => d.id === displayId) || screen.getPrimaryDisplay()
-  const width = LAUNCHER_WINDOW_WIDTH
-  const height = 600
-  const x = Math.round(display.bounds.x + (display.bounds.width - width) / 2)
-  const y = display.bounds.y + 24
-  launcherWindow.setBounds({ x, y, width, height })
-  launcherWindow.webContents.send('launcher/show', { displayId })
-  launcherWindow.setAlwaysOnTop(true, 'screen-saver')
-  launcherWindow.show()
+  if (!shells) return
+  const shell = shells.get(displayId)
+  if (!shell || shell.topBar.isDestroyed()) return
+  const topBar = shell.topBar
+
+  if (hideTimeout) {
+    clearTimeout(hideTimeout)
+    hideTimeout = null
+  }
+
+  if (activeTopBar && activeTopBar !== topBar && !activeTopBar.isDestroyed()) {
+    activeTopBar.webContents.send('launcher/hide')
+    activeTopBar.setFocusable(false)
+    activeTopBar.setAlwaysOnTop(false)
+  }
+
+  topBar.webContents.send('topbar/close-menus')
+  topBar.setFocusable(true)
+  topBar.setIgnoreMouseEvents(false)
+  topBar.setAlwaysOnTop(true, 'screen-saver')
+
+  const bounds = topBar.getBounds()
+  topBar.setBounds({ ...bounds, height: 600 })
+
+  topBar.webContents.send('launcher/show', { displayId })
   try {
-    const hwnd = launcherWindow.getNativeWindowHandle().readUInt32LE(0)
+    const hwnd = topBar.getNativeWindowHandle().readUInt32LE(0)
     forceForeground(hwnd)
   } catch (e) {
     console.error('[launcher] forceForeground error:', e.message)
   }
-  launcherWindow.focus()
+  topBar.focus()
 
-  if (activeDisplayId != null && activeDisplayId !== displayId) {
-    broadcastGap(activeDisplayId, null)
-  }
   activeDisplayId = displayId
-  const gapLeft = Math.round((display.bounds.width - width) / 2)
-  const gapRight = gapLeft + width
-  broadcastGap(displayId, { left: gapLeft, right: gapRight })
+  activeTopBar = topBar
 }
 
 function showFromHotkey() {
@@ -168,6 +170,11 @@ function showFromHotkey() {
   const cursor = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursor)
   showLauncher(display.id)
+}
+
+function handleBlur(topBar) {
+  if (activeTopBar !== topBar) return
+  animatedHide()
 }
 
 module.exports = {
@@ -188,9 +195,10 @@ module.exports = {
       return { success: true }
     },
   },
-  setLauncherWindow,
   setShells,
   showFromHotkey,
+  isLauncherActive,
+  handleBlur,
   start(b) {
     broadcast = b
     buildIndex().catch((e) => console.error('[launcher] initial index error:', e.message))

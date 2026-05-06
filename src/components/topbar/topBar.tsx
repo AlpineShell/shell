@@ -6,6 +6,7 @@ import { ThemeProvider } from "../themeContext";
 import MediaStatus from "./status/mediaStatus";
 import MicrophoneStatus from "./status/microphoneStatus";
 import LauncherTrigger from "./launcherTrigger";
+import LauncherPanel from "./launcherPanel";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
 
@@ -19,6 +20,7 @@ export default function TopBar() {
     const [hovered, setHovered] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [menuGap, setMenuGap] = useState<{ left: number; right: number } | null>(null);
+    const [launcherOpen, setLauncherOpen] = useState(false);
     const [launcherGap, setLauncherGap] = useState<{ left: number; right: number } | null>(null);
     const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
     const activeGap = menuGap || launcherGap;
@@ -30,9 +32,8 @@ export default function TopBar() {
     }
 
     useEffect(() => {
-        window.topbar.onLauncherGap((data) => {
-            setLauncherGap(data.open && data.gap ? data.gap : null);
-        });
+        window.launcher.onShow(() => setLauncherOpen(true));
+        window.launcher.onHide(() => setLauncherOpen(false));
     }, []);
 
     return (
@@ -64,6 +65,7 @@ export default function TopBar() {
                     <Clock />
                 </div>
             </div>
+            {launcherOpen && <LauncherPanel onGapChange={setLauncherGap} />}
         </ThemeProvider>
     );
 }

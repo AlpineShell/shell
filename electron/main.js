@@ -105,6 +105,7 @@ function createTopBarWindow(display) {
 
   const cursorTracker = setInterval(() => {
     if (win.isDestroyed()) return
+    if (launcher.isLauncherActive(win)) return
     const bounds = win.getBounds()
     const cursor = screen.getCursorScreenPoint()
 
@@ -132,6 +133,7 @@ function createTopBarWindow(display) {
 
   const onSetHeight = (event, height) => {
     if (win.isDestroyed()) return
+    if (launcher.isLauncherActive(win)) return
     if (event.sender === win.webContents) {
       const bounds = win.getBounds()
       win.setBounds({ ...bounds, height })
@@ -139,6 +141,7 @@ function createTopBarWindow(display) {
     }
   }
   ipcMain.on('topbar/set-height', onSetHeight)
+  win.on('blur', () => launcher.handleBlur(win))
   win.on('closed', () => {
     clearInterval(cursorTracker)
     ipcMain.removeListener('topbar/set-height', onSetHeight)
@@ -271,34 +274,6 @@ function createScreenshotWindow() {
   return win
 }
 
-function createLauncherWindow() {
-  const win = new BrowserWindow({
-    width: 624,
-    height: 600,
-    x: -10000,
-    y: -10000,
-    frame: false,
-    resizable: false,
-    movable: false,
-    skipTaskbar: true,
-    focusable: true,
-    transparent: true,
-    thickFrame: false,
-    show: false,
-    paintWhenInitiallyHidden: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-      backgroundThrottling: false,
-    },
-  })
-
-  win.setAlwaysOnTop(true, 'screen-saver')
-  win.loadURL(getURL('launcher'))
-
-  return win
-}
 
 function createSetupWindow() {
   const win = new BrowserWindow({
@@ -404,8 +379,6 @@ app.whenReady().then(async () => {
     )
   }
 
-  const launcherWindow = createLauncherWindow()
-  launcher.setLauncherWindow(launcherWindow)
   launcher.setShells(shells)
 
   for (const display of screen.getAllDisplays()) {
