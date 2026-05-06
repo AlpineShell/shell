@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('topbar', {
   onForegroundColorChanged: (callback) => {
     ipcRenderer.on('topbar/fg-color-changed', (_, data) => callback(data))
   },
+  colorOverride: () => ipcRenderer.invoke('topbar/color-override-get'),
+  setColorOverride: (color) => ipcRenderer.invoke('topbar/color-override-set', color),
+  colorPalette: () => ipcRenderer.invoke('topbar/color-palette'),
   onCloseMenus: (callback) => {
     const handler = () => callback()
     ipcRenderer.on('topbar/close-menus', handler)

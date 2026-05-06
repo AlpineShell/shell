@@ -163,6 +163,9 @@ declare global {
       setHeight: (height: number) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => void
+      colorOverride: () => Promise<TopBarColor | null>
+      setColorOverride: (color: { r: number; g: number; b: number } | null) => Promise<TopBarColor | null>
+      colorPalette: () => Promise<TopBarColor[]>
       foregroundColor: () => Promise<ForegroundColorData[]>
       onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => void
       onCloseMenus: (callback: () => void) => () => void

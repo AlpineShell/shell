@@ -1,9 +1,45 @@
-const { nativeImage } = require('electron')
+const { app, nativeImage } = require('electron')
 const { exec } = require('child_process')
 const fs = require('fs')
+const path = require('path')
+
+const STORE_FILE = 'topbar-color.json'
 
 let lastColor = null
 let lastWallpaperPath = null
+let lastPalette = []
+let userOverride = null
+let storePath = null
+let broadcastRef = null
+
+function getStorePath() {
+  if (!storePath) storePath = path.join(app.getPath('userData'), STORE_FILE)
+  return storePath
+}
+
+function loadOverride() {
+  try {
+    const file = getStorePath()
+    if (fs.existsSync(file)) {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'))
+      if (data.color && typeof data.color.r === 'number') {
+        userOverride = data.color
+      }
+    }
+  } catch (e) {
+    console.error('[topbarColor] load error:', e.message)
+  }
+}
+
+function saveOverride() {
+  try {
+    const dir = path.dirname(getStorePath())
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(getStorePath(), JSON.stringify({ color: userOverride }))
+  } catch (e) {
+    console.error('[topbarColor] save error:', e.message)
+  }
+}
 
 function getWallpaperPath() {
   return new Promise((resolve) => {
@@ -103,6 +139,10 @@ function remapToMenuTone(r, g, b) {
   return { r: nr, g: ng, b: nb, darkText: !isDark }
 }
 
+function computeDarkText(r, g, b) {
+  return 0.299 * r + 0.587 * g + 0.114 * b > 128
+}
+
 function extractColor(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null
 
@@ -127,18 +167,40 @@ function extractColor(filePath) {
 
   const clusters = flattenClusters(medianCut(pixels, 4))
   const dominant = pickDominantColor(clusters)
-  return remapToMenuTone(dominant[0], dominant[1], dominant[2])
+  return { color: remapToMenuTone(dominant[0], dominant[1], dominant[2]), clusters }
+}
+
+function buildPalette(clusters) {
+  const seen = new Set()
+  const palette = []
+  for (const [r, g, b] of clusters) {
+    const mapped = remapToMenuTone(r, g, b)
+    const key = `${mapped.r},${mapped.g},${mapped.b}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    palette.push(mapped)
+  }
+  return palette
+}
+
+function getEffectiveColor() {
+  if (userOverride) return userOverride
+  return lastColor
 }
 
 function updateColor(broadcast) {
   getWallpaperPath().then((wallpaperPath) => {
     if (wallpaperPath === lastWallpaperPath && lastColor) return
     lastWallpaperPath = wallpaperPath
-    const color = extractColor(wallpaperPath)
-    if (!color) return
+    const result = extractColor(wallpaperPath)
+    if (!result) return
+    lastPalette = buildPalette(result.clusters)
+    const color = result.color
     if (!lastColor || color.r !== lastColor.r || color.g !== lastColor.g || color.b !== lastColor.b) {
       lastColor = color
-      broadcast('topbar/color-changed', color)
+      if (!userOverride) {
+        broadcast('topbar/color-changed', color)
+      }
     }
   })
 }
@@ -146,16 +208,36 @@ function updateColor(broadcast) {
 module.exports = {
   handlers: {
     'topbar/color': () => {
+      if (userOverride) return userOverride
       if (lastColor) return lastColor
       return getWallpaperPath().then((p) => {
-        lastColor = extractColor(p)
-        lastWallpaperPath = p
-        return lastColor
+        const result = extractColor(p)
+        if (result) {
+          lastColor = result.color
+          lastPalette = buildPalette(result.clusters)
+          lastWallpaperPath = p
+        }
+        return userOverride || lastColor
       })
     },
+    'topbar/color-override-get': () => userOverride,
+    'topbar/color-override-set': (_event, color) => {
+      if (color && typeof color.r === 'number') {
+        userOverride = { r: color.r, g: color.g, b: color.b, darkText: computeDarkText(color.r, color.g, color.b) }
+      } else {
+        userOverride = null
+      }
+      saveOverride()
+      const effective = getEffectiveColor()
+      if (effective && broadcastRef) broadcastRef('topbar/color-changed', effective)
+      return effective
+    },
+    'topbar/color-palette': () => lastPalette,
   },
 
   start(broadcast) {
+    broadcastRef = broadcast
+    loadOverride()
     updateColor(broadcast)
     setInterval(() => updateColor(broadcast), 5000)
   },
