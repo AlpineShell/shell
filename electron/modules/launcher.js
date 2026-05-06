@@ -341,6 +341,17 @@ module.exports = {
       }
       return { success: true }
     },
+    'launcher/close-window': (_event, hwnd) => {
+      animatedHide()
+      const { exec } = require('child_process')
+      exec(`powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).AppActivate([int]0); Add-Type -Name W -Namespace W -MemberDefinition '[DllImport(\\\"user32.dll\\\")] public static extern int PostMessage(IntPtr h,uint m,int w,int l);'; [W.W]::PostMessage([IntPtr]${hwnd}, 0x0010, 0, 0)"`)
+      return { success: true }
+    },
+    'launcher/end-task': (_event, pid) => {
+      animatedHide()
+      try { process.kill(pid) } catch {}
+      return { success: true }
+    },
     'launcher/open-location': (_event, id) => {
       const item = index.find((i) => i.id === id)
       if (!item || !item.lnkPath) return { success: false }

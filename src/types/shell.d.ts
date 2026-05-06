@@ -141,6 +141,8 @@ declare global {
       launchAdmin: (id: number) => Promise<{ success: boolean }>
       uninstall: (id: number) => Promise<{ success: boolean }>
       openLocation: (id: number) => Promise<{ success: boolean }>
+      closeWindow: (hwnd: number) => Promise<{ success: boolean }>
+      endTask: (pid: number) => Promise<{ success: boolean }>
       getHotkey: () => Promise<string>
       setHotkey: (hotkey: string) => Promise<string>
       defaultHotkey: () => Promise<string>

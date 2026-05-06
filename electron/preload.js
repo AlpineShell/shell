@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld('launcher', {
   launchAdmin: (id) => ipcRenderer.invoke('launcher/launch-admin', id),
   uninstall: (id) => ipcRenderer.invoke('launcher/uninstall', id),
   openLocation: (id) => ipcRenderer.invoke('launcher/open-location', id),
+  closeWindow: (hwnd) => ipcRenderer.invoke('launcher/close-window', hwnd),
+  endTask: (pid) => ipcRenderer.invoke('launcher/end-task', pid),
   getHotkey: () => ipcRenderer.invoke('launcher/hotkey-get'),
   setHotkey: (hotkey) => ipcRenderer.invoke('launcher/hotkey-set', hotkey),
   defaultHotkey: () => ipcRenderer.invoke('launcher/hotkey-default'),

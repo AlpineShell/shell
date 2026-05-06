@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 
 const CORNER = 12
@@ -50,15 +50,26 @@ interface LauncherPanelProps {
 interface ContextAction {
   label: string
   icon: typeof ShieldCheck
-  action: (id: number) => void
-  show?: (item: LauncherItem) => boolean
+  action: () => void
 }
 
-const CONTEXT_ACTIONS: ContextAction[] = [
-  { label: "Run as administrator", icon: ShieldCheck, action: (id) => window.launcher.launchAdmin(id) },
-  { label: "Open file location", icon: FolderOpen, action: (id) => window.launcher.openLocation(id), show: (item) => !!item.lnkPath },
-  { label: "Uninstall", icon: Trash2, action: (id) => window.launcher.uninstall(id) },
-]
+function appActions(item: LauncherItem): ContextAction[] {
+  const actions: ContextAction[] = [
+    { label: "Run as administrator", icon: ShieldCheck, action: () => window.launcher.launchAdmin(item.id) },
+  ]
+  if (item.lnkPath) {
+    actions.push({ label: "Open file location", icon: FolderOpen, action: () => window.launcher.openLocation(item.id) })
+  }
+  actions.push({ label: "Uninstall", icon: Trash2, action: () => window.launcher.uninstall(item.id) })
+  return actions
+}
+
+function openAppActions(app: OpenApp): ContextAction[] {
+  return [
+    { label: "Close window", icon: X, action: () => window.launcher.closeWindow(app.hwnd) },
+    { label: "End task", icon: SkullIcon, action: () => window.launcher.endTask(app.id) },
+  ]
+}
 
 export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const bg = useTopbarBg()
@@ -156,11 +167,12 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     return null
   }, [selected, mathResult, matchedOpenApps, results, mathOffset, openOffset])
 
-  const contextItem = contextOpen && selectedEntry?.type === "app" ? selectedEntry.item : null
   const contextActions = useMemo(() => {
-    if (!contextItem) return []
-    return CONTEXT_ACTIONS.filter((a) => !a.show || a.show(contextItem))
-  }, [contextItem])
+    if (!contextOpen || !selectedEntry) return []
+    if (selectedEntry.type === "app" && selectedEntry.item) return appActions(selectedEntry.item)
+    if (selectedEntry.type === "open") return openAppActions(selectedEntry.app)
+    return []
+  }, [contextOpen, selectedEntry])
 
   useEffect(() => {
     if (selected >= totalCount) setSelected(0)
@@ -192,7 +204,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       } else if (e.key === "Enter") {
         e.preventDefault()
         const action = contextActions[contextSelected]
-        if (action && contextItem) action.action(contextItem.id)
+        if (action) action.action()
       }
       return
     }
@@ -206,7 +218,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault()
       setSelected((s) => Math.max(s - 1, 0))
-    } else if (e.key === "ArrowRight" && selectedEntry?.type === "app" && selectedEntry.item) {
+    } else if (e.key === "ArrowRight" && selectedEntry && (selectedEntry.type === "app" || selectedEntry.type === "open")) {
       e.preventDefault()
       setContextOpen(true)
       setContextSelected(0)
@@ -269,8 +281,10 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
               ) : (
                 <Search size={16} className="shrink-0 opacity-60" />
               )}
-              {contextOpen && contextItem ? (
-                <span className={`flex-1 text-[15px] truncate ${textColor}`}>{contextItem.name}</span>
+              {contextOpen && selectedEntry ? (
+                <span className={`flex-1 text-[15px] truncate ${textColor}`}>
+                  {selectedEntry.type === "app" ? selectedEntry.item?.name : selectedEntry.type === "open" ? selectedEntry.app.name : ""}
+                </span>
               ) : (
                 <input
                   ref={inputRef}
@@ -289,7 +303,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
               style={{ height: resultsHeight, transition: "height 200ms cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
               <div ref={resultsRef}>
-                {contextOpen && contextItem ? (
+                {contextOpen && contextActions.length > 0 ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
                     <div className="flex flex-col p-1.5 gap-0.5">
@@ -299,7 +313,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                           <button
                             key={action.label}
                             onMouseMove={() => setContextSelected(ci)}
-                            onClick={() => action.action(contextItem.id)}
+                            onClick={() => action.action()}
                             className={`w-full flex items-center gap-3 px-2.5 h-10 rounded-md text-left text-[13px] cursor-pointer transition-colors ${textColor} ${
                               ci === contextSelected ? selectedBg : hoverBg
                             }`}
