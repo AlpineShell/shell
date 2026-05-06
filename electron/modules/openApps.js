@@ -19,17 +19,37 @@ async function compileDll() {
   const compileScript =
     `Add-Type -Language CSharp -TypeDefinition @'\n` +
     `using System;\n` +
+    `using System.Text;\n` +
+    `using System.Collections.Generic;\n` +
     `using System.Runtime.InteropServices;\n` +
     `public class TaskbarFilter {\n` +
+    `    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);\n` +
+    `    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);\n` +
     `    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);\n` +
     `    [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);\n` +
-    `    [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hWnd, int dwAttribute, out int pvAttribute, int cbAttribute);\n` +
-    `    public static bool IsTaskbarVisible(IntPtr hWnd) {\n` +
+    `    [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);\n` +
+    `    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder sb, int n);\n` +
+    `    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);\n` +
+    `    [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hWnd, int a, out int v, int s);\n` +
+    `    public static bool IsTaskbarWindow(IntPtr hWnd) {\n` +
     `        if (!IsWindowVisible(hWnd)) return false;\n` +
-    `        if ((GetWindowLong(hWnd, -20) & 0x80) != 0) return false;\n` +
-    `        int cloaked = 0;\n` +
-    `        DwmGetWindowAttribute(hWnd, 14, out cloaked, 4);\n` +
+    `        if (GetWindowTextLength(hWnd) == 0) return false;\n` +
+    `        int ex = GetWindowLong(hWnd, -20);\n` +
+    `        if ((ex & 0x80) != 0) return false;\n` +
+    `        if (GetWindowLong(hWnd, -8) != 0 && (ex & 0x40000) == 0) return false;\n` +
+    `        int cloaked = 0; DwmGetWindowAttribute(hWnd, 14, out cloaked, 4);\n` +
     `        return cloaked == 0;\n` +
+    `    }\n` +
+    `    public static string GetTitle(IntPtr hWnd) {\n` +
+    `        var sb = new StringBuilder(256); GetWindowText(hWnd, sb, 256); return sb.ToString();\n` +
+    `    }\n` +
+    `    public static object[][] GetTaskbarWindows() {\n` +
+    `        var list = new List<object[]>();\n` +
+    `        EnumWindows((h, _) => {\n` +
+    `            if (IsTaskbarWindow(h)) { uint pid; GetWindowThreadProcessId(h, out pid); list.Add(new object[]{ h.ToInt64(), (long)pid, GetTitle(h) }); }\n` +
+    `            return true;\n` +
+    `        }, IntPtr.Zero);\n` +
+    `        return list.ToArray();\n` +
     `    }\n` +
     `}\n` +
     `'@ -OutputAssembly '${DLL_PATH}'\n`
@@ -44,13 +64,16 @@ async function compileDll() {
 
   const queryScript =
     `Add-Type -Path '${DLL_PATH}'\n` +
-    `$r = Get-Process |\n` +
-    `  Where-Object { $_.MainWindowHandle.ToInt64() -ne 0 -and [TaskbarFilter]::IsTaskbarVisible($_.MainWindowHandle) } |\n` +
-    `  ForEach-Object {\n` +
-    `    $p = $null; try { $p = $_.MainModule.FileName } catch {}\n` +
-    `    [PSCustomObject]@{ id = $_.Id; name = $_.ProcessName; title = $_.MainWindowTitle; path = $p }\n` +
-    `  } | ConvertTo-Json -Compress\n` +
-    `if ($null -eq $r) { '[]' } else { $r }\n`
+    `$wins = [TaskbarFilter]::GetTaskbarWindows()\n` +
+    `$pids = @{}; Get-Process | ForEach-Object { $pids[$_.Id] = $_ }\n` +
+    `$r = @(foreach ($w in $wins) {\n` +
+    `  $proc = $pids[[int]$w[1]]\n` +
+    `  if ($proc) {\n` +
+    `    $p = $null; try { $p = $proc.MainModule.FileName } catch {}\n` +
+    `    if ($p) { [PSCustomObject]@{ id = [int]$w[1]; hwnd = $w[0]; name = $proc.ProcessName; title = [string]$w[2]; path = $p } }\n` +
+    `  }\n` +
+    `})\n` +
+    `if ($r.Count -eq 0) { '[]' } else { $r | ConvertTo-Json -Compress }\n`
 
   fs.writeFileSync(QUERY_PS1, queryScript, 'utf8')
   queryReady = true
@@ -63,18 +86,12 @@ async function parseApps(stdout) {
   try { raw = JSON.parse(stdout.trim()) } catch { return [] }
   if (!Array.isArray(raw)) raw = [raw]
 
+  const HIDDEN_NAMES = new Set(['electron', 'powershell', 'conhost', 'cmd', 'alpine-shell'])
   const shellPid = process.pid
-  const candidates = raw.filter((p) => p.path && p.id !== shellPid)
-
-  const seen = new Set()
-  const unique = []
-  for (const p of candidates) {
-    const key = p.path.toLowerCase()
-    if (!seen.has(key)) { seen.add(key); unique.push(p) }
-  }
+  const candidates = raw.filter((p) => p.path && p.id !== shellPid && !HIDDEN_NAMES.has(p.name.toLowerCase()))
 
   const apps = await Promise.all(
-    unique.map(async (p) => {
+    candidates.map(async (p) => {
       const key = p.path.toLowerCase()
       if (!iconCache.has(key)) {
         try {
@@ -84,7 +101,7 @@ async function parseApps(stdout) {
           iconCache.set(key, null)
         }
       }
-      return { id: p.id, name: p.name, title: p.title, path: p.path, icon: iconCache.get(key) }
+      return { id: p.id, hwnd: p.hwnd, name: p.name, title: p.title, path: p.path, icon: iconCache.get(key) }
     })
   )
 
@@ -94,7 +111,7 @@ async function parseApps(stdout) {
 const FALLBACK_CMD =
   `$r = Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | ` +
   `ForEach-Object { $p = $null; try { $p = $_.MainModule.FileName } catch {}; ` +
-  `[PSCustomObject]@{ id = $_.Id; name = $_.ProcessName; title = $_.MainWindowTitle; path = $p } } | ` +
+  `[PSCustomObject]@{ id = $_.Id; hwnd = $_.MainWindowHandle.ToInt64(); name = $_.ProcessName; title = $_.MainWindowTitle; path = $p } } | ` +
   `ConvertTo-Json -Compress; if ($null -eq $r) { '[]' } else { $r }`
 
 function getOpenApps() {
@@ -116,7 +133,7 @@ function getOpenApps() {
 }
 
 function snapshot(apps) {
-  return JSON.stringify(apps.map((a) => ({ id: a.id, name: a.name })).sort((a, b) => a.id - b.id))
+  return JSON.stringify(apps.map((a) => ({ hwnd: a.hwnd, title: a.title })).sort((a, b) => a.hwnd - b.hwnd))
 }
 
 module.exports = {

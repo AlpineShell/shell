@@ -2,6 +2,7 @@ export {}
 
 interface OpenApp {
   id: number
+  hwnd: number
   name: string
   title: string
   path: string

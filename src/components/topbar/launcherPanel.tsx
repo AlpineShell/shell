@@ -72,6 +72,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const placeholderColor = darkText ? "placeholder:text-black/40" : "placeholder:text-white/40"
 
   const [items, setItems] = useState<LauncherItem[]>([])
+  const [openApps, setOpenApps] = useState<OpenApp[]>([])
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
   const [closing, setClosing] = useState(false)
@@ -86,6 +87,8 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   useEffect(() => {
     window.launcher.index().then(setItems)
     window.launcher.onIndexChanged(setItems)
+    window.shell.windows.openApps().then(setOpenApps)
+    window.shell.windows.onOpenAppsChanged(setOpenApps)
     requestAnimationFrame(() => inputRef.current?.focus())
     return () => {
       window.topbar.setHeight(24)
@@ -114,24 +117,46 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
 
   const mathResult = useMemo(() => tryMath(query.trim()), [query])
 
+  const matchedOpenApps = useMemo(() => {
+    if (!query.trim()) return []
+    const matched: { app: OpenApp; s: number }[] = []
+    for (const app of openApps) {
+      const nameScore = score(query, app.name)
+      const titleScore = score(query, app.title)
+      const best = Math.max(nameScore, titleScore)
+      if (best >= 0) matched.push({ app, s: best })
+    }
+    matched.sort((a, b) => b.s - a.s)
+    return matched.slice(0, 3).map((r) => r.app)
+  }, [query, openApps])
+
   const results = useMemo(() => {
     if (!query.trim()) return []
+    const openPaths = new Set(matchedOpenApps.map((a) => a.path.toLowerCase()))
     const scored: { item: LauncherItem; s: number }[] = []
     for (const item of items) {
+      if (openPaths.has(item.target.toLowerCase())) continue
       const s = score(query, item.name)
       if (s >= 0) scored.push({ item, s })
     }
     scored.sort((a, b) => b.s - a.s)
-    const limit = mathResult ? MAX_RESULTS - 1 : MAX_RESULTS
+    const taken = (mathResult ? 1 : 0) + matchedOpenApps.length
+    const limit = Math.max(1, MAX_RESULTS - taken)
     return scored.slice(0, limit).map((r) => r.item)
-  }, [query, items, mathResult])
+  }, [query, items, mathResult, matchedOpenApps])
 
-  const totalCount = (mathResult ? 1 : 0) + results.length
-  const mathSelected = mathResult && selected === 0
-  const appIndex = mathResult ? selected - 1 : selected
-  const selectedApp = !mathSelected && appIndex >= 0 ? results[appIndex] : null
+  const totalCount = (mathResult ? 1 : 0) + matchedOpenApps.length + results.length
+  const mathOffset = mathResult ? 1 : 0
+  const openOffset = mathOffset + matchedOpenApps.length
 
-  const contextItem = contextOpen ? selectedApp : null
+  const selectedEntry = useMemo(() => {
+    if (mathResult && selected === 0) return { type: "math" as const }
+    if (selected >= mathOffset && selected < openOffset) return { type: "open" as const, app: matchedOpenApps[selected - mathOffset] }
+    if (selected >= openOffset) return { type: "app" as const, item: results[selected - openOffset] }
+    return null
+  }, [selected, mathResult, matchedOpenApps, results, mathOffset, openOffset])
+
+  const contextItem = contextOpen && selectedEntry?.type === "app" ? selectedEntry.item : null
   const contextActions = useMemo(() => {
     if (!contextItem) return []
     return CONTEXT_ACTIONS.filter((a) => !a.show || a.show(contextItem))
@@ -181,18 +206,22 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault()
       setSelected((s) => Math.max(s - 1, 0))
-    } else if (e.key === "ArrowRight" && selectedApp) {
+    } else if (e.key === "ArrowRight" && selectedEntry?.type === "app" && selectedEntry.item) {
       e.preventDefault()
       setContextOpen(true)
       setContextSelected(0)
       requestAnimationFrame(() => panelRef.current?.focus())
     } else if (e.key === "Enter") {
       e.preventDefault()
-      if (mathSelected && mathResult) {
+      if (!selectedEntry) return
+      if (selectedEntry.type === "math" && mathResult) {
         navigator.clipboard.writeText(mathResult)
         window.launcher.hide()
-      } else if (selectedApp) {
-        window.launcher.launch(selectedApp.id)
+      } else if (selectedEntry.type === "open") {
+        window.alttab.activate(selectedEntry.app.hwnd)
+        window.launcher.hide()
+      } else if (selectedEntry.type === "app" && selectedEntry.item) {
+        window.launcher.launch(selectedEntry.item.id)
       }
     }
   }
@@ -282,7 +311,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                       })}
                     </div>
                   </>
-                ) : query.trim() && (mathResult || results.length > 0) ? (
+                ) : query.trim() && totalCount > 0 ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
                     <div ref={listRef} className="flex flex-col p-1.5 gap-0.5">
@@ -291,7 +320,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                           onMouseMove={() => setSelected(0)}
                           onClick={() => { navigator.clipboard.writeText(mathResult); window.launcher.hide() }}
                           className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
-                            mathSelected ? selectedBg : hoverBg
+                            selected === 0 ? selectedBg : hoverBg
                           }`}
                         >
                           <Equal size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
@@ -299,8 +328,34 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                           <Copy size={13} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
                         </button>
                       )}
+                      {matchedOpenApps.map((app, i) => {
+                        const idx = mathOffset + i
+                        return (
+                          <button
+                            key={`open-${app.hwnd}`}
+                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
+                            onClick={() => { window.alttab.activate(app.hwnd); window.launcher.hide() }}
+                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
+                              idx === selected ? selectedBg : hoverBg
+                            }`}
+                          >
+                            {app.icon ? (
+                              <img src={app.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
+                            ) : (
+                              <div className={`w-7 h-7 shrink-0 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+                            )}
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className={`text-[13px] truncate ${textColor}`}>{app.name}</span>
+                              <span className={`text-[11px] truncate ${dimText}`}>{app.title}</span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                      {matchedOpenApps.length > 0 && results.length > 0 && (
+                        <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
+                      )}
                       {results.map((item, i) => {
-                        const idx = mathResult ? i + 1 : i
+                        const idx = openOffset + i
                         return (
                           <button
                             key={item.id}
