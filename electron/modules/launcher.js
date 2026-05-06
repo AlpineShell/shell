@@ -1,6 +1,7 @@
 const { app, shell: electronShell, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { execFile } = require('child_process')
 const { forceForeground } = require('./winFocus')
 
 const SCAN_DIRS = [
@@ -43,6 +44,39 @@ function walkLnks(dir, out) {
   }
 }
 
+function extractIcons(paths) {
+  return new Promise((resolve) => {
+    const script = `
+Add-Type -AssemblyName System.Drawing
+$paths = @(${paths.map((p) => `'${p.replace(/'/g, "''")}'`).join(',')})
+$results = @()
+foreach ($p in $paths) {
+  try {
+    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+    $bmp = $icon.ToBitmap()
+    $ms = New-Object System.IO.MemoryStream
+    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    $results += [Convert]::ToBase64String($ms.ToArray())
+    $ms.Dispose()
+    $bmp.Dispose()
+    $icon.Dispose()
+  } catch {
+    $results += ''
+  }
+}
+$results -join '|'
+`
+    execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 50 * 1024 * 1024 }, (err, stdout) => {
+      if (err) {
+        console.error('[launcher] icon extraction error:', err.message)
+        return resolve(paths.map(() => null))
+      }
+      const parts = stdout.trim().split('|')
+      resolve(parts.map((b64) => b64 && b64.length > 10 ? `data:image/png;base64,${b64}` : null))
+    })
+  })
+}
+
 async function buildIndex() {
   const lnkPaths = []
   for (const dir of SCAN_DIRS) walkLnks(dir, lnkPaths)
@@ -63,18 +97,12 @@ async function buildIndex() {
     if (seenNames.has(dedupeKey)) continue
     seenNames.add(dedupeKey)
 
-    let icon = null
-    try {
-      const img = await app.getFileIcon(lnkPath, { size: 'normal' })
-      if (img && !img.isEmpty()) icon = img.toDataURL()
-    } catch {}
-
     items.push({
       id: items.length,
       name,
       lnkPath,
       target: info.target,
-      icon,
+      icon: null,
     })
   }
 
@@ -82,6 +110,16 @@ async function buildIndex() {
   for (let i = 0; i < items.length; i++) items[i].id = i
   index = items
   if (broadcast) broadcast('launcher/index-changed', index)
+
+  const icons = await extractIcons(items.map((i) => i.target))
+  let changed = false
+  for (let i = 0; i < items.length; i++) {
+    if (icons[i]) {
+      items[i].icon = icons[i]
+      changed = true
+    }
+  }
+  if (changed && broadcast) broadcast('launcher/index-changed', index)
 }
 
 let rebuildTimer = null
