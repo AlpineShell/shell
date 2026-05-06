@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2 } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 
 const CORNER = 12
@@ -28,6 +28,19 @@ function score(query: string, name: string): number {
   }
   if (qi < q.length) return -1
   return maxConsecutive * 10 - firstMatch
+}
+
+function tryMath(expr: string): string | null {
+  if (!/[0-9]/.test(expr) || !/[+\-*/%^]/.test(expr)) return null
+  if (!/^[\d\s+\-*/.%^(),]+$/.test(expr)) return null
+  try {
+    const sanitized = expr.replace(/\^/g, "**").replace(/,/g, ".")
+    const result = new Function(`"use strict"; return (${sanitized})`)()
+    if (typeof result !== "number" || !isFinite(result)) return null
+    return Number.isInteger(result) ? result.toString() : parseFloat(result.toPrecision(12)).toString()
+  } catch {
+    return null
+  }
 }
 
 interface LauncherPanelProps {
@@ -99,6 +112,8 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     return () => window.removeEventListener("blur", onBlur)
   }, [])
 
+  const mathResult = useMemo(() => tryMath(query.trim()), [query])
+
   const results = useMemo(() => {
     if (!query.trim()) return []
     const scored: { item: LauncherItem; s: number }[] = []
@@ -107,19 +122,25 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       if (s >= 0) scored.push({ item, s })
     }
     scored.sort((a, b) => b.s - a.s)
-    return scored.slice(0, MAX_RESULTS).map((r) => r.item)
-  }, [query, items])
+    const limit = mathResult ? MAX_RESULTS - 1 : MAX_RESULTS
+    return scored.slice(0, limit).map((r) => r.item)
+  }, [query, items, mathResult])
 
-  const contextItem = contextOpen ? results[selected] : null
+  const totalCount = (mathResult ? 1 : 0) + results.length
+  const mathSelected = mathResult && selected === 0
+  const appIndex = mathResult ? selected - 1 : selected
+  const selectedApp = !mathSelected && appIndex >= 0 ? results[appIndex] : null
+
+  const contextItem = contextOpen ? selectedApp : null
   const contextActions = useMemo(() => {
     if (!contextItem) return []
     return CONTEXT_ACTIONS.filter((a) => !a.show || a.show(contextItem))
   }, [contextItem])
 
   useEffect(() => {
-    if (selected >= results.length) setSelected(0)
+    if (selected >= totalCount) setSelected(0)
     setContextOpen(false)
-  }, [results])
+  }, [results, mathResult])
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -156,19 +177,23 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       window.launcher.hide()
     } else if (e.key === "ArrowDown") {
       e.preventDefault()
-      setSelected((s) => Math.min(s + 1, results.length - 1))
+      setSelected((s) => Math.min(s + 1, totalCount - 1))
     } else if (e.key === "ArrowUp") {
       e.preventDefault()
       setSelected((s) => Math.max(s - 1, 0))
-    } else if (e.key === "ArrowRight" && results[selected]) {
+    } else if (e.key === "ArrowRight" && selectedApp) {
       e.preventDefault()
       setContextOpen(true)
       setContextSelected(0)
       requestAnimationFrame(() => panelRef.current?.focus())
     } else if (e.key === "Enter") {
       e.preventDefault()
-      const item = results[selected]
-      if (item) window.launcher.launch(item.id)
+      if (mathSelected && mathResult) {
+        navigator.clipboard.writeText(mathResult)
+        window.launcher.hide()
+      } else if (selectedApp) {
+        window.launcher.launch(selectedApp.id)
+      }
     }
   }
 
@@ -257,18 +282,32 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                       })}
                     </div>
                   </>
-                ) : query.trim() ? (
+                ) : query.trim() && (mathResult || results.length > 0) ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
-                    {results.length > 0 ? (
-                      <div ref={listRef} className="flex flex-col p-1.5 gap-0.5">
-                        {results.map((item, i) => (
+                    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5">
+                      {mathResult && (
+                        <button
+                          onMouseMove={() => setSelected(0)}
+                          onClick={() => { navigator.clipboard.writeText(mathResult); window.launcher.hide() }}
+                          className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
+                            mathSelected ? selectedBg : hoverBg
+                          }`}
+                        >
+                          <Equal size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+                          <span className={`flex-1 text-[15px] font-medium ${textColor}`}>{mathResult}</span>
+                          <Copy size={13} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
+                        </button>
+                      )}
+                      {results.map((item, i) => {
+                        const idx = mathResult ? i + 1 : i
+                        return (
                           <button
                             key={item.id}
-                            onMouseMove={() => { setSelected(i); setContextOpen(false) }}
+                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
                             onClick={() => window.launcher.launch(item.id)}
                             className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
-                              i === selected ? selectedBg : hoverBg
+                              idx === selected ? selectedBg : hoverBg
                             }`}
                           >
                             {item.icon ? (
@@ -278,12 +317,12 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                             )}
                             <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
                           </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className={`px-4 py-4 text-[13px] ${dimText}`}>No results</div>
-                    )}
+                        )
+                      })}
+                    </div>
                   </>
+                ) : query.trim() ? (
+                  <div className={`px-4 py-4 text-[13px] ${dimText}`}>No results</div>
                 ) : null}
               </div>
             </div>
