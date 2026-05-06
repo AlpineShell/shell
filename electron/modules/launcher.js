@@ -166,6 +166,10 @@ function showLauncher(displayId) {
 }
 
 function showFromHotkey() {
+  if (activeTopBar) {
+    animatedHide()
+    return
+  }
   const { screen } = require('electron')
   const cursor = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursor)
