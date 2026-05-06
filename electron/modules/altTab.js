@@ -75,6 +75,7 @@ const THUMBNAIL_MAX_WIDTH = 320
 const THUMBNAIL_MAX_HEIGHT = 200
 
 let overlayWindow = null
+let activeTopBar = null
 let shellsRef = null
 let hookHandle = null
 let hookCallbackPointer = null
@@ -99,7 +100,6 @@ function getHwnd(win) {
 }
 
 function isOwnWindow(hwnd) {
-  if (overlayWindow && !overlayWindow.isDestroyed() && getHwnd(overlayWindow) === hwnd) return true
   if (!shellsRef) return false
   for (const shell of shellsRef.values()) {
     if (!shell.topBar.isDestroyed() && getHwnd(shell.topBar) === hwnd) return true
@@ -303,7 +303,7 @@ function getActiveDisplay() {
 }
 
 async function showSwitcher() {
-  if (!overlayWindow || overlayWindow.isDestroyed()) return
+  if (!shellsRef) return
 
   windowList = await buildWindowList()
   if (windowList.length === 0) return
@@ -312,22 +312,29 @@ async function showSwitcher() {
   switcherActive = true
 
   const display = getActiveDisplay()
-  const { x, y, width, height } = display.bounds
+  const shell = shellsRef.get(display.id)
+  if (!shell || shell.topBar.isDestroyed()) return
 
-  overlayWindow.setPosition(x, y)
-  overlayWindow.setSize(width, height)
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver')
+  const topBar = shell.topBar
+  activeTopBar = topBar
 
-  if (!overlayWindow.isVisible()) overlayWindow.showInactive()
-  overlayWindow.webContents.send('alttab/show', { windows: windowList, selectedIndex })
+  const bounds = topBar.getBounds()
+  topBar.setBounds({ ...bounds, height: 600 })
+  topBar.setAlwaysOnTop(true, 'screen-saver')
+  topBar.setIgnoreMouseEvents(false)
+
+  topBar.webContents.send('alttab/show', { windows: windowList, selectedIndex })
 }
 
 function hideSwitcher() {
-  if (!overlayWindow || overlayWindow.isDestroyed()) return
   switcherActive = false
   windowList = []
-  overlayWindow.webContents.send('alttab/hide')
-  moveOffscreen()
+  if (activeTopBar && !activeTopBar.isDestroyed()) {
+    activeTopBar.webContents.send('alttab/hide')
+    activeTopBar.setAlwaysOnTop(false)
+    activeTopBar.setBounds({ ...activeTopBar.getBounds(), height: 24 })
+  }
+  activeTopBar = null
 }
 
 function cycleSelection(forward) {
@@ -337,8 +344,8 @@ function cycleSelection(forward) {
   } else {
     selectedIndex = (selectedIndex - 1 + windowList.length) % windowList.length
   }
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.webContents.send('alttab/selection-changed', selectedIndex)
+  if (activeTopBar && !activeTopBar.isDestroyed()) {
+    activeTopBar.webContents.send('alttab/selection-changed', selectedIndex)
   }
 }
 
@@ -475,8 +482,8 @@ module.exports = {
     },
   },
 
-  setOverlayWindow(win) {
-    overlayWindow = win
+  isAltTabActive(win) {
+    return activeTopBar === win
   },
 
   setShells(shells) {

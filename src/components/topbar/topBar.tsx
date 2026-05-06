@@ -7,6 +7,7 @@ import MediaStatus from "./status/mediaStatus";
 import MicrophoneStatus from "./status/microphoneStatus";
 import LauncherTrigger from "./launcherTrigger";
 import LauncherPanel from "./launcherPanel";
+import AltTabPanel from "./altTabPanel";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
 
@@ -66,6 +67,7 @@ export default function TopBar() {
                 </div>
             </div>
             {launcherOpen && <LauncherPanel onGapChange={setLauncherGap} />}
+            <AltTabPanel />
         </ThemeProvider>
     );
 }

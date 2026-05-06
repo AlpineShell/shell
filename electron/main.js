@@ -106,6 +106,7 @@ function createTopBarWindow(display) {
   const cursorTracker = setInterval(() => {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
+    if (altTab && altTab.isAltTabActive(win)) return
     const bounds = win.getBounds()
     const cursor = screen.getCursorScreenPoint()
 
@@ -134,6 +135,7 @@ function createTopBarWindow(display) {
   const onSetHeight = (event, height) => {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
+    if (altTab && altTab.isAltTabActive(win)) return
     if (event.sender === win.webContents) {
       const bounds = win.getBounds()
       win.setBounds({ ...bounds, height })
@@ -209,37 +211,6 @@ function repositionShell(display) {
   shell.display = display
 }
 
-function createAltTabWindow() {
-  const win = new BrowserWindow({
-    width: 400,
-    height: 600,
-    frame: false,
-    resizable: false,
-    movable: false,
-    skipTaskbar: true,
-    focusable: false,
-    transparent: true,
-    thickFrame: false,
-    show: false,
-    paintWhenInitiallyHidden: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-      backgroundThrottling: false,
-    },
-  })
-
-  win.setAlwaysOnTop(true, 'screen-saver')
-  win.loadURL(getURL('alttab'))
-
-  win.webContents.once('did-finish-load', () => {
-    win.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
-    win.showInactive()
-  })
-
-  return win
-}
 
 function createScreenshotWindow() {
   const win = new BrowserWindow({
@@ -366,9 +337,7 @@ app.whenReady().then(async () => {
     return
   }
 
-  const altTabWindow = createAltTabWindow()
-  altTab.setOverlayWindow(altTabWindow)
-  altTab.setShells(shells)
+  if (altTab) altTab.setShells(shells)
 
   const screenshotWindow = createScreenshotWindow()
   if (screenshot) {
