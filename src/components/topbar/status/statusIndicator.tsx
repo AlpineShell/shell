@@ -9,11 +9,12 @@ import ControlCenter from "./controlCenter";
 import PopupMenu from "../shared/popupMenu";
 import { useDarkText } from "../../themeContext";
 
-function NetworkIcon({ signal, connected, type, color }: { signal: number | null; connected: boolean; type: string; color: string }) {
+function NetworkIcon({ signal, connected, type, radioOn, color }: { signal: number | null; connected: boolean; type: string; radioOn: boolean; color: string }) {
     if (type === 'ethernet') {
         return <EthernetPort color={color} size={14} />;
     }
 
+    if (!radioOn) return <WifiOff color={color} size={14} />;
     if (!connected) return <WifiOff color={color} size={14} />;
     if (signal === null) return <Wifi color={color} size={14} />;
     if (signal >= 70) return <Wifi color={color} size={14} />;
@@ -51,6 +52,17 @@ export default function StatusIndicator() {
     const [wifiRadio, setWifiRadio] = useState(true);
     const [btDevices, setBtDevices] = useState<BluetoothDevice[]>([]);
     const [btScanning, setBtScanning] = useState(false);
+    const [btEnabledOverride, setBtEnabledOverride] = useState<boolean | null>(null);
+
+    const btResolved = btEnabledOverride !== null
+        ? { ...bluetooth, enabled: btEnabledOverride, connected: btEnabledOverride && bluetooth.connected, devices: btEnabledOverride ? bluetooth.devices : [] }
+        : bluetooth;
+
+    useEffect(() => {
+        if (btEnabledOverride !== null && bluetooth.enabled === btEnabledOverride) {
+            setBtEnabledOverride(null);
+        }
+    }, [bluetooth.enabled, btEnabledOverride]);
 
     function refreshWifiRadio() {
         window.shell.network.wifiRadioGet().then((r) => {
@@ -67,7 +79,36 @@ export default function StatusIndicator() {
     }
 
     function toggleBluetoothRadio(enabled: boolean) {
-        window.shell.system.bluetoothSetRadio(enabled);
+        setBtEnabledOverride(enabled);
+        if (!enabled) {
+            setBtDevices([]);
+            setBtScanning(false);
+        } else {
+            setBtDevices([]);
+            setBtScanning(true);
+        }
+        window.shell.system.bluetoothSetRadio(enabled)
+            .then(() => {
+                if (enabled) {
+                    let attempts = 0;
+                    const trySCan = () => {
+                        attempts++;
+                        window.shell.system.bluetoothScan().then((result) => {
+                            if (result.length > 0 || attempts >= 4) {
+                                setBtDevices(result);
+                                setBtScanning(false);
+                            } else {
+                                setTimeout(trySCan, 1500);
+                            }
+                        });
+                    };
+                    setTimeout(trySCan, 1500);
+                }
+            })
+            .catch(() => {
+                setBtEnabledOverride(null);
+                setBtScanning(false);
+            });
     }
 
     function scanWifi() {
@@ -109,14 +150,14 @@ export default function StatusIndicator() {
             onOpen={scanAll}
             trigger={
                 <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-4.5 items-center gap-1 transition-colors duration-300`}>
-                    <BluetoothIcon enabled={bluetooth.enabled} connected={bluetooth.connected} color={iconColor} />
-                    <NetworkIcon signal={network.signal} connected={network.connected} type={network.type} color={iconColor} />
+                    <BluetoothIcon enabled={btResolved.enabled} connected={btResolved.connected} color={iconColor} />
+                    <NetworkIcon signal={network.signal} connected={network.connected} type={network.type} radioOn={wifiRadio} color={iconColor} />
                     {battery.hasBattery && <BatteryIcon percent={battery.percent} charging={battery.charging} color={iconColor} />}
                 </div>
             }
         >
             <ControlCenter
-                battery={battery} network={network} bluetooth={bluetooth}
+                battery={battery} network={network} bluetooth={btResolved}
                 volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute}
                 monitors={monitors} setMonitorBrightness={setMonitorBrightness}
                 wifiNetworks={wifiNetworks} wifiScanning={wifiScanning} scanWifi={scanWifi}

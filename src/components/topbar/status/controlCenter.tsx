@@ -45,10 +45,12 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
     const darkText = useDarkText();
     const [view, setView] = useState<View>('main');
 
-    const wifiLabel = network.connected ? (network.ssid ?? "Connected") : undefined;
+    const wifiLabel = wifiRadio && network.connected ? (network.ssid ?? "Connected") : (wifiRadio ? undefined : "Off");
 
     let btLabel: string | undefined;
-    if (bluetooth.enabled && bluetooth.connected) {
+    if (!bluetooth.enabled) {
+        btLabel = "Off";
+    } else if (bluetooth.connected) {
         btLabel = bluetooth.devices.length > 1
             ? `${bluetooth.devices.length} Connected`
             : bluetooth.devices[0] ?? "Connected";
