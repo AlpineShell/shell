@@ -158,6 +158,7 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('system/monitors-changed', (_, data) => callback(data))
     },
     powerAction: (action) => ipcRenderer.invoke('system/power-action', action),
+    info: () => ipcRenderer.invoke('system/info'),
     battery: () => ipcRenderer.invoke('system/battery'),
     onBatteryChanged: (callback) => {
       ipcRenderer.on('system/battery-changed', (_, data) => callback(data))

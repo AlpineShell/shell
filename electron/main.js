@@ -14,6 +14,7 @@ const setup = require('./modules/setup')
 const mediaSession = require('./modules/mediaSession')
 const microphone = require('./modules/microphone')
 const battery = require('./modules/battery')
+const systemInfo = require('./modules/systemInfo')
 const launcher = require('./modules/launcher')
 const launcherHotkey = require('./modules/launcherHotkey')
 let altTab = null
@@ -278,10 +279,10 @@ function createSettingsWindow() {
     return settingsWin
   }
   settingsWin = new BrowserWindow({
-    width: 1000,
-    height: 650,
-    minWidth: 680,
-    minHeight: 480,
+    width: 1280,
+    height: 820,
+    minWidth: 800,
+    minHeight: 560,
     frame: false,
     resizable: true,
     center: true,
@@ -317,7 +318,7 @@ app.whenReady().then(async () => {
     return
   }
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, screenshot, launcher, launcherHotkey)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, launcherHotkey)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())

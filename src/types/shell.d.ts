@@ -96,6 +96,21 @@ declare global {
     brightness: number
   }
 
+  interface DiskInfo {
+    letter: string
+    label: string
+    total: number
+    used: number
+    free: number
+  }
+
+  interface SystemInfo {
+    computerName: string
+    user: string
+    os: { name: string; version: string; build: string }
+    disks: DiskInfo[]
+  }
+
   interface SetupOptions {
     shell: boolean
     cursor: boolean
@@ -224,6 +239,7 @@ declare global {
         setMonitorBrightness: (id: string, value: number) => Promise<number>
         onMonitorsChanged: (callback: (data: MonitorInfo[]) => void) => void
         powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
+        info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>
         onBatteryChanged: (callback: (data: BatteryStatus) => void) => void
       }
