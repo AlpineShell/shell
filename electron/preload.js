@@ -117,6 +117,8 @@ contextBridge.exposeInMainWorld('shell', {
     },
     wifiConnect: (ssid, password) => ipcRenderer.invoke('network/wifi-connect', { ssid, password }),
     wifiDisconnect: () => ipcRenderer.invoke('network/wifi-disconnect'),
+    wifiRadioGet: () => ipcRenderer.invoke('network/wifi-radio-get'),
+    wifiRadioSet: (enabled) => ipcRenderer.invoke('network/wifi-radio-set', enabled),
   },
   system: {
     bluetooth: () => ipcRenderer.invoke('system/bluetooth'),
@@ -129,6 +131,7 @@ contextBridge.exposeInMainWorld('shell', {
     bluetoothScan: () => ipcRenderer.invoke('system/bluetooth-scan'),
     bluetoothToggle: (instanceId, action) => ipcRenderer.invoke('system/bluetooth-toggle', { instanceId, action }),
     bluetoothOpenSettings: () => ipcRenderer.invoke('system/bluetooth-settings'),
+    bluetoothSetRadio: (enabled) => ipcRenderer.invoke('system/bluetooth-set-radio', enabled),
     volume: () => ipcRenderer.invoke('system/volume-get'),
     setVolume: (value) => ipcRenderer.invoke('system/volume-set', value),
     onVolumeChanged: (callback) => {

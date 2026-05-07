@@ -20,14 +20,14 @@ foreach ($d in $parentDevices) {
     $hex = ''
     if ($d.InstanceId -match 'Dev_([0-9a-fA-F]{12})') { $hex = $Matches[1] }
 
-    $hasActiveAudio = $false
-    if ($hex) {
+    $isConnected = $false
+    if ($d.Status -eq 'OK' -and $hex) {
         foreach ($svc in $serviceDevices) {
             if ($svc.InstanceId -match $hex -and $svc.Status -eq 'OK') {
                 foreach ($guid in $audioGuids) {
-                    if ($svc.InstanceId -match $guid) { $hasActiveAudio = $true; break }
+                    if ($svc.InstanceId -match $guid) { $isConnected = $true; break }
                 }
-                if ($hasActiveAudio) { break }
+                if ($isConnected) { break }
             }
         }
     }
@@ -35,7 +35,7 @@ foreach ($d in $parentDevices) {
     $result += @{
         name = $d.FriendlyName
         instanceId = $d.InstanceId
-        connected = $hasActiveAudio
+        connected = $isConnected
         paired = $true
     }
 }

@@ -4,9 +4,36 @@ import { Bluetooth, BluetoothConnected, ChevronLeft, Loader2, Plus, RefreshCw } 
 interface BluetoothMenuProps {
     devices: BluetoothDevice[];
     scanning: boolean;
+    enabled: boolean;
+    onToggleRadio: (enabled: boolean) => void;
     onScan: () => void;
     onBack: () => void;
     darkText: boolean;
+}
+
+function ToggleSwitch({ checked, onChange, darkText }: { checked: boolean; onChange: (v: boolean) => void; darkText: boolean }) {
+    const onColor = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.85)";
+    const offColor = darkText ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.18)";
+    const knobOn = darkText ? "rgb(255,255,255)" : "rgb(20,20,20)";
+    const knobOff = darkText ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.7)";
+    return (
+        <button
+            onClick={() => onChange(!checked)}
+            className="relative shrink-0 cursor-pointer rounded-full transition-colors"
+            style={{ width: 26, height: 14, backgroundColor: checked ? onColor : offColor }}
+            aria-pressed={checked}
+        >
+            <span
+                className="absolute top-0.5 rounded-full transition-all"
+                style={{
+                    width: 10,
+                    height: 10,
+                    left: checked ? 14 : 2,
+                    backgroundColor: checked ? knobOn : knobOff,
+                }}
+            />
+        </button>
+    );
 }
 
 type RowPhase = "idle" | "toggling" | "settling";
@@ -77,7 +104,7 @@ function DeviceRow({ device, phase, onToggle, darkText }: { device: BluetoothDev
     );
 }
 
-export default function BluetoothMenu({ devices, scanning, onScan, onBack, darkText }: BluetoothMenuProps) {
+export default function BluetoothMenu({ devices, scanning, enabled, onToggleRadio, onScan, onBack, darkText }: BluetoothMenuProps) {
     const color = darkText ? "black" : "white";
     const dimColor = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)";
     const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -124,17 +151,25 @@ export default function BluetoothMenu({ devices, scanning, onScan, onBack, darkT
                     <ChevronLeft color={color} size={16} />
                     <span className="text-sm font-medium">Bluetooth</span>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => window.shell.system.bluetoothOpenSettings()} className="cursor-pointer">
-                        <Plus color={dimColor} size={15} />
+                <div className="flex items-center gap-2.5">
+                    <button onClick={() => window.shell.system.bluetoothOpenSettings()} className="cursor-pointer" disabled={!enabled}>
+                        <Plus color={dimColor} size={15} style={{ opacity: enabled ? 1 : 0.4 }} />
                     </button>
-                    <button onClick={onScan} disabled={scanning} className="cursor-pointer">
-                        <RefreshCw color={dimColor} size={14} className={scanning ? "animate-spin" : ""} />
+                    <button onClick={onScan} disabled={scanning || !enabled} className="cursor-pointer">
+                        <RefreshCw color={dimColor} size={14} className={scanning ? "animate-spin" : ""} style={{ opacity: enabled ? 1 : 0.4 }} />
                     </button>
+                    <div style={{ marginLeft: 4 }}>
+                        <ToggleSwitch checked={enabled} onChange={onToggleRadio} darkText={darkText} />
+                    </div>
                 </div>
             </div>
 
-            {scanning && devices.length === 0 ? (
+            {!enabled ? (
+                <div className={`flex flex-col items-center gap-2 py-4 ${darkText ? "text-black/40" : "text-white/40"}`}>
+                    <Bluetooth size={20} />
+                    <span className="text-sm">Bluetooth off</span>
+                </div>
+            ) : scanning && devices.length === 0 ? (
                 <div className={`flex items-center justify-center py-6 ${darkText ? "text-black/40" : "text-white/40"}`}>
                     <Loader2 size={20} className="animate-spin" />
                 </div>

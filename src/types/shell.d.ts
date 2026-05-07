@@ -197,6 +197,8 @@ declare global {
         onWifiScanUpdated: (callback: (data: WifiNetwork[]) => void) => void
         wifiConnect: (ssid: string, password?: string) => Promise<{ success: boolean; needsPassword?: boolean }>
         wifiDisconnect: () => Promise<{ success: boolean }>
+        wifiRadioGet: () => Promise<{ success: boolean; state: string }>
+        wifiRadioSet: (enabled: boolean) => Promise<{ success: boolean; state: string }>
       }
       system: {
         bluetooth: () => Promise<BluetoothState>
@@ -205,6 +207,7 @@ declare global {
         bluetoothScan: () => Promise<BluetoothDevice[]>
         bluetoothToggle: (instanceId: string, action: 'connect' | 'disconnect') => Promise<{ success: boolean }>
         bluetoothOpenSettings: () => Promise<void>
+        bluetoothSetRadio: (enabled: boolean) => Promise<{ success: boolean; state: string }>
         volume: () => Promise<number>
         setVolume: (value: number) => Promise<number>
         onVolumeChanged: (callback: (data: number) => void) => void

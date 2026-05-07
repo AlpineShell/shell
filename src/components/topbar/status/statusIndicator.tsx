@@ -48,8 +48,27 @@ export default function StatusIndicator() {
 
     const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([]);
     const [wifiScanning, setWifiScanning] = useState(false);
+    const [wifiRadio, setWifiRadio] = useState(true);
     const [btDevices, setBtDevices] = useState<BluetoothDevice[]>([]);
     const [btScanning, setBtScanning] = useState(false);
+
+    function refreshWifiRadio() {
+        window.shell.network.wifiRadioGet().then((r) => {
+            if (r.success) setWifiRadio(r.state === 'on');
+        });
+    }
+
+    function toggleWifiRadio(enabled: boolean) {
+        setWifiRadio(enabled);
+        window.shell.network.wifiRadioSet(enabled).then((r) => {
+            if (r.success) setWifiRadio(r.state === 'on');
+            else refreshWifiRadio();
+        });
+    }
+
+    function toggleBluetoothRadio(enabled: boolean) {
+        window.shell.system.bluetoothSetRadio(enabled);
+    }
 
     function scanWifi() {
         setWifiScanning(true);
@@ -75,6 +94,7 @@ export default function StatusIndicator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         scanAll();
+        refreshWifiRadio();
         window.shell.network.onWifiScanUpdated((data) => {
             setWifiNetworks(data);
             setWifiScanning(false);
@@ -100,7 +120,9 @@ export default function StatusIndicator() {
                 volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute}
                 monitors={monitors} setMonitorBrightness={setMonitorBrightness}
                 wifiNetworks={wifiNetworks} wifiScanning={wifiScanning} scanWifi={scanWifi}
+                wifiRadio={wifiRadio} onToggleWifiRadio={toggleWifiRadio}
                 btDevices={btDevices} btScanning={btScanning} scanBluetooth={scanBluetooth}
+                onToggleBluetoothRadio={toggleBluetoothRadio}
             />
         </PopupMenu>
     );

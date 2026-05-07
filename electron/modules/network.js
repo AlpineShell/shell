@@ -11,6 +11,7 @@ const scriptsDir = app.isPackaged
   : path.join(__dirname, '..', 'scripts')
 const scriptPath = path.join(scriptsDir, 'networkStatus.ps1')
 const scanScriptPath = path.join(scriptsDir, 'wifiScan.ps1')
+const radioScriptPath = path.join(scriptsDir, 'wifiRadio.ps1')
 
 function getNetworkStatus() {
   return new Promise((resolve) => {
@@ -102,12 +103,33 @@ function wifiDisconnect() {
   })
 }
 
+function wifiRadio(action) {
+  return new Promise((resolve) => {
+    exec(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${radioScriptPath}" -Action "${action}"`,
+      (err, stdout) => {
+        if (err || !stdout) return resolve({ success: false, state: 'unknown' })
+        try { resolve(JSON.parse(stdout.trim())) } catch { resolve({ success: false, state: 'unknown' }) }
+      }
+    )
+  })
+}
+
 module.exports = {
   handlers: {
     'network/wifi-signal': () => getNetworkStatus(),
     'network/wifi-scan': () => scanWifiNetworks(),
     'network/wifi-connect': (_event, { ssid, password }) => wifiConnect(ssid, password),
     'network/wifi-disconnect': () => wifiDisconnect(),
+    'network/wifi-radio-get': () => wifiRadio('get'),
+    'network/wifi-radio-set': async (_event, enabled) => {
+      const result = await wifiRadio(enabled ? 'on' : 'off')
+      setTimeout(async () => {
+        const current = await getNetworkStatus()
+        if (broadcastFn) broadcastFn('network/wifi-signal-changed', current)
+      }, 1500)
+      return result
+    },
   },
 
   start(broadcast) {

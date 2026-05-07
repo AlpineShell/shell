@@ -17,9 +17,12 @@ interface ControlCenterProps {
     wifiNetworks: WifiNetwork[];
     wifiScanning: boolean;
     scanWifi: () => void;
+    wifiRadio: boolean;
+    onToggleWifiRadio: (enabled: boolean) => void;
     btDevices: BluetoothDevice[];
     btScanning: boolean;
     scanBluetooth: () => void;
+    onToggleBluetoothRadio: (enabled: boolean) => void;
 }
 
 function batteryLabel(battery: BatteryStatus): string | undefined {
@@ -38,7 +41,7 @@ function batteryIcon(percent: number | null, charging: boolean): React.FC<{ colo
 
 type View = 'main' | 'wifi' | 'bluetooth';
 
-export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness, wifiNetworks, wifiScanning, scanWifi, btDevices, btScanning, scanBluetooth }: ControlCenterProps) {
+export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness, wifiNetworks, wifiScanning, scanWifi, wifiRadio, onToggleWifiRadio, btDevices, btScanning, scanBluetooth, onToggleBluetoothRadio }: ControlCenterProps) {
     const darkText = useDarkText();
     const [view, setView] = useState<View>('main');
 
@@ -107,8 +110,8 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                 </div>
 
                 <div ref={subRef} className="w-65 shrink-0 self-start">
-                    {view === 'wifi' && <WifiMenu networks={wifiNetworks} scanning={wifiScanning} onScan={scanWifi} onBack={() => setView('main')} darkText={darkText} />}
-                    {view === 'bluetooth' && <BluetoothMenu devices={btDevices} scanning={btScanning} onScan={scanBluetooth} onBack={() => setView('main')} darkText={darkText} />}
+                    {view === 'wifi' && <WifiMenu networks={wifiNetworks} scanning={wifiScanning} enabled={wifiRadio} onToggleRadio={onToggleWifiRadio} onScan={scanWifi} onBack={() => setView('main')} darkText={darkText} />}
+                    {view === 'bluetooth' && <BluetoothMenu devices={btDevices} scanning={btScanning} enabled={bluetooth.enabled} onToggleRadio={onToggleBluetoothRadio} onScan={scanBluetooth} onBack={() => setView('main')} darkText={darkText} />}
                 </div>
             </div>
         </div>
