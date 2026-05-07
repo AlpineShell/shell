@@ -40,13 +40,47 @@ async function getDisks() {
     })
 }
 
+async function getCpu() {
+  const data = await runPs(
+    "Get-CimInstance Win32_Processor | Select-Object -First 1 Name, NumberOfCores, NumberOfLogicalProcessors | ConvertTo-Json -Compress"
+  )
+  if (!data) return { name: '', cores: 0, threads: 0 }
+  return {
+    name: (data.Name || '').replace(/\s+/g, ' ').trim(),
+    cores: Number(data.NumberOfCores || 0),
+    threads: Number(data.NumberOfLogicalProcessors || 0),
+  }
+}
+
+async function getGpu() {
+  const data = await runPs(
+    "Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM | ConvertTo-Json -Compress"
+  )
+  if (!data) return { name: '' }
+  const list = Array.isArray(data) ? data : [data]
+  const best = list
+    .filter((g) => g && g.Name)
+    .sort((a, b) => Number(b.AdapterRAM || 0) - Number(a.AdapterRAM || 0))[0]
+  return { name: best ? best.Name : '' }
+}
+
+function getMemory() {
+  const total = os.totalmem()
+  const free = os.freemem()
+  return { total, used: total - free, free }
+}
+
 async function getSystemInfo() {
-  const [osInfo, disks] = await Promise.all([getOsInfo(), getDisks()])
+  const [osInfo, disks, cpu, gpu] = await Promise.all([getOsInfo(), getDisks(), getCpu(), getGpu()])
   return {
     computerName: os.hostname(),
     user: os.userInfo().username,
     os: osInfo,
     disks,
+    cpu,
+    gpu,
+    memory: getMemory(),
+    uptime: Math.floor(os.uptime()),
   }
 }
 

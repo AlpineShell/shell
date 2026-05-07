@@ -109,6 +109,10 @@ declare global {
     user: string
     os: { name: string; version: string; build: string }
     disks: DiskInfo[]
+    cpu: { name: string; cores: number; threads: number }
+    gpu: { name: string }
+    memory: { total: number; used: number; free: number }
+    uptime: number
   }
 
   interface SetupOptions {

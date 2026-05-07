@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useWallpaper } from '../../hooks/useWallpaper'
 
-const CACHE_KEY = 'alpine.systemInfo'
+const CACHE_KEY = 'alpine.systemInfo.v2'
 
 function readCache(): SystemInfo | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY)
-    return raw ? (JSON.parse(raw) as SystemInfo) : null
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed?.cpu || !parsed?.gpu || !parsed?.memory || typeof parsed?.uptime !== 'number') return null
+    return parsed as SystemInfo
   } catch {
     return null
   }
@@ -31,6 +34,16 @@ function formatSize(bytes: number): string {
 }
 
 const DISK_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#ec4899']
+const RAM_COLOR = '#8b5cf6'
+
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
+}
 
 export default function AboutPage() {
   const wallpaper = useWallpaper()
@@ -49,36 +62,77 @@ export default function AboutPage() {
   }, [])
 
   return (
-    <div className="max-w-3xl">
-      <div className="flex gap-6 items-start">
-        <div className="w-72 shrink-0 flex flex-col gap-2">
-          <div
-            className="w-full aspect-video rounded-lg bg-neutral-900 bg-cover bg-center border border-white/5"
-            style={wallpaper ? { backgroundImage: `url('${wallpaper}')` } : undefined}
-          />
+    <div className="max-w-4xl">
+      <div className="flex gap-6 items-stretch">
+        <div className="flex gap-2 items-stretch">
+          <div className="w-72 shrink-0 flex flex-col gap-2">
+            <div
+              className="w-full aspect-video rounded-lg bg-neutral-900 bg-cover bg-center border border-white/5"
+              style={wallpaper ? { backgroundImage: `url('${wallpaper}')` } : undefined}
+            />
 
-          {info
-            ? info.disks.map((d, i) => (
-                <DiskRow key={d.letter} disk={d} color={DISK_COLORS[i % DISK_COLORS.length]} />
-              ))
-            : [0, 1].map((i) => (
+            {info ? (
+              <>
+                {info.disks.map((d, i) => (
+                  <UsageRow
+                    key={d.letter}
+                    label={`${d.letter}:`}
+                    used={d.used}
+                    total={d.total}
+                    color={DISK_COLORS[i % DISK_COLORS.length]}
+                  />
+                ))}
+                <UsageRow
+                  label="RAM"
+                  used={info.memory.used}
+                  total={info.memory.total}
+                  color={RAM_COLOR}
+                />
+              </>
+            ) : (
+              [0, 1, 2].map((i) => (
                 <div key={i} className="w-full h-6 rounded-md bg-neutral-900 border border-white/5 animate-pulse" />
-              ))}
+              ))
+            )}
+          </div>
+
+          {info && (
+            <div
+              className="w-60 shrink-0 rounded-lg bg-neutral-900 border border-white/5 px-3.5 py-3 flex flex-col gap-3 transition-opacity duration-300 self-stretch"
+              style={{ opacity: info ? 1 : 0 }}
+            >
+              {info.cpu.name && (
+                <SpecRow
+                  label="Processor"
+                  value={info.cpu.name}
+                  detail={info.cpu.cores ? `${info.cpu.cores} cores - ${info.cpu.threads} threads` : undefined}
+                />
+              )}
+              {info.gpu.name && <SpecRow label="Graphics" value={info.gpu.name} />}
+              <SpecRow
+                label="Memory"
+                value={formatSize(info.memory.total)}
+                detail={`${formatSize(info.memory.used)} used`}
+              />
+              <SpecRow label="Uptime" value={formatUptime(info.uptime)} />
+              <SpecRow label="User" value={info.user} />
+            </div>
+          )}
         </div>
 
         <div
-          className="pt-1 flex flex-col gap-1 transition-opacity duration-300"
+          className="pt-1 flex flex-col gap-1 transition-opacity duration-300 min-w-0 flex-1"
           style={{ opacity: info ? 1 : 0 }}
         >
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {info?.computerName ?? ' '}
+          <h1 className="text-2xl font-semibold tracking-tight truncate">
+            {info?.computerName ?? ''}
           </h1>
-          <span className="text-sm text-white/60">
-            {info?.os.name ?? ' '}
+          <span className="text-sm text-white/60 truncate">
+            {info?.os.name ?? ''}
           </span>
           {info?.os.build && (
-            <span className="text-xs text-white/40 mt-2">
-              Version {info.os.version} · Build {info.os.build}
+            <span className="text-xs text-white/40">
+              Version {info.os.version} - Build {info.os.build}
             </span>
           )}
         </div>
@@ -87,8 +141,8 @@ export default function AboutPage() {
   )
 }
 
-function DiskRow({ disk, color }: { disk: DiskInfo; color: string }) {
-  const pct = disk.total > 0 ? (disk.used / disk.total) * 100 : 0
+function UsageRow({ label, used, total, color }: { label: string; used: number; total: number; color: string }) {
+  const pct = total > 0 ? (used / total) * 100 : 0
   return (
     <div className="relative w-full h-6 rounded-md bg-neutral-900 border border-white/5 overflow-hidden">
       <div
@@ -96,11 +150,21 @@ function DiskRow({ disk, color }: { disk: DiskInfo; color: string }) {
         style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
       />
       <div className="absolute inset-0 flex items-center justify-between px-2.5 text-[11px] font-medium">
-        <span className="text-white/90">{disk.letter}:</span>
+        <span className="text-white/90">{label}</span>
         <span className="text-white/80">
-          {formatSize(disk.used)} / {formatSize(disk.total)}
+          {formatSize(used)} / {formatSize(total)}
         </span>
       </div>
+    </div>
+  )
+}
+
+function SpecRow({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return (
+    <div className="flex flex-col min-w-0">
+      <span className="text-[10px] uppercase tracking-wider text-white/40">{label}</span>
+      <span className="text-sm text-white/90 truncate">{value}</span>
+      {detail && <span className="text-xs text-white/50">{detail}</span>}
     </div>
   )
 }
