@@ -1,9 +1,9 @@
-const { exec } = require('child_process')
+const { execFile } = require('child_process')
 const os = require('os')
 
-function runJson(cmd) {
+function runPs(command) {
   return new Promise((resolve) => {
-    exec(`powershell -NoProfile -Command "${cmd}"`, { maxBuffer: 1024 * 1024 }, (err, stdout) => {
+    execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], { maxBuffer: 1024 * 1024 }, (err, stdout) => {
       if (err || !stdout) return resolve(null)
       try { resolve(JSON.parse(stdout.trim())) } catch { resolve(null) }
     })
@@ -11,7 +11,7 @@ function runJson(cmd) {
 }
 
 async function getOsInfo() {
-  const data = await runJson(
+  const data = await runPs(
     "Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber | ConvertTo-Json -Compress"
   )
   if (!data) return { name: 'Windows', version: '', build: '' }
@@ -20,8 +20,8 @@ async function getOsInfo() {
 }
 
 async function getDisks() {
-  const data = await runJson(
-    "Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Select-Object DeviceID, Size, FreeSpace, VolumeName | ConvertTo-Json -Compress"
+  const data = await runPs(
+    "Get-CimInstance Win32_LogicalDisk -Filter \"DriveType=3\" | Select-Object DeviceID, Size, FreeSpace, VolumeName | ConvertTo-Json -Compress"
   )
   if (!data) return []
   const list = Array.isArray(data) ? data : [data]

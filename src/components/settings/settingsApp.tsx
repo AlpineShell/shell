@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Command, Info, Paintbrush, Keyboard, Search, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Command, House, Paintbrush, Keyboard, Search, X } from 'lucide-react'
 import AboutPage from './aboutPage'
 import PersonalizationPage from './personalizationPage'
 import HotkeysPage from './hotkeysPage'
 
-type PageId = 'about' | 'personalization' | 'hotkeys'
+type PageId = 'home' | 'personalization' | 'hotkeys'
 
 interface PageDef {
   id: PageId
   label: string
-  icon: typeof Info
+  icon: typeof House
 }
 
 const PAGES: PageDef[] = [
-  { id: 'about', label: 'About', icon: Info },
+  { id: 'home', label: 'Home', icon: House },
   { id: 'personalization', label: 'Personalization', icon: Paintbrush },
   { id: 'hotkeys', label: 'Hotkeys', icon: Keyboard },
 ]
@@ -22,7 +22,7 @@ const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
 
 export default function SettingsApp() {
-  const [history, setHistory] = useState<PageId[]>(['about'])
+  const [history, setHistory] = useState<PageId[]>(['home'])
   const [historyIndex, setHistoryIndex] = useState(0)
   const [search, setSearch] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -153,7 +153,7 @@ export default function SettingsApp() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto px-5 pt-3 pb-6">
-          {currentId === 'about' && <AboutPage />}
+          {currentId === 'home' && <AboutPage />}
           {currentId === 'personalization' && <PersonalizationPage />}
           {currentId === 'hotkeys' && <HotkeysPage />}
         </div>
