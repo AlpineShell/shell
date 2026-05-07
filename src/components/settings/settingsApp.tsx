@@ -65,7 +65,7 @@ export default function SettingsApp() {
 
   return (
     <div className="w-screen h-screen bg-neutral-950 text-white flex overflow-hidden">
-      <aside className="w-56 shrink-0 flex flex-col border-r border-white/5 bg-neutral-950" style={dragRegion}>
+      <aside className="w-56 shrink-0 flex flex-col bg-neutral-900" style={dragRegion}>
         <div className="h-20 flex items-center px-5 shrink-0">
           <span className="text-xl font-semibold tracking-tight">Settings</span>
         </div>
