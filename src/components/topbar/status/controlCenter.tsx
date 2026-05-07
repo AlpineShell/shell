@@ -61,11 +61,14 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
     const [height, setHeight] = useState<number | undefined>(undefined);
 
     useEffect(() => {
-        requestAnimationFrame(() => {
-            const el = view === 'main' ? mainRef.current : subRef.current;
-            if (el) setHeight(el.offsetHeight);
-        });
-    }, [view, wifiNetworks, btDevices, wifiScanning, btScanning]);
+        const el = view === 'main' ? mainRef.current : subRef.current;
+        if (!el) return;
+        const update = () => setHeight(el.offsetHeight);
+        update();
+        const observer = new ResizeObserver(update);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [view]);
 
     return (
         <div className="overflow-hidden w-65 transition-[height] duration-200 ease-in-out" style={{ height: height ? `${height}px` : 'auto' }}>
