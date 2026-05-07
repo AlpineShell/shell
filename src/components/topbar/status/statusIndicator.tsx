@@ -130,6 +130,7 @@ export default function StatusIndicator() {
     function scanAll() {
         scanWifi();
         scanBluetooth();
+        refreshWifiRadio();
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps

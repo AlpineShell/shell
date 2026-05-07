@@ -20,11 +20,21 @@ function isRadioEnabled() {
 }
 
 function getConnectedDevices() {
-  return runPowerShell(
-    "$ag=@('0000110B','0000111E','0000110E','0000110C');$svcs=Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match 'BTHENUM' -and $_.InstanceId -notmatch '^BTHENUM\\\\Dev_' -and $_.Status -eq 'OK' };$hexes=@{};foreach($s in $svcs){foreach($g in $ag){if($s.InstanceId -match $g -and $s.InstanceId -match '&([0-9a-fA-F]{12})_'){$hexes[$Matches[1]]=$true;break}}};Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match '^BTHENUM\\\\Dev_([0-9a-fA-F]{12})' -and $_.Status -eq 'OK' -and $hexes[$Matches[1]] } | Select-Object -ExpandProperty FriendlyName"
-  ).then((output) => {
-    if (!output) return []
-    return [...new Set(output.split('\n').map(d => d.trim()).filter(Boolean))]
+  return new Promise((resolve) => {
+    exec(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}"`,
+      (err, stdout) => {
+        if (err || !stdout) return resolve([])
+        try {
+          const parsed = JSON.parse(stdout.trim())
+          const list = Array.isArray(parsed) ? parsed : [parsed]
+          const names = list.filter((d) => d.connected).map((d) => d.name)
+          resolve([...new Set(names)])
+        } catch {
+          resolve([])
+        }
+      }
+    )
   })
 }
 

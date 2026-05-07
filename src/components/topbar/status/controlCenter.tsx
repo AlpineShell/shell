@@ -45,15 +45,15 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
     const darkText = useDarkText();
     const [view, setView] = useState<View>('main');
 
-    const wifiLabel = wifiRadio && network.connected ? (network.ssid ?? "Connected") : (wifiRadio ? undefined : "Off");
+    const wifiLabel = wifiRadio && network.connected && network.type === 'wifi' && network.ssid
+        ? network.ssid
+        : undefined;
 
     let btLabel: string | undefined;
-    if (!bluetooth.enabled) {
-        btLabel = "Off";
-    } else if (bluetooth.connected) {
+    if (bluetooth.enabled && bluetooth.connected && bluetooth.devices.length > 0) {
         btLabel = bluetooth.devices.length > 1
             ? `${bluetooth.devices.length} Connected`
-            : bluetooth.devices[0] ?? "Connected";
+            : bluetooth.devices[0];
     }
 
     const mainRef = useRef<HTMLDivElement>(null);
@@ -75,8 +75,8 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
             >
                 <div ref={mainRef} className="p-3 gap-3 flex flex-col h-fit w-65 shrink-0">
                     <div className="gap-3 mb-1 flex flex-col">
-                        <ControlItem label="Wi-Fi" sublabel={wifiLabel} Icon={Wifi} darkText={darkText} onClick={() => setView('wifi')} />
-                        <ControlItem label="Bluetooth" sublabel={btLabel} Icon={Bluetooth} darkText={darkText} onClick={() => setView('bluetooth')} />
+                        <ControlItem label="Wi-Fi" sublabel={wifiLabel} active={wifiRadio} Icon={Wifi} darkText={darkText} onClick={() => setView('wifi')} />
+                        <ControlItem label="Bluetooth" sublabel={btLabel} active={bluetooth.enabled} Icon={Bluetooth} darkText={darkText} onClick={() => setView('bluetooth')} />
                     </div>
                     <div className="flex flex-col gap-2">
                         <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
@@ -120,20 +120,20 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
     )
 }
 
-function ControlItem({ label, sublabel, Icon, darkText, onClick }: { label: string; sublabel?: string; Icon: React.FC<{ color: string; size: number }>; darkText: boolean; onClick?: () => void }) {
-    const active = !!sublabel;
+function ControlItem({ label, sublabel, active, Icon, darkText, onClick }: { label: string; sublabel?: string; active?: boolean; Icon: React.FC<{ color: string; size: number }>; darkText: boolean; onClick?: () => void }) {
+    const isActive = active ?? !!sublabel;
     const color = darkText ? "black" : "white";
     const dimColor = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)";
     return (
         <div className={`flex cursor-pointer justify-between items-center ${darkText ? "text-black" : "text-white"}`} onClick={onClick}>
             <div className="flex mx-1 gap-3 text-sm items-center">
-                <Icon color={active ? color : dimColor} size={17} />
+                <Icon color={isActive ? color : dimColor} size={17} />
                 <div className="flex flex-col gap-0">
-                    <span className={active ? 'text-xs' : `text-[13px] ${darkText ? 'text-black/60' : 'text-white/60'}`}>{label}</span>
-                    {active && <span className={`text-[13px] ${darkText ? "text-black/60" : "text-white/60"} -mt-0.5`}>{sublabel}</span>}
+                    <span className={sublabel ? 'text-xs' : `text-[13px] ${isActive ? '' : (darkText ? 'text-black/60' : 'text-white/60')}`}>{label}</span>
+                    {sublabel && <span className={`text-[13px] ${darkText ? "text-black/60" : "text-white/60"} -mt-0.5`}>{sublabel}</span>}
                 </div>
             </div>
-            <ChevronRight color={active ? color : dimColor} size={15} />
+            <ChevronRight color={isActive ? color : dimColor} size={15} />
         </div>
     )
 }
