@@ -10,7 +10,7 @@ const MIN_H = 2;
 const MAX_H = 13;
 const NOISE_FLOOR = 0.05;
 
-function MusicBars({ peak }: { peak: number }) {
+function MusicBars({ peak, color }: { peak: number; color: string }) {
     const gated = peak < NOISE_FLOOR ? 0 : (peak - NOISE_FLOOR) / (1 - NOISE_FLOOR);
     const boosted = Math.min(1, Math.pow(gated, 0.7) * 1.4);
     return (
@@ -27,7 +27,7 @@ function MusicBars({ peak }: { peak: number }) {
                         width={1.5}
                         height={h}
                         rx={0.5}
-                        fill="white"
+                        fill={color}
                         style={{ transition: 'y 120ms linear, height 120ms linear' }}
                     />
                 );
@@ -48,7 +48,7 @@ export default function MediaStatus() {
             onOpen={() => window.shell.media.session().then(media.update)}
             trigger={
                 <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-4.5 items-center gap-1.5`}>
-                    <MusicBars peak={peak} />
+                    <MusicBars peak={peak} color={darkText ? "black" : "white"} />
                     <span className={`text-[12px] leading-none max-w-24 truncate ${darkText ? "text-black" : "text-white"}`}>
                         {media.title}
                     </span>
