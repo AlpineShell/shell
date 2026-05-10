@@ -15,6 +15,8 @@ const registeredBars = new Map()
 const originalWorkAreas = new Map()
 let settingWorkArea = false
 
+const WINDOW_MARGIN_DIP = 10
+
 function isSettingWorkArea() {
   return settingWorkArea
 }
@@ -62,17 +64,21 @@ function setWorkArea(hWnd, barPx, displayId) {
     originalWorkAreas.set(displayId, orig)
   }
 
+  let dpi = 96
+  try { dpi = GetDpiForWindow(hWnd) || 96 } catch (_) {}
+  const marginPx = Math.round(WINDOW_MARGIN_DIP * dpi / 96)
+
   const rect = Buffer.alloc(16)
-  rect.writeInt32LE(mon.left, 0)
-  rect.writeInt32LE(mon.top + barPx, 4)
-  rect.writeInt32LE(mon.right, 8)
-  rect.writeInt32LE(mon.bottom, 12)
+  rect.writeInt32LE(mon.left + marginPx, 0)
+  rect.writeInt32LE(mon.top + barPx + marginPx, 4)
+  rect.writeInt32LE(mon.right - marginPx, 8)
+  rect.writeInt32LE(mon.bottom - marginPx, 12)
 
   settingWorkArea = true
   const result = SystemParametersInfoW(SPI_SETWORKAREA, 0, rect, SPIF_SENDCHANGE)
   settingWorkArea = false
 
-  console.log(`[appbar] SetWorkArea display=${displayId} mon=${mon.left},${mon.top}-${mon.right},${mon.bottom} workTop=${mon.top + barPx} result=${result}`)
+  console.log(`[appbar] SetWorkArea display=${displayId} mon=${mon.left},${mon.top}-${mon.right},${mon.bottom} margin=${marginPx} workTop=${mon.top + barPx + marginPx} result=${result}`)
   return !!result
 }
 
