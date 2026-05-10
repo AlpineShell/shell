@@ -62,10 +62,10 @@ export default function SettingsApp() {
   return (
     <div className="w-screen h-screen bg-neutral-950 text-white flex overflow-hidden">
       <aside className="w-56 shrink-0 flex flex-col bg-neutral-900" style={dragRegion}>
-        <div className="h-20 flex items-center px-5 shrink-0">
-          <span className="text-xl font-semibold tracking-tight">Settings</span>
+        <div className="h-14 flex items-center px-5 shrink-0">
+          <span className="text-base font-semibold tracking-tight">Settings</span>
         </div>
-        <nav className="flex-1 px-2 pt-3 flex flex-col gap-0.5 overflow-auto" style={noDragRegion}>
+        <nav className="flex-1 px-2 flex flex-col gap-0.5 overflow-auto" style={noDragRegion}>
           {NAV.map((p) => {
             const Icon = p.icon
             const active = p.path === topSegment
@@ -85,9 +85,9 @@ export default function SettingsApp() {
         </nav>
       </aside>
 
-      <main className="flex-1 min-w-0 flex flex-col">
-        <div className="h-20 px-5 flex items-center shrink-0" style={dragRegion}>
-          <header className="w-full h-12 flex items-center gap-3 pl-3 pr-2 rounded-2xl bg-neutral-900">
+      <main className="flex-1 min-w-0 flex flex-col bg-neutral-900">
+        <div className="h-14 flex items-center shrink-0 bg-neutral-900" style={dragRegion}>
+          <header className="w-full h-10 flex items-center gap-3 pl-3 pr-3">
             <div className="flex items-center gap-1" style={noDragRegion}>
               <button
                 onClick={back}
@@ -147,7 +147,7 @@ export default function SettingsApp() {
           </header>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-auto px-5 pt-3 pb-6">
+        <div className="flex-1 min-h-0 overflow-auto px-5 pt-5 pb-6 bg-neutral-950 rounded-tl-xl">
           <PageRouter path={currentPath} navigate={navigate} />
         </div>
       </main>
