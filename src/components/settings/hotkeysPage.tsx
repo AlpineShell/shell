@@ -90,7 +90,7 @@ export default function HotkeysPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 w-full">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Hotkeys</h1>
         <p className="text-sm text-white/50 mt-1">Configure keyboard shortcuts.</p>

@@ -99,6 +99,9 @@ contextBridge.exposeInMainWorld('shell', {
     },
     setWallpaper: (filePath) => ipcRenderer.invoke('windows/wallpaper-set', filePath),
     pickWallpaper: () => ipcRenderer.invoke('windows/wallpaper-pick'),
+    wallpaperPresets: () => ipcRenderer.invoke('windows/wallpaper-presets'),
+    wallpaperMine: () => ipcRenderer.invoke('windows/wallpaper-mine'),
+    wallpaperMineDelete: (filePath) => ipcRenderer.invoke('windows/wallpaper-mine-delete', filePath),
     openApps: () => ipcRenderer.invoke('windows/open-apps'),
     onOpenAppsChanged: (callback) => {
       ipcRenderer.on('windows/open-apps-changed', (_, data) => callback(data))

@@ -56,6 +56,10 @@
       {
         "from": "electron/scripts",
         "to": "scripts"
+      },
+      {
+        "from": "wallpapers",
+        "to": "wallpapers"
       }
     ],
     "win": {

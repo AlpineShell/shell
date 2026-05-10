@@ -1,5 +1,5 @@
 const { exec } = require('child_process')
-const { dialog } = require('electron')
+const { dialog, app } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const koffi = require('koffi')
@@ -16,6 +16,10 @@ const SPIF_SENDCHANGE = 0x02
 
 let lastPath = null
 let broadcastFn = null
+
+function getMineDir() {
+  return path.join(app.getPath('userData'), 'wallpapers')
+}
 
 function getPath() {
   return new Promise((resolve) => {
@@ -62,14 +66,90 @@ module.exports = {
     'windows/wallpaper-set': async (_event, filePath) => {
       return setWallpaper(filePath)
     },
+    'windows/wallpaper-presets': async () => {
+      const presetsDir = app.isPackaged
+        ? path.join(process.resourcesPath, 'wallpapers')
+        : path.join(__dirname, '..', '..', 'wallpapers')
+      try {
+        if (!fs.existsSync(presetsDir)) return []
+        const entries = fs.readdirSync(presetsDir)
+        const valid = ['.jpg', '.jpeg', '.png', '.bmp', '.webp']
+        return entries
+          .filter((name) => valid.includes(path.extname(name).toLowerCase()))
+          .map((name) => {
+            const fullPath = path.join(presetsDir, name)
+            const dataUrl = encode(fullPath)
+            return { name: path.basename(name, path.extname(name)), path: fullPath, thumbnail: dataUrl }
+          })
+          .filter((p) => p.thumbnail)
+      } catch (e) {
+        console.error('[wallpaper] presets error:', e.message)
+        return []
+      }
+    },
     'windows/wallpaper-pick': async () => {
       const result = await dialog.showOpenDialog({
         title: 'Choose wallpaper',
         properties: ['openFile'],
-        filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'bmp'] }],
+        filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'webp'] }],
       })
-      if (result.canceled || result.filePaths.length === 0) return false
-      return setWallpaper(result.filePaths[0])
+      if (result.canceled || result.filePaths.length === 0) return null
+      const sourcePath = result.filePaths[0]
+      const minePath = getMineDir()
+      try {
+        if (!fs.existsSync(minePath)) fs.mkdirSync(minePath, { recursive: true })
+        const ext = path.extname(sourcePath)
+        const base = path.basename(sourcePath, ext)
+        let target = path.join(minePath, `${base}${ext}`)
+        let n = 1
+        while (fs.existsSync(target)) {
+          target = path.join(minePath, `${base} (${n})${ext}`)
+          n++
+        }
+        fs.copyFileSync(sourcePath, target)
+        setWallpaper(target)
+        return target
+      } catch (e) {
+        console.error('[wallpaper] pick copy error:', e.message)
+        return null
+      }
+    },
+    'windows/wallpaper-mine': async () => {
+      const minePath = getMineDir()
+      try {
+        if (!fs.existsSync(minePath)) return []
+        const entries = fs.readdirSync(minePath)
+        const valid = ['.jpg', '.jpeg', '.png', '.bmp', '.webp']
+        return entries
+          .filter((name) => valid.includes(path.extname(name).toLowerCase()))
+          .map((name) => {
+            const fullPath = path.join(minePath, name)
+            const stat = fs.statSync(fullPath)
+            return {
+              name: path.basename(name, path.extname(name)),
+              path: fullPath,
+              thumbnail: encode(fullPath),
+              addedAt: stat.mtimeMs,
+            }
+          })
+          .filter((p) => p.thumbnail)
+          .sort((a, b) => b.addedAt - a.addedAt)
+      } catch (e) {
+        console.error('[wallpaper] mine error:', e.message)
+        return []
+      }
+    },
+    'windows/wallpaper-mine-delete': async (_event, filePath) => {
+      const minePath = getMineDir()
+      const resolved = path.resolve(filePath)
+      if (!resolved.startsWith(path.resolve(minePath))) return false
+      try {
+        if (fs.existsSync(resolved)) fs.unlinkSync(resolved)
+        return true
+      } catch (e) {
+        console.error('[wallpaper] delete error:', e.message)
+        return false
+      }
     },
   },
 

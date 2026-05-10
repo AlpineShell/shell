@@ -203,7 +203,10 @@ declare global {
         wallpaper: () => Promise<string | null>
         onWallpaperChanged: (callback: (data: string | null) => void) => void
         setWallpaper: (filePath: string) => Promise<boolean>
-        pickWallpaper: () => Promise<boolean>
+        pickWallpaper: () => Promise<string | null>
+        wallpaperPresets: () => Promise<{ name: string; path: string; thumbnail: string }[]>
+        wallpaperMine: () => Promise<{ name: string; path: string; thumbnail: string; addedAt: number }[]>
+        wallpaperMineDelete: (filePath: string) => Promise<boolean>
         openApps: () => Promise<OpenApp[]>
         onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => void
         openSettings: () => Promise<void>

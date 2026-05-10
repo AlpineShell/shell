@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, Image as ImageIcon } from 'lucide-react'
-import { useWallpaper } from '../../hooks/useWallpaper'
+import { Check } from 'lucide-react'
 
 const PRESET_COLORS = [
   { r: 48, g: 48, b: 48 },
@@ -21,8 +20,7 @@ function colorMatch(a: { r: number; g: number; b: number }, b: { r: number; g: n
   return a.r === b.r && a.g === b.g && a.b === b.b
 }
 
-export default function PersonalizationPage() {
-  const wallpaper = useWallpaper()
+export default function TopBarPage() {
   const [colorOverride, setColorOverride] = useState<{ r: number; g: number; b: number } | null>(null)
   const [palette, setPalette] = useState<{ r: number; g: number; b: number; darkText: boolean }[]>([])
   const [searchIcon, setSearchIcon] = useState(false)
@@ -55,24 +53,10 @@ export default function PersonalizationPage() {
   const isAuto = colorOverride === null
 
   return (
-    <div className="flex flex-col gap-8 max-w-3xl">
-      <Section title="Wallpaper">
-        <div className="flex gap-4 items-end">
-          <div
-            className="w-80 aspect-video rounded-lg bg-neutral-900 bg-cover bg-center border border-white/5 shrink-0"
-            style={wallpaper ? { backgroundImage: `url('${wallpaper}')` } : undefined}
-          />
-          <button
-            onClick={() => window.shell.windows.pickWallpaper()}
-            className="flex items-center gap-2 h-9 px-4 bg-white text-neutral-950 rounded-md font-medium text-sm hover:bg-neutral-200 transition-colors cursor-pointer"
-          >
-            <ImageIcon size={14} />
-            Choose image
-          </button>
-        </div>
-      </Section>
+    <div className="flex flex-col gap-8 w-full">
+      <h1 className="text-2xl font-semibold tracking-tight">Top Bar</h1>
 
-      <Section title="Top bar color" subtitle="Pick a preset or use a color from your wallpaper.">
+      <Section title="Color" subtitle="Pick a preset or use a color from your wallpaper.">
         <div className="flex flex-col gap-4">
           <div>
             <span className="block text-xs text-white/50 mb-2">Presets</span>
@@ -114,7 +98,7 @@ export default function PersonalizationPage() {
         </div>
       </Section>
 
-      <Section title="Top bar">
+      <Section title="Icon">
         <ToggleRow
           label="Show search icon"
           description="Display the search button in the top bar. The hotkey still works either way."
