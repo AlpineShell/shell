@@ -111,7 +111,9 @@ export default function SettingsApp() {
               </button>
             </div>
 
-            <Breadcrumb path={currentPath} onNavigate={navigate} />
+            <div style={noDragRegion}>
+              <Breadcrumb path={currentPath} onNavigate={navigate} />
+            </div>
 
             <div className="flex-1" />
 
@@ -186,7 +188,7 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
             ) : (
               <button
                 onClick={() => onNavigate(subpath)}
-                className="text-[13px] text-white/60 hover:text-white cursor-pointer"
+                className="text-[13px] text-white/60 hover:text-white hover:underline underline-offset-4 decoration-white/30 cursor-pointer"
               >
                 {label}
               </button>
