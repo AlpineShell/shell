@@ -10,18 +10,43 @@ interface WallpaperItem {
   thumbnail: string
 }
 
+const MINE_CACHE = 'alpine.wallpapers.mine'
+const PRESETS_CACHE = 'alpine.wallpapers.presets'
+
+function readCache(key: string): WallpaperItem[] | null {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function writeCache(key: string, list: WallpaperItem[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(list))
+  } catch {}
+}
+
 export default function WallpaperPage() {
   const wallpaper = useWallpaper()
   const [tab, setTab] = useState<Tab>('mine')
-  const [mine, setMine] = useState<WallpaperItem[]>([])
-  const [presets, setPresets] = useState<WallpaperItem[]>([])
-  const [loadedMine, setLoadedMine] = useState(false)
-  const [loadedPresets, setLoadedPresets] = useState(false)
+  const cachedMine = readCache(MINE_CACHE)
+  const cachedPresets = readCache(PRESETS_CACHE)
+  const [mine, setMine] = useState<WallpaperItem[]>(cachedMine ?? [])
+  const [presets, setPresets] = useState<WallpaperItem[]>(cachedPresets ?? [])
+  const [loadedMine, setLoadedMine] = useState(cachedMine !== null)
+  const [loadedPresets, setLoadedPresets] = useState(cachedPresets !== null)
+  const [pendingPath, setPendingPath] = useState<string | null>(null)
 
   function refreshMine() {
     window.shell.windows.wallpaperMine().then((list) => {
-      setMine(list)
+      const sliced = list.map(({ name, path, thumbnail }) => ({ name, path, thumbnail }))
+      setMine(sliced)
       setLoadedMine(true)
+      writeCache(MINE_CACHE, sliced)
     })
   }
 
@@ -30,8 +55,21 @@ export default function WallpaperPage() {
     window.shell.windows.wallpaperPresets().then((list) => {
       setPresets(list)
       setLoadedPresets(true)
+      writeCache(PRESETS_CACHE, list)
     })
   }, [])
+
+  useEffect(() => {
+    if (pendingPath && wallpaper) {
+      const match = [...mine, ...presets].find((w) => w.path === pendingPath)
+      if (match && match.thumbnail === wallpaper) setPendingPath(null)
+    }
+  }, [pendingPath, wallpaper, mine, presets])
+
+  function isSelected(p: WallpaperItem) {
+    if (pendingPath) return p.path === pendingPath
+    return wallpaper === p.thumbnail
+  }
 
   async function uploadWallpaper() {
     const newPath = await window.shell.windows.pickWallpaper()
@@ -39,6 +77,7 @@ export default function WallpaperPage() {
   }
 
   async function applyWallpaper(p: WallpaperItem) {
+    setPendingPath(p.path)
     await window.shell.windows.setWallpaper(p.path)
   }
 
@@ -75,7 +114,7 @@ export default function WallpaperPage() {
                 <WallpaperTile
                   key={p.path}
                   src={p.thumbnail}
-                  selected={wallpaper === p.thumbnail}
+                  selected={isSelected(p)}
                   onClick={() => applyWallpaper(p)}
                   onDelete={() => deleteMine(p)}
                 />
@@ -99,6 +138,7 @@ export default function WallpaperPage() {
                 key={p.path}
                 src={p.thumbnail}
                 label={p.name}
+                selected={isSelected(p)}
                 onClick={() => applyWallpaper(p)}
               />
             ))

@@ -21,6 +21,36 @@ function getMineDir() {
   return path.join(app.getPath('userData'), 'wallpapers')
 }
 
+function getPrefPath() {
+  return path.join(app.getPath('userData'), 'wallpaper.json')
+}
+
+function savePref(filePath) {
+  try {
+    fs.writeFileSync(getPrefPath(), JSON.stringify({ path: filePath }))
+  } catch (e) {
+    console.error('[wallpaper] save pref error:', e.message)
+  }
+}
+
+function loadPref() {
+  try {
+    const raw = fs.readFileSync(getPrefPath(), 'utf8')
+    const data = JSON.parse(raw)
+    return data?.path || null
+  } catch {
+    return null
+  }
+}
+
+let persistTimer = null
+function persistAsync(filePath) {
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, filePath, SPIF_UPDATEINIFILE)
+  }, 800)
+}
+
 function getPath() {
   return new Promise((resolve) => {
     exec(
@@ -48,10 +78,12 @@ function setWallpaper(filePath) {
     SPI_SETDESKWALLPAPER,
     0,
     filePath,
-    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE
+    SPIF_SENDCHANGE
   )
   if (ok) {
     lastPath = filePath
+    savePref(filePath)
+    persistAsync(filePath)
     if (broadcastFn) broadcastFn('windows/wallpaper-changed', encode(filePath))
   }
   return !!ok
@@ -155,6 +187,11 @@ module.exports = {
 
   start(broadcast) {
     broadcastFn = broadcast
+    const saved = loadPref()
+    if (saved && fs.existsSync(saved)) {
+      lastPath = saved
+      SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, saved, SPIF_SENDCHANGE)
+    }
     setInterval(async () => {
       const currentPath = await getPath()
       if (currentPath !== lastPath) {
