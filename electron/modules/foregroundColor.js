@@ -23,6 +23,9 @@ const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uin
 
 const SRCCOPY = 0x00CC0020
 
+let altTab = null
+try { altTab = require('./altTab') } catch (_) {}
+
 const perDisplay = new Map()
 const pendingDisplay = new Map()
 const hwndPerDisplay = new Map()
@@ -110,6 +113,8 @@ function clearDisplay(displayId, broadcast) {
 }
 
 function update(broadcast) {
+  if (altTab && altTab.isSwitcherActive()) return
+
   for (const [displayId, trackedHwnd] of [...hwndPerDisplay.entries()]) {
     if (!trackedHwnd || !IsZoomed(trackedHwnd)) {
       clearDisplay(displayId, broadcast)

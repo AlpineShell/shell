@@ -486,6 +486,10 @@ module.exports = {
     return activeTopBar === win
   },
 
+  isSwitcherActive() {
+    return switcherActive
+  },
+
   setShells(shells) {
     shellsRef = shells
   },
