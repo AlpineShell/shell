@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Command, House, Paintbrush, Search, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Command, House, Paintbrush, Plug, Search, X } from 'lucide-react'
 import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
 import WallpaperPage from './wallpaperPage'
 import TopBarPage from './topBarPage'
 import HotkeysPage from './hotkeysPage'
+import DevicesHub from './devicesHub'
+import BluetoothSettingsPage from './bluetoothSettingsPage'
+import WifiSettingsPage from './wifiSettingsPage'
 
 interface NavItem {
   path: string
@@ -15,6 +18,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { path: 'home', label: 'Home', icon: House },
   { path: 'personalization', label: 'Personalization', icon: Paintbrush },
+  { path: 'devices', label: 'Devices & Connections', icon: Plug },
 ]
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
@@ -161,6 +165,9 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'personalization/wallpaper') return <WallpaperPage />
   if (path === 'personalization/topbar') return <TopBarPage />
   if (path === 'personalization/hotkeys') return <HotkeysPage />
+  if (path === 'devices') return <DevicesHub onNavigate={navigate} />
+  if (path === 'devices/bluetooth') return <BluetoothSettingsPage />
+  if (path === 'devices/wifi') return <WifiSettingsPage />
   return null
 }
 
@@ -170,6 +177,9 @@ const SEGMENT_LABELS: Record<string, string> = {
   wallpaper: 'Wallpaper',
   topbar: 'Top Bar',
   hotkeys: 'Hotkeys',
+  devices: 'Devices & Connections',
+  bluetooth: 'Bluetooth',
+  wifi: 'Wi-Fi',
 }
 
 function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string) => void }) {
