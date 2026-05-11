@@ -13,6 +13,7 @@ const COMPILE_PS1 = path.join(TEMP, 'alpine_compile_filter.ps1')
 const QUERY_PS1 = path.join(TEMP, 'alpine_query_apps.ps1')
 
 let queryReady = false
+let lastApps = null
 
 async function compileDll() {
   try { fs.unlinkSync(DLL_PATH) } catch {}
@@ -139,7 +140,9 @@ function snapshot(apps) {
 module.exports = {
   handlers: {
     'windows/open-apps': async () => {
+      if (lastApps !== null) return lastApps
       const apps = await getOpenApps()
+      lastApps = apps
       lastSnapshot = snapshot(apps)
       return apps
     },
@@ -150,10 +153,11 @@ module.exports = {
     setInterval(async () => {
       const apps = await getOpenApps()
       const current = snapshot(apps)
+      lastApps = apps
       if (current !== lastSnapshot) {
         lastSnapshot = current
         broadcast('windows/open-apps-changed', apps)
       }
-    }, 3000)
+    }, 2000)
   },
 }
