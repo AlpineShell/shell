@@ -288,6 +288,8 @@ function createSettingsWindow() {
     center: true,
     transparent: false,
     skipTaskbar: false,
+    show: false,
+    backgroundColor: '#0a0a0a',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -295,6 +297,9 @@ function createSettingsWindow() {
     },
   })
   settingsWin.loadURL(getURL('settings'))
+  settingsWin.once('ready-to-show', () => {
+    if (settingsWin && !settingsWin.isDestroyed()) settingsWin.show()
+  })
   settingsWin.on('closed', () => {
     settingsWin = null
   })
