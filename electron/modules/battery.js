@@ -1,10 +1,13 @@
 const { exec } = require('child_process')
 const path = require('path')
+const { app } = require('electron')
 
 let lastPercent = undefined
 let lastCharging = undefined
 
-const scriptPath = path.join(__dirname, '..', 'scripts', 'batteryStatus.ps1')
+const scriptPath = app.isPackaged
+  ? path.join(process.resourcesPath, 'scripts', 'batteryStatus.ps1')
+  : path.join(__dirname, '..', 'scripts', 'batteryStatus.ps1')
 
 function getBatteryStatus() {
   return new Promise((resolve) => {

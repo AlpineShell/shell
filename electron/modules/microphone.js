@@ -1,10 +1,13 @@
 const { exec } = require('child_process')
 const path = require('path')
+const { app } = require('electron')
 
 let lastActive = false
 let lastApps = ''
 
-const scriptPath = path.join(__dirname, '..', 'scripts', 'microphoneStatus.ps1')
+const scriptPath = app.isPackaged
+  ? path.join(process.resourcesPath, 'scripts', 'microphoneStatus.ps1')
+  : path.join(__dirname, '..', 'scripts', 'microphoneStatus.ps1')
 
 function getMicrophoneStatus() {
   return new Promise((resolve) => {
