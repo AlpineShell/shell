@@ -39,7 +39,12 @@ function readUrlShortcut(filePath) {
     const urlMatch = content.match(/^URL=(.+)$/m)
     if (!urlMatch) return null
     const iconMatch = content.match(/^IconFile=(.+)$/m)
-    return { target: urlMatch[1].trim(), iconFile: iconMatch ? iconMatch[1].trim() : null }
+    const indexMatch = content.match(/^IconIndex=(-?\d+)$/m)
+    return {
+      target: urlMatch[1].trim(),
+      icon: iconMatch ? iconMatch[1].trim() : null,
+      iconIndex: indexMatch ? parseInt(indexMatch[1], 10) : 0,
+    }
   } catch {
     return null
   }
@@ -89,32 +94,62 @@ foreach ($a in $apps) {
   })
 }
 
-function extractIcons(paths) {
+function extractIcons(specs) {
   return new Promise((resolve) => {
+    const entries = specs.map((s) => `@{ p='${s.path.replace(/'/g, "''")}'; i=${s.index | 0} }`).join(',')
     const script = `
 Add-Type -AssemblyName System.Drawing
-$paths = @(${paths.map((p) => `'${p.replace(/'/g, "''")}'`).join(',')})
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class IconExtractor {
+  [DllImport("shell32.dll", CharSet=CharSet.Unicode)]
+  public static extern uint ExtractIconExW(string lpszFile, int nIconIndex, IntPtr[] phiconLarge, IntPtr[] phiconSmall, uint nIcons);
+  [DllImport("user32.dll")]
+  public static extern int DestroyIcon(IntPtr hIcon);
+}
+'@
+$entries = @(${entries})
 $results = @()
-foreach ($p in $paths) {
+foreach ($e in $entries) {
+  $p = [Environment]::ExpandEnvironmentVariables($e.p)
+  $idx = [int]$e.i
+  $b64 = ''
   try {
-    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
-    $bmp = $icon.ToBitmap()
-    $ms = New-Object System.IO.MemoryStream
-    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-    $results += [Convert]::ToBase64String($ms.ToArray())
-    $ms.Dispose()
-    $bmp.Dispose()
-    $icon.Dispose()
-  } catch {
-    $results += ''
+    $large = New-Object 'IntPtr[]' 1
+    $count = [IconExtractor]::ExtractIconExW($p, $idx, $large, $null, 1)
+    if ($count -gt 0 -and $large[0] -ne [IntPtr]::Zero) {
+      $icon = [System.Drawing.Icon]::FromHandle($large[0])
+      $bmp = $icon.ToBitmap()
+      $ms = New-Object System.IO.MemoryStream
+      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      $b64 = [Convert]::ToBase64String($ms.ToArray())
+      $ms.Dispose()
+      $bmp.Dispose()
+      $icon.Dispose()
+      [void][IconExtractor]::DestroyIcon($large[0])
+    }
+  } catch {}
+  if ([string]::IsNullOrEmpty($b64)) {
+    try {
+      $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+      $bmp = $icon.ToBitmap()
+      $ms = New-Object System.IO.MemoryStream
+      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      $b64 = [Convert]::ToBase64String($ms.ToArray())
+      $ms.Dispose()
+      $bmp.Dispose()
+      $icon.Dispose()
+    } catch {}
   }
+  $results += $b64
 }
 $results -join '|'
 `
     execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 50 * 1024 * 1024 }, (err, stdout) => {
       if (err) {
         console.error('[launcher] icon extraction error:', err.message)
-        return resolve(paths.map(() => null))
+        return resolve(specs.map(() => null))
       }
       const parts = stdout.trim().split('|')
       resolve(parts.map((b64) => b64 && b64.length > 10 ? `data:image/png;base64,${b64}` : null))
@@ -149,7 +184,8 @@ async function buildIndex() {
       name,
       lnkPath: scPath,
       target: info.target,
-      iconSource: info.icon && info.icon.length > 0 ? info.icon : info.target,
+      iconSource: info.icon && info.icon.length > 0 ? info.icon : (isUrl ? null : info.target),
+      iconIndex: info.iconIndex || 0,
       icon: null,
       isUrl,
     })
@@ -184,9 +220,9 @@ async function buildIndex() {
     }
   }).catch((e) => console.error('[launcher] UWP error:', e.message))
 
-  const iconItems = items.filter((i) => i.lnkPath && !i.isUrl)
+  const iconItems = items.filter((i) => i.iconSource && i.iconSource.includes('\\'))
   if (iconItems.length > 0) {
-    const icons = await extractIcons(iconItems.map((i) => i.iconSource))
+    const icons = await extractIcons(iconItems.map((i) => ({ path: i.iconSource, index: i.iconIndex || 0 })))
     let changed = false
     for (let k = 0; k < iconItems.length; k++) {
       if (icons[k]) {
