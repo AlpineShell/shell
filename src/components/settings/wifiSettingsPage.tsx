@@ -9,7 +9,7 @@ function SignalIcon({ signal, color, size }: { signal: number; color: string; si
 }
 
 export default function WifiSettingsPage() {
-  const [enabled, setEnabled] = useState(true)
+  const [enabled, setEnabled] = useState(window.alpineBoot?.wifi?.radio ?? true)
   const [networks, setNetworks] = useState<WifiNetwork[]>([])
   const [scanning, setScanning] = useState(false)
   const [connecting, setConnecting] = useState<string | null>(null)
@@ -18,6 +18,9 @@ export default function WifiSettingsPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    window.shell.network.wifiNetworks().then((cached) => {
+      if (cached.length > 0) setNetworks(cached)
+    })
     window.shell.network.wifiRadioGet().then((r) => {
       if (r.success) setEnabled(r.state === 'on')
     })

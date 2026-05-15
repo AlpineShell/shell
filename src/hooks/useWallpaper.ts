@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 
 declare global {
   interface Window {
-    alpineBoot?: { wallpaper: string | null }
+    alpineBoot?: {
+      wallpaper: string | null
+      bluetooth: { enabled: boolean; connected: boolean; devices: string[] } | null
+      wifi: { status: NetworkStatus; radio: boolean } | null
+    }
   }
 }
 

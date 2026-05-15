@@ -12,6 +12,7 @@ const radioScriptPath = path.join(scriptsDir, 'bluetoothRadio.ps1')
 
 let lastState = undefined
 let cachedState = { enabled: false, connected: false, devices: [] }
+let cachedDevices = []
 let broadcastRef = null
 
 function isRadioEnabled() {
@@ -52,12 +53,13 @@ function scanBluetoothDevices() {
     exec(
       `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}"`,
       (err, stdout) => {
-        if (err || !stdout) return resolve([])
+        if (err || !stdout) return resolve(cachedDevices)
         try {
           const parsed = JSON.parse(stdout.trim())
-          resolve(Array.isArray(parsed) ? parsed : [parsed])
+          cachedDevices = Array.isArray(parsed) ? parsed : [parsed]
+          resolve(cachedDevices)
         } catch {
-          resolve([])
+          resolve(cachedDevices)
         }
       }
     )
@@ -99,6 +101,7 @@ function setBluetoothRadio(action) {
 module.exports = {
   handlers: {
     'system/bluetooth': () => cachedState,
+    'system/bluetooth-devices': () => cachedDevices,
     'system/bluetooth-scan': () => scanBluetoothDevices(),
     'system/bluetooth-toggle': async (_event, { instanceId, action }) => {
       const result = await toggleBluetoothDevice(instanceId, action)
@@ -130,6 +133,10 @@ module.exports = {
 
   start(broadcast) {
     broadcastRef = broadcast
+    const { ipcMain } = require('electron')
+    ipcMain.on('system/bluetooth-init', (event) => {
+      event.returnValue = cachedState
+    })
     async function poll() {
       const current = await getBluetoothState()
       cachedState = current

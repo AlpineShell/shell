@@ -1,9 +1,17 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 let initialWallpaper = null
+let initialBluetooth = null
+let initialWifi = null
 try { initialWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
+try { initialBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
+try { initialWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
 
-contextBridge.exposeInMainWorld('alpineBoot', { wallpaper: initialWallpaper })
+contextBridge.exposeInMainWorld('alpineBoot', {
+  wallpaper: initialWallpaper,
+  bluetooth: initialBluetooth,
+  wifi: initialWifi,
+})
 
 contextBridge.exposeInMainWorld('topbar', {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
@@ -122,6 +130,7 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('network/wifi-signal-changed', (_, data) => callback(data))
     },
     wifiScan: () => ipcRenderer.invoke('network/wifi-scan'),
+    wifiNetworks: () => ipcRenderer.invoke('network/wifi-networks'),
     onWifiScanUpdated: (callback) => {
       ipcRenderer.on('network/wifi-scan-updated', (_, data) => callback(data))
     },
@@ -139,6 +148,7 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('system/bluetooth-devices-changed', (_, data) => callback(data))
     },
     bluetoothScan: () => ipcRenderer.invoke('system/bluetooth-scan'),
+    bluetoothDevices: () => ipcRenderer.invoke('system/bluetooth-devices'),
     bluetoothToggle: (instanceId, action) => ipcRenderer.invoke('system/bluetooth-toggle', { instanceId, action }),
     bluetoothOpenSettings: () => ipcRenderer.invoke('system/bluetooth-settings'),
     bluetoothSetRadio: (enabled) => ipcRenderer.invoke('system/bluetooth-set-radio', enabled),

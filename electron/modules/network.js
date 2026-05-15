@@ -6,6 +6,8 @@ let lastSignal = undefined
 let lastType = undefined
 let lastSsid = undefined
 let cachedStatus = { signal: null, connected: false, type: 'wifi', ssid: null }
+let cachedNetworks = []
+let cachedRadio = true
 
 const scriptsDir = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts')
@@ -47,7 +49,8 @@ function fetchWifiList() {
         if (err || !stdout) return resolve(null)
         try {
           const parsed = JSON.parse(stdout.trim())
-          resolve(Array.isArray(parsed) ? parsed : [parsed])
+          cachedNetworks = Array.isArray(parsed) ? parsed : [parsed]
+          resolve(cachedNetworks)
         } catch {
           resolve(null)
         }
@@ -119,12 +122,18 @@ function wifiRadio(action) {
 module.exports = {
   handlers: {
     'network/wifi-signal': () => cachedStatus,
+    'network/wifi-networks': () => cachedNetworks,
     'network/wifi-scan': () => scanWifiNetworks(),
     'network/wifi-connect': (_event, { ssid, password }) => wifiConnect(ssid, password),
     'network/wifi-disconnect': () => wifiDisconnect(),
-    'network/wifi-radio-get': () => wifiRadio('get'),
+    'network/wifi-radio-get': async () => {
+      const result = await wifiRadio('get')
+      if (result.success) cachedRadio = result.state === 'on'
+      return result
+    },
     'network/wifi-radio-set': async (_event, enabled) => {
       const result = await wifiRadio(enabled ? 'on' : 'off')
+      if (result.success) cachedRadio = result.state === 'on'
       setTimeout(async () => {
         const current = await getNetworkStatus()
         cachedStatus = current
@@ -136,9 +145,17 @@ module.exports = {
 
   start(broadcast) {
     broadcastFn = broadcast;
+    const { ipcMain } = require('electron')
+    ipcMain.on('network/wifi-init', (event) => {
+      event.returnValue = { status: cachedStatus, radio: cachedRadio }
+    })
     async function poll() {
-      const current = await getNetworkStatus()
+      const [current, radio] = await Promise.all([
+        getNetworkStatus(),
+        wifiRadio('get'),
+      ])
       cachedStatus = current
+      if (radio.success) cachedRadio = radio.state === 'on'
       if (current.signal !== lastSignal || current.type !== lastType || current.ssid !== lastSsid) {
         lastSignal = current.signal
         lastType = current.type
