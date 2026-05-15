@@ -81,14 +81,14 @@ export default function WifiSettingsPage() {
     <div className="w-full flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Wi-Fi</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <button
             onClick={scan}
             disabled={scanning || !enabled}
-            className="w-8 h-8 flex items-center justify-center rounded-md bg-white/5 hover:bg-white/10 text-white/80 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="text-white/60 hover:text-white cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label="Rescan"
           >
-            <RefreshCw size={13} className={scanning ? 'animate-spin' : ''} />
+            <RefreshCw size={15} className={scanning ? 'animate-spin' : ''} />
           </button>
           <Toggle checked={enabled} onChange={toggleRadio} />
         </div>
