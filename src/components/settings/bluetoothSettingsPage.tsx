@@ -96,26 +96,28 @@ export default function BluetoothSettingsPage() {
 
 function DeviceRow({ device, busy, onClick }: { device: BluetoothDevice; busy: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={busy}
-      className="flex items-center justify-between gap-4 py-3 px-1 border-b border-white/5 last:border-b-0 cursor-pointer hover:bg-white/3 transition-colors text-left disabled:cursor-default"
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        {device.connected ? (
-          <BluetoothConnected size={16} className="text-white shrink-0" />
-        ) : (
-          <Bluetooth size={16} className="text-white/50 shrink-0" />
-        )}
-        <div className="flex flex-col min-w-0">
-          <span className="text-sm text-white/90 truncate">{device.name}</span>
-          <span className="text-xs text-white/50">
-            {busy ? (device.connected ? 'Disconnecting...' : 'Connecting...') : device.connected ? 'Connected' : device.paired ? 'Paired' : 'Available'}
-          </span>
+    <div className="relative after:content-[''] after:absolute after:bottom-0 after:left-2 after:right-2 after:h-px after:bg-white/3 last:after:hidden">
+      <button
+        onClick={onClick}
+        disabled={busy}
+        className="w-full flex items-center justify-between gap-4 py-3 px-2 rounded-md cursor-pointer hover:bg-white/3 transition-colors text-left disabled:cursor-default"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          {device.connected ? (
+            <BluetoothConnected size={16} className="text-white shrink-0" />
+          ) : (
+            <Bluetooth size={16} className="text-white/50 shrink-0" />
+          )}
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm text-white/90 truncate">{device.name}</span>
+            <span className="text-xs text-white/50">
+              {busy ? (device.connected ? 'Disconnecting...' : 'Connecting...') : device.connected ? 'Connected' : device.paired ? 'Paired' : 'Available'}
+            </span>
+          </div>
         </div>
-      </div>
-      {busy && <Loader2 size={14} className="text-white/60 animate-spin shrink-0" />}
-    </button>
+        {busy && <Loader2 size={14} className="text-white/60 animate-spin shrink-0" />}
+      </button>
+    </div>
   )
 }
 
