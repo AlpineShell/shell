@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, Lock, RefreshCw, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from 'lucide-react'
 
 function SignalIcon({ signal, color, size }: { signal: number; color: string; size: number }) {
@@ -13,6 +13,7 @@ export default function WifiSettingsPage() {
   const [networks, setNetworks] = useState<WifiNetwork[]>([])
   const [scanning, setScanning] = useState(true)
   const [connecting, setConnecting] = useState<string | null>(null)
+  const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [passwordFor, setPasswordFor] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -60,17 +61,20 @@ export default function WifiSettingsPage() {
       setError(ssid)
       return
     }
-    await new Promise((r) => setTimeout(r, 1500))
     setPasswordFor(null)
     setPassword('')
+    await new Promise((r) => setTimeout(r, 1500))
     setConnecting(null)
     scan()
   }
 
-  async function handleDisconnect() {
+  async function handleDisconnect(ssid: string) {
+    setDisconnecting(ssid)
     await window.shell.network.wifiDisconnect()
     await new Promise((r) => setTimeout(r, 1000))
-    scan()
+    const list = await window.shell.network.wifiScan()
+    if (list) setNetworks(list)
+    setDisconnecting(null)
   }
 
   return (
@@ -103,12 +107,13 @@ export default function WifiSettingsPage() {
               key={n.ssid}
               network={n}
               connecting={connecting === n.ssid}
+              disconnecting={disconnecting === n.ssid}
               error={error === n.ssid}
               passwordOpen={passwordFor === n.ssid}
               password={password}
               onClick={() => {
-                if (connecting) return
-                if (n.connected) handleDisconnect()
+                if (connecting || disconnecting) return
+                if (n.connected) handleDisconnect(n.ssid)
                 else if (passwordFor === n.ssid) {
                   setPasswordFor(null)
                   setPassword('')
@@ -130,6 +135,7 @@ export default function WifiSettingsPage() {
 function NetworkRow({
   network,
   connecting,
+  disconnecting,
   error,
   passwordOpen,
   password,
@@ -139,6 +145,7 @@ function NetworkRow({
 }: {
   network: WifiNetwork
   connecting: boolean
+  disconnecting: boolean
   error: boolean
   passwordOpen: boolean
   password: string
@@ -147,6 +154,12 @@ function NetworkRow({
   onPasswordSubmit: () => void
 }) {
   const iconColor = network.connected ? 'white' : 'rgba(255,255,255,0.5)'
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (passwordOpen) requestAnimationFrame(() => inputRef.current?.focus())
+  }, [passwordOpen])
+
   return (
     <div className="border-b border-white/5 last:border-b-0">
       <button
@@ -157,37 +170,46 @@ function NetworkRow({
           <SignalIcon signal={network.signal} color={iconColor} size={16} />
           <div className="flex flex-col min-w-0">
             <span className={`text-sm truncate ${network.connected ? 'text-white' : 'text-white/90'}`}>{network.ssid}</span>
-            {network.connected && <span className="text-xs text-white/50">Connected</span>}
+            {(network.connected || disconnecting) && (
+              <span className="text-xs text-white/50">{disconnecting ? 'Disconnecting…' : 'Connected'}</span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {connecting && <Loader2 size={13} className="text-white/60 animate-spin" />}
+          {(connecting || disconnecting) && <Loader2 size={13} className="text-white/60 animate-spin" />}
           {network.security !== 'Open' && <Lock size={13} className="text-white/50" />}
         </div>
       </button>
-      {passwordOpen && (
-        <div className="flex gap-2 items-center pl-7 pb-3 pr-1">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => onPasswordChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onPasswordSubmit()
-            }}
-            placeholder="Password"
-            autoFocus
-            className={`flex-1 max-w-xs h-8 text-[13px] px-2.5 rounded-md outline-none bg-white/5 text-white placeholder:text-white/30 ${
-              error ? 'ring-1 ring-red-400' : ''
-            }`}
-          />
-          <button
-            onClick={onPasswordSubmit}
-            className="h-8 px-3 rounded-md text-[12px] bg-white text-neutral-950 hover:bg-neutral-200 cursor-pointer transition-colors"
-          >
-            Connect
-          </button>
+      <div
+        className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+        style={{ gridTemplateRows: passwordOpen ? '1fr' : '0fr', opacity: passwordOpen ? 1 : 0 }}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex gap-2 items-center pl-7 pr-1 pb-3 pt-1">
+            <input
+              ref={inputRef}
+              type="password"
+              value={password}
+              tabIndex={passwordOpen ? 0 : -1}
+              onChange={(e) => onPasswordChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onPasswordSubmit()
+              }}
+              placeholder="Password"
+              className={`flex-1 max-w-xs h-8 text-[13px] px-2.5 rounded-md outline-none bg-white/5 text-white placeholder:text-white/30 ${
+                error ? 'ring-1 ring-red-400' : ''
+              }`}
+            />
+            <button
+              onClick={onPasswordSubmit}
+              tabIndex={passwordOpen ? 0 : -1}
+              className="h-8 px-3 rounded-md text-[12px] bg-white text-neutral-950 hover:bg-neutral-200 cursor-pointer transition-colors"
+            >
+              Connect
+            </button>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

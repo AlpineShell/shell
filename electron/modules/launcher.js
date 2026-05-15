@@ -357,7 +357,29 @@ module.exports = {
         })
       } else if (item.appId) {
         const { execFile } = require('child_process')
-        execFile('explorer.exe', [`shell:AppsFolder\\${item.appId}`], (e) => {
+        const escapedAppId = item.appId.replace(/"/g, '\\"')
+        const script = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+[ComImport, Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IApplicationActivationManager {
+  [PreserveSig]
+  int ActivateApplication([In] string appUserModelId, [In] string arguments, [In] uint options, [Out] out uint processId);
+}
+public static class UwpLauncher {
+  public static int Launch(string appId) {
+    Type t = Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C"));
+    object obj = Activator.CreateInstance(t);
+    IApplicationActivationManager iam = (IApplicationActivationManager)obj;
+    uint pid;
+    return iam.ActivateApplication(appId, null, 0, out pid);
+  }
+}
+"@
+[void][UwpLauncher]::Launch("${escapedAppId}")
+`
+        execFile('powershell', ['-NoProfile', '-Command', script], (e) => {
           if (e && e.code !== 1) console.error('[launcher] launch UWP error:', e.message)
         })
       }
