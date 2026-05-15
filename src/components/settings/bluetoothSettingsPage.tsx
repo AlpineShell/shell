@@ -96,7 +96,7 @@ export default function BluetoothSettingsPage() {
 
 function DeviceRow({ device, busy, onClick }: { device: BluetoothDevice; busy: boolean; onClick: () => void }) {
   return (
-    <div className="relative after:content-[''] after:absolute after:bottom-0 after:left-2 after:right-2 after:h-px after:bg-white/3 last:after:hidden hover:after:hidden">
+    <div className="relative after:content-[''] after:absolute after:bottom-0 after:left-2 after:right-2 after:h-px after:bg-white/3 last:after:hidden hover:after:hidden [&:has(+*:hover)]:after:hidden">
       <button
         onClick={onClick}
         disabled={busy}

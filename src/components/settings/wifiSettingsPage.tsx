@@ -161,7 +161,7 @@ function NetworkRow({
   }, [passwordOpen])
 
   return (
-    <div className="relative after:content-[''] after:absolute after:bottom-0 after:left-2 after:right-2 after:h-px after:bg-white/3 last:after:hidden">
+    <div className="relative after:content-[''] after:absolute after:bottom-0 after:left-2 after:right-2 after:h-px after:bg-white/3 last:after:hidden hover:after:hidden [&:has(+*:hover)]:after:hidden">
       <button
         onClick={onClick}
         className="w-full flex items-center justify-between gap-4 py-3 px-2 rounded-md cursor-pointer hover:bg-white/3 transition-colors text-left"
