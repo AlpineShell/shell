@@ -1,5 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+let initialWallpaper = null
+try { initialWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
+
+contextBridge.exposeInMainWorld('alpineBoot', { wallpaper: initialWallpaper })
+
 contextBridge.exposeInMainWorld('topbar', {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
   setHeight: (height) => ipcRenderer.send('topbar/set-height', height),

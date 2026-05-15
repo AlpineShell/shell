@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 
-let wallpaperCache: string | null = null
+declare global {
+  interface Window {
+    alpineBoot?: { wallpaper: string | null }
+  }
+}
+
+let wallpaperCache: string | null = window.alpineBoot?.wallpaper ?? null
 
 export function useWallpaper() {
   const [value, setValue] = useState<string | null>(wallpaperCache)

@@ -1,5 +1,5 @@
 const { exec } = require('child_process')
-const { dialog, app } = require('electron')
+const { dialog, app, ipcMain } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const koffi = require('koffi')
@@ -63,25 +63,10 @@ function getPath() {
   })
 }
 
-let cachedEncoded = null
-let cachedEncodedPath = null
-let cachedEncodedMtime = 0
-
 function encode(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null
-
   const mtime = fs.statSync(filePath).mtimeMs
-  if (cachedEncodedPath === filePath && cachedEncodedMtime === mtime && cachedEncoded) {
-    return cachedEncoded
-  }
-
-  const ext = path.extname(filePath).slice(1).toLowerCase()
-  const mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`
-  const data = fs.readFileSync(filePath).toString('base64')
-  cachedEncoded = `data:${mime};base64,${data}`
-  cachedEncodedPath = filePath
-  cachedEncodedMtime = mtime
-  return cachedEncoded
+  return `alpine-wallpaper://image?p=${encodeURIComponent(filePath)}&v=${mtime}`
 }
 
 function setWallpaper(filePath) {
@@ -103,10 +88,7 @@ function setWallpaper(filePath) {
 
 module.exports = {
   handlers: {
-    'windows/wallpaper': async () => {
-      lastPath = await getPath()
-      return encode(lastPath)
-    },
+    'windows/wallpaper': () => encode(lastPath),
     'windows/wallpaper-set': async (_event, filePath) => {
       return setWallpaper(filePath)
     },
@@ -204,6 +186,10 @@ module.exports = {
       lastPath = saved
       SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, saved, SPIF_SENDCHANGE)
     }
+
+    ipcMain.on('windows/wallpaper-init', (event) => {
+      event.returnValue = encode(lastPath)
+    })
     setInterval(async () => {
       const currentPath = await getPath()
       if (currentPath !== lastPath) {

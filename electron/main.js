@@ -1,5 +1,10 @@
-const { app, BrowserWindow, screen, ipcMain } = require('electron')
+const { app, BrowserWindow, screen, ipcMain, protocol, net } = require('electron')
 const path = require('path')
+const { pathToFileURL } = require('url')
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'alpine-wallpaper', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } },
+])
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
 const network = require('./modules/network')
@@ -322,6 +327,23 @@ app.whenReady().then(async () => {
     app.quit()
     return
   }
+
+  const wallpaperExts = new Set(['.jpg', '.jpeg', '.png', '.bmp', '.webp'])
+  protocol.handle('alpine-wallpaper', async (request) => {
+    const url = new URL(request.url)
+    const filePath = url.searchParams.get('p')
+    if (!filePath) return new Response(null, { status: 400 })
+    const ext = path.extname(filePath).toLowerCase()
+    if (!wallpaperExts.has(ext)) return new Response(null, { status: 403 })
+    const response = await net.fetch(pathToFileURL(filePath).href)
+    return new Response(response.body, {
+      status: response.status,
+      headers: {
+        ...Object.fromEntries(response.headers),
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
+    })
+  })
 
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, launcherHotkey)
 
