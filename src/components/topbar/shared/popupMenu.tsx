@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTopbarBg, useDarkText, useFullscreenWindow, useMenuOpenChange } from "../../themeContext";
 
 const CORNER = 12;
@@ -51,10 +51,14 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         });
     }
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!open) return;
         repositionPopup();
         reportMenuBounds();
+    }, [open]);
+
+    useEffect(() => {
+        if (!open) return;
         const popup = popupRef.current;
         if (!popup) return;
         let prevWidth = popup.offsetWidth;
@@ -91,8 +95,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         const rect = wrapper.getBoundingClientRect();
         const popupWidth = popup.offsetWidth;
         const centerX = rect.left + rect.width / 2;
-        const left = Math.max(SCREEN_PAD, Math.min(centerX - popupWidth / 2, window.innerWidth - popupWidth - SCREEN_PAD));
-        setPopupStyle({ position: "fixed", top: rect.bottom, left });
+        const left = Math.round(Math.max(SCREEN_PAD, Math.min(centerX - popupWidth / 2, window.innerWidth - popupWidth - SCREEN_PAD)));
+        setPopupStyle({ position: "fixed", top: Math.round(rect.bottom), left });
     }
 
     function handleEnter() {
@@ -103,8 +107,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             if (forceCloseActive) forceCloseActive();
             if (wrapperRef.current) {
                 const rect = wrapperRef.current.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                setPopupStyle({ position: "fixed", top: rect.bottom, left: centerX });
+                setPopupStyle({ position: "fixed", top: Math.round(rect.bottom), left: -9999 });
             }
             window.topbar.setHeight(500);
             requestAnimationFrame(() => setOpen(true));
