@@ -58,18 +58,38 @@ foreach ($a in $apps) {
   $icon = ''
   try {
     $family = ($a.AppID -split '!')[0]
+    $appPart = ($a.AppID -split '!')[1]
     $pkg = Get-AppxPackage | Where-Object { $_.PackageFamilyName -eq $family } | Select-Object -First 1
     if ($pkg) {
       $manifest = Get-AppxPackageManifest -Package $pkg.PackageFullName
-      $logo = $manifest.Package.Properties.Logo
-      $logoDir = Split-Path (Join-Path $pkg.InstallLocation $logo)
-      $logoBase = [System.IO.Path]::GetFileNameWithoutExtension($logo)
-      $logoExt = [System.IO.Path]::GetExtension($logo)
-      $candidates = Get-ChildItem $logoDir -Filter "$logoBase*" -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match '\\.(png|jpg|jpeg)$' } | Sort-Object { $_.Length } -Descending
-      $best = $candidates | Select-Object -First 1
-      if ($best) {
-        $bytes = [System.IO.File]::ReadAllBytes($best.FullName)
-        $icon = [Convert]::ToBase64String($bytes)
+      $allApps = @($manifest.Package.Applications.Application)
+      $app = $null
+      if ($appPart) { $app = $allApps | Where-Object { $_.Id -eq $appPart } | Select-Object -First 1 }
+      if (-not $app) { $app = $allApps[0] }
+      $logo = $null
+      if ($app -and $app.VisualElements) {
+        if ($app.VisualElements.Square44x44Logo) { $logo = $app.VisualElements.Square44x44Logo }
+        elseif ($app.VisualElements.Square150x150Logo) { $logo = $app.VisualElements.Square150x150Logo }
+      }
+      if (-not $logo) { $logo = $manifest.Package.Properties.Logo }
+      if ($logo) {
+        $logoDir = Split-Path (Join-Path $pkg.InstallLocation $logo)
+        $logoBase = [System.IO.Path]::GetFileNameWithoutExtension($logo)
+        $pattern = "^" + [Regex]::Escape($logoBase) + "\\.scale-(\\d+)\\.(png|jpg|jpeg)$"
+        $best = Get-ChildItem $logoDir -ErrorAction SilentlyContinue |
+          Where-Object { $_.Name -match $pattern } |
+          Sort-Object @{ Expression = { [int]([Regex]::Match($_.Name, 'scale-(\\d+)').Groups[1].Value) }; Descending = $true } |
+          Select-Object -First 1
+        if (-not $best) {
+          $best = Get-ChildItem $logoDir -Filter "$logoBase*" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -match '\\.(png|jpg|jpeg)$' -and $_.Name -notmatch 'contrast' } |
+            Sort-Object Length -Descending |
+            Select-Object -First 1
+        }
+        if ($best) {
+          $bytes = [System.IO.File]::ReadAllBytes($best.FullName)
+          $icon = [Convert]::ToBase64String($bytes)
+        }
       }
     }
   } catch {}
