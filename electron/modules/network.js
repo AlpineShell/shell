@@ -128,12 +128,24 @@ module.exports = {
     'network/wifi-disconnect': () => wifiDisconnect(),
     'network/wifi-radio-get': async () => {
       const result = await wifiRadio('get')
-      if (result.success) cachedRadio = result.state === 'on'
+      if (result.success) {
+        const newRadio = result.state === 'on'
+        if (newRadio !== cachedRadio) {
+          cachedRadio = newRadio
+          if (broadcastFn) broadcastFn('network/wifi-radio-changed', cachedRadio)
+        }
+      }
       return result
     },
     'network/wifi-radio-set': async (_event, enabled) => {
       const result = await wifiRadio(enabled ? 'on' : 'off')
-      if (result.success) cachedRadio = result.state === 'on'
+      if (result.success) {
+        const newRadio = result.state === 'on'
+        if (newRadio !== cachedRadio) {
+          cachedRadio = newRadio
+          if (broadcastFn) broadcastFn('network/wifi-radio-changed', cachedRadio)
+        }
+      }
       setTimeout(async () => {
         const current = await getNetworkStatus()
         cachedStatus = current
@@ -155,7 +167,13 @@ module.exports = {
         wifiRadio('get'),
       ])
       cachedStatus = current
-      if (radio.success) cachedRadio = radio.state === 'on'
+      if (radio.success) {
+        const newRadio = radio.state === 'on'
+        if (newRadio !== cachedRadio) {
+          cachedRadio = newRadio
+          broadcast('network/wifi-radio-changed', cachedRadio)
+        }
+      }
       if (current.signal !== lastSignal || current.type !== lastType || current.ssid !== lastSsid) {
         lastSignal = current.signal
         lastType = current.type

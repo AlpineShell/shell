@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { Bluetooth, BluetoothConnected, Loader2, Plus, RefreshCw } from 'lucide-react'
 
 export default function BluetoothSettingsPage() {
-  const [enabled, setEnabled] = useState(window.alpineBoot?.bluetooth?.enabled ?? false)
+  const [enabled, setEnabled] = useState(window.alpineBoot?.bluetooth()?.enabled ?? false)
   const [devices, setDevices] = useState<BluetoothDevice[]>([])
-  const [scanning, setScanning] = useState(false)
+  const [scanning, setScanning] = useState(true)
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
   useEffect(() => {

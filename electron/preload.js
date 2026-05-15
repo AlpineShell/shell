@@ -1,16 +1,27 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
-let initialWallpaper = null
-let initialBluetooth = null
-let initialWifi = null
-try { initialWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
-try { initialBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
-try { initialWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
+let bootWallpaper = null
+let bootBluetooth = null
+let bootWifi = null
+try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
+try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
+try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
+
+ipcRenderer.on('windows/wallpaper-changed', (_, data) => { bootWallpaper = data })
+ipcRenderer.on('system/bluetooth-changed', (_, data) => { bootBluetooth = data })
+ipcRenderer.on('network/wifi-radio-changed', (_, radio) => {
+  if (bootWifi) bootWifi.radio = radio
+  else bootWifi = { status: null, radio }
+})
+ipcRenderer.on('network/wifi-signal-changed', (_, status) => {
+  if (bootWifi) bootWifi.status = status
+  else bootWifi = { status, radio: true }
+})
 
 contextBridge.exposeInMainWorld('alpineBoot', {
-  wallpaper: initialWallpaper,
-  bluetooth: initialBluetooth,
-  wifi: initialWifi,
+  wallpaper: () => bootWallpaper,
+  bluetooth: () => bootBluetooth,
+  wifi: () => bootWifi,
 })
 
 contextBridge.exposeInMainWorld('topbar', {
