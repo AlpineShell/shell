@@ -133,6 +133,9 @@ declare global {
     hasStartup: boolean
     hasCursor: boolean
     gpoBlocked: boolean
+    isInstalled: boolean
+    installedVersion: string | null
+    currentVersion: string
   }
 
   interface LauncherItem {
@@ -150,6 +153,8 @@ declare global {
       skip: () => Promise<void>
       relaunch: () => Promise<void>
       restartWindows: () => Promise<void>
+      revertShell: () => Promise<{ success: boolean }>
+      uninstall: () => Promise<{ success: boolean }>
       onProgress: (callback: (step: string) => void) => void
     }
     launcher: {

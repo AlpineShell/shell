@@ -86,6 +86,8 @@ contextBridge.exposeInMainWorld('setup', {
   skip: () => ipcRenderer.invoke('setup/skip'),
   relaunch: () => ipcRenderer.invoke('setup/relaunch'),
   restartWindows: () => ipcRenderer.invoke('setup/restart-windows'),
+  revertShell: () => ipcRenderer.invoke('setup/revert-shell'),
+  uninstall: () => ipcRenderer.invoke('setup/uninstall'),
   onProgress: (callback) => {
     ipcRenderer.on('setup/progress', (_, step) => callback(step))
   },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Command, House, Paintbrush, Plug, Search, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Command, House, MonitorCog, Paintbrush, Plug, Search, X } from 'lucide-react'
 import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
 import WallpaperPage from './wallpaperPage'
@@ -8,6 +8,8 @@ import HotkeysPage from './hotkeysPage'
 import DevicesHub from './devicesHub'
 import BluetoothSettingsPage from './bluetoothSettingsPage'
 import WifiSettingsPage from './wifiSettingsPage'
+import SystemPage from './systemPage'
+import SystemRevertPage from './systemRevertPage'
 
 interface NavItem {
   path: string
@@ -19,6 +21,7 @@ const NAV: NavItem[] = [
   { path: 'home', label: 'Home', icon: House },
   { path: 'personalization', label: 'Personalization', icon: Paintbrush },
   { path: 'devices', label: 'Devices & Connections', icon: Plug },
+  { path: 'system', label: 'System', icon: MonitorCog },
 ]
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
@@ -168,6 +171,8 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'devices') return <DevicesHub onNavigate={navigate} />
   if (path === 'devices/bluetooth') return <BluetoothSettingsPage />
   if (path === 'devices/wifi') return <WifiSettingsPage />
+  if (path === 'system') return <SystemPage onNavigate={navigate} />
+  if (path === 'system/revert') return <SystemRevertPage />
   return null
 }
 
@@ -180,6 +185,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   devices: 'Devices & Connections',
   bluetooth: 'Bluetooth',
   wifi: 'Wi-Fi',
+  system: 'System',
+  revert: 'Revert back to Windows',
 }
 
 function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string) => void }) {

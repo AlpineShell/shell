@@ -33,12 +33,35 @@ function regAdd(keyPath, valueName, value, type = 'REG_SZ') {
   execFileSync('reg', ['add', keyPath, '/v', valueName, '/t', type, '/d', value, '/f'], { windowsHide: true })
 }
 
+function regQuery(keyPath, valueName) {
+  try {
+    const result = execSync(`reg query "${keyPath}" /v "${valueName}"`, { windowsHide: true, encoding: 'utf8' })
+    const match = result.match(/REG_\w+\s+(.+)/)
+    return match ? match[1].trim() : null
+  } catch {
+    return null
+  }
+}
+
 function regDelete(keyPath, valueName) {
   execFileSync('reg', ['delete', keyPath, '/v', valueName, '/f'], { windowsHide: true })
 }
 
 function regDeleteKey(keyPath) {
   execFileSync('reg', ['delete', keyPath, '/f'], { windowsHide: true })
+}
+
+function getInstalledVersion() {
+  return regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\AlpineShell', 'DisplayVersion')
+}
+
+function revertShell() {
+  try { regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', 'explorer.exe') } catch {}
+  try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell') } catch {}
+  try { regAdd('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'AutoRestartShell', '1', 'REG_DWORD') } catch {}
+  try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'RestartApps') } catch {}
+  try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
+  try { execSync('schtasks /change /tn "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" /enable', { windowsHide: true }) } catch {}
 }
 
 async function installFiles() {
@@ -142,9 +165,11 @@ module.exports = {
   getInstalledExePath,
   isPortableRun,
   isInstalled,
+  getInstalledVersion,
   installFiles,
   createShortcuts,
   registerUninstaller,
   uninstall,
+  revertShell,
   relaunchFromInstalled,
 }

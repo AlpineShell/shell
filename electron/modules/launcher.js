@@ -10,10 +10,6 @@ const SCAN_DIRS = [
   path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
 ]
 
-const SKIP_NAMES = new Set([
-  'uninstall', 'uninstaller', 'readme', 'license', 'help', 'documentation',
-])
-
 let index = []
 let broadcast = null
 let shells = null
@@ -23,25 +19,29 @@ let hideTimeout = null
 
 const LAUNCHER_WIDTH = 600
 
-function shouldSkipShortcut(file) {
-  const lower = file.toLowerCase().replace(/\.lnk$/, '')
-  for (const skip of SKIP_NAMES) {
-    if (lower.includes(skip)) return true
-  }
-  return false
-}
-
-function walkLnks(dir, out) {
+function walkShortcuts(dir, out) {
   let entries
   try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
   for (const entry of entries) {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-      walkLnks(full, out)
-    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.lnk')) {
-      if (shouldSkipShortcut(entry.name)) continue
-      out.push(full)
+      walkShortcuts(full, out)
+    } else if (entry.isFile()) {
+      const lower = entry.name.toLowerCase()
+      if (lower.endsWith('.lnk') || lower.endsWith('.url')) out.push(full)
     }
+  }
+}
+
+function readUrlShortcut(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8')
+    const urlMatch = content.match(/^URL=(.+)$/m)
+    if (!urlMatch) return null
+    const iconMatch = content.match(/^IconFile=(.+)$/m)
+    return { target: urlMatch[1].trim(), iconFile: iconMatch ? iconMatch[1].trim() : null }
+  } catch {
+    return null
   }
 }
 
@@ -123,21 +123,23 @@ $results -join '|'
 }
 
 async function buildIndex() {
-  const lnkPaths = []
-  for (const dir of SCAN_DIRS) walkLnks(dir, lnkPaths)
+  const shortcutPaths = []
+  for (const dir of SCAN_DIRS) walkShortcuts(dir, shortcutPaths)
 
   const seenNames = new Set()
   const items = []
 
-  for (const lnkPath of lnkPaths) {
+  for (const scPath of shortcutPaths) {
+    const isUrl = scPath.toLowerCase().endsWith('.url')
     let info
-    try { info = electronShell.readShortcutLink(lnkPath) } catch { continue }
+    if (isUrl) {
+      info = readUrlShortcut(scPath)
+    } else {
+      try { info = electronShell.readShortcutLink(scPath) } catch { continue }
+    }
     if (!info?.target) continue
 
-    const targetLower = info.target.toLowerCase()
-    if (!targetLower.endsWith('.exe') && !info.appUserModelId) continue
-
-    const name = path.basename(lnkPath, '.lnk')
+    const name = path.basename(scPath, path.extname(scPath))
     const dedupeKey = name.toLowerCase()
     if (seenNames.has(dedupeKey)) continue
     seenNames.add(dedupeKey)
@@ -145,9 +147,11 @@ async function buildIndex() {
     items.push({
       id: items.length,
       name,
-      lnkPath,
+      lnkPath: scPath,
       target: info.target,
+      iconSource: info.icon && info.icon.length > 0 ? info.icon : info.target,
       icon: null,
+      isUrl,
     })
   }
 
@@ -180,18 +184,14 @@ async function buildIndex() {
     }
   }).catch((e) => console.error('[launcher] UWP error:', e.message))
 
-  const iconPaths = items.filter((i) => i.lnkPath).map((i) => i.target)
-  if (iconPaths.length > 0) {
-    const icons = await extractIcons(iconPaths)
-    let iconIdx = 0
+  const iconItems = items.filter((i) => i.lnkPath && !i.isUrl)
+  if (iconItems.length > 0) {
+    const icons = await extractIcons(iconItems.map((i) => i.iconSource))
     let changed = false
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].lnkPath) {
-        if (icons[iconIdx]) {
-          items[i].icon = icons[iconIdx]
-          changed = true
-        }
-        iconIdx++
+    for (let k = 0; k < iconItems.length; k++) {
+      if (icons[k]) {
+        iconItems[k].icon = icons[k]
+        changed = true
       }
     }
     if (changed && broadcast) broadcast('launcher/index-changed', index)
@@ -310,14 +310,20 @@ module.exports = {
       if (!item) return { success: false }
       animatedHide()
       if (item.lnkPath) {
-        electronShell.openPath(item.lnkPath).catch((e) => console.error('[launcher] launch error:', e.message))
+        electronShell.openPath(item.lnkPath).then((err) => {
+          if (err) {
+            console.error('[launcher] openPath failed for', item.lnkPath, '-', err)
+            const { execFile } = require('child_process')
+            execFile('explorer.exe', [item.lnkPath], (e) => {
+              if (e && e.code !== 1) console.error('[launcher] explorer fallback error:', e.message)
+            })
+          }
+        })
       } else if (item.appId) {
         const { execFile } = require('child_process')
-        const family = item.appId.split('!')[0]
-        const appPart = item.appId.split('!')[1] || ''
-        execFile('powershell', ['-NoProfile', '-Command',
-          `$pkg = Get-AppxPackage | Where-Object { $_.PackageFamilyName -eq '${family.replace(/'/g, "''")}' } | Select-Object -First 1; if ($pkg) { $m = Get-AppxPackageManifest $pkg; $apps = @($m.Package.Applications.Application); $a = if ('${appPart}') { $apps | Where-Object { $_.Id -eq '${appPart}' } | Select-Object -First 1 } else { $apps[0] }; if ($a) { Start-Process (Join-Path $pkg.InstallLocation $a.Executable) } }`
-        ], (e) => { if (e) console.error('[launcher] launch UWP error:', e.message) })
+        execFile('explorer.exe', [`shell:AppsFolder\\${item.appId}`], (e) => {
+          if (e && e.code !== 1) console.error('[launcher] launch UWP error:', e.message)
+        })
       }
       return { success: true }
     },

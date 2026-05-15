@@ -133,6 +133,9 @@ function getSetupStatus() {
     hasStartup: startupEntry !== null,
     hasCursor: currentCursor === 'Alpine Shell',
     gpoBlocked: hasGpoShellOverride(),
+    isInstalled: installer.isInstalled(),
+    installedVersion: installer.getInstalledVersion(),
+    currentVersion: app.getVersion(),
   }
 }
 
@@ -239,6 +242,14 @@ module.exports = {
     'setup/restart-windows': () => {
       execSync('shutdown /r /t 5 /c "Restarting to apply Alpine Shell"', { windowsHide: true })
       app.exit()
+    },
+    'setup/revert-shell': () => {
+      installer.revertShell()
+      return { success: true }
+    },
+    'setup/uninstall': () => {
+      installer.uninstall()
+      return { success: true }
     },
   },
 

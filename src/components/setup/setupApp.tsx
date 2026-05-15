@@ -36,6 +36,11 @@ export default function SetupApp() {
     window.setup.onProgress(setCurrentStep)
   }, [])
 
+  const isUpdate = !!status?.isInstalled
+  const verb = isUpdate ? 'Update' : 'Install'
+  const verbIng = isUpdate ? 'Updating' : 'Installing'
+  const verbPast = isUpdate ? 'updated' : 'installed'
+
   async function handleInstall() {
     setCurrentStep('')
     setPage('installing')
@@ -72,13 +77,13 @@ export default function SetupApp() {
                 onClick={handleInstall}
                 className="mt-20 w-full h-11 bg-white cursor-pointer text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors"
               >
-                Install Preset
+                {verb} Preset
               </button>
               <button
                 onClick={() => setPage('options')}
                 className="mt-3 w-full h-11 cursor-pointer text-white text-sm hover:text-neutral-300 transition-colors"
               >
-                Customize Install
+                Customize {verb}
               </button>
             </div>
           </div>
@@ -124,7 +129,7 @@ export default function SetupApp() {
                 onClick={handleInstall}
                 className="w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
               >
-                Install
+                {verb}
               </button>
               <button
                 onClick={() => setPage('welcome')}
@@ -139,7 +144,7 @@ export default function SetupApp() {
         {page === 'installing' && (
           <div className="flex-1 flex flex-col items-center justify-center">
             <div className="w-8 h-8 border-2 border-neutral-700 border-t-white rounded-full animate-spin" />
-            <p className="mt-5 text-[15px]">Installing</p>
+            <p className="mt-5 text-[15px]">{verbIng}</p>
             <p className="mt-2 text-xs text-neutral-600 h-4 transition-all">
               {currentStep}
             </p>
@@ -152,9 +157,9 @@ export default function SetupApp() {
               <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
                 <X size={24} strokeWidth={2.5} className="text-red-400" />
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight mt-5">Installation failed</h1>
+              <h1 className="text-2xl font-semibold tracking-tight mt-5">{isUpdate ? 'Update' : 'Installation'} failed</h1>
               <p className="text-neutral-500 text-sm mt-2 leading-relaxed">
-                Something went wrong during installation.
+                Something went wrong during {isUpdate ? 'the update' : 'installation'}.
               </p>
               <p className="mt-3 text-xs text-red-400/80 bg-red-400/5 rounded-lg px-3 py-2 font-mono break-all">
                 {result.error}
@@ -183,9 +188,9 @@ export default function SetupApp() {
               <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
                 <Check size={24} strokeWidth={2.5} />
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight mt-5">Setup complete</h1>
+              <h1 className="text-2xl font-semibold tracking-tight mt-5">{isUpdate ? 'Update complete' : 'Setup complete'}</h1>
               <p className="text-neutral-500 text-sm mt-2 leading-relaxed">
-                Restart your computer to start using Alpine Shell.
+                Restart your computer to {verbPast === 'updated' ? 'finish updating' : 'start using'} Alpine Shell.
               </p>
 
               <div className="mt-5 space-y-1.5 text-xs text-neutral-600">
