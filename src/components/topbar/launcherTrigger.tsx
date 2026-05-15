@@ -16,7 +16,7 @@ export default function LauncherTrigger() {
 
   return (
     <button
-      onClick={() => window.launcher.show()}
+      onMouseEnter={() => window.launcher.show()}
       className={`flex items-center gap-1.5 px-2 h-5 rounded-full cursor-pointer transition-colors ${
         darkText ? 'hover:bg-black/10' : 'hover:bg-white/10'
       }`}
