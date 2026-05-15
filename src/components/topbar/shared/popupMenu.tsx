@@ -57,7 +57,11 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         reportMenuBounds();
         const popup = popupRef.current;
         if (!popup) return;
-        const observer = new ResizeObserver(() => {
+        let prevWidth = popup.offsetWidth;
+        const observer = new ResizeObserver((entries) => {
+            const width = entries[0]?.contentRect.width ?? popup.offsetWidth;
+            if (width === prevWidth) return;
+            prevWidth = width;
             repositionPopup();
             reportMenuBounds();
         });

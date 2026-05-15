@@ -63,13 +63,25 @@ function getPath() {
   })
 }
 
+let cachedEncoded = null
+let cachedEncodedPath = null
+let cachedEncodedMtime = 0
+
 function encode(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null
+
+  const mtime = fs.statSync(filePath).mtimeMs
+  if (cachedEncodedPath === filePath && cachedEncodedMtime === mtime && cachedEncoded) {
+    return cachedEncoded
+  }
 
   const ext = path.extname(filePath).slice(1).toLowerCase()
   const mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`
   const data = fs.readFileSync(filePath).toString('base64')
-  return `data:${mime};base64,${data}`
+  cachedEncoded = `data:${mime};base64,${data}`
+  cachedEncodedPath = filePath
+  cachedEncodedMtime = mtime
+  return cachedEncoded
 }
 
 function setWallpaper(filePath) {
