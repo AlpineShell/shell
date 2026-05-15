@@ -11,6 +11,7 @@ const toggleScriptPath = path.join(scriptsDir, 'bluetoothToggle.ps1')
 const radioScriptPath = path.join(scriptsDir, 'bluetoothRadio.ps1')
 
 let lastState = undefined
+let cachedState = { enabled: false, connected: false, devices: [] }
 let broadcastRef = null
 
 function isRadioEnabled() {
@@ -97,7 +98,7 @@ function setBluetoothRadio(action) {
 
 module.exports = {
   handlers: {
-    'system/bluetooth': () => getBluetoothState(),
+    'system/bluetooth': () => cachedState,
     'system/bluetooth-scan': () => scanBluetoothDevices(),
     'system/bluetooth-toggle': async (_event, { instanceId, action }) => {
       const result = await toggleBluetoothDevice(instanceId, action)
@@ -107,6 +108,7 @@ module.exports = {
           getBluetoothState(),
           scanBluetoothDevices(),
         ])
+        cachedState = state
         lastState = `${state.enabled}:${state.connected}`
         broadcastRef?.('system/bluetooth-changed', state)
         broadcastRef?.('system/bluetooth-devices-changed', devices)
@@ -118,6 +120,7 @@ module.exports = {
       const result = await setBluetoothRadio(enabled ? 'on' : 'off')
       setTimeout(async () => {
         const state = await getBluetoothState()
+        cachedState = state
         lastState = `${state.enabled}:${state.connected}`
         broadcastRef?.('system/bluetooth-changed', state)
       }, 1500)
@@ -127,13 +130,16 @@ module.exports = {
 
   start(broadcast) {
     broadcastRef = broadcast
-    setInterval(async () => {
+    async function poll() {
       const current = await getBluetoothState()
+      cachedState = current
       const key = `${current.enabled}:${current.connected}`
       if (key !== lastState) {
         lastState = key
         broadcast('system/bluetooth-changed', current)
       }
-    }, 5000)
+    }
+    poll()
+    setInterval(poll, 5000)
   },
 }

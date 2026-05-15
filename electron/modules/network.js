@@ -5,6 +5,7 @@ const path = require('path')
 let lastSignal = undefined
 let lastType = undefined
 let lastSsid = undefined
+let cachedStatus = { signal: null, connected: false, type: 'wifi', ssid: null }
 
 const scriptsDir = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts')
@@ -117,7 +118,7 @@ function wifiRadio(action) {
 
 module.exports = {
   handlers: {
-    'network/wifi-signal': () => getNetworkStatus(),
+    'network/wifi-signal': () => cachedStatus,
     'network/wifi-scan': () => scanWifiNetworks(),
     'network/wifi-connect': (_event, { ssid, password }) => wifiConnect(ssid, password),
     'network/wifi-disconnect': () => wifiDisconnect(),
@@ -126,6 +127,7 @@ module.exports = {
       const result = await wifiRadio(enabled ? 'on' : 'off')
       setTimeout(async () => {
         const current = await getNetworkStatus()
+        cachedStatus = current
         if (broadcastFn) broadcastFn('network/wifi-signal-changed', current)
       }, 1500)
       return result
@@ -134,14 +136,17 @@ module.exports = {
 
   start(broadcast) {
     broadcastFn = broadcast;
-    setInterval(async () => {
+    async function poll() {
       const current = await getNetworkStatus()
+      cachedStatus = current
       if (current.signal !== lastSignal || current.type !== lastType || current.ssid !== lastSsid) {
         lastSignal = current.signal
         lastType = current.type
         lastSsid = current.ssid
         broadcast('network/wifi-signal-changed', current)
       }
-    }, 10000)
+    }
+    poll()
+    setInterval(poll, 10000)
   },
 }
