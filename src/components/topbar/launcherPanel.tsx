@@ -1,11 +1,23 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2 } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
+import { useWallpaper } from "../../hooks/useWallpaper"
 
 const CORNER = 12
 const MAX_RESULTS = 5
-const LAUNCHER_WIDTH = 600
+const LAUNCHER_WIDTH_DEFAULT = 600
+const WALLPAPER_TILE_WIDTH = 200
+const WALLPAPER_TILE_GAP = 12
+const WALLPAPER_PANEL_PADDING_X = 16
+const WALLPAPER_MAX_VISIBLE = 5
+const WIDTH_TRANSITION = "width 240ms cubic-bezier(0.16, 1, 0.3, 1), left 240ms cubic-bezier(0.16, 1, 0.3, 1)"
+
+function wallpaperPanelWidth(visibleCount: number): number {
+  if (visibleCount <= 0) return LAUNCHER_WIDTH_DEFAULT
+  const tiles = Math.min(visibleCount, WALLPAPER_MAX_VISIBLE)
+  return tiles * WALLPAPER_TILE_WIDTH + (tiles - 1) * WALLPAPER_TILE_GAP + WALLPAPER_PANEL_PADDING_X * 2
+}
 
 function score(query: string, name: string): number {
   const q = query.toLowerCase()
@@ -91,6 +103,26 @@ interface LauncherPanelProps {
   onGapChange: (gap: { left: number; right: number } | null) => void
 }
 
+type SettingId = "wallpaper"
+
+interface SettingCommand {
+  id: SettingId
+  label: string
+  hint: string
+  icon: typeof Wallpaper
+  keywords: string[]
+}
+
+const SETTINGS: SettingCommand[] = [
+  {
+    id: "wallpaper",
+    label: "Wallpaper",
+    hint: "Change your desktop wallpaper",
+    icon: Wallpaper,
+    keywords: ["wallpaper", "background", "desktop", "image", "theme"],
+  },
+]
+
 interface ContextAction {
   label: string
   icon: typeof ShieldCheck
@@ -134,16 +166,88 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const [resultsHeight, setResultsHeight] = useState(0)
   const [contextOpen, setContextOpen] = useState(false)
   const [contextSelected, setContextSelected] = useState(0)
+  const [activeCommand, setActiveCommand] = useState<SettingId | null>(null)
+  const [wallpapers, setWallpapers] = useState<WallpaperItem[]>([])
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const currentWallpaper = useWallpaper()
+  const originalPath = useRef<string | null>(null)
+  const committed = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+
+  const sortedWallpapers = useMemo(() => {
+    if (!query.trim()) return wallpapers
+    return wallpapers
+      .map((w) => ({ w, s: score(query, w.name) }))
+      .sort((a, b) => b.s - a.s)
+      .map((r) => r.w)
+  }, [wallpapers, query])
+
+  const panelWidth = activeCommand === "wallpaper"
+    ? (wallpapers.length === 0 ? LAUNCHER_WIDTH_DEFAULT : wallpaperPanelWidth(wallpapers.length))
+    : LAUNCHER_WIDTH_DEFAULT
+
+  function enterCommand(id: SettingId) {
+    setActiveCommand(id)
+    setQuery("")
+    setSelected(0)
+    setContextOpen(false)
+    if (id === "wallpaper") {
+      committed.current = false
+      const cur = wallpapers.find((w) => w.thumbnail === currentWallpaper)
+      if (cur) {
+        originalPath.current = cur.path
+        setPreviewIndex(wallpapers.indexOf(cur))
+      } else {
+        originalPath.current = null
+        setPreviewIndex(0)
+      }
+    }
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  function commitWallpaper() {
+    committed.current = true
+    window.launcher.hide()
+  }
+
+  function exitCommand() {
+    if (activeCommand === "wallpaper" && !committed.current && originalPath.current) {
+      window.shell.windows.setWallpaper(originalPath.current)
+    }
+    originalPath.current = null
+    committed.current = false
+    setActiveCommand(null)
+    setQuery("")
+    setPreviewIndex(0)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  function navigatePreview(delta: number) {
+    if (sortedWallpapers.length === 0) return
+    setPreviewIndex((i) => (i + delta + sortedWallpapers.length) % sortedWallpapers.length)
+  }
+
+  function pickWallpaper(idx: number) {
+    setPreviewIndex(idx)
+    committed.current = true
+    window.launcher.hide()
+  }
 
   useEffect(() => {
     window.launcher.index().then(setItems)
     window.launcher.onIndexChanged(setItems)
     window.shell.windows.openApps().then(setOpenApps)
     window.shell.windows.onOpenAppsChanged(setOpenApps)
+    Promise.all([
+      window.shell.windows.wallpaperMine(),
+      window.shell.windows.wallpaperPresets(),
+    ]).then(([mine, presets]) => {
+      const list: WallpaperItem[] = [...mine, ...presets].map(({ name, path, thumbnail }) => ({ name, path, thumbnail }))
+      setWallpapers(list)
+    })
     requestAnimationFrame(() => inputRef.current?.focus())
     return () => {
       window.topbar.setHeight(24)
@@ -151,11 +255,12 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   }, [])
 
   useEffect(() => {
-    const left = Math.round((window.innerWidth - LAUNCHER_WIDTH) / 2) - CORNER
-    const right = left + LAUNCHER_WIDTH + CORNER * 2
+    const left = Math.round((window.innerWidth - panelWidth) / 2) - CORNER
+    const right = left + panelWidth + CORNER * 2
     onGapChange({ left, right })
-    return () => onGapChange(null)
-  }, [])
+  }, [panelWidth])
+
+  useEffect(() => () => onGapChange(null), [])
 
   useEffect(() => {
     const onStartClose = () => setClosing(true)
@@ -186,6 +291,18 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     return matched.slice(0, 3).map((r) => r.app)
   }, [query, openApps])
 
+  const matchedSettings = useMemo(() => {
+    if (!query.trim()) return []
+    const out: { setting: SettingCommand; s: number }[] = []
+    for (const setting of SETTINGS) {
+      let best = score(query, setting.label)
+      for (const k of setting.keywords) best = Math.max(best, score(query, k))
+      if (best >= 0) out.push({ setting, s: best })
+    }
+    out.sort((a, b) => b.s - a.s)
+    return out.map((r) => r.setting)
+  }, [query])
+
   const results = useMemo(() => {
     if (!query.trim()) return []
     const openPaths = new Set(matchedOpenApps.map((a) => a.path.toLowerCase()))
@@ -196,23 +313,25 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       if (s >= 0) scored.push({ item, s })
     }
     scored.sort((a, b) => b.s - a.s)
-    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + matchedOpenApps.length
+    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length
     const limit = Math.max(1, MAX_RESULTS - taken)
     return scored.slice(0, limit).map((r) => r.item)
-  }, [query, items, mathResult, mapResult, matchedOpenApps])
+  }, [query, items, mathResult, mapResult, matchedOpenApps, matchedSettings])
 
   const mathOffset = mathResult ? 1 : 0
   const mapOffset = mathOffset + (mapResult ? 1 : 0)
   const openOffset = mapOffset + matchedOpenApps.length
-  const totalCount = openOffset + results.length
+  const settingsOffset = openOffset + matchedSettings.length
+  const totalCount = settingsOffset + results.length
 
   const selectedEntry = useMemo(() => {
     if (mathResult && selected === 0) return { type: "math" as const }
     if (mapResult && selected === mathOffset) return { type: "map" as const, result: mapResult }
     if (selected >= mapOffset && selected < openOffset) return { type: "open" as const, app: matchedOpenApps[selected - mapOffset] }
-    if (selected >= openOffset) return { type: "app" as const, item: results[selected - openOffset] }
+    if (selected >= openOffset && selected < settingsOffset) return { type: "setting" as const, setting: matchedSettings[selected - openOffset] }
+    if (selected >= settingsOffset) return { type: "app" as const, item: results[selected - settingsOffset] }
     return null
-  }, [selected, mathResult, mapResult, matchedOpenApps, results, mathOffset, mapOffset, openOffset])
+  }, [selected, mathResult, mapResult, matchedOpenApps, matchedSettings, results, mathOffset, mapOffset, openOffset, settingsOffset])
 
   const contextActions = useMemo(() => {
     if (!contextOpen || !selectedEntry) return []
@@ -228,13 +347,53 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
 
   useEffect(() => {
     requestAnimationFrame(() => {
-      if (!query.trim()) {
+      if (!query.trim() && !activeCommand) {
         setResultsHeight(0)
       } else if (resultsRef.current) {
         setResultsHeight(resultsRef.current.offsetHeight)
       }
     })
-  }, [query, results, contextOpen, mapResult])
+  }, [query, results, contextOpen, mapResult, activeCommand])
+
+  useEffect(() => {
+    if (!resultsRef.current) return
+    const observer = new ResizeObserver(() => {
+      if (!resultsRef.current) return
+      if (!query.trim() && !activeCommand) return
+      setResultsHeight(resultsRef.current.offsetHeight)
+    })
+    observer.observe(resultsRef.current)
+    return () => observer.disconnect()
+  }, [query, activeCommand])
+
+  useEffect(() => {
+    if (activeCommand !== "wallpaper") return
+    if (sortedWallpapers.length === 0) return
+    const idx = Math.min(previewIndex, sortedWallpapers.length - 1)
+    const target = sortedWallpapers[idx]
+    if (target && target.thumbnail !== currentWallpaper) {
+      window.shell.windows.setWallpaper(target.path)
+    }
+  }, [previewIndex, activeCommand, sortedWallpapers])
+
+  useEffect(() => {
+    if (activeCommand !== "wallpaper") return
+    if (originalPath.current) return
+    if (wallpapers.length === 0) return
+    const cur = wallpapers.find((w) => w.thumbnail === currentWallpaper)
+    if (cur) {
+      originalPath.current = cur.path
+      setPreviewIndex(wallpapers.indexOf(cur))
+    }
+  }, [wallpapers, activeCommand])
+
+  useEffect(() => {
+    return () => {
+      if (originalPath.current && !committed.current) {
+        window.shell.windows.setWallpaper(originalPath.current)
+      }
+    }
+  }, [])
 
   function handleKey(e: React.KeyboardEvent) {
     if (contextOpen) {
@@ -258,7 +417,22 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
 
     if (e.key === "Escape") {
       e.preventDefault()
-      window.launcher.hide()
+      if (activeCommand) exitCommand()
+      else window.launcher.hide()
+    } else if (e.key === "Backspace" && activeCommand && query === "") {
+      e.preventDefault()
+      exitCommand()
+    } else if (activeCommand === "wallpaper") {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault()
+        navigatePreview(-1)
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault()
+        navigatePreview(1)
+      } else if (e.key === "Enter") {
+        e.preventDefault()
+        commitWallpaper()
+      }
     } else if (e.key === "ArrowDown") {
       e.preventDefault()
       setSelected((s) => Math.min(s + 1, totalCount - 1))
@@ -282,6 +456,8 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       } else if (selectedEntry.type === "open") {
         window.alttab.activate(selectedEntry.app.hwnd)
         window.launcher.hide()
+      } else if (selectedEntry.type === "setting" && selectedEntry.setting) {
+        enterCommand(selectedEntry.setting.id)
       } else if (selectedEntry.type === "app" && selectedEntry.item) {
         window.launcher.launch(selectedEntry.item.id)
       }
@@ -294,7 +470,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     if (el) el.scrollIntoView({ block: "nearest" })
   }, [selected, contextOpen])
 
-  const left = Math.round((window.innerWidth - LAUNCHER_WIDTH) / 2)
+  const left = Math.round((window.innerWidth - panelWidth) / 2)
 
   const cornerBg = borderColor
     ? `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${bg} ${CORNER + 0.5}px)`
@@ -311,7 +487,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       <div
         ref={panelRef}
         className={`absolute ${closing ? "menu-exit" : "menu-enter"}`}
-        style={{ top: 24, left, width: LAUNCHER_WIDTH, outline: "none" }}
+        style={{ top: 24, left, width: panelWidth, outline: "none", transition: WIDTH_TRANSITION }}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={contextOpen ? handleKey : undefined}
         tabIndex={-1}
@@ -340,9 +516,12 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                   ref={inputRef}
                   type="text"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value)
+                    if (activeCommand === "wallpaper") setPreviewIndex(0)
+                  }}
                   onKeyDown={handleKey}
-                  placeholder="Search apps"
+                  placeholder={activeCommand === "wallpaper" ? "Filter wallpapers" : "Search apps"}
                   autoFocus
                   className={`flex-1 bg-transparent outline-none text-[15px] ${placeholderColor}`}
                 />
@@ -353,7 +532,17 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
               style={{ height: resultsHeight, transition: "height 200ms cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
               <div ref={resultsRef}>
-                {contextOpen && contextActions.length > 0 ? (
+                {activeCommand === "wallpaper" ? (
+                  <>
+                    <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+                    <WallpaperCarousel
+                      wallpapers={sortedWallpapers}
+                      loading={wallpapers.length === 0}
+                      selectedIndex={previewIndex}
+                      onPick={pickWallpaper}
+                    />
+                  </>
+                ) : contextOpen && contextActions.length > 0 ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
                     <div className="flex flex-col p-1.5 gap-0.5">
@@ -440,11 +629,35 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                           </button>
                         )
                       })}
-                      {matchedOpenApps.length > 0 && results.length > 0 && (
+                      {matchedOpenApps.length > 0 && matchedSettings.length > 0 && (
+                        <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
+                      )}
+                      {matchedSettings.map((s, i) => {
+                        const idx = openOffset + i
+                        const Icon = s.icon
+                        return (
+                          <button
+                            key={`setting-${s.id}`}
+                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
+                            onClick={() => enterCommand(s.id)}
+                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
+                              idx === selected ? selectedBg : hoverBg
+                            }`}
+                          >
+                            <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className={`text-[13px] truncate ${textColor}`}>{s.label}</span>
+                              <span className={`text-[11px] truncate ${dimText}`}>{s.hint}</span>
+                            </div>
+                            <Settings2 size={12} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
+                          </button>
+                        )
+                      })}
+                      {(matchedOpenApps.length > 0 || matchedSettings.length > 0) && results.length > 0 && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
                       {results.map((item, i) => {
-                        const idx = openOffset + i
+                        const idx = settingsOffset + i
                         return (
                           <button
                             key={item.id}
@@ -491,5 +704,76 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       </div>
     </div>,
     document.body
+  )
+}
+
+interface WallpaperItem {
+  name: string
+  path: string
+  thumbnail: string
+}
+
+interface WallpaperCarouselProps {
+  wallpapers: WallpaperItem[]
+  loading: boolean
+  selectedIndex: number
+  onPick: (idx: number) => void
+}
+
+function WallpaperCarousel({ wallpapers, loading, selectedIndex, onPick }: WallpaperCarouselProps) {
+  const darkText = useDarkText()
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const selectedRef = useRef<HTMLButtonElement>(null)
+  const didCenter = useRef(false)
+
+  const dimText = darkText ? "text-black/55" : "text-white/55"
+  const selectedBorder = darkText ? "border-black" : "border-white"
+  const defaultBorder = darkText ? "border-black/10 hover:border-black/30" : "border-white/10 hover:border-white/30"
+
+  useEffect(() => {
+    if (!selectedRef.current || !scrollRef.current) return
+    const el = selectedRef.current
+    const container = scrollRef.current
+    const target = el.offsetLeft - container.offsetWidth / 2 + el.offsetWidth / 2
+    container.scrollTo({ left: target, behavior: didCenter.current ? "smooth" : "auto" })
+    didCenter.current = true
+  }, [selectedIndex, wallpapers])
+
+  if (loading) {
+    return <div className={`px-4 py-6 text-[13px] ${dimText}`}>Loading wallpapers…</div>
+  }
+
+  if (wallpapers.length === 0) {
+    return <div className={`px-4 py-6 text-[13px] ${dimText}`}>No wallpapers</div>
+  }
+
+  return (
+    <div ref={scrollRef} className="overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex gap-3 px-4 py-4 w-max">
+        {wallpapers.map((w, i) => {
+          const selected = i === selectedIndex
+          return (
+            <button
+              key={w.path}
+              ref={selected ? selectedRef : undefined}
+              onClick={() => onPick(i)}
+              className="shrink-0 cursor-pointer"
+              style={{ width: WALLPAPER_TILE_WIDTH }}
+            >
+              <div
+                className={`relative w-full aspect-video rounded-lg overflow-hidden bg-neutral-900 border-2 transition-colors ${
+                  selected ? selectedBorder : defaultBorder
+                }`}
+              >
+                <img src={w.thumbnail} alt="" className="w-full h-full object-cover" draggable={false} />
+                <div className="absolute left-0 right-0 bottom-0 px-2 py-1 bg-linear-to-t from-black/70 to-transparent">
+                  <span className="text-[11px] text-white truncate block text-left">{w.name}</span>
+                </div>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
