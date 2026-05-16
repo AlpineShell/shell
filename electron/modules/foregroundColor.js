@@ -29,6 +29,7 @@ try { altTab = require('./altTab') } catch (_) {}
 const perDisplay = new Map()
 const pendingDisplay = new Map()
 const hwndPerDisplay = new Map()
+const sampledHwndPerDisplay = new Map()
 
 function colorEqual(a, b) {
   if (a === b) return true
@@ -106,6 +107,7 @@ function getDisplayIdForWindow(hwnd) {
 function clearDisplay(displayId, broadcast) {
   hwndPerDisplay.delete(displayId)
   pendingDisplay.delete(displayId)
+  sampledHwndPerDisplay.delete(displayId)
   if (perDisplay.has(displayId)) {
     perDisplay.delete(displayId)
     broadcast('topbar/fg-color-changed', { displayId })
@@ -129,6 +131,8 @@ function update(broadcast) {
 
   hwndPerDisplay.set(displayId, hwnd)
 
+  if (sampledHwndPerDisplay.get(displayId) === hwnd && perDisplay.has(displayId)) return
+
   const rgb = sampleTitleBarColor(hwnd)
   if (!rgb) {
     clearDisplay(displayId, broadcast)
@@ -144,6 +148,8 @@ function update(broadcast) {
     return
   }
 
+  pendingDisplay.delete(displayId)
+  sampledHwndPerDisplay.set(displayId, hwnd)
   const prev = perDisplay.get(displayId)
   if (!colorEqual(prev, color)) {
     perDisplay.set(displayId, color)
