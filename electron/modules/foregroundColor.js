@@ -30,6 +30,7 @@ const perDisplay = new Map()
 const pendingDisplay = new Map()
 const hwndPerDisplay = new Map()
 const sampledHwndPerDisplay = new Map()
+let startupIgnoreHwnd = null
 
 function colorEqual(a, b) {
   if (a === b) return true
@@ -124,7 +125,14 @@ function update(broadcast) {
   }
 
   const hwnd = GetForegroundWindow()
-  if (!hwnd || !IsZoomed(hwnd)) return
+  if (!hwnd || !IsZoomed(hwnd)) {
+    if (startupIgnoreHwnd && (!IsWindow(startupIgnoreHwnd) || !IsZoomed(startupIgnoreHwnd))) {
+      startupIgnoreHwnd = null
+    }
+    return
+  }
+
+  if (hwnd === startupIgnoreHwnd) return
 
   const displayId = getDisplayIdForWindow(hwnd)
   if (displayId == null) return
@@ -150,6 +158,7 @@ function update(broadcast) {
 
   pendingDisplay.delete(displayId)
   sampledHwndPerDisplay.set(displayId, hwnd)
+  startupIgnoreHwnd = null
   const prev = perDisplay.get(displayId)
   if (!colorEqual(prev, color)) {
     perDisplay.set(displayId, color)
@@ -168,6 +177,8 @@ module.exports = {
     },
   },
   start(broadcast) {
+    const initial = GetForegroundWindow()
+    if (initial && IsZoomed(initial)) startupIgnoreHwnd = initial
     setInterval(() => update(broadcast), 300)
   },
 }
