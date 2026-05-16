@@ -9,6 +9,7 @@ const scriptsDir = app.isPackaged
 const scanScriptPath = path.join(scriptsDir, 'bluetoothScan.ps1')
 const toggleScriptPath = path.join(scriptsDir, 'bluetoothToggle.ps1')
 const radioScriptPath = path.join(scriptsDir, 'bluetoothRadio.ps1')
+const unpairScriptPath = path.join(scriptsDir, 'bluetoothUnpair.ps1')
 
 let lastState = undefined
 let cachedState = { enabled: false, connected: false, devices: [] }
@@ -86,6 +87,22 @@ function openBluetoothPairing() {
   exec('DevicePairingWizard.exe')
 }
 
+function unpairBluetoothDevice(instanceId) {
+  return new Promise((resolve) => {
+    exec(
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${unpairScriptPath}" -InstanceId "${instanceId}"`,
+      (err, stdout) => {
+        if (err || !stdout) return resolve({ success: false })
+        try {
+          resolve(JSON.parse(stdout.trim()))
+        } catch {
+          resolve({ success: false })
+        }
+      }
+    )
+  })
+}
+
 function setBluetoothRadio(action) {
   return new Promise((resolve) => {
     exec(
@@ -119,6 +136,20 @@ module.exports = {
       return result
     },
     'system/bluetooth-settings': () => openBluetoothPairing(),
+    'system/bluetooth-unpair': async (_event, instanceId) => {
+      const result = await unpairBluetoothDevice(instanceId)
+      setTimeout(async () => {
+        const [state, devices] = await Promise.all([
+          getBluetoothState(),
+          scanBluetoothDevices(),
+        ])
+        cachedState = state
+        lastState = `${state.enabled}:${state.connected}`
+        broadcastRef?.('system/bluetooth-changed', state)
+        broadcastRef?.('system/bluetooth-devices-changed', devices)
+      }, 1500)
+      return result
+    },
     'system/bluetooth-set-radio': async (_event, enabled) => {
       const result = await setBluetoothRadio(enabled ? 'on' : 'off')
       setTimeout(async () => {

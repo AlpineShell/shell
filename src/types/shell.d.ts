@@ -235,6 +235,7 @@ declare global {
         bluetoothScan: () => Promise<BluetoothDevice[]>
         bluetoothDevices: () => Promise<BluetoothDevice[]>
         bluetoothToggle: (instanceId: string, action: 'connect' | 'disconnect') => Promise<{ success: boolean }>
+        bluetoothUnpair: (instanceId: string) => Promise<{ success: boolean }>
         bluetoothOpenSettings: () => Promise<void>
         bluetoothSetRadio: (enabled: boolean) => Promise<{ success: boolean; state: string }>
         volume: () => Promise<number>
