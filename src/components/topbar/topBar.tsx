@@ -25,7 +25,7 @@ export default function TopBar() {
     const [launcherGap, setLauncherGap] = useState<{ left: number; right: number } | null>(null);
     const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
     const activeGap = menuGap || launcherGap;
-    const showBorder = fullscreenWindow && (hovered || menuOpen || launcherGap !== null);
+    const showBorder = hovered || menuOpen || launcherGap !== null;
 
     function handleMenuChange(open: boolean, gap?: { left: number; right: number }) {
         setMenuOpen(open);
@@ -45,14 +45,14 @@ export default function TopBar() {
                 onMouseEnter={() => setHovered(true)}
                 onMouseLeave={() => setHovered(false)}
             >
-                {fullscreenWindow && (activeGap ? (
+                {activeGap ? (
                     <>
                         <div style={{ position: "absolute", bottom: 0, left: 0, width: activeGap.left, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
                         <div style={{ position: "absolute", bottom: 0, left: activeGap.right, right: 0, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
                     </>
                 ) : (
                     <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
-                ))}
+                )}
                 <div className="flex items-center gap-1 relative z-1 self-stretch">
                     <SystemMenu />
                 </div>
