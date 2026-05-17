@@ -145,7 +145,7 @@ export default function SettingsApp() {
 
             <button
               onClick={() => window.shell.windows.closeSettings()}
-              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/10 cursor-pointer transition-colors"
+              className="w-7 h-7 flex items-center justify-center cursor-pointer text-white/60 hover:text-white transition-colors"
               style={noDragRegion}
               aria-label="Close"
             >
