@@ -87,9 +87,17 @@ async function parseApps(stdout) {
   try { raw = JSON.parse(stdout.trim()) } catch { return [] }
   if (!Array.isArray(raw)) raw = [raw]
 
-  const HIDDEN_NAMES = new Set(['electron', 'powershell', 'conhost', 'cmd', 'alpine-shell'])
+  const HIDDEN_NAMES = new Set(['powershell', 'conhost', 'cmd'])
+  const SHELL_NAMES = new Set(['electron', 'alpine-shell', 'alpine shell'])
+  const SHELL_DEFAULT_TITLE = 'alpine-shell'
   const shellPid = process.pid
-  const candidates = raw.filter((p) => p.path && p.id !== shellPid && !HIDDEN_NAMES.has(p.name.toLowerCase()))
+  const candidates = raw.filter((p) => {
+    if (!p.path || p.id === shellPid) return false
+    const nameLower = p.name.toLowerCase()
+    if (HIDDEN_NAMES.has(nameLower)) return false
+    if (SHELL_NAMES.has(nameLower)) return p.title && p.title !== SHELL_DEFAULT_TITLE
+    return true
+  })
 
   const apps = await Promise.all(
     candidates.map(async (p) => {
@@ -102,7 +110,8 @@ async function parseApps(stdout) {
           iconCache.set(key, null)
         }
       }
-      return { id: p.id, hwnd: p.hwnd, name: p.name, title: p.title, path: p.path, icon: iconCache.get(key) }
+      const displayName = SHELL_NAMES.has(p.name.toLowerCase()) ? p.title : p.name
+      return { id: p.id, hwnd: p.hwnd, name: displayName, title: p.title, path: p.path, icon: iconCache.get(key) }
     })
   )
 

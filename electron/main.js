@@ -284,6 +284,7 @@ function createSettingsWindow() {
     return settingsWin
   }
   settingsWin = new BrowserWindow({
+    title: 'Settings',
     width: 1280,
     height: 820,
     minWidth: 800,
@@ -301,6 +302,7 @@ function createSettingsWindow() {
       contextIsolation: true,
     },
   })
+  settingsWin.on('page-title-updated', (e) => e.preventDefault())
   settingsWin.loadURL(getURL('settings'))
   settingsWin.once('ready-to-show', () => {
     if (settingsWin && !settingsWin.isDestroyed()) settingsWin.show()

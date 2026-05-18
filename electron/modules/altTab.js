@@ -239,6 +239,8 @@ async function getIcon(exePath) {
   }
 }
 
+const SHELL_PROCESS_NAMES = new Set(['electron', 'alpine-shell', 'alpine shell'])
+
 async function buildWindowList() {
   const hwnds = enumTaskWindows()
   const results = []
@@ -249,7 +251,8 @@ async function buildWindowList() {
     GetWindowThreadProcessId(hwnd, pidBuf)
     const pid = pidBuf.readUInt32LE(0)
     const exePath = getProcessPath(pid)
-    const processName = exePath ? exePath.split('\\').pop().replace(/\.exe$/i, '') : 'Unknown'
+    const rawProcessName = exePath ? exePath.split('\\').pop().replace(/\.exe$/i, '') : 'Unknown'
+    const processName = SHELL_PROCESS_NAMES.has(rawProcessName.toLowerCase()) ? title : rawProcessName
     const icon = await getIcon(exePath)
     const thumbnail = captureWindowThumbnail(hwnd)
     results.push({ hwnd, title, processName, icon, thumbnail: thumbnail || '' })
