@@ -4,7 +4,7 @@ A Windows desktop shell.
 
 ## Requirements
 
-- Windows 10/11
+- Windows 10/11 
 - Node.js 18+
 
 ## Getting Started
