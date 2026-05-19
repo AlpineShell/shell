@@ -8,6 +8,7 @@ interface WallpaperItem {
   name: string
   path: string
   thumbnail: string
+  url: string
 }
 
 const MINE_CACHE = 'alpine.wallpapers.mine'
@@ -43,7 +44,7 @@ export default function WallpaperPage() {
 
   function refreshMine() {
     window.shell.windows.wallpaperMine().then((list) => {
-      const sliced = list.map(({ name, path, thumbnail }) => ({ name, path, thumbnail }))
+      const sliced = list.map(({ name, path, thumbnail, url }) => ({ name, path, thumbnail, url }))
       setMine(sliced)
       setLoadedMine(true)
       writeCache(MINE_CACHE, sliced)
@@ -62,13 +63,13 @@ export default function WallpaperPage() {
   useEffect(() => {
     if (pendingPath && wallpaper) {
       const match = [...mine, ...presets].find((w) => w.path === pendingPath)
-      if (match && match.thumbnail === wallpaper) setPendingPath(null)
+      if (match && match.url === wallpaper) setPendingPath(null)
     }
   }, [pendingPath, wallpaper, mine, presets])
 
   function isSelected(p: WallpaperItem) {
     if (pendingPath) return p.path === pendingPath
-    return wallpaper === p.thumbnail
+    return wallpaper === p.url
   }
 
   async function uploadWallpaper() {

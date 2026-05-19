@@ -1,8 +1,35 @@
 const { exec } = require('child_process')
-const { dialog, app, ipcMain } = require('electron')
+const { dialog, app, ipcMain, nativeImage } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const koffi = require('koffi')
+
+const THUMBNAIL_WIDTH = 400
+const thumbnailCache = new Map()
+
+function generateThumbnail(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null
+  const mtime = fs.statSync(filePath).mtimeMs
+  const cacheKey = `${filePath}:${mtime}`
+  const cached = thumbnailCache.get(cacheKey)
+  if (cached) return cached
+  try {
+    const img = nativeImage.createFromPath(filePath)
+    if (img.isEmpty()) return null
+    const size = img.getSize()
+    if (size.width === 0 || size.height === 0) return null
+    const targetWidth = Math.min(THUMBNAIL_WIDTH, size.width)
+    const resized = img.resize({ width: targetWidth, quality: 'good' })
+    const dataUrl = `data:image/jpeg;base64,${resized.toJPEG(75).toString('base64')}`
+    thumbnailCache.set(cacheKey, dataUrl)
+    return dataUrl
+  } catch (e) {
+    console.error('[wallpaper] thumbnail error:', e.message)
+    return null
+  }
+}
+
+const yieldTick = () => new Promise((resolve) => setImmediate(resolve))
 
 const user32 = koffi.load('user32.dll')
 const SystemParametersInfoW = user32.func(
@@ -100,14 +127,21 @@ module.exports = {
         if (!fs.existsSync(presetsDir)) return []
         const entries = fs.readdirSync(presetsDir)
         const valid = ['.jpg', '.jpeg', '.png', '.bmp', '.webp']
-        return entries
-          .filter((name) => valid.includes(path.extname(name).toLowerCase()))
-          .map((name) => {
-            const fullPath = path.join(presetsDir, name)
-            const dataUrl = encode(fullPath)
-            return { name: path.basename(name, path.extname(name)), path: fullPath, thumbnail: dataUrl }
+        const files = entries.filter((name) => valid.includes(path.extname(name).toLowerCase()))
+        const out = []
+        for (const name of files) {
+          const fullPath = path.join(presetsDir, name)
+          const thumbnail = generateThumbnail(fullPath)
+          if (!thumbnail) continue
+          out.push({
+            name: path.basename(name, path.extname(name)),
+            path: fullPath,
+            thumbnail,
+            url: encode(fullPath),
           })
-          .filter((p) => p.thumbnail)
+          await yieldTick()
+        }
+        return out
       } catch (e) {
         console.error('[wallpaper] presets error:', e.message)
         return []
@@ -146,20 +180,23 @@ module.exports = {
         if (!fs.existsSync(minePath)) return []
         const entries = fs.readdirSync(minePath)
         const valid = ['.jpg', '.jpeg', '.png', '.bmp', '.webp']
-        return entries
-          .filter((name) => valid.includes(path.extname(name).toLowerCase()))
-          .map((name) => {
-            const fullPath = path.join(minePath, name)
-            const stat = fs.statSync(fullPath)
-            return {
-              name: path.basename(name, path.extname(name)),
-              path: fullPath,
-              thumbnail: encode(fullPath),
-              addedAt: stat.mtimeMs,
-            }
+        const files = entries.filter((name) => valid.includes(path.extname(name).toLowerCase()))
+        const out = []
+        for (const name of files) {
+          const fullPath = path.join(minePath, name)
+          const stat = fs.statSync(fullPath)
+          const thumbnail = generateThumbnail(fullPath)
+          if (!thumbnail) continue
+          out.push({
+            name: path.basename(name, path.extname(name)),
+            path: fullPath,
+            thumbnail,
+            url: encode(fullPath),
+            addedAt: stat.mtimeMs,
           })
-          .filter((p) => p.thumbnail)
-          .sort((a, b) => b.addedAt - a.addedAt)
+          await yieldTick()
+        }
+        return out.sort((a, b) => b.addedAt - a.addedAt)
       } catch (e) {
         console.error('[wallpaper] mine error:', e.message)
         return []

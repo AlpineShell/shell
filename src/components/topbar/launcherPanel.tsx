@@ -196,7 +196,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     setContextOpen(false)
     if (id === "wallpaper") {
       committed.current = false
-      const cur = wallpapers.find((w) => w.thumbnail === currentWallpaper)
+      const cur = wallpapers.find((w) => w.url === currentWallpaper)
       if (cur) {
         originalPath.current = cur.path
         setPreviewIndex(wallpapers.indexOf(cur))
@@ -245,12 +245,8 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       window.shell.windows.wallpaperMine(),
       window.shell.windows.wallpaperPresets(),
     ]).then(([mine, presets]) => {
-      const list: WallpaperItem[] = [...mine, ...presets].map(({ name, path, thumbnail }) => ({ name, path, thumbnail }))
+      const list: WallpaperItem[] = [...mine, ...presets].map(({ name, path, thumbnail, url }) => ({ name, path, thumbnail, url }))
       setWallpapers(list)
-      for (const w of list) {
-        const img = new Image()
-        img.src = w.thumbnail
-      }
     })
     requestAnimationFrame(() => inputRef.current?.focus())
     return () => {
@@ -306,6 +302,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     out.sort((a, b) => b.s - a.s)
     return out.map((r) => r.setting)
   }, [query])
+
 
   const results = useMemo(() => {
     if (!query.trim()) return []
@@ -375,7 +372,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     if (sortedWallpapers.length === 0) return
     const idx = Math.min(previewIndex, sortedWallpapers.length - 1)
     const target = sortedWallpapers[idx]
-    if (target && target.thumbnail !== currentWallpaper) {
+    if (target && target.url !== currentWallpaper) {
       window.shell.windows.setWallpaper(target.path)
     }
   }, [previewIndex, activeCommand, sortedWallpapers])
@@ -384,7 +381,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     if (activeCommand !== "wallpaper") return
     if (originalPath.current) return
     if (wallpapers.length === 0) return
-    const cur = wallpapers.find((w) => w.thumbnail === currentWallpaper)
+    const cur = wallpapers.find((w) => w.url === currentWallpaper)
     if (cur) {
       originalPath.current = cur.path
       setPreviewIndex(wallpapers.indexOf(cur))
@@ -715,6 +712,7 @@ interface WallpaperItem {
   name: string
   path: string
   thumbnail: string
+  url: string
 }
 
 interface WallpaperCarouselProps {
