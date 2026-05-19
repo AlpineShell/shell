@@ -241,6 +241,9 @@ async function getIcon(exePath) {
 
 const SHELL_PROCESS_NAMES = new Set(['electron', 'alpine-shell', 'alpine shell'])
 
+const SETTINGS_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64"><rect width="24" height="24" rx="4" fill="#0F1A24"/><g fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" transform="translate(3.5 3.5) scale(0.708)"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g></svg>`
+const SETTINGS_ICON_DATA_URL = `data:image/svg+xml;base64,${Buffer.from(SETTINGS_ICON_SVG).toString('base64')}`
+
 async function buildWindowList() {
   const hwnds = enumTaskWindows()
   const results = []
@@ -252,8 +255,11 @@ async function buildWindowList() {
     const pid = pidBuf.readUInt32LE(0)
     const exePath = getProcessPath(pid)
     const rawProcessName = exePath ? exePath.split('\\').pop().replace(/\.exe$/i, '') : 'Unknown'
-    const processName = SHELL_PROCESS_NAMES.has(rawProcessName.toLowerCase()) ? title : rawProcessName
-    const icon = await getIcon(exePath)
+    const isAlpineShell = SHELL_PROCESS_NAMES.has(rawProcessName.toLowerCase())
+    const processName = isAlpineShell ? title : rawProcessName
+    const icon = isAlpineShell && title === 'Settings'
+      ? SETTINGS_ICON_DATA_URL
+      : await getIcon(exePath)
     const thumbnail = captureWindowThumbnail(hwnd)
     results.push({ hwnd, title, processName, icon, thumbnail: thumbnail || '' })
   }

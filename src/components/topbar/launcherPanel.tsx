@@ -103,7 +103,7 @@ interface LauncherPanelProps {
   onGapChange: (gap: { left: number; right: number } | null) => void
 }
 
-type SettingId = "wallpaper" | "settings"
+type SettingId = "wallpaper"
 
 interface SettingCommand {
   id: SettingId
@@ -121,14 +121,17 @@ const SETTINGS: SettingCommand[] = [
     icon: Wallpaper,
     keywords: ["wallpaper", "background", "desktop", "image", "theme"],
   },
-  {
-    id: "settings",
-    label: "Settings",
-    hint: "Open Alpine Shell settings",
-    icon: Settings,
-    keywords: ["settings", "preferences", "options", "config", "system"],
-  },
 ]
+
+const ALPINE_SETTINGS_ID = -1
+const ALPINE_SETTINGS_KEYWORDS = ["settings", "preferences", "options", "config", "system"]
+const ALPINE_SETTINGS_ITEM: LauncherItem = {
+  id: ALPINE_SETTINGS_ID,
+  name: "Settings",
+  lnkPath: "",
+  target: "alpine:settings",
+  icon: null,
+}
 
 interface ContextAction {
   label: string
@@ -197,11 +200,6 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     : LAUNCHER_WIDTH_DEFAULT
 
   function enterCommand(id: SettingId) {
-    if (id === "settings") {
-      window.shell.windows.openSettings()
-      window.launcher.hide()
-      return
-    }
     setActiveCommand(id)
     setQuery("")
     setSelected(0)
@@ -326,9 +324,13 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       if (s >= 0) scored.push({ item, s })
     }
     scored.sort((a, b) => b.s - a.s)
-    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length
+    const settingsScore = ALPINE_SETTINGS_KEYWORDS.reduce((m, k) => Math.max(m, score(query, k)), -1)
+    const showSettings = settingsScore >= 0
+    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length + (showSettings ? 1 : 0)
     const limit = Math.max(1, MAX_RESULTS - taken)
-    return scored.slice(0, limit).map((r) => r.item)
+    const list = scored.slice(0, limit).map((r) => r.item)
+    if (showSettings) list.push(ALPINE_SETTINGS_ITEM)
+    return list
   }, [query, items, mathResult, mapResult, matchedOpenApps, matchedSettings])
 
   const mathOffset = mathResult ? 1 : 0
@@ -452,7 +454,10 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault()
       setSelected((s) => Math.max(s - 1, 0))
-    } else if (e.key === "ArrowRight" && selectedEntry && (selectedEntry.type === "app" || selectedEntry.type === "open")) {
+    } else if (e.key === "ArrowRight" && selectedEntry && (
+      selectedEntry.type === "open" ||
+      (selectedEntry.type === "app" && selectedEntry.item && selectedEntry.item.id !== ALPINE_SETTINGS_ID)
+    )) {
       e.preventDefault()
       setContextOpen(true)
       setContextSelected(0)
@@ -472,7 +477,12 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       } else if (selectedEntry.type === "setting" && selectedEntry.setting) {
         enterCommand(selectedEntry.setting.id)
       } else if (selectedEntry.type === "app" && selectedEntry.item) {
-        window.launcher.launch(selectedEntry.item.id)
+        if (selectedEntry.item.id === ALPINE_SETTINGS_ID) {
+          window.shell.windows.openSettings()
+          window.launcher.hide()
+        } else {
+          window.launcher.launch(selectedEntry.item.id)
+        }
       }
     }
   }
@@ -671,16 +681,28 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                       )}
                       {results.map((item, i) => {
                         const idx = settingsOffset + i
+                        const isAlpineSettings = item.id === ALPINE_SETTINGS_ID
                         return (
                           <button
                             key={item.id}
                             onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
-                            onClick={() => window.launcher.launch(item.id)}
+                            onClick={() => {
+                              if (isAlpineSettings) {
+                                window.shell.windows.openSettings()
+                                window.launcher.hide()
+                              } else {
+                                window.launcher.launch(item.id)
+                              }
+                            }}
                             className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
                               idx === selected ? selectedBg : hoverBg
                             }`}
                           >
-                            {item.icon ? (
+                            {isAlpineSettings ? (
+                              <div className={`w-7 h-7 shrink-0 flex items-center justify-center ${darkText ? "text-black/70" : "text-white/70"}`}>
+                                <Settings size={18} />
+                              </div>
+                            ) : item.icon ? (
                               <img src={item.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
                             ) : (
                               <div className={`w-7 h-7 shrink-0 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
