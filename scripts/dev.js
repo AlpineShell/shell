@@ -1,5 +1,9 @@
 const { spawn, exec } = require('child_process')
 const http = require('http')
+const fs = require('fs')
+const path = require('path')
+const electronPath = require('electron')
+const projectRoot = path.join(__dirname, '..')
 
 const ALPINE = `
    █████╗ ██╗     ██████╗ ██╗███╗   ██╗███████╗
@@ -54,9 +58,9 @@ function killExplorer() {
 }
 
 function startExplorer() {
-  return new Promise((resolve) => {
-    exec('start explorer.exe', () => resolve())
-  })
+  try {
+    spawn('explorer.exe', [], { detached: true, stdio: 'ignore', windowsHide: false }).unref()
+  } catch {}
 }
 
 function waitForPort(port) {
@@ -76,24 +80,51 @@ let viteProc = null
 let electronProc = null
 let exiting = false
 
+function syncWrite(text) {
+  try { fs.writeSync(1, text) } catch {}
+}
+
 function cleanup() {
   if (exiting) return
   exiting = true
-  process.stdout.write('\n')
-  status('shutdown', 'Stopping services...', c.yellow)
+
+  startExplorer()
+
+  syncWrite(`\n${c.dim}[${c.yellow}shutdown${c.reset}${c.dim}]${c.reset} Stopping services...\n`)
+  syncWrite(`${c.dim}[${c.yellow}shutdown${c.reset}${c.dim}]${c.reset} Restoring explorer.exe...\n`)
+
+  if (electronProc?.pid) {
+    try { spawn('taskkill', ['/F', '/T', '/PID', String(electronProc.pid)], { stdio: 'ignore', windowsHide: true, detached: true }).unref() } catch {}
+  }
+  if (viteProc?.pid) {
+    try { spawn('taskkill', ['/F', '/T', '/PID', String(viteProc.pid)], { stdio: 'ignore', windowsHide: true, detached: true }).unref() } catch {}
+  }
   if (electronProc) try { electronProc.kill() } catch {}
   if (viteProc) try { viteProc.kill() } catch {}
-  status('shutdown', 'Restoring explorer.exe...', c.yellow)
-  exec('start explorer.exe', () => {
-    status('shutdown', `${c.green}Goodbye${c.reset}`)
-    process.exit(0)
-  })
+
+  syncWrite(`${c.dim}[${c.yellow}shutdown${c.reset}${c.dim}]${c.reset} ${c.green}Goodbye${c.reset}\n`)
+
+  if (process.stdin.isTTY) {
+    try { process.stdin.setRawMode(false) } catch {}
+  }
+  setTimeout(() => process.exit(0), 200)
+}
+
+if (process.stdin.isTTY) {
+  try {
+    process.stdin.setRawMode(true)
+    process.stdin.resume()
+    process.stdin.on('data', (data) => {
+      if (data[0] === 0x03) cleanup()
+    })
+  } catch {}
 }
 
 process.on('SIGINT', cleanup)
 process.on('SIGTERM', cleanup)
+process.on('SIGBREAK', cleanup)
 process.on('exit', () => {
-  if (!exiting) exec('start explorer.exe')
+  if (!exiting) startExplorer()
 })
 
 async function main() {
@@ -127,9 +158,10 @@ async function main() {
   viteSpin.succeed('Frontend ready on http://localhost:5173')
 
   const electronSpin = spinner('Starting backend (Electron)', c.blue)
-  electronProc = spawn('npx', ['electron', '.'], {
-    shell: true,
+  electronProc = spawn(electronPath, ['.'], {
+    cwd: projectRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: false,
   })
   electronSpin.succeed('Backend started')
 

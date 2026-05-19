@@ -429,3 +429,13 @@ function startShellMode() {
 app.on('will-quit', () => {
   unregisterAll()
 })
+
+function gracefulShutdown() {
+  try { unregisterAll() } catch {}
+  app.exit(0)
+}
+
+process.on('SIGINT', gracefulShutdown)
+process.on('SIGTERM', gracefulShutdown)
+process.on('SIGBREAK', gracefulShutdown)
+process.on('SIGHUP', gracefulShutdown)
