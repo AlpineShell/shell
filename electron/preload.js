@@ -108,6 +108,7 @@ contextBridge.exposeInMainWorld('setup', {
   status: () => ipcRenderer.invoke('setup/status'),
   install: (options) => ipcRenderer.invoke('setup/install', options),
   skip: () => ipcRenderer.invoke('setup/skip'),
+  testOut: () => ipcRenderer.invoke('setup/test-out'),
   relaunch: () => ipcRenderer.invoke('setup/relaunch'),
   restartWindows: () => ipcRenderer.invoke('setup/restart-windows'),
   revertShell: () => ipcRenderer.invoke('setup/revert-shell'),

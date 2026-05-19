@@ -151,6 +151,7 @@ declare global {
       status: () => Promise<SetupStatus>
       install: (options: SetupOptions) => Promise<SetupResult>
       skip: () => Promise<void>
+      testOut: () => Promise<void>
       relaunch: () => Promise<void>
       restartWindows: () => Promise<void>
       revertShell: () => Promise<{ success: boolean }>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Check, X, AlertTriangle } from 'lucide-react'
+import { Check, X, AlertTriangle, FlaskConical } from 'lucide-react'
 
 type Page = 'welcome' | 'options' | 'installing' | 'complete' | 'error'
 
@@ -26,7 +26,6 @@ const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSPrope
 export default function SetupApp() {
   const [page, setPage] = useState<Page>('welcome')
   const [installCursor, setInstallCursor] = useState(true)
-  const [installShell, setInstallShell] = useState(true)
   const [status, setStatus] = useState<SetupStatus | null>(null)
   const [result, setResult] = useState<SetupResult | null>(null)
   const [currentStep, setCurrentStep] = useState('')
@@ -44,9 +43,13 @@ export default function SetupApp() {
   async function handleInstall() {
     setCurrentStep('')
     setPage('installing')
-    const res = await window.setup.install({ shell: installShell, cursor: installCursor })
+    const res = await window.setup.install({ shell: true, cursor: installCursor })
     setResult(res)
     setPage(res.error ? 'error' : 'complete')
+  }
+
+  function handleTestOut() {
+    window.setup.testOut()
   }
 
 
@@ -75,10 +78,22 @@ export default function SetupApp() {
             <div>
               <button
                 onClick={handleInstall}
-                className="mt-20 w-full h-11 bg-white cursor-pointer text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors"
+                className="w-full h-11 bg-white cursor-pointer text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors"
               >
-                {verb} Preset
+                {verb}
               </button>
+              {!isUpdate && (
+                <button
+                  onClick={handleTestOut}
+                  className="mt-3 w-full h-13 cursor-pointer rounded-lg border border-white/20 text-white text-sm hover:bg-white/5 transition-colors flex flex-col items-center justify-center"
+                >
+                  <div className='flex items-center gap-1'>
+                    <FlaskConical size={14} />
+                    Test Out
+                  </div>
+                  <span className="text-white/50 text-xs"> Resets on restart</span>
+                </button>
+              )}
               <button
                 onClick={() => setPage('options')}
                 className="mt-3 w-full h-11 cursor-pointer text-white text-sm hover:text-neutral-300 transition-colors"
@@ -96,26 +111,17 @@ export default function SetupApp() {
               <p className="text-neutral-400 mt-2 text-sm">Choose what to set up.</p>
 
               <div className="mt-8 space-y-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-[15px] font-medium">Desktop Environment</div>
-                    <div className="text-sm text-neutral-500 mt-0.5">
-                      Replace Explorer with Alpine Shell
-                    </div>
-                    {status?.gpoBlocked && (
-                      <div className="flex items-center gap-1.5 mt-1.5 text-amber-400 text-xs">
-                        <AlertTriangle size={12} />
-                        <span>Group Policy may prevent this change</span>
-                      </div>
-                    )}
+                {status?.gpoBlocked && (
+                  <div className="flex items-center gap-1.5 text-amber-400 text-xs">
+                    <AlertTriangle size={12} />
+                    <span>Group Policy may prevent shell replacement</span>
                   </div>
-                  <Toggle checked={installShell} onChange={setInstallShell} />
-                </div>
+                )}
 
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-[15px] font-medium">Custom Cursor</div>
-                    <div className="text-sm text-neutral-500 mt-0.5">
+                    <div className="text-sm text-white/60 mt-0.5">
                       Install the Moga White cursor pack
                     </div>
                   </div>
@@ -145,7 +151,7 @@ export default function SetupApp() {
           <div className="flex-1 flex flex-col items-center justify-center">
             <div className="w-8 h-8 border-2 border-neutral-700 border-t-white rounded-full animate-spin" />
             <p className="mt-5 text-[15px]">{verbIng}</p>
-            <p className="mt-2 text-xs text-neutral-600 h-4 transition-all">
+            <p className="mt-2 text-xs text-white/70 h-4 transition-all">
               {currentStep}
             </p>
           </div>
@@ -189,26 +195,26 @@ export default function SetupApp() {
                 <Check size={24} strokeWidth={2.5} />
               </div>
               <h1 className="text-2xl font-semibold tracking-tight mt-5">{isUpdate ? 'Update complete' : 'Setup complete'}</h1>
-              <p className="text-neutral-500 text-sm mt-2 leading-relaxed">
+              <p className="text-white/70 text-sm mt-2 leading-relaxed">
                 Restart your computer to {verbPast === 'updated' ? 'finish updating' : 'start using'} Alpine Shell.
               </p>
 
-              <div className="mt-5 space-y-1.5 text-xs text-neutral-600">
+              <div className="mt-5 space-y-1.5 text-xs text-white/60">
                 {result.shell && (
                   <p className="flex items-center gap-2">
-                    <Check size={11} className="text-neutral-500 shrink-0" />
+                    <Check size={11} className="text-white/70 shrink-0" />
                     Set as default desktop environment
                   </p>
                 )}
                 {result.startup && (
                   <p className="flex items-center gap-2">
-                    <Check size={11} className="text-neutral-500 shrink-0" />
+                    <Check size={11} className="text-white/70 shrink-0" />
                     Added to startup
                   </p>
                 )}
                 {result.cursor && (
                   <p className="flex items-center gap-2">
-                    <Check size={11} className="text-neutral-500 shrink-0" />
+                    <Check size={11} className="text-white/70 shrink-0" />
                     Custom cursor installed
                   </p>
                 )}

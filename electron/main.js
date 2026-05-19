@@ -252,8 +252,9 @@ function createScreenshotWindow() {
 }
 
 
+let setupWin = null
 function createSetupWindow() {
-  const win = new BrowserWindow({
+  setupWin = new BrowserWindow({
     width: 480,
     height: 560,
     frame: false,
@@ -268,13 +269,13 @@ function createSetupWindow() {
     },
   })
 
-  win.loadURL(getURL('setup'))
+  setupWin.loadURL(getURL('setup'))
 
-  win.on('closed', () => {
+  setupWin.on('closed', () => {
     app.quit()
   })
 
-  return win
+  return setupWin
 }
 
 let settingsWin = null
@@ -352,6 +353,15 @@ app.whenReady().then(async () => {
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
 
+  ipcMain.handle('setup/test-out', () => {
+    if (setupWin && !setupWin.isDestroyed()) {
+      setupWin.removeAllListeners('closed')
+      setupWin.close()
+      setupWin = null
+    }
+    startShellMode()
+  })
+
   if (process.argv.includes('--setup')) {
     createSetupWindow()
     return
@@ -367,6 +377,10 @@ app.whenReady().then(async () => {
     return
   }
 
+  startShellMode()
+})
+
+function startShellMode() {
   if (altTab) altTab.setShells(shells)
 
   const screenshotWindow = createScreenshotWindow()
@@ -410,7 +424,7 @@ app.whenReady().then(async () => {
       repositionShell(display)
     }
   })
-})
+}
 
 app.on('will-quit', () => {
   unregisterAll()
