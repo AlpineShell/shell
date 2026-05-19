@@ -105,8 +105,10 @@ foreach ($a in $apps) {
       for (const line of stdout.trim().split('\n')) {
         const parts = line.trim().split('||')
         if (parts.length >= 2 && parts[0] && parts[1]) {
+          const appId = parts[1].trim()
+          if (appId.toLowerCase().startsWith('windows.immersivecontrolpanel')) continue
           const icon = parts[2] && parts[2].length > 10 ? `data:image/png;base64,${parts[2]}` : null
-          apps.push({ name: parts[0].trim(), appId: parts[1].trim(), icon })
+          apps.push({ name: parts[0].trim(), appId, icon })
         }
       }
       resolve(apps)
@@ -177,6 +179,8 @@ $results -join '|'
   })
 }
 
+const BLOCKED_NAMES = new Set(['settings'])
+
 async function buildIndex() {
   const shortcutPaths = []
   for (const dir of SCAN_DIRS) walkShortcuts(dir, shortcutPaths)
@@ -193,9 +197,11 @@ async function buildIndex() {
       try { info = electronShell.readShortcutLink(scPath) } catch { continue }
     }
     if (!info?.target) continue
+    if (info.target.toLowerCase().startsWith('ms-settings:')) continue
 
     const name = path.basename(scPath, path.extname(scPath))
     const dedupeKey = name.toLowerCase()
+    if (BLOCKED_NAMES.has(dedupeKey)) continue
     if (seenNames.has(dedupeKey)) continue
     seenNames.add(dedupeKey)
 
@@ -220,6 +226,7 @@ async function buildIndex() {
     let added = false
     for (const uwp of uwpApps) {
       const dedupeKey = uwp.name.toLowerCase()
+      if (BLOCKED_NAMES.has(dedupeKey)) continue
       if (seenNames.has(dedupeKey)) continue
       seenNames.add(dedupeKey)
       items.push({

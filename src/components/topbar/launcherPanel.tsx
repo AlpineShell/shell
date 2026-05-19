@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2 } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Settings } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 
@@ -103,7 +103,7 @@ interface LauncherPanelProps {
   onGapChange: (gap: { left: number; right: number } | null) => void
 }
 
-type SettingId = "wallpaper"
+type SettingId = "wallpaper" | "settings"
 
 interface SettingCommand {
   id: SettingId
@@ -120,6 +120,13 @@ const SETTINGS: SettingCommand[] = [
     hint: "Change your desktop wallpaper",
     icon: Wallpaper,
     keywords: ["wallpaper", "background", "desktop", "image", "theme"],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    hint: "Open Alpine Shell settings",
+    icon: Settings,
+    keywords: ["settings", "preferences", "options", "config", "system"],
   },
 ]
 
@@ -190,6 +197,11 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     : LAUNCHER_WIDTH_DEFAULT
 
   function enterCommand(id: SettingId) {
+    if (id === "settings") {
+      window.shell.windows.openSettings()
+      window.launcher.hide()
+      return
+    }
     setActiveCommand(id)
     setQuery("")
     setSelected(0)
