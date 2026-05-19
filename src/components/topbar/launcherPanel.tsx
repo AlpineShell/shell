@@ -247,6 +247,10 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     ]).then(([mine, presets]) => {
       const list: WallpaperItem[] = [...mine, ...presets].map(({ name, path, thumbnail }) => ({ name, path, thumbnail }))
       setWallpapers(list)
+      for (const w of list) {
+        const img = new Image()
+        img.src = w.thumbnail
+      }
     })
     requestAnimationFrame(() => inputRef.current?.focus())
     return () => {
