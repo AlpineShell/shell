@@ -5,6 +5,7 @@ import SystemMenu from "./systemMenu";
 import { ThemeProvider } from "../themeContext";
 import MediaStatus from "./status/mediaStatus";
 import MicrophoneStatus from "./status/microphoneStatus";
+import SystemTray from "./systemTray";
 import LauncherTrigger from "./launcherTrigger";
 import LauncherPanel from "./launcherPanel";
 import AltTabPanel from "./altTabPanel";
@@ -62,6 +63,7 @@ export default function TopBar() {
                 <div className="flex items-center gap-1 mr-1 relative z-1 self-stretch">
                     <MicrophoneStatus />
                     <MediaStatus />
+                    <SystemTray />
                     <StatusIndicator />
                     <Clock />
                 </div>

@@ -4,6 +4,7 @@ import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
 import WallpaperPage from './wallpaperPage'
 import TopBarPage from './topBarPage'
+import TrayPage from './trayPage'
 import HotkeysPage from './hotkeysPage'
 import DevicesHub from './devicesHub'
 import BluetoothSettingsPage from './bluetoothSettingsPage'
@@ -167,6 +168,7 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'personalization') return <PersonalizationHub onNavigate={navigate} />
   if (path === 'personalization/wallpaper') return <WallpaperPage />
   if (path === 'personalization/topbar') return <TopBarPage />
+  if (path === 'personalization/tray') return <TrayPage />
   if (path === 'personalization/hotkeys') return <HotkeysPage />
   if (path === 'devices') return <DevicesHub onNavigate={navigate} />
   if (path === 'devices/bluetooth') return <BluetoothSettingsPage />
@@ -181,6 +183,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   personalization: 'Personalization',
   wallpaper: 'Wallpaper',
   topbar: 'Top Bar',
+  tray: 'System Tray',
   hotkeys: 'Hotkeys',
   devices: 'Devices & Connections',
   bluetooth: 'Bluetooth',

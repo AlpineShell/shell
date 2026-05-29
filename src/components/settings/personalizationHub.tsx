@@ -1,4 +1,4 @@
-import { ChevronRight, Image as ImageIcon, Keyboard, PanelTop } from 'lucide-react'
+import { ChevronRight, Image as ImageIcon, Keyboard, LayoutGrid, PanelTop } from 'lucide-react'
 
 interface PersonalizationHubProps {
   onNavigate: (path: string) => void
@@ -7,6 +7,7 @@ interface PersonalizationHubProps {
 const ROWS = [
   { path: 'personalization/wallpaper', label: 'Wallpaper', description: 'Change background image', icon: ImageIcon },
   { path: 'personalization/topbar', label: 'Top Bar', description: 'Color, icon', icon: PanelTop },
+  { path: 'personalization/tray', label: 'System Tray', description: 'Show, hide and reorder tray icons', icon: LayoutGrid },
   { path: 'personalization/hotkeys', label: 'Hotkeys', description: 'Function keys', icon: Keyboard },
 ]
 

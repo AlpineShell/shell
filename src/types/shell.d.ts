@@ -146,6 +146,26 @@ declare global {
     icon: string | null
   }
 
+  interface TrayIcon {
+    id: string
+    hWnd: number
+    uID: number
+    guid: string | null
+    tooltip: string
+    icon: string
+    version: number
+  }
+
+  interface TrayLayout {
+    order: string[]
+    hidden: string[]
+  }
+
+  interface TrayDisplaySetting {
+    showOnAllMonitors: boolean
+    primaryDisplayId: number
+  }
+
   interface Window {
     setup: {
       status: () => Promise<SetupStatus>
@@ -265,6 +285,17 @@ declare global {
         control: (action: 'play' | 'pause' | 'toggle' | 'next' | 'previous') => Promise<{ success: boolean }>
         microphone: () => Promise<MicrophoneStatus>
         onMicrophoneChanged: (callback: (data: MicrophoneStatus) => void) => void
+      }
+      tray: {
+        icons: () => Promise<TrayIcon[]>
+        onIconsChanged: (callback: (data: TrayIcon[]) => void) => void
+        click: (id: string, button: 'left' | 'right', x: number, y: number) => Promise<void>
+        layout: () => Promise<TrayLayout>
+        setLayout: (layout: TrayLayout) => Promise<TrayLayout>
+        onLayoutChanged: (callback: (data: TrayLayout) => void) => void
+        display: () => Promise<TrayDisplaySetting>
+        setDisplay: (showOnAllMonitors: boolean) => Promise<TrayDisplaySetting>
+        onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => void
       }
     }
   }

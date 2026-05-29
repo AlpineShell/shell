@@ -22,6 +22,9 @@ const battery = require('./modules/battery')
 const systemInfo = require('./modules/systemInfo')
 const launcher = require('./modules/launcher')
 const launcherHotkey = require('./modules/launcherHotkey')
+const trayLayout = require('./modules/trayLayout')
+let trayHost = null
+try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[main] trayHost load error:', e.message) }
 let altTab = null
 try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
 let screenshot = null
@@ -104,7 +107,7 @@ function createTopBarWindow(display) {
   win.setIgnoreMouseEvents(true)
   win.loadURL(getURL('topbar', display.id))
 
-  const INTERACTIVE_RIGHT = 400
+  const INTERACTIVE_RIGHT = 600
   const INTERACTIVE_LEFT = 40
   const INTERACTIVE_CENTER = 120
   let ignoring = true
@@ -145,10 +148,16 @@ function createTopBarWindow(display) {
     if (event.sender === win.webContents) {
       const bounds = win.getBounds()
       win.setBounds({ ...bounds, height })
-      win.setAlwaysOnTop(height > TOP_BAR_HEIGHT)
+      if (height > TOP_BAR_HEIGHT) {
+        win.setAlwaysOnTop(true, 'screen-saver')
+      } else {
+        win.setAlwaysOnTop(false)
+      }
+      win.webContents.invalidate()
     }
   }
   ipcMain.on('topbar/set-height', onSetHeight)
+
   win.on('blur', () => launcher.handleBlur(win))
   win.on('closed', () => {
     clearInterval(cursorTracker)
@@ -348,7 +357,7 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, launcherHotkey)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, launcherHotkey, trayLayout, trayHost)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
@@ -396,6 +405,17 @@ function startShellMode() {
 
   for (const display of screen.getAllDisplays()) {
     createShellForDisplay(display)
+  }
+
+  if (process.env.ALPINE_TRAY_DEBUG) {
+    try {
+      require('./zorderDebug').start(() => {
+        const primaryId = screen.getPrimaryDisplay().id
+        return shells.get(primaryId) || [...shells.values()][0]
+      })
+    } catch (e) {
+      console.error('[zorderDebug] start error:', e.message)
+    }
   }
 
   if (!isDev) processAutostart()

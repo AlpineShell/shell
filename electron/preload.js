@@ -208,4 +208,21 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('media/microphone-changed', (_, data) => callback(data))
     },
   },
+  tray: {
+    icons: () => ipcRenderer.invoke('tray/icons'),
+    onIconsChanged: (callback) => {
+      ipcRenderer.on('tray/icons-changed', (_, data) => callback(data))
+    },
+    click: (id, button, x, y) => ipcRenderer.invoke('tray/click', { id, button, x, y }),
+    layout: () => ipcRenderer.invoke('tray/layout-get'),
+    setLayout: (layout) => ipcRenderer.invoke('tray/layout-set', layout),
+    onLayoutChanged: (callback) => {
+      ipcRenderer.on('tray/layout-changed', (_, data) => callback(data))
+    },
+    display: () => ipcRenderer.invoke('tray/display-get'),
+    setDisplay: (showOnAllMonitors) => ipcRenderer.invoke('tray/display-set', showOnAllMonitors),
+    onDisplayChanged: (callback) => {
+      ipcRenderer.on('tray/display-changed', (_, data) => callback(data))
+    },
+  },
 })
