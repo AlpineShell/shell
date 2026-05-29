@@ -319,6 +319,13 @@ function createSettingsWindow() {
   })
   settingsWin.on('closed', () => {
     settingsWin = null
+    for (const shell of shells.values()) {
+      const tb = shell.topBar
+      if (tb && !tb.isDestroyed()) {
+        try { tb.moveTop() } catch {}
+        try { tb.webContents.invalidate() } catch {}
+      }
+    }
   })
   return settingsWin
 }

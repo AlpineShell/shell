@@ -61,9 +61,9 @@ export default function TopBar() {
                     <LauncherTrigger />
                 </div>
                 <div className="flex items-center gap-1 mr-1 relative z-1 self-stretch">
-                    <MicrophoneStatus />
-                    <MediaStatus />
                     <SystemTray />
+                    <MediaStatus />
+                    <MicrophoneStatus />
                     <StatusIndicator />
                     <Clock />
                 </div>

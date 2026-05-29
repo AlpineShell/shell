@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTopbarBg, useDarkText, useFullscreenWindow, useMenuOpenChange } from "../../themeContext";
 
-const CORNER = 12;
+const CORNER = 16;
 
 let forceCloseActive: (() => void) | null = null;
 
@@ -144,21 +144,29 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                     onMouseEnter={handleEnter}
                     onMouseLeave={handleLeave}
                 >
-                    <div
-                        className="absolute top-0 right-full"
-                        style={{ width: CORNER, height: CORNER, background: borderColor
-                            ? `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${BG} ${CORNER + 0.5}px)`
-                            : `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
-                    />
-                    <div
-                        className="absolute top-0 left-full"
-                        style={{ width: CORNER, height: CORNER, background: borderColor
-                            ? `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${BG} ${CORNER + 0.5}px)`
-                            : `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${BG} ${CORNER}px)` }}
-                    />
+                    <svg
+                        className="absolute right-full"
+                        width={CORNER}
+                        height={CORNER}
+                        viewBox={`0 0 ${CORNER} ${CORNER}`}
+                        style={{ top: -0.5, overflow: "visible", display: "block" }}
+                    >
+                        <path d={`M0 0 H${CORNER} V${CORNER} A${CORNER} ${CORNER} 0 0 0 0 0 Z`} fill={BG} />
+                        {borderColor && <path d={`M0 0 A${CORNER} ${CORNER} 0 0 1 ${CORNER} ${CORNER}`} fill="none" stroke={borderColor} strokeWidth={1} />}
+                    </svg>
+                    <svg
+                        className="absolute left-full"
+                        width={CORNER}
+                        height={CORNER}
+                        viewBox={`0 0 ${CORNER} ${CORNER}`}
+                        style={{ top: -0.5, overflow: "visible", display: "block" }}
+                    >
+                        <path d={`M${CORNER} 0 H0 V${CORNER} A${CORNER} ${CORNER} 0 0 1 ${CORNER} 0 Z`} fill={BG} />
+                        {borderColor && <path d={`M${CORNER} 0 A${CORNER} ${CORNER} 0 0 0 0 ${CORNER}`} fill="none" stroke={borderColor} strokeWidth={1} />}
+                    </svg>
                     <div style={{ position: "relative" }}>
                         <div
-                            className="overflow-hidden rounded-b-xl shadow-xl"
+                            className="overflow-hidden rounded-b-2xl shadow-xl"
                             style={{ backgroundColor: BG }}
                         >
                             {children}
@@ -166,14 +174,14 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                         {borderColor && (
                             <div style={{
                                 position: "absolute",
-                                top: CORNER,
+                                top: CORNER - 0.5,
                                 left: 0,
                                 right: 0,
                                 bottom: 0,
-                                borderLeft: `0.5px solid ${borderColor}`,
-                                borderRight: `0.5px solid ${borderColor}`,
-                                borderBottom: `0.5px solid ${borderColor}`,
-                                borderRadius: "0 0 12px 12px",
+                                borderLeft: `1px solid ${borderColor}`,
+                                borderRight: `1px solid ${borderColor}`,
+                                borderBottom: `1px solid ${borderColor}`,
+                                borderRadius: "0 0 16px 16px",
                                 pointerEvents: "none",
                             }} />
                         )}
