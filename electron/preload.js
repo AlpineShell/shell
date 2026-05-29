@@ -224,5 +224,10 @@ contextBridge.exposeInMainWorld('shell', {
     onDisplayChanged: (callback) => {
       ipcRenderer.on('tray/display-changed', (_, data) => callback(data))
     },
+    settings: () => ipcRenderer.invoke('tray/settings-get'),
+    setSettings: (partial) => ipcRenderer.invoke('tray/settings-set', partial),
+    onSettingsChanged: (callback) => {
+      ipcRenderer.on('tray/settings-changed', (_, data) => callback(data))
+    },
   },
 })

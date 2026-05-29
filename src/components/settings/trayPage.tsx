@@ -2,12 +2,14 @@ import { ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react'
 import { useTrayIcons } from '../../hooks/useTrayIcons'
 import { useTrayLayout } from '../../hooks/useTrayLayout'
 import { useTrayDisplay } from '../../hooks/useTrayDisplay'
+import { useTraySettings } from '../../hooks/useTraySettings'
 import { composeTray } from '../topbar/tray/composeTray'
 
 export default function TrayPage() {
   const icons = useTrayIcons()
   const { layout, setLayout } = useTrayLayout()
   const { display, setShowOnAllMonitors } = useTrayDisplay()
+  const { settings, setSettings } = useTraySettings()
   const { visible, overflow } = composeTray(icons, layout)
 
   function commit(visibleIds: string[], hidden: string[]) {
@@ -35,52 +37,75 @@ export default function TrayPage() {
     <div className="flex flex-col gap-8 w-full">
       <h1 className="text-2xl font-semibold tracking-tight">System Tray</h1>
 
-      {icons.length === 0 && (
-        <p className="text-sm text-white/50">No tray icons are currently running. App icons appear here once their apps add them to the notification area.</p>
-      )}
-
-      {visible.length > 0 && (
-        <Section title="Shown" subtitle="Icons displayed in the top bar. Reorder them or move them to the hidden area.">
-          <div className="flex flex-col gap-1">
-            {visible.map((icon, i) => (
-              <Row key={icon.id} icon={icon}>
-                <IconButton label="Move up" disabled={i === 0} onClick={() => move(icon.id, -1)}>
-                  <ChevronUp size={15} />
-                </IconButton>
-                <IconButton label="Move down" disabled={i === visible.length - 1} onClick={() => move(icon.id, 1)}>
-                  <ChevronDown size={15} />
-                </IconButton>
-                <IconButton label="Hide" onClick={() => hide(icon.id)}>
-                  <EyeOff size={15} />
-                </IconButton>
-              </Row>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {overflow.length > 0 && (
-        <Section title="Hidden" subtitle="Icons tucked into the overflow flyout.">
-          <div className="flex flex-col gap-1">
-            {overflow.map((icon) => (
-              <Row key={icon.id} icon={icon}>
-                <IconButton label="Show" onClick={() => show(icon.id)}>
-                  <Eye size={15} />
-                </IconButton>
-              </Row>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      <Section title="Monitors">
-        <ToggleRow
-          label="Show on all monitors"
-          description="Mirror the tray on every display's top bar. When off, it appears only on your primary display."
-          checked={display.showOnAllMonitors}
-          onChange={setShowOnAllMonitors}
-        />
+      <Section title="General">
+        <div className="flex flex-col gap-3">
+          <ToggleRow
+            label="Show system tray"
+            description="Display running apps' tray icons in the top bar."
+            checked={settings.enabled}
+            onChange={(v) => setSettings({ enabled: v })}
+          />
+          {settings.enabled && (
+            <ToggleRow
+              label="Show overflow arrow"
+              description="Show the chevron that holds hidden icons. When off, the arrow is hidden and hidden icons are managed only here."
+              checked={settings.showOverflow}
+              onChange={(v) => setSettings({ showOverflow: v })}
+            />
+          )}
+        </div>
       </Section>
+
+      {settings.enabled && (
+        <>
+          {icons.length === 0 && (
+            <p className="text-sm text-white/50">No tray icons are currently running. App icons appear here once their apps add them to the notification area.</p>
+          )}
+
+          {visible.length > 0 && (
+            <Section title="Shown" subtitle="Icons displayed in the top bar. Reorder them or move them to the hidden area.">
+              <div className="flex flex-col gap-1">
+                {visible.map((icon, i) => (
+                  <Row key={icon.id} icon={icon}>
+                    <IconButton label="Move up" disabled={i === 0} onClick={() => move(icon.id, -1)}>
+                      <ChevronUp size={15} />
+                    </IconButton>
+                    <IconButton label="Move down" disabled={i === visible.length - 1} onClick={() => move(icon.id, 1)}>
+                      <ChevronDown size={15} />
+                    </IconButton>
+                    <IconButton label="Hide" onClick={() => hide(icon.id)}>
+                      <EyeOff size={15} />
+                    </IconButton>
+                  </Row>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {overflow.length > 0 && (
+            <Section title="Hidden" subtitle="Icons tucked into the overflow flyout.">
+              <div className="flex flex-col gap-1">
+                {overflow.map((icon) => (
+                  <Row key={icon.id} icon={icon}>
+                    <IconButton label="Show" onClick={() => show(icon.id)}>
+                      <Eye size={15} />
+                    </IconButton>
+                  </Row>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          <Section title="Monitors">
+            <ToggleRow
+              label="Show on all monitors"
+              description="Mirror the tray on every display's top bar. When off, it appears only on your primary display."
+              checked={display.showOnAllMonitors}
+              onChange={setShowOnAllMonitors}
+            />
+          </Section>
+        </>
+      )}
     </div>
   )
 }

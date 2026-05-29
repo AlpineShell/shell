@@ -4,6 +4,7 @@ import { useDarkText } from "../themeContext";
 import { useTrayIcons } from "../../hooks/useTrayIcons";
 import { useTrayLayout } from "../../hooks/useTrayLayout";
 import { useTrayDisplay } from "../../hooks/useTrayDisplay";
+import { useTraySettings } from "../../hooks/useTraySettings";
 import { composeTray } from "./tray/composeTray";
 import PopupMenu from "./shared/popupMenu";
 
@@ -67,6 +68,7 @@ function SystemTrayInner() {
     const icons = useTrayIcons();
     const { layout, setLayout } = useTrayLayout();
     const { display } = useTrayDisplay();
+    const { settings } = useTraySettings();
 
     const containerRef = useRef<HTMLDivElement>(null);
     const caretRef = useRef<HTMLDivElement>(null);
@@ -79,9 +81,9 @@ function SystemTrayInner() {
 
     const { visible, overflow } = composeTray(icons, layout);
     const onPrimary = display.showOnAllMonitors || MY_DISPLAY_ID === display.primaryDisplayId;
-    const showCaret = overflow.length > 0 || dragId !== null;
+    const showCaret = settings.showOverflow && (overflow.length > 0 || dragId !== null);
 
-    if (!onPrimary || (visible.length === 0 && overflow.length === 0)) return null;
+    if (!settings.enabled || !onPrimary || (visible.length === 0 && overflow.length === 0)) return null;
 
     function computeDropIndex(clientX: number) {
         let index = visible.length;

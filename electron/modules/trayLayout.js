@@ -7,6 +7,8 @@ const STORE_FILE = 'tray-layout.json'
 let order = []
 let hidden = []
 let showOnAllMonitors = false
+let enabled = true
+let showOverflow = true
 let storePath = null
 let broadcastRef = null
 
@@ -23,6 +25,8 @@ function load() {
       if (Array.isArray(data.order)) order = data.order.filter((id) => typeof id === 'string')
       if (Array.isArray(data.hidden)) hidden = data.hidden.filter((id) => typeof id === 'string')
       if (typeof data.showOnAllMonitors === 'boolean') showOnAllMonitors = data.showOnAllMonitors
+      if (typeof data.enabled === 'boolean') enabled = data.enabled
+      if (typeof data.showOverflow === 'boolean') showOverflow = data.showOverflow
     }
   } catch (e) {
     console.error('[trayLayout] load error:', e.message)
@@ -33,7 +37,7 @@ function save() {
   try {
     const dir = path.dirname(getStorePath())
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(getStorePath(), JSON.stringify({ order, hidden, showOnAllMonitors }))
+    fs.writeFileSync(getStorePath(), JSON.stringify({ order, hidden, showOnAllMonitors, enabled, showOverflow }))
   } catch (e) {
     console.error('[trayLayout] save error:', e.message)
   }
@@ -55,6 +59,10 @@ function getDisplaySetting() {
   return { showOnAllMonitors, primaryDisplayId: getPrimaryDisplayId() }
 }
 
+function getSettings() {
+  return { enabled, showOverflow }
+}
+
 module.exports = {
   handlers: {
     'tray/layout-get': () => getLayout(),
@@ -71,6 +79,14 @@ module.exports = {
       save()
       if (broadcastRef) broadcastRef('tray/display-changed', getDisplaySetting())
       return getDisplaySetting()
+    },
+    'tray/settings-get': () => getSettings(),
+    'tray/settings-set': (_event, partial) => {
+      if (partial && typeof partial.enabled === 'boolean') enabled = partial.enabled
+      if (partial && typeof partial.showOverflow === 'boolean') showOverflow = partial.showOverflow
+      save()
+      if (broadcastRef) broadcastRef('tray/settings-changed', getSettings())
+      return getSettings()
     },
   },
 

@@ -166,6 +166,11 @@ declare global {
     primaryDisplayId: number
   }
 
+  interface TraySettings {
+    enabled: boolean
+    showOverflow: boolean
+  }
+
   interface Window {
     setup: {
       status: () => Promise<SetupStatus>
@@ -296,6 +301,9 @@ declare global {
         display: () => Promise<TrayDisplaySetting>
         setDisplay: (showOnAllMonitors: boolean) => Promise<TrayDisplaySetting>
         onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => void
+        settings: () => Promise<TraySettings>
+        setSettings: (partial: Partial<TraySettings>) => Promise<TraySettings>
+        onSettingsChanged: (callback: (data: TraySettings) => void) => void
       }
     }
   }
