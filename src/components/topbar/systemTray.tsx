@@ -8,6 +8,22 @@ import { composeTray } from "./tray/composeTray";
 import PopupMenu from "./shared/popupMenu";
 
 const DRAG_THRESHOLD = 5;
+const DRAG_EXPAND_HEIGHT = 240;
+const BAR_DROP_Y = 32;
+
+type DragSource = "visible" | "overflow";
+interface DragState {
+    id: string;
+    source: DragSource;
+    el: HTMLElement;
+    startX: number;
+    startY: number;
+    active: boolean;
+    dropIndex: number;
+    overCaret: boolean;
+    lastX: number;
+    lastY: number;
+}
 
 function screenAnchor(el: HTMLElement) {
     const rect = el.getBoundingClientRect();
@@ -55,11 +71,10 @@ function SystemTrayInner() {
     const containerRef = useRef<HTMLDivElement>(null);
     const caretRef = useRef<HTMLDivElement>(null);
     const iconRefs = useRef(new Map<string, HTMLButtonElement>());
-    const dragRef = useRef<{ id: string; startX: number; startY: number; active: boolean } | null>(null);
+    const dragRef = useRef<DragState | null>(null);
 
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
-    const [dropIndex, setDropIndex] = useState<number | null>(null);
     const [overCaret, setOverCaret] = useState(false);
 
     const { visible, overflow } = composeTray(icons, layout);
@@ -97,9 +112,27 @@ function SystemTrayInner() {
         setLayout({ order: [...visible.map((i) => i.id), ...overflow.map((i) => i.id)], hidden });
     }
 
-    function onPointerDown(e: React.PointerEvent, id: string) {
+    function showIcon(id: string) {
+        const hidden = layout.hidden.filter((h) => h !== id);
+        const visIds = visible.map((i) => i.id);
+        const restOverflow = overflow.map((i) => i.id).filter((x) => x !== id);
+        setLayout({ order: [...visIds, id, ...restOverflow], hidden });
+    }
+
+    function onPointerDown(e: React.PointerEvent, id: string, source: DragSource) {
         if (e.button !== 0) return;
-        dragRef.current = { id, startX: e.clientX, startY: e.clientY, active: false };
+        dragRef.current = {
+            id,
+            source,
+            el: e.currentTarget as HTMLElement,
+            startX: e.clientX,
+            startY: e.clientY,
+            active: false,
+            dropIndex: 0,
+            overCaret: false,
+            lastX: e.clientX,
+            lastY: e.clientY,
+        };
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         window.addEventListener("pointermove", onPointerMove);
         window.addEventListener("pointerup", onPointerUp);
@@ -112,14 +145,18 @@ function SystemTrayInner() {
             if (Math.hypot(e.clientX - s.startX, e.clientY - s.startY) < DRAG_THRESHOLD) return;
             s.active = true;
             setDragId(s.id);
+            if (s.source === "visible") window.topbar?.setHeight?.(DRAG_EXPAND_HEIGHT);
         }
-        setDragPos({ x: e.clientX, y: e.clientY });
-        setDropIndex(computeDropIndex(e.clientX));
+        s.lastX = e.clientX;
+        s.lastY = e.clientY;
+        s.dropIndex = computeDropIndex(e.clientX);
         const c = caretRef.current;
-        if (c) {
+        s.overCaret = !!c && (() => {
             const r = c.getBoundingClientRect();
-            setOverCaret(e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 6 && e.clientY <= r.bottom + 6);
-        }
+            return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 6 && e.clientY <= r.bottom + 6;
+        })();
+        setDragPos({ x: e.clientX, y: e.clientY });
+        setOverCaret(s.overCaret);
     }
 
     function onPointerUp() {
@@ -127,22 +164,21 @@ function SystemTrayInner() {
         window.removeEventListener("pointerup", onPointerUp);
         const s = dragRef.current;
         dragRef.current = null;
-        const active = s?.active;
-        const id = s?.id ?? null;
-        const droppedOnCaret = overCaret;
-        const index = dropIndex;
         setDragId(null);
         setDragPos(null);
-        setDropIndex(null);
         setOverCaret(false);
-        if (!id) return;
-        if (!active) {
-            const el = iconRefs.current.get(id);
-            if (el) clickTray(id, "left", el);
+        if (!s) return;
+        if (!s.active) {
+            clickTray(s.id, "left", s.el);
             return;
         }
-        if (droppedOnCaret) hideIcon(id);
-        else if (index !== null) reorderTo(id, index);
+        window.topbar?.setHeight?.(24);
+        if (s.source === "visible") {
+            if (s.overCaret) hideIcon(s.id);
+            else reorderTo(s.id, s.dropIndex);
+        } else if (s.lastY <= BAR_DROP_Y) {
+            showIcon(s.id);
+        }
     }
 
     const draggedIcon = dragId ? visible.find((i) => i.id === dragId) || overflow.find((i) => i.id === dragId) : null;
@@ -157,14 +193,14 @@ function SystemTrayInner() {
                         else iconRefs.current.delete(icon.id);
                     }}
                     title={icon.tooltip}
-                    onPointerDown={(e) => onPointerDown(e, icon.id)}
+                    onPointerDown={(e) => onPointerDown(e, icon.id, "visible")}
                     onContextMenu={(e) => {
                         e.preventDefault();
                         clickTray(icon.id, "right", e.currentTarget);
                     }}
                     className={`flex items-center justify-center w-4 h-5 cursor-pointer transition-opacity ${dragId === icon.id ? "opacity-30" : "hover:opacity-60"}`}
                 >
-                    {icon.icon ? <img src={icon.icon} alt="" className="w-4 h-4" draggable={false} /> : <div className="w-3 h-3 rounded-sm bg-white/20" />}
+                    {icon.icon ? <img src={icon.icon} alt="" className="w-3.5 h-3.5" draggable={false} /> : <div className="w-3 h-3 rounded-sm bg-white/20" />}
                 </button>
             ))}
 
@@ -179,7 +215,7 @@ function SystemTrayInner() {
                         </div>
                     }
                 >
-                    <TrayOverflow icons={overflow} darkText={darkText} />
+                    <TrayOverflow icons={overflow} darkText={darkText} dragId={dragId} onIconPointerDown={onPointerDown} />
                 </PopupMenu>
             )}
 
@@ -188,15 +224,25 @@ function SystemTrayInner() {
                     src={draggedIcon.icon}
                     alt=""
                     draggable={false}
-                    className="w-4 h-4 pointer-events-none"
-                    style={{ position: "fixed", left: dragPos.x - 8, top: dragPos.y - 8, zIndex: 50, opacity: 0.85 }}
+                    className="w-3.5 h-3.5 pointer-events-none"
+                    style={{ position: "fixed", left: dragPos.x - 7, top: dragPos.y - 7, zIndex: 50, opacity: 0.85 }}
                 />
             )}
         </div>
     );
 }
 
-function TrayOverflow({ icons, darkText }: { icons: TrayIcon[]; darkText: boolean }) {
+function TrayOverflow({
+    icons,
+    darkText,
+    dragId,
+    onIconPointerDown,
+}: {
+    icons: TrayIcon[];
+    darkText: boolean;
+    dragId: string | null;
+    onIconPointerDown: (e: React.PointerEvent, id: string, source: DragSource) => void;
+}) {
     if (icons.length === 0) {
         return <div className={`px-4 py-3 text-xs ${darkText ? "text-black/50" : "text-white/50"}`}>No hidden icons</div>;
     }
@@ -206,12 +252,12 @@ function TrayOverflow({ icons, darkText }: { icons: TrayIcon[]; darkText: boolea
                 <button
                     key={icon.id}
                     title={icon.tooltip}
-                    onClick={(e) => clickTray(icon.id, "left", e.currentTarget)}
+                    onPointerDown={(e) => onIconPointerDown(e, icon.id, "overflow")}
                     onContextMenu={(e) => {
                         e.preventDefault();
                         clickTray(icon.id, "right", e.currentTarget);
                     }}
-                    className={`flex items-center justify-center w-8 h-8 rounded-md cursor-pointer transition-colors ${darkText ? "hover:bg-black/10" : "hover:bg-white/15"}`}
+                    className={`flex items-center justify-center w-8 h-8 rounded-md cursor-pointer transition-colors ${darkText ? "hover:bg-black/10" : "hover:bg-white/15"} ${dragId === icon.id ? "opacity-30" : ""}`}
                 >
                     {icon.icon ? <img src={icon.icon} alt="" className="w-5 h-5" draggable={false} /> : <div className="w-4 h-4 rounded-sm bg-white/20" />}
                 </button>
