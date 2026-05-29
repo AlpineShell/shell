@@ -186,7 +186,7 @@ function SystemTrayInner() {
     const draggedIcon = dragId ? visible.find((i) => i.id === dragId) || overflow.find((i) => i.id === dragId) : null;
 
     return (
-        <div ref={containerRef} className="flex items-center gap-0.5 self-stretch">
+        <div ref={containerRef} className="flex items-center gap-0.5 self-stretch pr-2">
             {visible.map((icon) => (
                 <button
                     key={icon.id}
