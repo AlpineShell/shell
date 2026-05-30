@@ -1,8 +1,12 @@
 import { createPortal } from "react-dom"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 
 const CORNER = 12
+
+interface AltTabPanelProps {
+  onGapChange: (gap: { left: number; right: number } | null) => void
+}
 
 function WindowEntry({ window, selected, bg, darkText }: { window: AltTabWindow; selected: boolean; bg: string; darkText: boolean }) {
   const [thumbWidth, setThumbWidth] = useState(200)
@@ -46,7 +50,7 @@ function WindowEntry({ window, selected, bg, darkText }: { window: AltTabWindow;
   )
 }
 
-export default function AltTabPanel() {
+export default function AltTabPanel({ onGapChange }: AltTabPanelProps) {
   const bg = useTopbarBg()
   const darkText = useDarkText()
   const fullscreenWindow = useFullscreenWindow()
@@ -55,6 +59,7 @@ export default function AltTabPanel() {
   const [windows, setWindows] = useState<AltTabWindow[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [visible, setVisible] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     window.alttab.onShow((data) => {
@@ -69,6 +74,24 @@ export default function AltTabPanel() {
     })
     window.alttab.onSelectionChanged(setSelectedIndex)
   }, [])
+
+  useEffect(() => {
+    if (!visible) {
+      onGapChange(null)
+      return
+    }
+    const panel = panelRef.current
+    if (!panel) return
+    const reportGap = () => {
+      const left = Math.round((window.innerWidth - panel.offsetWidth) / 2) - CORNER
+      const right = left + panel.offsetWidth + CORNER * 2
+      onGapChange({ left, right })
+    }
+    reportGap()
+    const observer = new ResizeObserver(reportGap)
+    observer.observe(panel)
+    return () => observer.disconnect()
+  }, [visible])
 
   if (!visible || windows.length === 0) return null
 
@@ -86,6 +109,7 @@ export default function AltTabPanel() {
         <div className="absolute top-0 left-full" style={{ width: CORNER, height: CORNER, background: cornerBgRight }} />
         <div className="relative">
           <div
+            ref={panelRef}
             className="overflow-hidden rounded-b-xl shadow-2xl p-3"
             style={{ backgroundColor: bg, transition: "background-color 300ms ease", maxWidth: "90vw" }}
           >

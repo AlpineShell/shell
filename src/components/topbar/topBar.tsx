@@ -24,9 +24,10 @@ export default function TopBar() {
     const [menuGap, setMenuGap] = useState<{ left: number; right: number } | null>(null);
     const [launcherOpen, setLauncherOpen] = useState(false);
     const [launcherGap, setLauncherGap] = useState<{ left: number; right: number } | null>(null);
+    const [altTabGap, setAltTabGap] = useState<{ left: number; right: number } | null>(null);
     const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
-    const activeGap = menuGap || launcherGap;
-    const showBorder = hovered || menuOpen || launcherGap !== null;
+    const activeGap = menuGap || launcherGap || altTabGap;
+    const showBorder = hovered || menuOpen || launcherGap !== null || altTabGap !== null;
 
     function handleMenuChange(open: boolean, gap?: { left: number; right: number }) {
         setMenuOpen(open);
@@ -69,7 +70,7 @@ export default function TopBar() {
                 </div>
             </div>
             {launcherOpen && <LauncherPanel onGapChange={setLauncherGap} />}
-            <AltTabPanel />
+            <AltTabPanel onGapChange={setAltTabGap} />
         </ThemeProvider>
     );
 }
