@@ -360,4 +360,11 @@ function processAutostart() {
 
 }
 
-module.exports = { processAutostart }
+module.exports = {
+  processAutostart,
+  RUN_KEYS,
+  RUN_ONCE_KEYS,
+  STARTUP_FOLDERS,
+  isBlockedEntry,
+  expandEnvVars,
+}

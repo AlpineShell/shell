@@ -23,6 +23,7 @@ const systemInfo = require('./modules/systemInfo')
 const launcher = require('./modules/launcher')
 const launcherHotkey = require('./modules/launcherHotkey')
 const trayLayout = require('./modules/trayLayout')
+const appManager = require('./modules/appManager')
 let trayHost = null
 try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[main] trayHost load error:', e.message) }
 let altTab = null
@@ -382,7 +383,7 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, launcherHotkey, trayLayout, trayHost)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, launcherHotkey, trayLayout, trayHost, appManager)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())

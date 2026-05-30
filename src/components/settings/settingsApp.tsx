@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Command, House, MonitorCog, Paintbrush, Plug, Search, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, AppWindow, Command, House, MonitorCog, Paintbrush, Plug, Search, X } from 'lucide-react'
 import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
 import WallpaperPage from './wallpaperPage'
@@ -12,6 +12,7 @@ import BluetoothSettingsPage from './bluetoothSettingsPage'
 import WifiSettingsPage from './wifiSettingsPage'
 import SystemPage from './systemPage'
 import SystemRevertPage from './systemRevertPage'
+import AppsPage from './appsPage'
 
 interface NavItem {
   path: string
@@ -23,6 +24,7 @@ const NAV: NavItem[] = [
   { path: 'home', label: 'Home', icon: House },
   { path: 'personalization', label: 'Personalization', icon: Paintbrush },
   { path: 'devices', label: 'Devices & Connections', icon: Plug },
+  { path: 'apps', label: 'Apps', icon: AppWindow },
   { path: 'system', label: 'System', icon: MonitorCog },
 ]
 
@@ -180,6 +182,7 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'devices') return <DevicesHub onNavigate={navigate} />
   if (path === 'devices/bluetooth') return <BluetoothSettingsPage />
   if (path === 'devices/wifi') return <WifiSettingsPage />
+  if (path === 'apps') return <AppsPage />
   if (path === 'system') return <SystemPage onNavigate={navigate} />
   if (path === 'system/revert') return <SystemRevertPage />
   return null
@@ -187,6 +190,7 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
 
 const SEGMENT_LABELS: Record<string, string> = {
   home: 'Home',
+  apps: 'Apps',
   personalization: 'Personalization',
   wallpaper: 'Wallpaper',
   topbar: 'Top Bar',

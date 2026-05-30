@@ -234,4 +234,21 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('tray/settings-changed', (_, data) => callback(data))
     },
   },
+  apps: {
+    startup: () => ipcRenderer.invoke('apps/startup-list'),
+    onStartupChanged: (callback) => {
+      ipcRenderer.on('apps/startup-changed', (_, data) => callback(data))
+    },
+    setStartup: (id, enabled) => ipcRenderer.invoke('apps/startup-set', { id, enabled }),
+    clearPending: (id) => ipcRenderer.invoke('apps/startup-clear-pending', { id }),
+    applySystemChanges: () => ipcRenderer.invoke('apps/startup-apply-system'),
+    history: () => ipcRenderer.invoke('apps/startup-history'),
+    onStartupHistoryChanged: (callback) => {
+      ipcRenderer.on('apps/startup-history-changed', (_, data) => callback(data))
+    },
+    undo: (seq) => ipcRenderer.invoke('apps/startup-undo', { seq }),
+    running: () => ipcRenderer.invoke('apps/running-list'),
+    endTask: (pids) => ipcRenderer.invoke('apps/end-task', pids),
+    openLocation: (target) => ipcRenderer.invoke('apps/open-location', target),
+  },
 })

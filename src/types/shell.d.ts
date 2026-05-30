@@ -9,6 +9,40 @@ interface OpenApp {
   icon: string
 }
 
+interface StartupEntry {
+  id: string
+  name: string
+  command: string
+  target: string | null
+  icon: string | null
+  source: 'registry' | 'folder' | 'task'
+  sourceLabel: string
+  scope: 'user' | 'system'
+  enabled: boolean
+  pending: 'enable' | 'disable' | null
+  running: boolean
+  location: string
+}
+
+interface RunningApp {
+  name: string
+  path: string | null
+  icon: string | null
+  memory: number
+  cpu: number
+  count: number
+  pids: number[]
+}
+
+interface StartupHistoryEntry {
+  seq: number
+  id: string
+  name: string
+  from: boolean
+  to: boolean
+  scope: 'user' | 'system'
+}
+
 interface NetworkStatus {
   signal: number | null
   connected: boolean
@@ -244,6 +278,19 @@ declare global {
         openSettings: () => Promise<void>
         closeSettings: () => Promise<void>
         setSettingsPage: (name: string) => Promise<void>
+      }
+      apps: {
+        startup: () => Promise<StartupEntry[]>
+        onStartupChanged: (callback: (data: StartupEntry[]) => void) => void
+        setStartup: (id: string, enabled: boolean) => Promise<StartupEntry[]>
+        clearPending: (id: string) => Promise<StartupEntry[]>
+        applySystemChanges: () => Promise<{ ok: boolean; error?: string }>
+        history: () => Promise<StartupHistoryEntry[]>
+        onStartupHistoryChanged: (callback: (data: StartupHistoryEntry[]) => void) => void
+        undo: (seq: number) => Promise<StartupEntry[]>
+        running: () => Promise<RunningApp[]>
+        endTask: (pids: number[]) => Promise<{ ok: boolean }>
+        openLocation: (target: string) => Promise<{ ok: boolean }>
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>
