@@ -200,7 +200,7 @@ function SystemTrayInner() {
                         e.preventDefault();
                         clickTray(icon.id, "right", e.currentTarget);
                     }}
-                    className={`flex items-center justify-center w-4 h-5 cursor-pointer transition-opacity ${dragId === icon.id ? "opacity-30" : "hover:opacity-60"}`}
+                    className={`flex items-center justify-center w-4 h-5 cursor-pointer transition-opacity ${dragId === icon.id ? "opacity-30" : "hover:opacity-90"}`}
                 >
                     {icon.icon ? <img src={icon.icon} alt="" className="w-3.5 h-3.5" draggable={false} /> : <div className="w-3 h-3 rounded-sm bg-white/20" />}
                 </button>
