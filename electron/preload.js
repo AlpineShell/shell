@@ -3,9 +3,11 @@ const { contextBridge, ipcRenderer } = require('electron')
 let bootWallpaper = null
 let bootBluetooth = null
 let bootWifi = null
+let bootSettingsIcon = null
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
 try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
+try { bootSettingsIcon = ipcRenderer.sendSync('windows/settings-icon') } catch {}
 
 ipcRenderer.on('windows/wallpaper-changed', (_, data) => { bootWallpaper = data })
 ipcRenderer.on('system/bluetooth-changed', (_, data) => { bootBluetooth = data })
@@ -119,6 +121,7 @@ contextBridge.exposeInMainWorld('setup', {
 })
 
 contextBridge.exposeInMainWorld('shell', {
+  settingsIcon: bootSettingsIcon,
   windows: {
     wallpaper: () => ipcRenderer.invoke('windows/wallpaper'),
     onWallpaperChanged: (callback) => {
@@ -135,6 +138,7 @@ contextBridge.exposeInMainWorld('shell', {
     },
     openSettings: () => ipcRenderer.invoke('windows/open-settings'),
     closeSettings: () => ipcRenderer.invoke('windows/close-settings'),
+    setSettingsPage: (name) => ipcRenderer.invoke('windows/set-settings-page', name),
   },
   network: {
     wifiSignal: () => ipcRenderer.invoke('network/wifi-signal'),

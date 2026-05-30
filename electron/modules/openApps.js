@@ -14,6 +14,15 @@ const QUERY_PS1 = path.join(TEMP, 'alpine_query_apps.ps1')
 
 let queryReady = false
 let lastApps = null
+let shellAppsProvider = null
+let broadcastFn = null
+
+function withShellApps(apps) {
+  const extras = shellAppsProvider ? shellAppsProvider() : []
+  if (extras.length === 0) return apps
+  const extraHwnds = new Set(extras.map((e) => e.hwnd))
+  return [...extras, ...apps.filter((a) => !extraHwnds.has(a.hwnd))]
+}
 
 async function compileDll() {
   try { fs.unlinkSync(DLL_PATH) } catch {}
@@ -147,25 +156,36 @@ function snapshot(apps) {
 }
 
 module.exports = {
+  setShellAppsProvider(provider) {
+    shellAppsProvider = provider
+  },
+  refresh() {
+    if (!broadcastFn) return
+    const merged = withShellApps(lastApps || [])
+    lastSnapshot = snapshot(merged)
+    broadcastFn('windows/open-apps-changed', merged)
+  },
   handlers: {
     'windows/open-apps': async () => {
-      if (lastApps !== null) return lastApps
-      const apps = await getOpenApps()
-      lastApps = apps
-      lastSnapshot = snapshot(apps)
-      return apps
+      if (lastApps === null) {
+        lastApps = await getOpenApps()
+      }
+      const merged = withShellApps(lastApps)
+      lastSnapshot = snapshot(merged)
+      return merged
     },
   },
   start(broadcast) {
+    broadcastFn = broadcast
     compileDll()
 
     setInterval(async () => {
-      const apps = await getOpenApps()
-      const current = snapshot(apps)
-      lastApps = apps
+      lastApps = await getOpenApps()
+      const merged = withShellApps(lastApps)
+      const current = snapshot(merged)
       if (current !== lastSnapshot) {
         lastSnapshot = current
-        broadcast('windows/open-apps-changed', apps)
+        broadcast('windows/open-apps-changed', merged)
       }
     }, 2000)
   },

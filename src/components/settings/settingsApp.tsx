@@ -68,6 +68,11 @@ export default function SettingsApp() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  useEffect(() => {
+    const leaf = segments[segments.length - 1]
+    window.shell.windows.setSettingsPage(SEGMENT_LABELS[leaf] ?? leaf)
+  }, [currentPath])
+
   return (
     <div className="w-screen h-screen bg-neutral-950 text-white flex overflow-hidden">
       <aside className="w-56 shrink-0 flex flex-col bg-neutral-900" style={dragRegion}>

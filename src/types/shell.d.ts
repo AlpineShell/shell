@@ -230,6 +230,7 @@ declare global {
       onCloseMenus: (callback: () => void) => () => void
     }
     shell: {
+      settingsIcon: string
       windows: {
         wallpaper: () => Promise<string | null>
         onWallpaperChanged: (callback: (data: string | null) => void) => void
@@ -242,6 +243,7 @@ declare global {
         onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => void
         openSettings: () => Promise<void>
         closeSettings: () => Promise<void>
+        setSettingsPage: (name: string) => Promise<void>
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>

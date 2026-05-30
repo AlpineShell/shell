@@ -288,6 +288,7 @@ function createSetupWindow() {
 }
 
 let settingsWin = null
+let currentSettingsPage = null
 function createSettingsWindow() {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.focus()
@@ -319,6 +320,8 @@ function createSettingsWindow() {
   })
   settingsWin.on('closed', () => {
     settingsWin = null
+    currentSettingsPage = null
+    openApps.refresh()
     for (const shell of shells.values()) {
       const tb = shell.topBar
       if (tb && !tb.isDestroyed()) {
@@ -338,6 +341,21 @@ ipcMain.handle('windows/close-settings', () => {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.destroy()
   }
+})
+
+ipcMain.handle('windows/set-settings-page', (_event, name) => {
+  currentSettingsPage = typeof name === 'string' && name ? name : null
+  openApps.refresh()
+})
+
+const { SETTINGS_ICON_DATA_URL } = require('./settingsIcon')
+ipcMain.on('windows/settings-icon', (e) => { e.returnValue = SETTINGS_ICON_DATA_URL })
+const SETTINGS_APP_PATH = 'alpine:settings'
+openApps.setShellAppsProvider(() => {
+  if (!settingsWin || settingsWin.isDestroyed()) return []
+  let hwnd = 0
+  try { hwnd = settingsWin.getNativeWindowHandle().readUInt32LE(0) } catch { return [] }
+  return [{ id: -1, hwnd, name: 'Settings', title: currentSettingsPage || 'Settings', path: SETTINGS_APP_PATH, icon: SETTINGS_ICON_DATA_URL }]
 })
 
 app.whenReady().then(async () => {

@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Settings } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2 } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 
@@ -124,12 +124,13 @@ const SETTINGS: SettingCommand[] = [
 ]
 
 const ALPINE_SETTINGS_ID = -1
+const ALPINE_SETTINGS_PATH = "alpine:settings"
 const ALPINE_SETTINGS_KEYWORDS = ["settings", "preferences", "options", "config", "system"]
 const ALPINE_SETTINGS_ITEM: LauncherItem = {
   id: ALPINE_SETTINGS_ID,
   name: "Settings",
   lnkPath: "",
-  target: "alpine:settings",
+  target: ALPINE_SETTINGS_PATH,
   icon: null,
 }
 
@@ -151,6 +152,9 @@ function appActions(item: LauncherItem): ContextAction[] {
 }
 
 function openAppActions(app: OpenApp): ContextAction[] {
+  if (app.path === ALPINE_SETTINGS_PATH) {
+    return [{ label: "Close window", icon: X, action: () => window.shell.windows.closeSettings() }]
+  }
   return [
     { label: "Close window", icon: X, action: () => window.launcher.closeWindow(app.hwnd) },
     { label: "End task", icon: SkullIcon, action: () => window.launcher.endTask(app.id) },
@@ -293,7 +297,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     const matched: { app: OpenApp; s: number }[] = []
     for (const app of openApps) {
       const nameScore = score(query, app.name)
-      const titleScore = score(query, app.title)
+      const titleScore = app.path.toLowerCase() === ALPINE_SETTINGS_PATH ? -1 : score(query, app.title)
       const best = Math.max(nameScore, titleScore)
       if (best >= 0) matched.push({ app, s: best })
     }
@@ -325,7 +329,8 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     }
     scored.sort((a, b) => b.s - a.s)
     const settingsScore = ALPINE_SETTINGS_KEYWORDS.reduce((m, k) => Math.max(m, score(query, k)), -1)
-    const showSettings = settingsScore >= 0
+    const settingsAlreadyOpen = matchedOpenApps.some((a) => a.path.toLowerCase() === ALPINE_SETTINGS_PATH)
+    const showSettings = settingsScore >= 0 && !settingsAlreadyOpen
     const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length + (showSettings ? 1 : 0)
     const limit = Math.max(1, MAX_RESULTS - taken)
     const list = scored.slice(0, limit).map((r) => r.item)
@@ -699,9 +704,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                             }`}
                           >
                             {isAlpineSettings ? (
-                              <div className={`w-7 h-7 shrink-0 flex items-center justify-center ${darkText ? "text-black/70" : "text-white/70"}`}>
-                                <Settings size={18} />
-                              </div>
+                              <img src={window.shell.settingsIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
                             ) : item.icon ? (
                               <img src={item.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
                             ) : (

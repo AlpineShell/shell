@@ -63,6 +63,34 @@ function startExplorer() {
   } catch {}
 }
 
+function listeningPidsOnPort(port) {
+  return new Promise((resolve) => {
+    exec('netstat -ano', (err, stdout) => {
+      const pids = new Set()
+      if (!err && stdout) {
+        for (const line of stdout.split('\n')) {
+          const parts = line.trim().split(/\s+/)
+          if (parts.length < 5 || parts[0] !== 'TCP') continue
+          const [, local, , state, pid] = parts
+          if (state === 'LISTENING' && local.endsWith(`:${port}`) && /^\d+$/.test(pid) && pid !== '0') {
+            pids.add(pid)
+          }
+        }
+      }
+      resolve([...pids])
+    })
+  })
+}
+
+async function freePort(port) {
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const pids = await listeningPidsOnPort(port)
+    if (pids.length === 0) return
+    await Promise.all(pids.map((pid) => new Promise((res) => exec(`taskkill /F /PID ${pid}`, () => res()))))
+    await new Promise((res) => setTimeout(res, 100))
+  }
+}
+
 function waitForPort(port) {
   return new Promise((resolve) => {
     const tryConnect = () => {
@@ -135,6 +163,10 @@ async function main() {
   const killSpin = spinner('Killing explorer.exe', c.yellow)
   await killExplorer()
   killSpin.succeed('explorer.exe stopped')
+
+  const portSpin = spinner('Freeing port 5173', c.yellow)
+  await freePort(5173)
+  portSpin.succeed('Port 5173 free')
 
   const viteSpin = spinner('Starting frontend (Vite)', c.magenta)
   viteProc = spawn('npm', ['run', 'dev'], {
