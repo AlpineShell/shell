@@ -1,44 +1,32 @@
 import { useMemo, useState } from 'react'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { PageHeader, SearchBox, TechToggle, FilterChip, Spinner, useTechState, formatMemory, bandLabel, bandClass } from './appsShared'
-
-type RunningSort = 'memory' | 'cpu'
+import { PageHeader, SearchBox, Spinner, bandLabel, bandClass } from './appsShared'
 
 export default function AppsRunningPage() {
   const running = useRunningApps()
-  const [tech, toggleTech] = useTechState()
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<RunningSort>('memory')
   const q = query.trim().toLowerCase()
 
   const apps = useMemo(() => {
-    const filtered = running
-      .filter((a) => tech || a.category !== 'system')
+    return running
+      .filter((a) => a.category !== 'system')
       .filter((a) => !q || a.friendlyName.toLowerCase().includes(q) || a.name.toLowerCase().includes(q))
-    return [...filtered].sort((a, b) => (sort === 'cpu' ? b.cpu - a.cpu || b.memory - a.memory : b.memory - a.memory))
-  }, [running, q, sort, tech])
+      .sort((a, b) => b.memory - a.memory)
+  }, [running, q])
 
   return (
     <div className="flex flex-col gap-5 w-full">
       <PageHeader title="Running" description="Apps using your computer right now. You can close ones you're not using.">
         <SearchBox value={query} onChange={setQuery} placeholder="Search for an app" />
-        <TechToggle tech={tech} onToggle={toggleTech} />
       </PageHeader>
 
       <div className="flex flex-col gap-3">
-        {tech && (
-          <div className="flex items-center gap-1">
-            <FilterChip active={sort === 'memory'} onClick={() => setSort('memory')}>Most memory</FilterChip>
-            <FilterChip active={sort === 'cpu'} onClick={() => setSort('cpu')}>Most processor</FilterChip>
-          </div>
-        )}
-
         {running.length === 0 && <p className="text-sm text-white/50">Looking at what's running…</p>}
         {running.length > 0 && apps.length === 0 && <p className="text-sm text-white/50">No apps match your search.</p>}
 
         <div className="flex flex-col gap-1">
           {apps.map((app) => (
-            <RunningRow key={app.name} app={app} tech={tech} />
+            <RunningRow key={app.name} app={app} />
           ))}
         </div>
       </div>
@@ -46,7 +34,7 @@ export default function AppsRunningPage() {
   )
 }
 
-function RunningRow({ app, tech }: { app: RunningApp; tech: boolean }) {
+function RunningRow({ app }: { app: RunningApp }) {
   const [busy, setBusy] = useState(false)
   const [closed, setClosed] = useState(false)
 
@@ -65,14 +53,7 @@ function RunningRow({ app, tech }: { app: RunningApp; tech: boolean }) {
         <span className="text-[13px] text-white/90 truncate">{app.friendlyName}</span>
         {app.count > 1 && <span className="text-[11px] text-white/40 shrink-0">({app.count})</span>}
       </div>
-      {tech ? (
-        <>
-          <span className="text-[12px] text-white/50 tabular-nums shrink-0 w-12 text-right">{app.cpu > 0 ? `${app.cpu}%` : '—'}</span>
-          <span className="text-[12px] text-white/60 tabular-nums shrink-0 w-16 text-right">{formatMemory(app.memory)}</span>
-        </>
-      ) : (
-        <span className={`text-[12px] shrink-0 w-20 text-right ${bandClass(app.band)}`}>{bandLabel(app.band)}</span>
-      )}
+      <span className={`text-[12px] shrink-0 w-20 text-right ${bandClass(app.band)}`}>{bandLabel(app.band)}</span>
       <button
         onClick={close}
         disabled={busy}
