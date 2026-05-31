@@ -57,6 +57,7 @@ interface InstalledApp {
   version: string | null
   icon: string | null
   source: 'desktop' | 'store'
+  isComponent: boolean
   startupId: string | null
   canUninstall: boolean
   canOpen: boolean

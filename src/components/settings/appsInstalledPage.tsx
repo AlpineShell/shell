@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
+import { Boxes, ChevronDown, ChevronRight, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import { AppIcon, PageHeader, SearchBox, Spinner, Toggle } from './appsShared'
@@ -10,6 +10,7 @@ export default function AppsInstalledPage() {
   const installed = useInstalledApps()
   const startup = useStartupApps()
   const [query, setQuery] = useState('')
+  const [componentsOpen, setComponentsOpen] = useState(false)
 
   const startupById = useMemo(() => {
     const map = new Map<string, StartupEntry>()
@@ -21,19 +22,45 @@ export default function AppsInstalledPage() {
   const apps = q
     ? installed.filter((a) => a.name.toLowerCase().includes(q) || (a.publisher || '').toLowerCase().includes(q))
     : installed
+  const userApps = apps.filter((a) => !a.isComponent)
+  const components = apps.filter((a) => a.isComponent)
+  const showComponents = componentsOpen || q.length > 0
+
+  const startupEntryFor = (app: InstalledApp) => (app.startupId ? startupById.get(app.startupId) : undefined)
 
   return (
     <div className="flex flex-col gap-5 w-full">
-      <PageHeader title="Installed" description="All the apps on your PC. Click one to manage it.">
+      <PageHeader title="Installed" description="The apps on your PC. Click one to manage it.">
         <SearchBox value={query} onChange={setQuery} placeholder="Search for an app" />
       </PageHeader>
 
       <div className="flex flex-col gap-1">
         {installed.length === 0 && <p className="text-sm text-white/50">Looking for installed apps…</p>}
         {installed.length > 0 && apps.length === 0 && <p className="text-sm text-white/50">No apps match your search.</p>}
-        {apps.map((app) => (
-          <InstalledRow key={app.id} app={app} startupEntry={app.startupId ? startupById.get(app.startupId) : undefined} />
+
+        {userApps.map((app) => (
+          <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
         ))}
+
+        {components.length > 0 && (
+          <div className="rounded-lg bg-neutral-900 border border-white/5 mt-1 overflow-hidden">
+            <button onClick={() => setComponentsOpen((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 cursor-pointer text-left hover:bg-white/3 transition-colors">
+              <Boxes size={18} className="text-white/40 shrink-0" />
+              <div className="flex flex-col flex-1 min-w-0">
+                <span className="text-[13px] text-white/80">Components &amp; dependencies ({components.length})</span>
+                <span className="text-[11px] text-white/40">Shared runtime and support files other apps rely on — usually safe to leave alone.</span>
+              </div>
+              {showComponents ? <ChevronDown size={16} className="text-white/40 shrink-0" /> : <ChevronRight size={16} className="text-white/40 shrink-0" />}
+            </button>
+            {showComponents && (
+              <div className="flex flex-col gap-1 px-2 pb-2">
+                {components.map((app) => (
+                  <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

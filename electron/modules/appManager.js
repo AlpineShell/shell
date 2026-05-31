@@ -582,6 +582,36 @@ function findInstallExe(dir, appName) {
   }
 }
 
+function isLaunchable(a, shortcuts) {
+  if (a.source === 'store') return !!a.launchTarget
+  const nameKey = appIcons.normName(a.name)
+  if (nameKey && shortcuts.byName.has(nameKey)) return true
+  if (a.launchTarget && shortcuts.byTarget.has(a.launchTarget.toLowerCase())) return true
+  if (a.installLocation) {
+    const loc = a.installLocation.toLowerCase().replace(/[\\/]+$/, '')
+    if (shortcuts.list.some((s) => s.targetLower.startsWith(loc + '\\'))) return true
+  }
+  return false
+}
+
+const GAME_MARKERS = /(steamapps|steam:\/\/uninstall|[\\/]epic games[\\/]|gog galaxy|[\\/]riot games[\\/]|origin games|[\\/]ea games[\\/])/i
+const COMPONENT_STRONG = /(redistributable|\bredist\b|vc_redist|\bruntime\b|\.net\b|visual c\+\+|\bsdk\b|targeting pack|directx|\bframework\b|web deploy|localdb|\bodbc\b|bonjour|webview2?|tools for office|update health|common components|control panels|hosting bundle|application support|mobile device support)/i
+const COMPONENT_DRIVER = /((realtek|nvidia|intel|\bamd\b|audio|graphics|chipset|\busb\b|printer|\bprint\b|network|ethernet|wireless|wi-?fi|bluetooth|display|video|sound|disk|storage|touchpad|webcam|camera|miniport|chipset)\b.{0,20}driver|\bdriver\b.{0,20}(package|update|installer|software))/i
+const COMPONENT_SOFT = /(\bservice\b|\bagent\b|\bhelper\b|\bhost\b|online services|\biis\b)/i
+
+function isGameApp(a) {
+  return GAME_MARKERS.test(a.installLocation || '') || GAME_MARKERS.test(a.uninstallCmd || '')
+}
+
+function isComponentApp(a) {
+  if (a.source === 'store') return false
+  if (isGameApp(a)) return false
+  const name = a.name || ''
+  if (COMPONENT_STRONG.test(name) || COMPONENT_DRIVER.test(name)) return true
+  if (!a.launchable && COMPONENT_SOFT.test(name)) return true
+  return false
+}
+
 function desktopIconSource(a, shortcuts) {
   if (a.iconPath) {
     const expanded = appIcons.expandEnv(a.iconPath)
@@ -655,11 +685,14 @@ async function refreshInstalled() {
   }
 
   for (const a of internal) a.startupId = matchStartupId(a.installLocation, a.launchTarget)
+  const shortcuts = appIcons.buildShortcutIndex()
+  for (const a of internal) a.launchable = isLaunchable(a, shortcuts)
   internal.sort((a, b) => a.name.localeCompare(b.name))
   installedById = new Map(internal.map((a) => [a.id, a]))
 
   const toPublic = (a) => ({
     id: a.id, name: a.name, publisher: a.publisher, version: a.version, icon: a.icon || null, source: a.source,
+    isComponent: isComponentApp(a),
     startupId: a.startupId, canUninstall: !!(a.uninstallCmd || a.uninstallPackage),
     canOpen: !!(a.launchTarget || a.installLocation), canOpenLocation: !!(a.launchTarget || a.installLocation),
   })
@@ -669,7 +702,6 @@ async function refreshInstalled() {
   broadcastInstalled()
 
   const genericIcon = await appIcons.ensureGenericIcon()
-  const shortcuts = appIcons.buildShortcutIndex()
 
   const storeApps = internal.filter((a) => a.source === 'store')
   for (let i = 0; i < storeApps.length; i += 16) {
