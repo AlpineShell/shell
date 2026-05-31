@@ -485,7 +485,9 @@ function openLocation(target) {
 
 let cachedInstalled = []
 let installedById = new Map()
-let installedRefreshing = false
+let installedInFlight = null
+let installedListPromise = null
+let installedListResolve = null
 
 const DESKTOP_SCRIPT = `$paths=@('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKLM:\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall')
 $out=foreach($p in $paths){ if(Test-Path $p){ Get-ChildItem $p -ErrorAction SilentlyContinue | ForEach-Object { $i=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($i.DisplayName -and -not $i.SystemComponent -and -not $i.ParentKeyName){ [PSCustomObject]@{ key=$_.PSChildName; name=$i.DisplayName; publisher=$i.Publisher; version=$i.DisplayVersion; icon=$i.DisplayIcon; loc=$i.InstallLocation; uninstall=$i.UninstallString; quiet=$i.QuietUninstallString } } } } }
@@ -649,6 +651,20 @@ async function refreshInstalled() {
     })
   }
 
+  for (const a of internal) a.startupId = matchStartupId(a.installLocation, a.launchTarget)
+  internal.sort((a, b) => a.name.localeCompare(b.name))
+  installedById = new Map(internal.map((a) => [a.id, a]))
+
+  const toPublic = (a) => ({
+    id: a.id, name: a.name, publisher: a.publisher, version: a.version, icon: a.icon || null, source: a.source,
+    startupId: a.startupId, canUninstall: !!(a.uninstallCmd || a.uninstallPackage),
+    canOpen: !!(a.launchTarget || a.installLocation), canOpenLocation: !!(a.launchTarget || a.installLocation),
+  })
+
+  cachedInstalled = internal.map(toPublic)
+  markInstalledListReady()
+  broadcastInstalled()
+
   const genericIcon = await appIcons.ensureGenericIcon()
   const shortcuts = appIcons.buildShortcutIndex()
 
@@ -662,17 +678,10 @@ async function refreshInstalled() {
   const withSource = desktopApps.filter((a) => a.iconSource)
   const extracted = await appIcons.resolveIcons(withSource.map((a) => a.iconSource))
   withSource.forEach((a, i) => { a.icon = extracted[i] })
-
   for (const a of internal) if (!a.icon) a.icon = genericIcon
-  for (const a of internal) a.startupId = matchStartupId(a.installLocation, a.launchTarget)
 
-  internal.sort((a, b) => a.name.localeCompare(b.name))
-  installedById = new Map(internal.map((a) => [a.id, a]))
-  cachedInstalled = internal.map((a) => ({
-    id: a.id, name: a.name, publisher: a.publisher, version: a.version, icon: a.icon || null, source: a.source,
-    startupId: a.startupId, canUninstall: !!(a.uninstallCmd || a.uninstallPackage),
-    canOpen: !!(a.launchTarget || a.installLocation), canOpenLocation: !!(a.launchTarget || a.installLocation),
-  }))
+  cachedInstalled = internal.map(toPublic)
+  broadcastInstalled()
   return cachedInstalled
 }
 
@@ -680,17 +689,37 @@ function broadcastInstalled() {
   if (broadcastRef) broadcastRef('apps/installed-changed', cachedInstalled)
 }
 
-async function getInstalled() {
-  if (cachedInstalled.length === 0) return refreshInstalled()
-  if (!installedRefreshing) {
-    installedRefreshing = true
-    refreshInstalled().then(broadcastInstalled).catch(() => {}).finally(() => { installedRefreshing = false })
+function markInstalledListReady() {
+  if (installedListResolve) {
+    const resolve = installedListResolve
+    installedListResolve = null
+    resolve()
   }
+}
+
+function refreshInstalledShared() {
+  if (!installedInFlight) {
+    installedListPromise = new Promise((resolve) => { installedListResolve = resolve })
+    installedInFlight = refreshInstalled().finally(() => {
+      installedInFlight = null
+      markInstalledListReady()
+    })
+  }
+  return installedInFlight
+}
+
+async function getInstalled() {
+  if (cachedInstalled.length === 0) {
+    refreshInstalledShared()
+    if (installedListPromise) await installedListPromise
+    return cachedInstalled
+  }
+  refreshInstalledShared().then(broadcastInstalled).catch(() => {})
   return cachedInstalled
 }
 
 function afterUninstall() {
-  refreshInstalled().then(broadcastInstalled).catch(() => {})
+  refreshInstalledShared().then(broadcastInstalled).catch(() => {})
 }
 
 async function uninstallApp({ id }) {
@@ -751,7 +780,11 @@ module.exports = {
   },
   start(broadcast) {
     broadcastRef = broadcast
-    refreshStartup().catch(() => {})
+    refreshStartup()
+      .catch(() => {})
+      .then(() => refreshInstalledShared())
+      .then(broadcastInstalled)
+      .catch(() => {})
     listRunning().then((list) => { cachedRunning = list }).catch(() => {})
   },
 }

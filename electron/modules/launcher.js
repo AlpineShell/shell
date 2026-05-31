@@ -61,12 +61,14 @@ function getUwpApps() {
   return new Promise((resolve) => {
     const script = `
 $apps = Get-StartApps | Where-Object { $_.AppID -match '!' }
+$pkgMap = @{}
+Get-AppxPackage | ForEach-Object { if (-not $pkgMap.ContainsKey($_.PackageFamilyName)) { $pkgMap[$_.PackageFamilyName] = $_ } }
 foreach ($a in $apps) {
   $icon = ''
   try {
     $family = ($a.AppID -split '!')[0]
     $appPart = ($a.AppID -split '!')[1]
-    $pkg = Get-AppxPackage | Where-Object { $_.PackageFamilyName -eq $family } | Select-Object -First 1
+    $pkg = $pkgMap[$family]
     if ($pkg) {
       $manifest = Get-AppxPackageManifest -Package $pkg.PackageFullName
       $allApps = @($manifest.Package.Applications.Application)
