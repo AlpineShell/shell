@@ -79,7 +79,7 @@ export default function SettingsApp() {
   }, [currentPath])
 
   return (
-    <div className="w-screen h-screen bg-neutral-950 text-white flex overflow-hidden">
+    <div className="settings-scope w-screen h-screen bg-neutral-950 text-white flex overflow-hidden">
       <aside className="w-56 shrink-0 flex flex-col bg-neutral-900" style={dragRegion}>
         <div className="h-14 flex items-center px-5 shrink-0">
           <span className="text-base font-semibold tracking-tight">Settings</span>
