@@ -4,6 +4,7 @@ const fs = require('fs')
 const { execFile, exec } = require('child_process')
 const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow } = require('./winFocus')
 const appIcons = require('./appIcons')
+const appManager = require('./appManager')
 
 const SCAN_DIRS = [
   path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -106,7 +107,7 @@ foreach ($a in $apps) {
   Write-Output ($a.Name + '||' + $a.AppID + '||' + $icon)
 }
 `
-    execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 50 * 1024 * 1024 }, (err, stdout) => {
+    execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 50 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
       if (err) {
         console.error('[launcher] UWP discovery error:', err.message)
         return resolve([])
@@ -358,7 +359,7 @@ public static class UwpLauncher {
 "@
 [void][UwpLauncher]::Launch("${escapedAppId}")
 `
-    execFile('powershell', ['-NoProfile', '-Command', script], (e) => {
+    execFile('powershell', ['-NoProfile', '-Command', script], { windowsHide: true }, (e) => {
       if (e && e.code !== 1) console.error('[launcher] launch UWP error:', e.message)
     })
   }
@@ -369,20 +370,16 @@ function launchAdminItem(item) {
   if (!item) return { success: false }
   const target = item.lnkPath || (item.appId ? `shell:AppsFolder\\${item.appId}` : null)
   if (target) {
-    exec(`powershell -NoProfile -Command "Start-Process '${target.replace(/'/g, "''")}' -Verb RunAs"`)
+    exec(`powershell -NoProfile -Command "Start-Process '${target.replace(/'/g, "''")}' -Verb RunAs"`, { windowsHide: true })
   }
   return { success: true }
 }
 
-function uninstallItem(item) {
-  if (!item) return { success: false }
-  if (item.appId) {
-    const family = item.appId.split('!')[0]
-    exec(`powershell -NoProfile -Command "Get-AppxPackage '${family}' | Remove-AppxPackage"`)
-  } else {
-    electronShell.openExternal('ms-settings:appsfeatures')
-  }
-  return { success: true }
+async function uninstallItem(item) {
+  if (!item) return { ok: false, mode: 'none' }
+  const result = await appManager.uninstallByLaunch({ appId: item.appId, target: item.target, name: item.name })
+  scheduleRebuild()
+  return result
 }
 
 function openItemLocation(item) {
@@ -415,13 +412,12 @@ module.exports = {
     },
     'launcher/uninstall': (_event, id) => {
       const item = findItem(id)
-      if (!item) return { success: false }
-      animatedHide()
+      if (!item) return Promise.resolve({ ok: false, mode: 'none' })
       return uninstallItem(item)
     },
     'launcher/close-window': (_event, hwnd) => {
       animatedHide()
-      exec(`powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).AppActivate([int]0); Add-Type -Name W -Namespace W -MemberDefinition '[DllImport(\\\"user32.dll\\\")] public static extern int PostMessage(IntPtr h,uint m,int w,int l);'; [W.W]::PostMessage([IntPtr]${hwnd}, 0x0010, 0, 0)"`)
+      exec(`powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).AppActivate([int]0); Add-Type -Name W -Namespace W -MemberDefinition '[DllImport(\\\"user32.dll\\\")] public static extern int PostMessage(IntPtr h,uint m,int w,int l);'; [W.W]::PostMessage([IntPtr]${hwnd}, 0x0010, 0, 0)"`, { windowsHide: true })
       return { success: true }
     },
     'launcher/end-task': (_event, pid) => {

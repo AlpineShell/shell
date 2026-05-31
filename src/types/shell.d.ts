@@ -246,7 +246,7 @@ declare global {
       hide: () => Promise<void>
       launch: (id: number) => Promise<{ success: boolean }>
       launchAdmin: (id: number) => Promise<{ success: boolean }>
-      uninstall: (id: number) => Promise<{ success: boolean }>
+      uninstall: (id: number) => Promise<{ ok: boolean; mode: 'store' | 'desktop' | 'settings' | 'none' }>
       openLocation: (id: number) => Promise<{ success: boolean }>
       closeWindow: (hwnd: number) => Promise<{ success: boolean }>
       endTask: (pid: number) => Promise<{ success: boolean }>

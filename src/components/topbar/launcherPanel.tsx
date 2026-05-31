@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2 } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2, Loader2 } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 
@@ -156,14 +156,14 @@ interface ContextAction {
   action: () => void
 }
 
-function appActions(item: LauncherItem): ContextAction[] {
+function appActions(item: LauncherItem, onUninstall: (item: LauncherItem) => void): ContextAction[] {
   const actions: ContextAction[] = [
     { label: "Run as administrator", icon: ShieldCheck, action: () => window.launcher.launchAdmin(item.id) },
   ]
   if (item.lnkPath) {
     actions.push({ label: "Open file location", icon: FolderOpen, action: () => window.launcher.openLocation(item.id) })
   }
-  actions.push({ label: "Uninstall", icon: Trash2, action: () => window.launcher.uninstall(item.id) })
+  actions.push({ label: "Uninstall", icon: Trash2, action: () => onUninstall(item) })
   return actions
 }
 
@@ -196,6 +196,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const [resultsHeight, setResultsHeight] = useState(0)
   const [contextOpen, setContextOpen] = useState(false)
   const [contextSelected, setContextSelected] = useState(0)
+  const [notice, setNotice] = useState<{ text: string; busy: boolean } | null>(null)
   const [activeCommand, setActiveCommand] = useState<SettingId | null>(null)
   const [wallpapers, setWallpapers] = useState<WallpaperItem[]>([])
   const [previewIndex, setPreviewIndex] = useState(0)
@@ -294,16 +295,16 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
 
   useEffect(() => {
     const onStartClose = () => setClosing(true)
-    const onHide = () => setClosing(false)
+    const onHide = () => { setClosing(false); setNotice(null) }
     window.launcher.onStartClose(onStartClose)
     window.launcher.onHide(onHide)
   }, [])
 
   useEffect(() => {
-    const onBlur = () => window.launcher.hide()
+    const onBlur = () => { if (!notice) window.launcher.hide() }
     window.addEventListener("blur", onBlur)
     return () => window.removeEventListener("blur", onBlur)
-  }, [])
+  }, [notice])
 
   const mathResult = useMemo(() => tryMath(query.trim()), [query])
   const mapResult = useAddressLookup(query)
@@ -382,11 +383,23 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     return null
   }, [selected, mathResult, mapResult, matchedOpenApps, matchedSettings, matchedWindowCommands, results, mathOffset, mapOffset, openOffset, settingsOffset, winOffset])
 
+  async function runUninstall(item: LauncherItem) {
+    setNotice({ text: `Removing ${item.name}…`, busy: true })
+    const result = await window.launcher.uninstall(item.id)
+    if (result.mode === "store") {
+      setNotice({ text: result.ok ? `${item.name} removed` : `Couldn't remove ${item.name}`, busy: false })
+      setTimeout(() => window.launcher.hide(), 1100)
+    } else {
+      window.launcher.hide()
+    }
+  }
+
   const contextActions = useMemo(() => {
     if (!contextOpen || !selectedEntry) return []
-    if (selectedEntry.type === "app" && selectedEntry.item) return appActions(selectedEntry.item)
+    if (selectedEntry.type === "app" && selectedEntry.item) return appActions(selectedEntry.item, runUninstall)
     if (selectedEntry.type === "open") return openAppActions(selectedEntry.app)
     return []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextOpen, selectedEntry])
 
   useEffect(() => {
@@ -396,13 +409,13 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
 
   useEffect(() => {
     requestAnimationFrame(() => {
-      if (!query.trim() && !activeCommand) {
+      if (!query.trim() && !activeCommand && !notice) {
         setResultsHeight(0)
       } else if (resultsRef.current) {
         setResultsHeight(resultsRef.current.offsetHeight)
       }
     })
-  }, [query, results, contextOpen, mapResult, activeCommand])
+  }, [query, results, contextOpen, mapResult, activeCommand, notice])
 
   useEffect(() => {
     if (!resultsRef.current) return
@@ -445,6 +458,13 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   }, [])
 
   function handleKey(e: React.KeyboardEvent) {
+    if (notice) {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        window.launcher.hide()
+      }
+      return
+    }
     if (contextOpen) {
       if (e.key === "Escape" || e.key === "ArrowLeft") {
         e.preventDefault()
@@ -592,7 +612,15 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
               style={{ height: resultsHeight, transition: "height 200ms cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
               <div ref={resultsRef}>
-                {activeCommand === "wallpaper" ? (
+                {notice ? (
+                  <>
+                    <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+                    <div className="flex items-center gap-3 px-4 h-12">
+                      {notice.busy && <Loader2 size={16} className={`shrink-0 animate-spin ${darkText ? "text-black/40" : "text-white/40"}`} />}
+                      <span className={`text-[14px] ${textColor}`}>{notice.text}</span>
+                    </div>
+                  </>
+                ) : activeCommand === "wallpaper" ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
                     <WallpaperCarousel

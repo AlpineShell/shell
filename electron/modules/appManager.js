@@ -819,6 +819,54 @@ async function uninstallApp({ id }) {
   return { ok: false, error: 'No uninstaller available.' }
 }
 
+function cleanMatchName(text) {
+  return appIcons.normName(String(text || '').replace(/\([^)]*\)/g, ' ').replace(/\b(v|version)?\d[\d.]*\b/gi, ' '))
+}
+
+async function uninstallByLaunch({ appId, target, name }) {
+  if (cachedInstalled.length === 0) { try { await refreshInstalledShared() } catch {} }
+  const apps = [...installedById.values()]
+
+  if (appId) {
+    const aumid = String(appId).toLowerCase()
+    const family = String(appId).split('!')[0]
+    let match = apps.find((a) => a.source === 'store' && a.launchTarget && a.launchTarget.toLowerCase() === aumid)
+    if (!match) match = apps.find((a) => a.source === 'store' && a.uninstallPackage && a.uninstallPackage.toLowerCase().startsWith(family.toLowerCase() + '_'))
+    try {
+      if (match && match.uninstallPackage) {
+        await runPsScript(`Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object { $_.PackageFullName -eq '${match.uninstallPackage}' } | Remove-AppxPackage -ErrorAction SilentlyContinue`)
+      } else {
+        await runPsScript(`Get-AppxPackage '${family}' -ErrorAction SilentlyContinue | Remove-AppxPackage -ErrorAction SilentlyContinue`)
+      }
+    } catch {
+      return { ok: false, mode: 'store' }
+    }
+    afterUninstall()
+    return { ok: true, mode: 'store' }
+  }
+
+  const targetLower = (target || '').toLowerCase()
+  let match = apps.find((a) => a.source === 'desktop' && a.launchTarget && a.launchTarget.toLowerCase() === targetLower)
+  if (!match && targetLower) {
+    match = apps.find((a) => {
+      if (a.source !== 'desktop' || !a.installLocation) return false
+      const loc = a.installLocation.toLowerCase().replace(/[\\/]+$/, '')
+      return targetLower.startsWith(loc + '\\')
+    })
+  }
+  if (!match && name) {
+    const nameKey = cleanMatchName(name)
+    if (nameKey) match = apps.find((a) => a.source === 'desktop' && cleanMatchName(a.name) === nameKey)
+  }
+  if (match && match.uninstallCmd) {
+    try { exec(match.uninstallCmd, { windowsHide: false }, () => afterUninstall()) } catch { return { ok: false, mode: 'desktop' } }
+    return { ok: true, mode: 'desktop' }
+  }
+
+  try { shell.openExternal('ms-settings:appsfeatures') } catch {}
+  return { ok: true, mode: 'settings' }
+}
+
 function openApp({ id }) {
   const app = installedById.get(id)
   if (!app) return { ok: false }
@@ -857,6 +905,7 @@ module.exports = {
     'apps/installed-open': (_event, payload) => openApp(payload),
     'apps/installed-open-location': (_event, payload) => openInstalledLocation(payload),
   },
+  uninstallByLaunch,
   start(broadcast) {
     broadcastRef = broadcast
     refreshStartup()
