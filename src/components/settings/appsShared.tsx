@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Search, SlidersHorizontal } from 'lucide-react'
+import { AppWindow, Loader2, Search, SlidersHorizontal } from 'lucide-react'
 
 export function Spinner({ size = 14 }: { size?: number }) {
   return <Loader2 size={size} className="animate-spin" />
+}
+
+export function AppIcon({ icon, name, size = 28 }: { icon?: string | null; name: string; size?: number }) {
+  if (icon) return <img src={icon} alt={name} draggable={false} className="shrink-0 object-contain" style={{ width: size, height: size }} />
+  return (
+    <div className="shrink-0 flex items-center justify-center rounded-md bg-white/8 text-white/35" style={{ width: size, height: size }}>
+      <AppWindow size={Math.round(size * 0.55)} strokeWidth={1.75} />
+    </div>
+  )
 }
 
 export function formatMemory(bytes: number): string {

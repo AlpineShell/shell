@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, FolderOpen, Lock, ShieldAlert } from 'lucide-react'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { PageHeader, SearchBox, TechToggle, FilterChip, Spinner, Toggle, useTechState, processKey } from './appsShared'
+import { AppIcon, PageHeader, SearchBox, TechToggle, FilterChip, Spinner, Toggle, useTechState, processKey } from './appsShared'
 
 type StartupFilter = 'all' | 'on' | 'off'
 
@@ -69,7 +69,7 @@ export default function AppsStartupPage() {
             <div className="flex flex-col gap-1 mt-1">
               {recommend.slice(0, 3).map((e) => (
                 <div key={e.id} className="flex items-center gap-2">
-                  {e.icon ? <img src={e.icon} alt="" className="w-5 h-5 shrink-0" draggable={false} /> : <div className="w-5 h-5 rounded bg-white/10 shrink-0" />}
+                  <AppIcon icon={e.icon} name={e.friendlyName} size={20} />
                   <span className="text-[12px] text-white/85 flex-1 min-w-0 truncate">{e.friendlyName}</span>
                   <button onClick={() => window.shell.apps.setStartup(e.id, false)} className="h-6 px-2.5 rounded-md text-[11px] bg-white/10 text-white hover:bg-white/20 cursor-pointer transition-colors">Turn off</button>
                 </div>
@@ -136,7 +136,7 @@ function StartupRow({ entry, running, tech }: { entry: StartupEntry; running?: R
 
   return (
     <div className="flex items-center gap-3 px-3 min-h-14 py-2 rounded-lg bg-neutral-900 border border-white/5">
-      {entry.icon ? <img src={entry.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} /> : <div className="w-7 h-7 shrink-0 rounded bg-white/10" />}
+      <AppIcon icon={entry.icon} name={entry.friendlyName} />
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[13px] text-white/90 truncate">{entry.friendlyName}</span>

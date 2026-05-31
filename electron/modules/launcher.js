@@ -272,6 +272,7 @@ function scheduleRebuild() {
 
 function watchScanDirs() {
   for (const dir of SCAN_DIRS) {
+    if (!fs.existsSync(dir)) continue
     try {
       fs.watch(dir, { recursive: true }, scheduleRebuild)
     } catch (e) {

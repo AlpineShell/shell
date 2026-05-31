@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { PageHeader, SearchBox, Spinner, bandLabel, bandClass } from './appsShared'
+import { AppIcon, PageHeader, SearchBox, Spinner, bandLabel, bandClass } from './appsShared'
 
 export default function AppsRunningPage() {
   const running = useRunningApps()
@@ -48,7 +48,7 @@ function RunningRow({ app }: { app: RunningApp }) {
 
   return (
     <div className="flex items-center gap-3 px-3 h-12 rounded-lg bg-neutral-900 border border-white/5">
-      {app.icon ? <img src={app.icon} alt="" className="w-6 h-6 shrink-0" draggable={false} /> : <div className="w-6 h-6 shrink-0 rounded bg-white/10" />}
+      <AppIcon icon={app.icon} name={app.friendlyName} size={24} />
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <span className="text-[13px] text-white/90 truncate">{app.friendlyName}</span>
         {app.count > 1 && <span className="text-[11px] text-white/40 shrink-0">({app.count})</span>}

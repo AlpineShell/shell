@@ -1,4 +1,4 @@
-const { app, shell } = require('electron')
+const { app, shell, nativeImage } = require('electron')
 const { exec, execSync } = require('child_process')
 const { promisify } = require('util')
 const path = require('path')
@@ -46,19 +46,26 @@ function exeFromCommand(command) {
   return space > 0 ? s.slice(0, space) : s
 }
 
+const IMAGE_EXTS = new Set(['.png', '.ico', '.jpg', '.jpeg', '.gif', '.bmp'])
+
 async function iconFor(filePath) {
   if (!filePath) return null
   const key = filePath.toLowerCase()
   if (iconCache.has(key)) return iconCache.get(key)
+  let url = null
   try {
-    const image = await app.getFileIcon(filePath, { size: 'normal' })
-    const url = image.isEmpty() ? null : image.toDataURL()
-    iconCache.set(key, url)
-    return url
+    if (IMAGE_EXTS.has(path.extname(filePath).toLowerCase())) {
+      const image = nativeImage.createFromPath(filePath)
+      url = image.isEmpty() ? null : image.toDataURL()
+    } else {
+      const image = await app.getFileIcon(filePath, { size: 'normal' })
+      url = image.isEmpty() ? null : image.toDataURL()
+    }
   } catch {
-    iconCache.set(key, null)
-    return null
+    url = null
   }
+  iconCache.set(key, url)
+  return url
 }
 
 function resolveShortcutTarget(lnkPath) {
@@ -512,7 +519,10 @@ const STORE_SCRIPT = `Get-AppxPackage | Where-Object { $_.InstallLocation -and $
     $m=Get-AppxPackageManifest $pkg
     $app=$m.Package.Applications.Application; if($app -is [array]){ $app=$app[0] }
     if($app.Id){ $aumid="$($pkg.PackageFamilyName)!$($app.Id)" }
-    $logoRel=$m.Package.Properties.Logo; if($logoRel){ $logo=Join-Path $pkg.InstallLocation $logoRel }
+    $logoRel=$null
+    try{ $logoRel=$app.VisualElements.Square44x44Logo }catch{}
+    if(-not $logoRel){ try{ $logoRel=$m.Package.Properties.Logo }catch{} }
+    if($logoRel){ $logo=Join-Path $pkg.InstallLocation $logoRel }
     $dn=$m.Package.Properties.DisplayName
   } catch {}
   [PSCustomObject]@{ name=$pkg.Name; display=$dn; publisher=$pkg.Publisher; full=$pkg.PackageFullName; loc=$pkg.InstallLocation; aumid=$aumid; logo=$logo }
@@ -529,12 +539,33 @@ async function runPsScript(script) {
   }
 }
 
-function parseIconPath(displayIcon) {
+function parseIconSpec(displayIcon) {
   if (!displayIcon) return null
   let s = String(displayIcon).trim()
-  if (s.startsWith('"')) { const end = s.indexOf('"', 1); s = end > 0 ? s.slice(1, end) : s.slice(1) }
-  else { const comma = s.lastIndexOf(','); if (comma > 2) s = s.slice(0, comma) }
-  return s.trim() || null
+  let index = 0
+  if (s.startsWith('"')) {
+    const end = s.indexOf('"', 1)
+    const rest = end > 0 ? s.slice(end + 1) : ''
+    s = end > 0 ? s.slice(1, end) : s.slice(1)
+    const m = rest.match(/,\s*(-?\d+)/)
+    if (m) index = parseInt(m[1], 10)
+  } else {
+    const comma = s.lastIndexOf(',')
+    if (comma > 2) {
+      const tail = s.slice(comma + 1).trim()
+      if (/^-?\d+$/.test(tail)) { index = parseInt(tail, 10); s = s.slice(0, comma) }
+    }
+  }
+  s = s.trim()
+  return s ? { path: s, index } : null
+}
+
+function expandEnv(p) {
+  return String(p || '').replace(/%([^%]+)%/g, (_, key) => process.env[key] || `%${key}%`)
+}
+
+function normName(text) {
+  return String(text || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
 function cleanPublisher(pub) {
@@ -546,6 +577,196 @@ function cleanPublisher(pub) {
 function prettyPackageName(pkgName) {
   const last = String(pkgName || '').split('.').pop() || String(pkgName || '')
   return last.replace(/([a-z])([A-Z])/g, '$1 $2')
+}
+
+function resolveStoreLogo(basePath) {
+  if (!basePath) return null
+  try {
+    if (fs.existsSync(basePath)) return basePath
+    const dir = path.dirname(basePath)
+    const ext = path.extname(basePath).toLowerCase()
+    const base = path.basename(basePath, path.extname(basePath)).toLowerCase()
+    if (!fs.existsSync(dir)) return null
+    const matches = fs.readdirSync(dir).filter((f) => {
+      const low = f.toLowerCase()
+      return low.startsWith(base) && low.endsWith(ext) && !low.includes('contrast-black') && !low.includes('contrast-white')
+    })
+    if (!matches.length) return null
+    matches.sort((a, b) => {
+      try { return fs.statSync(path.join(dir, b)).size - fs.statSync(path.join(dir, a)).size } catch { return 0 }
+    })
+    return path.join(dir, matches[0])
+  } catch {
+    return null
+  }
+}
+
+const SKIP_EXE = /^(unins|setup|install|update|crash|vcredist|vc_redist|helper|notif|repair|cleanup|report|dotnet)/i
+
+function findInstallExe(dir, appName) {
+  if (!dir) return null
+  try {
+    if (!fs.existsSync(dir)) return null
+    const exes = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.exe') && !SKIP_EXE.test(e.name))
+      .map((e) => e.name)
+    if (!exes.length) return null
+    const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const target = norm(appName || '')
+    const named = exes.find((name) => {
+      const b = norm(path.basename(name, '.exe'))
+      return target && b && (target.includes(b) || b.includes(target))
+    })
+    if (named) return path.join(dir, named)
+    let best = null
+    let bestSize = -1
+    for (const name of exes) {
+      try { const size = fs.statSync(path.join(dir, name)).size; if (size > bestSize) { bestSize = size; best = name } } catch {}
+    }
+    return best ? path.join(dir, best) : null
+  } catch {
+    return null
+  }
+}
+
+const SHORTCUT_DIRS = [
+  path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+  path.join(process.env.PROGRAMDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+  path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+]
+
+function collectLnks(dir, out) {
+  let entries
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) collectLnks(full, out)
+    else if (entry.isFile() && entry.name.toLowerCase().endsWith('.lnk')) out.push(full)
+  }
+}
+
+function buildShortcutIndex() {
+  const list = []
+  const byTarget = new Map()
+  const byName = new Map()
+  const lnkPaths = []
+  for (const dir of SHORTCUT_DIRS) collectLnks(dir, lnkPaths)
+  for (const lnk of lnkPaths) {
+    let info
+    try { info = shell.readShortcutLink(lnk) } catch { continue }
+    if (!info || !info.target) continue
+    const iconPath = info.icon && info.icon.length ? info.icon : info.target
+    const entry = { targetLower: info.target.toLowerCase(), iconPath, index: info.iconIndex || 0 }
+    list.push(entry)
+    if (!byTarget.has(entry.targetLower)) byTarget.set(entry.targetLower, entry)
+    const key = normName(path.basename(lnk, '.lnk'))
+    if (key && !byName.has(key)) byName.set(key, entry)
+  }
+  return { list, byTarget, byName }
+}
+
+function desktopIconSource(a, shortcuts) {
+  if (a.iconPath) {
+    const expanded = expandEnv(a.iconPath)
+    if (fs.existsSync(expanded)) return { path: expanded, index: a.iconIndex || 0 }
+  }
+  const nameKey = normName(a.name)
+  if (nameKey && shortcuts.byName.has(nameKey)) return shortcuts.byName.get(nameKey)
+  if (a.launchTarget && shortcuts.byTarget.has(a.launchTarget.toLowerCase())) return shortcuts.byTarget.get(a.launchTarget.toLowerCase())
+  if (a.installLocation) {
+    const loc = a.installLocation.toLowerCase().replace(/[\\/]+$/, '')
+    const under = shortcuts.list.find((s) => s.targetLower.startsWith(loc + '\\'))
+    if (under) return under
+  }
+  if (a.launchTarget && fs.existsSync(a.launchTarget)) return { path: a.launchTarget, index: 0 }
+  const exe = findInstallExe(a.installLocation, a.name)
+  return exe ? { path: exe, index: 0 } : null
+}
+
+async function extractIconsBatch(specs) {
+  if (!specs.length) return []
+  const entries = specs.map((s) => `@{ p='${String(s.path).replace(/'/g, "''")}'; i=${s.index | 0} }`).join(',')
+  const script = `Add-Type -AssemblyName System.Drawing
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class AlpineIconExtractor {
+  [DllImport("shell32.dll", CharSet=CharSet.Unicode)]
+  public static extern uint ExtractIconExW(string lpszFile, int nIconIndex, IntPtr[] phiconLarge, IntPtr[] phiconSmall, uint nIcons);
+  [DllImport("user32.dll")]
+  public static extern int DestroyIcon(IntPtr hIcon);
+}
+'@
+$entries = @(${entries})
+$results = @()
+foreach ($e in $entries) {
+  $p = [Environment]::ExpandEnvironmentVariables($e.p)
+  $idx = [int]$e.i
+  $b64 = ''
+  try {
+    $large = New-Object 'IntPtr[]' 1
+    $count = [AlpineIconExtractor]::ExtractIconExW($p, $idx, $large, $null, 1)
+    if ($count -gt 0 -and $large[0] -ne [IntPtr]::Zero) {
+      $icon = [System.Drawing.Icon]::FromHandle($large[0])
+      $bmp = $icon.ToBitmap()
+      $ms = New-Object System.IO.MemoryStream
+      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      $b64 = [Convert]::ToBase64String($ms.ToArray())
+      $ms.Dispose(); $bmp.Dispose(); $icon.Dispose()
+      [void][AlpineIconExtractor]::DestroyIcon($large[0])
+    }
+  } catch {}
+  if ([string]::IsNullOrEmpty($b64)) {
+    try {
+      $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
+      $bmp = $icon.ToBitmap()
+      $ms = New-Object System.IO.MemoryStream
+      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      $b64 = [Convert]::ToBase64String($ms.ToArray())
+      $ms.Dispose(); $bmp.Dispose(); $icon.Dispose()
+    } catch {}
+  }
+  $results += $b64
+}
+$results -join '|'`
+  const out = await runPsScript(script)
+  return out.trim().split('|').map((b64) => (b64 && b64.length > 10 ? `data:image/png;base64,${b64}` : null))
+}
+
+let genericIconUrl = null
+
+async function ensureGenericIcon() {
+  if (genericIconUrl !== null) return genericIconUrl
+  const script = `Add-Type -AssemblyName System.Drawing
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class AlpineShFileInfo {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Auto)]
+  public struct SHFILEINFO { public IntPtr hIcon; public int iIcon; public uint dwAttributes; [MarshalAs(UnmanagedType.ByValTStr, SizeConst=260)] public string szDisplayName; [MarshalAs(UnmanagedType.ByValTStr, SizeConst=80)] public string szTypeName; }
+  [DllImport("shell32.dll", CharSet=CharSet.Auto)] public static extern IntPtr SHGetFileInfo(string p, uint a, ref SHFILEINFO i, uint c, uint f);
+  [DllImport("user32.dll")] public static extern int DestroyIcon(IntPtr h);
+}
+'@
+$info = New-Object AlpineShFileInfo+SHFILEINFO
+$sz = [uint32][Runtime.InteropServices.Marshal]::SizeOf([type]([AlpineShFileInfo+SHFILEINFO]))
+$b64 = ''
+try {
+  [void][AlpineShFileInfo]::SHGetFileInfo('generic.exe', 0x80, [ref]$info, $sz, (0x100 -bor 0x10))
+  if ($info.hIcon -ne [IntPtr]::Zero) {
+    $icon = [System.Drawing.Icon]::FromHandle($info.hIcon)
+    $bmp = $icon.ToBitmap()
+    $ms = New-Object System.IO.MemoryStream
+    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    $b64 = [Convert]::ToBase64String($ms.ToArray())
+    $ms.Dispose(); $bmp.Dispose(); $icon.Dispose()
+    [void][AlpineShFileInfo]::DestroyIcon($info.hIcon)
+  }
+} catch {}
+$b64`
+  const out = (await runPsScript(script)).trim()
+  genericIconUrl = out && out.length > 10 ? `data:image/png;base64,${out}` : null
+  return genericIconUrl
 }
 
 function matchStartupId(installLocation, launchTarget) {
@@ -575,12 +796,13 @@ async function refreshInstalled() {
     const id = `desktop:${d.key || d.name}`
     if (seen.has(id)) continue
     seen.add(id)
-    const iconPath = parseIconPath(d.icon)
+    const iconSpec = parseIconSpec(d.icon)
+    const iconPath = iconSpec ? iconSpec.path : null
     const launchTarget = iconPath && /\.exe$/i.test(iconPath) ? iconPath : null
     const installLocation = d.loc || (launchTarget ? path.dirname(launchTarget) : null)
     internal.push({
       id, source: 'desktop', name: String(d.name).trim(), publisher: cleanPublisher(d.publisher), version: d.version || null,
-      iconPath, installLocation, launchTarget, launchKind: launchTarget ? 'exe' : null,
+      iconPath, iconIndex: iconSpec ? iconSpec.index : 0, installLocation, launchTarget, launchKind: launchTarget ? 'exe' : null,
       uninstallCmd: d.quiet || d.uninstall || null, uninstallPackage: null,
     })
   }
@@ -596,14 +818,26 @@ async function refreshInstalled() {
     const name = s.display && !String(s.display).startsWith('ms-resource') ? String(s.display) : prettyPackageName(s.name)
     internal.push({
       id, source: 'store', name, publisher: cleanPublisher(s.publisher), version: null,
-      iconPath: s.logo || null, installLocation: s.loc || null, launchTarget: s.aumid || null, launchKind: s.aumid ? 'aumid' : null,
+      iconPath: resolveStoreLogo(s.logo) || null, installLocation: s.loc || null, launchTarget: s.aumid || null, launchKind: s.aumid ? 'aumid' : null,
       uninstallCmd: null, uninstallPackage: s.full || null,
     })
   }
 
-  for (let i = 0; i < internal.length; i += 16) {
-    await Promise.all(internal.slice(i, i + 16).map(async (a) => { a.icon = await iconFor(a.iconPath) }))
+  await ensureGenericIcon()
+  const shortcuts = buildShortcutIndex()
+
+  const storeApps = internal.filter((a) => a.source === 'store')
+  for (let i = 0; i < storeApps.length; i += 16) {
+    await Promise.all(storeApps.slice(i, i + 16).map(async (a) => { a.icon = await iconFor(a.iconPath) }))
   }
+
+  const desktopApps = internal.filter((a) => a.source === 'desktop')
+  for (const a of desktopApps) a.iconSource = desktopIconSource(a, shortcuts)
+  const withSource = desktopApps.filter((a) => a.iconSource)
+  const extracted = await extractIconsBatch(withSource.map((a) => a.iconSource))
+  withSource.forEach((a, i) => { a.icon = extracted[i] })
+
+  for (const a of internal) if (!a.icon) a.icon = genericIconUrl
   for (const a of internal) a.startupId = matchStartupId(a.installLocation, a.launchTarget)
 
   internal.sort((a, b) => a.name.localeCompare(b.name))

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { ExternalLink, FolderOpen } from 'lucide-react'
+import { ChevronDown, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
 import { useStartupApps } from '../../hooks/useStartupApps'
-import { PageHeader, SearchBox, Spinner, Toggle } from './appsShared'
+import { AppIcon, PageHeader, SearchBox, Spinner, Toggle } from './appsShared'
 
 type InstalledAction = 'open' | 'locate' | 'uninstall'
 
@@ -24,7 +24,7 @@ export default function AppsInstalledPage() {
 
   return (
     <div className="flex flex-col gap-5 w-full">
-      <PageHeader title="Installed" description="All the apps on your PC. Turn off auto-start, open, or uninstall.">
+      <PageHeader title="Installed" description="All the apps on your PC. Click one to manage it.">
         <SearchBox value={query} onChange={setQuery} placeholder="Search for an app" />
       </PageHeader>
 
@@ -40,6 +40,7 @@ export default function AppsInstalledPage() {
 }
 
 function InstalledRow({ app, startupEntry }: { app: InstalledApp; startupEntry?: StartupEntry }) {
+  const [expanded, setExpanded] = useState(false)
   const [pending, setPending] = useState<InstalledAction | null>(null)
   const startOn = startupEntry ? (startupEntry.pending ? startupEntry.pending === 'enable' : startupEntry.enabled) : false
 
@@ -50,34 +51,44 @@ function InstalledRow({ app, startupEntry }: { app: InstalledApp; startupEntry?:
   }
 
   return (
-    <div className="flex items-center gap-3 px-3 min-h-14 py-2 rounded-lg bg-neutral-900 border border-white/5">
-      {app.icon ? <img src={app.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} /> : <div className="w-7 h-7 shrink-0 rounded bg-white/10" />}
-      <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-[13px] text-white/90 truncate">{app.name}</span>
-        <span className="text-[11px] text-white/45 truncate">{app.publisher || (app.source === 'store' ? 'Microsoft Store app' : 'App')}</span>
-      </div>
-
-      {startupEntry && (
-        <div className="flex items-center gap-2 shrink-0 mr-1">
-          <span className="text-[11px] text-white/45">Starts with your PC</span>
-          <Toggle checked={startOn} pending={!!startupEntry.pending} onChange={() => window.shell.apps.setStartup(startupEntry.id, !startOn)} />
+    <div className="rounded-lg bg-neutral-900 border border-white/5 overflow-hidden">
+      <button onClick={() => setExpanded((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 text-left cursor-pointer hover:bg-white/3 transition-colors">
+        <AppIcon icon={app.icon} name={app.name} />
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="text-[13px] text-white/90 truncate">{app.name}</span>
+          <span className="text-[11px] text-white/45 truncate">{app.publisher || (app.source === 'store' ? 'Microsoft Store app' : 'App')}</span>
         </div>
-      )}
+        <ChevronDown size={16} className={`text-white/40 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
 
-      {app.canOpen && (
-        <button onClick={() => act('open', () => window.shell.apps.openApp(app.id))} disabled={!!pending} title="Open" aria-label="Open" className="w-8 h-8 flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 cursor-pointer transition-colors shrink-0 disabled:hover:bg-transparent">
-          {pending === 'open' ? <Spinner size={15} /> : <ExternalLink size={15} />}
-        </button>
-      )}
-      {app.canOpenLocation && (
-        <button onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))} disabled={!!pending} title="Open file location" aria-label="Open file location" className="w-8 h-8 flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 cursor-pointer transition-colors shrink-0 disabled:hover:bg-transparent">
-          {pending === 'locate' ? <Spinner size={15} /> : <FolderOpen size={15} />}
-        </button>
-      )}
-      {app.canUninstall && (
-        <button onClick={() => act('uninstall', () => window.shell.apps.uninstall(app.id))} disabled={!!pending} className="h-7 w-20 flex items-center justify-center rounded-md text-[12px] text-white/60 hover:text-red-200 hover:bg-red-500/15 cursor-pointer transition-colors shrink-0 disabled:cursor-default disabled:text-white/60 disabled:hover:bg-transparent">
-          {pending === 'uninstall' ? <Spinner size={13} /> : 'Uninstall'}
-        </button>
+      {expanded && (
+        <div className="border-t border-white/5 bg-black/15 px-3 py-3 flex items-center justify-between gap-x-4 gap-y-3 flex-wrap">
+          {startupEntry ? (
+            <label className="flex items-center gap-2.5 text-[12px] text-white/60 cursor-pointer select-none">
+              <Toggle checked={startOn} pending={!!startupEntry.pending} onChange={() => window.shell.apps.setStartup(startupEntry.id, !startOn)} />
+              Starts with your PC
+            </label>
+          ) : (
+            <span className="text-[12px] text-white/30">{app.source === 'store' ? 'Microsoft Store app' : 'Desktop app'}</span>
+          )}
+          <div className="flex items-center gap-1.5 ml-auto">
+            {app.canOpen && (
+              <button onClick={() => act('open', () => window.shell.apps.openApp(app.id))} disabled={!!pending} className="h-8 px-3 flex items-center gap-1.5 rounded-md text-[12px] text-white/70 bg-white/5 hover:bg-white/10 hover:text-white cursor-pointer transition-colors disabled:opacity-60">
+                {pending === 'open' ? <Spinner size={14} /> : <ExternalLink size={14} />} Open
+              </button>
+            )}
+            {app.canOpenLocation && (
+              <button onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))} disabled={!!pending} className="h-8 px-3 flex items-center gap-1.5 rounded-md text-[12px] text-white/70 bg-white/5 hover:bg-white/10 hover:text-white cursor-pointer transition-colors disabled:opacity-60">
+                {pending === 'locate' ? <Spinner size={14} /> : <FolderOpen size={14} />} Location
+              </button>
+            )}
+            {app.canUninstall && (
+              <button onClick={() => act('uninstall', () => window.shell.apps.uninstall(app.id))} disabled={!!pending} className="h-8 w-22 flex items-center justify-center gap-1.5 rounded-md text-[12px] text-red-300/90 bg-red-500/10 hover:bg-red-500/20 hover:text-red-200 cursor-pointer transition-colors disabled:opacity-60">
+                {pending === 'uninstall' ? <Spinner size={14} /> : <><Trash2 size={14} /> Remove</>}
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
