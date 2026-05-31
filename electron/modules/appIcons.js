@@ -36,21 +36,42 @@ function expandEnv(p) {
 
 const IMAGE_EXTS = new Set(['.png', '.ico', '.jpg', '.jpeg', '.gif', '.bmp'])
 
+function squirrelRedirect(target) {
+  if (!target || !/[\\/]update\.exe$/i.test(target)) return null
+  const dir = path.dirname(target)
+  try {
+    const ico = path.join(dir, 'app.ico')
+    if (fs.existsSync(ico)) return ico
+    const versions = fs.readdirSync(dir).filter((n) => /^app-/i.test(n)).sort().reverse()
+    for (const version of versions) {
+      const versionDir = path.join(dir, version)
+      let exes = []
+      try { exes = fs.readdirSync(versionDir).filter((n) => n.toLowerCase().endsWith('.exe') && !/^update/i.test(n)) } catch {}
+      if (exes.length) return path.join(versionDir, exes[0])
+    }
+  } catch {}
+  return null
+}
+
 async function iconForFile(filePath) {
   if (!filePath) return null
   const key = filePath.toLowerCase()
   if (iconCache.has(key)) return iconCache.get(key)
+  const target = squirrelRedirect(filePath) || filePath
   let url = null
   try {
-    if (IMAGE_EXTS.has(path.extname(filePath).toLowerCase())) {
-      const image = nativeImage.createFromPath(filePath)
+    if (IMAGE_EXTS.has(path.extname(target).toLowerCase())) {
+      const image = nativeImage.createFromPath(target)
       url = image.isEmpty() ? null : image.toDataURL()
     } else {
-      const image = await app.getFileIcon(filePath, { size: 'normal' })
+      const image = await app.getFileIcon(target, { size: 'normal' })
       url = image.isEmpty() ? null : image.toDataURL()
     }
   } catch {
     url = null
+  }
+  if (!url) {
+    try { const [robust] = await resolveIcons([{ path: target, index: 0 }]); url = robust || null } catch {}
   }
   iconCache.set(key, url)
   return url
