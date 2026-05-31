@@ -39,6 +39,7 @@ interface RunningApp {
   cpu: number
   count: number
   pids: number[]
+  hasWindow: boolean
 }
 
 interface StartupHistoryEntry {

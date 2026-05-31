@@ -405,7 +405,7 @@ async function applySystemChanges() {
 }
 
 async function listRunning() {
-  const script = '$c=@{}; Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | ForEach-Object { $c[[int]$_.IDProcess]=[int]$_.PercentProcessorTime }; Get-Process | ForEach-Object { $p=$null; try { $p=$_.Path } catch {}; [PSCustomObject]@{ id=$_.Id; name=$_.ProcessName; path=$p; mem=$_.WorkingSet64; cpu=$c[$_.Id] } } | ConvertTo-Json -Compress'
+  const script = '$c=@{}; Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | ForEach-Object { $c[[int]$_.IDProcess]=[int]$_.PercentProcessorTime }; Get-Process | ForEach-Object { $p=$null; try { $p=$_.Path } catch {}; [PSCustomObject]@{ id=$_.Id; name=$_.ProcessName; path=$p; mem=$_.WorkingSet64; cpu=$c[$_.Id]; win=([int64]$_.MainWindowHandle) } } | ConvertTo-Json -Compress'
   const out = await run(`powershell -NoProfile -Command "${script}"`)
   let raw = []
   try { raw = JSON.parse(out || '[]') } catch { raw = [] }
@@ -418,13 +418,14 @@ async function listRunning() {
     const key = (proc.name || 'Unknown').toLowerCase()
     let group = groups.get(key)
     if (!group) {
-      group = { name: proc.name || 'Unknown', path: proc.path || null, memory: 0, cpuRaw: 0, count: 0, pids: [] }
+      group = { name: proc.name || 'Unknown', path: proc.path || null, memory: 0, cpuRaw: 0, count: 0, pids: [], hasWindow: false }
       groups.set(key, group)
     }
     group.memory += proc.mem || 0
     group.cpuRaw += proc.cpu || 0
     group.count++
     group.pids.push(proc.id)
+    if (proc.win) group.hasWindow = true
     if (!group.path && proc.path) group.path = proc.path
   }
 
