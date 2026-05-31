@@ -250,5 +250,12 @@ contextBridge.exposeInMainWorld('shell', {
     running: () => ipcRenderer.invoke('apps/running-list'),
     endTask: (pids) => ipcRenderer.invoke('apps/end-task', pids),
     openLocation: (target) => ipcRenderer.invoke('apps/open-location', target),
+    installed: () => ipcRenderer.invoke('apps/installed-list'),
+    onInstalledChanged: (callback) => {
+      ipcRenderer.on('apps/installed-changed', (_, data) => callback(data))
+    },
+    uninstall: (id) => ipcRenderer.invoke('apps/installed-uninstall', { id }),
+    openApp: (id) => ipcRenderer.invoke('apps/installed-open', { id }),
+    openAppLocation: (id) => ipcRenderer.invoke('apps/installed-open-location', { id }),
   },
 })

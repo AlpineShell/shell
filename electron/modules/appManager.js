@@ -5,6 +5,7 @@ const path = require('path')
 const fs = require('fs')
 const os = require('os')
 const autostart = require('./autostart')
+const knownApps = require('../knownApps')
 
 const CPU_CORES = os.cpus().length || 1
 
@@ -69,6 +70,72 @@ function resolveShortcutTarget(lnkPath) {
   }
 }
 
+const metaCache = new Map()
+let metaSeq = 0
+
+function basenameLower(p) {
+  return p ? path.basename(p).toLowerCase() : null
+}
+
+async function enrichPaths(paths) {
+  const need = [...new Set(paths.filter((p) => p && !metaCache.has(p.toLowerCase())))]
+  if (need.length === 0) return
+  const id = ++metaSeq
+  const listFile = path.join(os.tmpdir(), `alpine-meta-${id}.json`)
+  const scriptFile = path.join(os.tmpdir(), `alpine-meta-${id}.ps1`)
+  const script = `$paths = Get-Content -Raw -LiteralPath '${listFile}' | ConvertFrom-Json\n$paths | ForEach-Object { $vi=$null; try { $vi = (Get-Item -LiteralPath $_ -ErrorAction Stop).VersionInfo } catch {}; [PSCustomObject]@{ p=$_; d=$vi.FileDescription; n=$vi.ProductName } } | ConvertTo-Json -Compress`
+  try {
+    fs.writeFileSync(listFile, JSON.stringify(need), 'utf8')
+    fs.writeFileSync(scriptFile, script, 'utf8')
+    const out = await run(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}"`)
+    let arr = []
+    try { arr = JSON.parse(out || '[]') } catch {}
+    if (!Array.isArray(arr)) arr = [arr]
+    for (const m of arr) {
+      if (!m || !m.p) continue
+      const label = (m.d || m.n || '').trim()
+      metaCache.set(m.p.toLowerCase(), label || null)
+    }
+  } catch {
+  } finally {
+    try { fs.unlinkSync(listFile) } catch {}
+    try { fs.unlinkSync(scriptFile) } catch {}
+  }
+  for (const p of need) if (!metaCache.has(p.toLowerCase())) metaCache.set(p.toLowerCase(), null)
+}
+
+function friendlyName(target, fallback) {
+  const base = basenameLower(target)
+  if (base && knownApps[base]) return knownApps[base].name
+  const meta = target ? metaCache.get(target.toLowerCase()) : null
+  if (meta) return meta
+  if (fallback && fallback.trim()) return fallback
+  return base ? base.replace(/\.exe$/i, '') : 'Unknown app'
+}
+
+function blurbForTarget(target) {
+  const base = basenameLower(target)
+  return base && knownApps[base] ? (knownApps[base].blurb || null) : null
+}
+
+function classifyTarget(target) {
+  const base = basenameLower(target)
+  if (base && knownApps[base] && knownApps[base].category) return knownApps[base].category
+  if (!target) return 'unknown'
+  const p = target.toLowerCase()
+  if (p.includes('\\windows\\')) return 'system'
+  if (p.includes('\\program files')) return 'app'
+  if (p.includes('\\users\\') || p.includes('\\appdata\\') || p.includes('\\programdata\\')) return 'app'
+  return 'unknown'
+}
+
+function memoryBand(bytes) {
+  const mb = bytes / (1024 * 1024)
+  if (mb >= 250) return 'heavy'
+  if (mb >= 60) return 'moderate'
+  return 'light'
+}
+
 async function readApprovedMap(fullKey) {
   const out = await run(`reg query "${fullKey}"`)
   const map = new Map()
@@ -76,7 +143,7 @@ async function readApprovedMap(fullKey) {
     const match = line.match(/^\s+(.+?)\s+REG_BINARY\s+([0-9A-Fa-f]+)/)
     if (!match) continue
     const firstByte = parseInt(match[2].slice(0, 2), 16)
-    map.set(match[1].trim().toLowerCase(), (firstByte & 0x01) === 1)
+    map.set(match[1].trim().toLowerCase(), (firstByte & 0x03) === 0x03)
   }
   return map
 }
@@ -242,7 +309,15 @@ async function refreshStartup() {
     })
   }
 
-  result.sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name))
+  await enrichPaths(result.map((e) => e.target).filter(Boolean))
+  for (const e of result) {
+    e.friendlyName = friendlyName(e.target, e.name)
+    e.category = classifyTarget(e.target)
+    e.blurb = blurbForTarget(e.target)
+    e.locked = e.category === 'system'
+  }
+
+  result.sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.friendlyName.localeCompare(b.friendlyName))
   cachedStartup = result
   return result
 }
@@ -374,6 +449,12 @@ async function listRunning() {
     group.cpu = Math.min(100, Math.round(group.cpuRaw / CPU_CORES))
     delete group.cpuRaw
   }
+  await enrichPaths(list.map((g) => g.path).filter(Boolean))
+  for (const group of list) {
+    group.friendlyName = friendlyName(group.path, group.name)
+    group.category = classifyTarget(group.path)
+    group.band = memoryBand(group.memory)
+  }
   list.sort((a, b) => b.memory - a.memory)
   return list
 }
@@ -417,6 +498,181 @@ function openLocation(target) {
   return { ok: true }
 }
 
+let cachedInstalled = []
+let installedById = new Map()
+let installedRefreshing = false
+
+const DESKTOP_SCRIPT = `$paths=@('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKLM:\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall')
+$out=foreach($p in $paths){ if(Test-Path $p){ Get-ChildItem $p -ErrorAction SilentlyContinue | ForEach-Object { $i=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($i.DisplayName -and -not $i.SystemComponent -and -not $i.ParentKeyName){ [PSCustomObject]@{ key=$_.PSChildName; name=$i.DisplayName; publisher=$i.Publisher; version=$i.DisplayVersion; icon=$i.DisplayIcon; loc=$i.InstallLocation; uninstall=$i.UninstallString; quiet=$i.QuietUninstallString } } } } }
+$out | ConvertTo-Json -Compress`
+
+const STORE_SCRIPT = `Get-AppxPackage | Where-Object { $_.InstallLocation -and $_.SignatureKind -ne 'System' -and -not $_.IsFramework -and -not $_.NonRemovable } | ForEach-Object {
+  $pkg=$_; $aumid=$null; $logo=$null; $dn=$null
+  try {
+    $m=Get-AppxPackageManifest $pkg
+    $app=$m.Package.Applications.Application; if($app -is [array]){ $app=$app[0] }
+    if($app.Id){ $aumid="$($pkg.PackageFamilyName)!$($app.Id)" }
+    $logoRel=$m.Package.Properties.Logo; if($logoRel){ $logo=Join-Path $pkg.InstallLocation $logoRel }
+    $dn=$m.Package.Properties.DisplayName
+  } catch {}
+  [PSCustomObject]@{ name=$pkg.Name; display=$dn; publisher=$pkg.Publisher; full=$pkg.PackageFullName; loc=$pkg.InstallLocation; aumid=$aumid; logo=$logo }
+} | ConvertTo-Json -Compress`
+
+async function runPsScript(script) {
+  const id = ++metaSeq
+  const file = path.join(os.tmpdir(), `alpine-ps-${id}.ps1`)
+  try {
+    fs.writeFileSync(file, script, 'utf8')
+    return await run(`powershell -NoProfile -ExecutionPolicy Bypass -File "${file}"`)
+  } finally {
+    try { fs.unlinkSync(file) } catch {}
+  }
+}
+
+function parseIconPath(displayIcon) {
+  if (!displayIcon) return null
+  let s = String(displayIcon).trim()
+  if (s.startsWith('"')) { const end = s.indexOf('"', 1); s = end > 0 ? s.slice(1, end) : s.slice(1) }
+  else { const comma = s.lastIndexOf(','); if (comma > 2) s = s.slice(0, comma) }
+  return s.trim() || null
+}
+
+function cleanPublisher(pub) {
+  if (!pub) return null
+  const m = String(pub).match(/CN=([^,]+)/)
+  return (m ? m[1] : String(pub)).trim() || null
+}
+
+function prettyPackageName(pkgName) {
+  const last = String(pkgName || '').split('.').pop() || String(pkgName || '')
+  return last.replace(/([a-z])([A-Z])/g, '$1 $2')
+}
+
+function matchStartupId(installLocation, launchTarget) {
+  const loc = (installLocation || '').toLowerCase().replace(/[\\/]+$/, '')
+  const launch = (launchTarget || '').toLowerCase()
+  for (const e of cachedStartup) {
+    if (!e.target) continue
+    const t = e.target.toLowerCase()
+    if (launch && t === launch) return e.id
+    if (loc && t.startsWith(loc + '\\')) return e.id
+  }
+  return null
+}
+
+async function refreshInstalled() {
+  if (cachedStartup.length === 0) { try { await refreshStartup() } catch {} }
+  const [desktopOut, storeOut] = await Promise.all([runPsScript(DESKTOP_SCRIPT), runPsScript(STORE_SCRIPT)])
+
+  const internal = []
+  const seen = new Set()
+
+  let desktop = []
+  try { desktop = JSON.parse(desktopOut || '[]') } catch {}
+  if (!Array.isArray(desktop)) desktop = [desktop]
+  for (const d of desktop) {
+    if (!d || !d.name) continue
+    const id = `desktop:${d.key || d.name}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    const iconPath = parseIconPath(d.icon)
+    const launchTarget = iconPath && /\.exe$/i.test(iconPath) ? iconPath : null
+    const installLocation = d.loc || (launchTarget ? path.dirname(launchTarget) : null)
+    internal.push({
+      id, source: 'desktop', name: String(d.name).trim(), publisher: cleanPublisher(d.publisher), version: d.version || null,
+      iconPath, installLocation, launchTarget, launchKind: launchTarget ? 'exe' : null,
+      uninstallCmd: d.quiet || d.uninstall || null, uninstallPackage: null,
+    })
+  }
+
+  let store = []
+  try { store = JSON.parse(storeOut || '[]') } catch {}
+  if (!Array.isArray(store)) store = [store]
+  for (const s of store) {
+    if (!s || !s.name) continue
+    const id = `store:${s.full || s.name}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    const name = s.display && !String(s.display).startsWith('ms-resource') ? String(s.display) : prettyPackageName(s.name)
+    internal.push({
+      id, source: 'store', name, publisher: cleanPublisher(s.publisher), version: null,
+      iconPath: s.logo || null, installLocation: s.loc || null, launchTarget: s.aumid || null, launchKind: s.aumid ? 'aumid' : null,
+      uninstallCmd: null, uninstallPackage: s.full || null,
+    })
+  }
+
+  for (let i = 0; i < internal.length; i += 16) {
+    await Promise.all(internal.slice(i, i + 16).map(async (a) => { a.icon = await iconFor(a.iconPath) }))
+  }
+  for (const a of internal) a.startupId = matchStartupId(a.installLocation, a.launchTarget)
+
+  internal.sort((a, b) => a.name.localeCompare(b.name))
+  installedById = new Map(internal.map((a) => [a.id, a]))
+  cachedInstalled = internal.map((a) => ({
+    id: a.id, name: a.name, publisher: a.publisher, version: a.version, icon: a.icon || null, source: a.source,
+    startupId: a.startupId, canUninstall: !!(a.uninstallCmd || a.uninstallPackage),
+    canOpen: !!(a.launchTarget || a.installLocation), canOpenLocation: !!(a.launchTarget || a.installLocation),
+  }))
+  return cachedInstalled
+}
+
+function broadcastInstalled() {
+  if (broadcastRef) broadcastRef('apps/installed-changed', cachedInstalled)
+}
+
+async function getInstalled() {
+  if (cachedInstalled.length === 0) return refreshInstalled()
+  if (!installedRefreshing) {
+    installedRefreshing = true
+    refreshInstalled().then(broadcastInstalled).catch(() => {}).finally(() => { installedRefreshing = false })
+  }
+  return cachedInstalled
+}
+
+function afterUninstall() {
+  refreshInstalled().then(broadcastInstalled).catch(() => {})
+}
+
+async function uninstallApp({ id }) {
+  const app = installedById.get(id)
+  if (!app) return { ok: false, error: 'App not found.' }
+  if (app.source === 'store' && app.uninstallPackage) {
+    try {
+      await runPsScript(`Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object { $_.PackageFullName -eq '${app.uninstallPackage}' } | Remove-AppxPackage -ErrorAction SilentlyContinue`)
+    } catch {
+      return { ok: false, error: 'Could not remove the app.' }
+    }
+    afterUninstall()
+    return { ok: true }
+  }
+  if (app.uninstallCmd) {
+    try { exec(app.uninstallCmd, { windowsHide: false }, () => afterUninstall()) } catch { return { ok: false, error: 'Could not start the uninstaller.' } }
+    return { ok: true }
+  }
+  return { ok: false, error: 'No uninstaller available.' }
+}
+
+function openApp({ id }) {
+  const app = installedById.get(id)
+  if (!app) return { ok: false }
+  try {
+    if (app.launchKind === 'exe' && app.launchTarget) { shell.openPath(app.launchTarget); return { ok: true } }
+    if (app.launchKind === 'aumid' && app.launchTarget) { exec(`explorer.exe shell:AppsFolder\\${app.launchTarget}`, { windowsHide: true }); return { ok: true } }
+    if (app.installLocation) { shell.openPath(app.installLocation); return { ok: true } }
+  } catch {}
+  return { ok: false }
+}
+
+function openInstalledLocation({ id }) {
+  const app = installedById.get(id)
+  if (!app) return { ok: false }
+  try {
+    if (app.launchTarget && app.launchKind === 'exe' && fs.existsSync(app.launchTarget)) { shell.showItemInFolder(app.launchTarget); return { ok: true } }
+    if (app.installLocation && fs.existsSync(app.installLocation)) { shell.openPath(app.installLocation); return { ok: true } }
+  } catch {}
+  return { ok: false }
+}
+
 module.exports = {
   handlers: {
     'apps/startup-list': () => getStartup(),
@@ -428,6 +684,10 @@ module.exports = {
     'apps/running-list': () => getRunning(),
     'apps/end-task': (_event, pids) => endTask(pids),
     'apps/open-location': (_event, target) => openLocation(target),
+    'apps/installed-list': () => getInstalled(),
+    'apps/installed-uninstall': (_event, payload) => uninstallApp(payload),
+    'apps/installed-open': (_event, payload) => openApp(payload),
+    'apps/installed-open-location': (_event, payload) => openInstalledLocation(payload),
   },
   start(broadcast) {
     broadcastRef = broadcast

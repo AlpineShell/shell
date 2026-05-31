@@ -12,6 +12,10 @@ interface OpenApp {
 interface StartupEntry {
   id: string
   name: string
+  friendlyName: string
+  blurb: string | null
+  category: 'app' | 'system' | 'unknown'
+  locked: boolean
   command: string
   target: string | null
   icon: string | null
@@ -26,6 +30,9 @@ interface StartupEntry {
 
 interface RunningApp {
   name: string
+  friendlyName: string
+  category: 'app' | 'system' | 'unknown'
+  band: 'light' | 'moderate' | 'heavy'
   path: string | null
   icon: string | null
   memory: number
@@ -41,6 +48,19 @@ interface StartupHistoryEntry {
   from: boolean
   to: boolean
   scope: 'user' | 'system'
+}
+
+interface InstalledApp {
+  id: string
+  name: string
+  publisher: string | null
+  version: string | null
+  icon: string | null
+  source: 'desktop' | 'store'
+  startupId: string | null
+  canUninstall: boolean
+  canOpen: boolean
+  canOpenLocation: boolean
 }
 
 interface NetworkStatus {
@@ -291,6 +311,11 @@ declare global {
         running: () => Promise<RunningApp[]>
         endTask: (pids: number[]) => Promise<{ ok: boolean }>
         openLocation: (target: string) => Promise<{ ok: boolean }>
+        installed: () => Promise<InstalledApp[]>
+        onInstalledChanged: (callback: (data: InstalledApp[]) => void) => void
+        uninstall: (id: string) => Promise<{ ok: boolean; error?: string }>
+        openApp: (id: string) => Promise<{ ok: boolean }>
+        openAppLocation: (id: string) => Promise<{ ok: boolean }>
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>

@@ -12,7 +12,10 @@ import BluetoothSettingsPage from './bluetoothSettingsPage'
 import WifiSettingsPage from './wifiSettingsPage'
 import SystemPage from './systemPage'
 import SystemRevertPage from './systemRevertPage'
-import AppsPage from './appsPage'
+import AppsHub from './appsHub'
+import AppsRunningPage from './appsRunningPage'
+import AppsInstalledPage from './appsInstalledPage'
+import AppsStartupPage from './appsStartupPage'
 
 interface NavItem {
   path: string
@@ -182,7 +185,10 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'devices') return <DevicesHub onNavigate={navigate} />
   if (path === 'devices/bluetooth') return <BluetoothSettingsPage />
   if (path === 'devices/wifi') return <WifiSettingsPage />
-  if (path === 'apps') return <AppsPage />
+  if (path === 'apps') return <AppsHub onNavigate={navigate} />
+  if (path === 'apps/running') return <AppsRunningPage />
+  if (path === 'apps/installed') return <AppsInstalledPage />
+  if (path === 'apps/startup') return <AppsStartupPage />
   if (path === 'system') return <SystemPage onNavigate={navigate} />
   if (path === 'system/revert') return <SystemRevertPage />
   return null
@@ -191,6 +197,9 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
 const SEGMENT_LABELS: Record<string, string> = {
   home: 'Home',
   apps: 'Apps',
+  running: 'Running',
+  installed: 'Installed',
+  startup: 'Startup',
   personalization: 'Personalization',
   wallpaper: 'Wallpaper',
   topbar: 'Top Bar',
