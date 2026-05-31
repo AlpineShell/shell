@@ -1,10 +1,9 @@
 const { execFile } = require('child_process')
-const { app } = require('electron')
 const os = require('os')
 const fs = require('fs')
 const path = require('path')
+const appIcons = require('./appIcons')
 
-const iconCache = new Map()
 let lastSnapshot = null
 
 const TEMP = os.tmpdir()
@@ -108,23 +107,16 @@ async function parseApps(stdout) {
     return true
   })
 
+  const generic = await appIcons.ensureGenericIcon()
   const apps = await Promise.all(
     candidates.map(async (p) => {
-      const key = p.path.toLowerCase()
-      if (!iconCache.has(key)) {
-        try {
-          const icon = await app.getFileIcon(p.path, { size: 'normal' })
-          iconCache.set(key, icon.toDataURL())
-        } catch {
-          iconCache.set(key, null)
-        }
-      }
+      const icon = (await appIcons.iconForFile(p.path)) || generic
       const displayName = SHELL_NAMES.has(p.name.toLowerCase()) ? p.title : p.name
-      return { id: p.id, hwnd: p.hwnd, name: displayName, title: p.title, path: p.path, icon: iconCache.get(key) }
+      return { id: p.id, hwnd: p.hwnd, name: displayName, title: p.title, path: p.path, icon }
     })
   )
 
-  return apps.filter((a) => a.icon !== null)
+  return apps
 }
 
 const FALLBACK_CMD =

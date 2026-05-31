@@ -42,11 +42,28 @@ const {
 const isDev = !app.isPackaged
 const BASE_URL = isDev ? 'http://localhost:5173' : null
 
+app.commandLine.appendSwitch('disable-features', 'NetworkServiceSandbox')
+
 function getURL(mode, displayId) {
   const params = displayId != null ? `mode=${mode}&displayId=${displayId}` : `mode=${mode}`
   if (isDev) return `${BASE_URL}?${params}`
   return `file://${path.join(__dirname, '..', 'dist', 'index.html')}?${params}`
 }
+
+function loadAppURL(win, url) {
+  win.loadURL(url)
+  let attempts = 0
+  win.webContents.on('did-finish-load', () => { attempts = 0 })
+  win.webContents.on('did-fail-load', (_event, errorCode, _desc, _validatedURL, isMainFrame) => {
+    if (!isMainFrame || errorCode === -3 || attempts >= 30) return
+    attempts++
+    setTimeout(() => { if (!win.isDestroyed()) win.loadURL(url) }, Math.min(2000, 400 + attempts * 200))
+  })
+  win.webContents.on('render-process-gone', () => {
+    setTimeout(() => { if (!win.isDestroyed()) win.loadURL(url) }, 600)
+  })
+}
+
 const TOP_BAR_HEIGHT = 24
 
 const shells = new Map()
@@ -72,7 +89,7 @@ function createDesktopWindow(display) {
   })
 
   win.setAlwaysOnTop(false)
-  win.loadURL(getURL('desktop'))
+  loadAppURL(win, getURL('desktop'))
 
   return win
 }
@@ -106,7 +123,7 @@ function createTopBarWindow(display) {
 
   win.setAlwaysOnTop(false)
   win.setIgnoreMouseEvents(true)
-  win.loadURL(getURL('topbar', display.id))
+  loadAppURL(win, getURL('topbar', display.id))
 
   const INTERACTIVE_RIGHT = 600
   const INTERACTIVE_LEFT = 40
@@ -252,7 +269,7 @@ function createScreenshotWindow() {
   })
 
   win.setAlwaysOnTop(true, 'screen-saver')
-  win.loadURL(getURL('screenshot'))
+  loadAppURL(win, getURL('screenshot'))
 
   win.webContents.once('did-finish-load', () => {
     win.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
@@ -279,7 +296,7 @@ function createSetupWindow() {
     },
   })
 
-  setupWin.loadURL(getURL('setup'))
+  loadAppURL(setupWin, getURL('setup'))
 
   setupWin.on('closed', () => {
     app.quit()
@@ -315,7 +332,7 @@ function createSettingsWindow() {
     },
   })
   settingsWin.on('page-title-updated', (e) => e.preventDefault())
-  settingsWin.loadURL(getURL('settings'))
+  loadAppURL(settingsWin, getURL('settings'))
   settingsWin.once('ready-to-show', () => {
     if (settingsWin && !settingsWin.isDestroyed()) settingsWin.show()
   })

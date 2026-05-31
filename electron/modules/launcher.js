@@ -3,6 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const { execFile } = require('child_process')
 const { forceForeground } = require('./winFocus')
+const appIcons = require('./appIcons')
 
 const SCAN_DIRS = [
   path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -116,69 +117,6 @@ foreach ($a in $apps) {
   })
 }
 
-function extractIcons(specs) {
-  return new Promise((resolve) => {
-    const entries = specs.map((s) => `@{ p='${s.path.replace(/'/g, "''")}'; i=${s.index | 0} }`).join(',')
-    const script = `
-Add-Type -AssemblyName System.Drawing
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class IconExtractor {
-  [DllImport("shell32.dll", CharSet=CharSet.Unicode)]
-  public static extern uint ExtractIconExW(string lpszFile, int nIconIndex, IntPtr[] phiconLarge, IntPtr[] phiconSmall, uint nIcons);
-  [DllImport("user32.dll")]
-  public static extern int DestroyIcon(IntPtr hIcon);
-}
-'@
-$entries = @(${entries})
-$results = @()
-foreach ($e in $entries) {
-  $p = [Environment]::ExpandEnvironmentVariables($e.p)
-  $idx = [int]$e.i
-  $b64 = ''
-  try {
-    $large = New-Object 'IntPtr[]' 1
-    $count = [IconExtractor]::ExtractIconExW($p, $idx, $large, $null, 1)
-    if ($count -gt 0 -and $large[0] -ne [IntPtr]::Zero) {
-      $icon = [System.Drawing.Icon]::FromHandle($large[0])
-      $bmp = $icon.ToBitmap()
-      $ms = New-Object System.IO.MemoryStream
-      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-      $b64 = [Convert]::ToBase64String($ms.ToArray())
-      $ms.Dispose()
-      $bmp.Dispose()
-      $icon.Dispose()
-      [void][IconExtractor]::DestroyIcon($large[0])
-    }
-  } catch {}
-  if ([string]::IsNullOrEmpty($b64)) {
-    try {
-      $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
-      $bmp = $icon.ToBitmap()
-      $ms = New-Object System.IO.MemoryStream
-      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-      $b64 = [Convert]::ToBase64String($ms.ToArray())
-      $ms.Dispose()
-      $bmp.Dispose()
-      $icon.Dispose()
-    } catch {}
-  }
-  $results += $b64
-}
-$results -join '|'
-`
-    execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 50 * 1024 * 1024 }, (err, stdout) => {
-      if (err) {
-        console.error('[launcher] icon extraction error:', err.message)
-        return resolve(specs.map(() => null))
-      }
-      const parts = stdout.trim().split('|')
-      resolve(parts.map((b64) => b64 && b64.length > 10 ? `data:image/png;base64,${b64}` : null))
-    })
-  })
-}
-
 const BLOCKED_NAMES = new Set(['settings'])
 
 async function buildIndex() {
@@ -222,6 +160,8 @@ async function buildIndex() {
   index = items
   if (broadcast) broadcast('launcher/index-changed', index)
 
+  const generic = await appIcons.ensureGenericIcon()
+
   getUwpApps().then((uwpApps) => {
     let added = false
     for (const uwp of uwpApps) {
@@ -235,7 +175,7 @@ async function buildIndex() {
         lnkPath: null,
         appId: uwp.appId,
         target: uwp.appId,
-        icon: uwp.icon,
+        icon: uwp.icon || generic,
       })
       added = true
     }
@@ -249,16 +189,11 @@ async function buildIndex() {
 
   const iconItems = items.filter((i) => i.iconSource && i.iconSource.includes('\\'))
   if (iconItems.length > 0) {
-    const icons = await extractIcons(iconItems.map((i) => ({ path: i.iconSource, index: i.iconIndex || 0 })))
-    let changed = false
-    for (let k = 0; k < iconItems.length; k++) {
-      if (icons[k]) {
-        iconItems[k].icon = icons[k]
-        changed = true
-      }
-    }
-    if (changed && broadcast) broadcast('launcher/index-changed', index)
+    const icons = await appIcons.resolveIcons(iconItems.map((i) => ({ path: i.iconSource, index: i.iconIndex || 0 })))
+    for (let k = 0; k < iconItems.length; k++) iconItems[k].icon = icons[k] || generic
   }
+  for (const item of items) if (!item.icon) item.icon = generic
+  if (broadcast) broadcast('launcher/index-changed', index)
 }
 
 let rebuildTimer = null
