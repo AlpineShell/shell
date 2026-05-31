@@ -261,7 +261,7 @@ async function refreshStartup() {
       name: e.name,
       command: e.command,
       target,
-      icon: await appIcons.iconForFile(target),
+      icon: null,
       source: e.source,
       sourceLabel: e.sourceLabel,
       scope: e.scope,
@@ -283,7 +283,7 @@ async function refreshStartup() {
       name: e.name,
       command: e.command,
       target,
-      icon: await appIcons.iconForFile(target),
+      icon: null,
       source: e.source,
       sourceLabel: e.sourceLabel,
       scope: e.scope,
@@ -295,7 +295,9 @@ async function refreshStartup() {
   }
 
   await enrichPaths(result.map((e) => e.target).filter(Boolean))
+  const iconMap = await appIcons.resolveExeIcons(result.map((e) => e.target))
   for (const e of result) {
+    e.icon = iconMap.get(e.target) || null
     e.friendlyName = friendlyName(e.target, e.name)
     e.category = classifyTarget(e.target)
     e.blurb = blurbForTarget(e.target)
@@ -431,12 +433,13 @@ async function listRunning() {
 
   const list = [...groups.values()]
   for (const group of list) {
-    group.icon = await appIcons.iconForFile(group.path)
     group.cpu = Math.min(100, Math.round(group.cpuRaw / CPU_CORES))
     delete group.cpuRaw
   }
   await enrichPaths(list.map((g) => g.path).filter(Boolean))
+  const iconMap = await appIcons.resolveExeIcons(list.map((g) => g.path))
   for (const group of list) {
+    group.icon = iconMap.get(group.path) || null
     group.friendlyName = friendlyName(group.path, group.name)
     group.category = classifyTarget(group.path)
     group.band = memoryBand(group.memory)

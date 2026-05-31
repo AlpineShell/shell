@@ -70,11 +70,37 @@ async function iconForFile(filePath) {
   } catch {
     url = null
   }
-  if (!url) {
+  if (!url && !IMAGE_EXTS.has(path.extname(target).toLowerCase())) {
     try { const [robust] = await resolveIcons([{ path: target, index: 0 }]); url = robust || null } catch {}
   }
   iconCache.set(key, url)
   return url
+}
+
+async function resolveExeIcons(targets) {
+  const result = new Map()
+  const pending = []
+  for (const original of targets) {
+    if (!original) { result.set(original, null); continue }
+    const key = original.toLowerCase()
+    if (iconCache.has(key)) { result.set(original, iconCache.get(key)); continue }
+    const src = squirrelRedirect(original) || original
+    if (IMAGE_EXTS.has(path.extname(src).toLowerCase())) {
+      let url = null
+      try { const image = nativeImage.createFromPath(src); url = image.isEmpty() ? null : image.toDataURL() } catch {}
+      if (url) { iconCache.set(key, url); result.set(original, url); continue }
+    }
+    pending.push({ original, src, key })
+  }
+  if (pending.length) {
+    const urls = await resolveIcons(pending.map((p) => ({ path: p.src, index: 0 })))
+    pending.forEach((p, i) => {
+      const url = urls[i] || null
+      iconCache.set(p.key, url)
+      result.set(p.original, url)
+    })
+  }
+  return result
 }
 
 function resolveStoreLogo(basePath) {
@@ -228,6 +254,7 @@ function getGenericIcon() {
 module.exports = {
   iconForFile,
   resolveIcons,
+  resolveExeIcons,
   ensureGenericIcon,
   getGenericIcon,
   buildShortcutIndex,
