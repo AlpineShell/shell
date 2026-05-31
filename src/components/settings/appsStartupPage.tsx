@@ -2,16 +2,12 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, FolderOpen, Lock, ShieldAlert } from 'lucide-react'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { AppIcon, PageHeader, SearchBox, TechToggle, FilterChip, Spinner, Toggle, useTechState, processKey } from './appsShared'
-
-type StartupFilter = 'all' | 'on' | 'off'
+import { AppIcon, PageHeader, SearchBox, Spinner, Toggle, processKey } from './appsShared'
 
 export default function AppsStartupPage() {
   const startup = useStartupApps()
   const running = useRunningApps()
-  const [tech, toggleTech] = useTechState()
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<StartupFilter>('all')
   const [systemOpen, setSystemOpen] = useState(false)
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -24,15 +20,12 @@ export default function AppsStartupPage() {
 
   const q = query.trim().toLowerCase()
   const matches = (e: StartupEntry) => !q || e.friendlyName.toLowerCase().includes(q) || e.name.toLowerCase().includes(q) || e.command.toLowerCase().includes(q)
-  const on = (e: StartupEntry) => (e.pending ? e.pending === 'enable' : e.enabled)
-  const passesFilter = (e: StartupEntry) => filter === 'all' || (filter === 'on' ? on(e) : !on(e))
 
-  const visible = startup.filter(matches).filter(passesFilter)
+  const visible = startup.filter(matches)
   const appEntries = visible.filter((e) => e.category !== 'system')
   const systemEntries = visible.filter((e) => e.category === 'system')
   const pending = startup.filter((e) => e.pending)
   const matchOf = (e: StartupEntry) => runningByName.get(processKey(e.target) || '')
-  const recommend = appEntries.filter((e) => on(e) && matchOf(e)?.band === 'heavy')
 
   async function applyChanges() {
     setError(null)
@@ -46,7 +39,6 @@ export default function AppsStartupPage() {
     <div className="flex flex-col gap-5 w-full">
       <PageHeader title="Startup" description="Apps that open automatically when you start your PC.">
         <SearchBox value={query} onChange={setQuery} placeholder="Search for an app" />
-        <TechToggle tech={tech} onToggle={toggleTech} />
       </PageHeader>
 
       <div className="flex flex-col gap-3">
@@ -62,39 +54,12 @@ export default function AppsStartupPage() {
           </div>
         )}
 
-        {recommend.length > 0 && (
-          <div className="flex flex-col gap-2 px-4 py-3 rounded-lg bg-amber-400/5 border border-amber-400/20">
-            <span className="text-[13px] text-amber-100/90">We recommend turning these off</span>
-            <span className="text-[11px] text-white/50">They start automatically and use a lot of memory. You can still open them yourself anytime.</span>
-            <div className="flex flex-col gap-1 mt-1">
-              {recommend.slice(0, 3).map((e) => (
-                <div key={e.id} className="flex items-center gap-2">
-                  <AppIcon icon={e.icon} name={e.friendlyName} size={20} />
-                  <span className="text-[12px] text-white/85 flex-1 min-w-0 truncate">{e.friendlyName}</span>
-                  <button onClick={() => window.shell.apps.setStartup(e.id, false)} className="h-6 px-2.5 rounded-md text-[11px] bg-white/10 text-white hover:bg-white/20 cursor-pointer transition-colors">Turn off</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tech && (
-          <div className="flex items-center gap-1">
-            <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>All</FilterChip>
-            <FilterChip active={filter === 'on'} onClick={() => setFilter('on')}>On</FilterChip>
-            <FilterChip active={filter === 'off'} onClick={() => setFilter('off')}>Off</FilterChip>
-          </div>
-        )}
-
         {startup.length === 0 && <p className="text-sm text-white/50">Looking for startup apps…</p>}
         {startup.length > 0 && appEntries.length === 0 && systemEntries.length === 0 && <p className="text-sm text-white/50">No apps match your search.</p>}
-        {startup.length > 0 && (appEntries.length > 0 || systemEntries.length > 0) && (
-          <p className="text-[11px] text-white/35">Changes take effect the next time you restart your PC.</p>
-        )}
 
         <div className="flex flex-col gap-1">
           {appEntries.map((entry) => (
-            <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} tech={tech} />
+            <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} />
           ))}
         </div>
 
@@ -111,7 +76,7 @@ export default function AppsStartupPage() {
             {systemOpen && (
               <div className="flex flex-col gap-1 px-2 pb-2">
                 {systemEntries.map((entry) => (
-                  <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} tech={tech} />
+                  <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} />
                 ))}
               </div>
             )}
@@ -122,10 +87,9 @@ export default function AppsStartupPage() {
   )
 }
 
-function StartupRow({ entry, running, tech }: { entry: StartupEntry; running?: RunningApp; tech: boolean }) {
+function StartupRow({ entry, running }: { entry: StartupEntry; running?: RunningApp }) {
   const [locating, setLocating] = useState(false)
   const effectiveOn = entry.pending ? entry.pending === 'enable' : entry.enabled
-  const lockedForUser = entry.locked && !tech
   const heavy = running?.band === 'heavy'
 
   async function openLocation() {
@@ -148,7 +112,6 @@ function StartupRow({ entry, running, tech }: { entry: StartupEntry; running?: R
           {heavy && <span className="text-[11px] text-amber-300/80 shrink-0">· Uses a lot of memory</span>}
         </div>
         <span className="text-[11px] text-white/45 truncate">{entry.blurb || (effectiveOn ? 'Opens when you start your PC' : 'Off')}</span>
-        {tech && <span className="text-[10px] text-white/30 font-mono truncate mt-0.5">{entry.sourceLabel} · {entry.command}</span>}
       </div>
       {entry.target && (
         <button
@@ -161,7 +124,7 @@ function StartupRow({ entry, running, tech }: { entry: StartupEntry; running?: R
           {locating ? <Spinner size={15} /> : <FolderOpen size={15} />}
         </button>
       )}
-      {lockedForUser ? (
+      {entry.locked ? (
         <Lock size={15} className="text-white/30 shrink-0" />
       ) : (
         <Toggle checked={effectiveOn} pending={!!entry.pending} onChange={() => window.shell.apps.setStartup(entry.id, !effectiveOn)} />

@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { AppWindow, Loader2, Search, SlidersHorizontal } from 'lucide-react'
+import { AppWindow, Loader2, Search } from 'lucide-react'
 
 export function Spinner({ size = 14 }: { size?: number }) {
   return <Loader2 size={size} className="animate-spin" />
@@ -12,13 +11,6 @@ export function AppIcon({ icon, name, size = 28 }: { icon?: string | null; name:
       <AppWindow size={Math.round(size * 0.55)} strokeWidth={1.75} />
     </div>
   )
-}
-
-export function formatMemory(bytes: number): string {
-  if (!bytes) return '—'
-  const mb = bytes / (1024 * 1024)
-  if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB'
-  return Math.round(mb) + ' MB'
 }
 
 export function bandLabel(band: 'light' | 'moderate' | 'heavy'): string {
@@ -35,12 +27,6 @@ export function processKey(target: string | null): string | null {
   return base.replace(/\.[^.]+$/, '').toLowerCase()
 }
 
-export function useTechState(): [boolean, () => void] {
-  const [tech, setTech] = useState(() => { try { return localStorage.getItem('apps.tech') === '1' } catch { return false } })
-  useEffect(() => { try { localStorage.setItem('apps.tech', tech ? '1' : '0') } catch {} }, [tech])
-  return [tech, () => setTech((v) => !v)]
-}
-
 export function Toggle({ checked, pending, onChange }: { checked: boolean; pending?: boolean; onChange: () => void }) {
   return (
     <button
@@ -54,31 +40,12 @@ export function Toggle({ checked, pending, onChange }: { checked: boolean; pendi
   )
 }
 
-export function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} className={`h-7 px-3 rounded-md text-[12px] cursor-pointer transition-colors ${active ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>
-      {children}
-    </button>
-  )
-}
-
 export function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <div className="flex items-center gap-2 bg-neutral-900 border border-white/5 focus-within:border-white/20 transition-colors rounded-lg h-8 px-3 w-56">
       <Search size={13} className="text-white/50 shrink-0" />
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="bg-transparent outline-none text-[13px] placeholder:text-white/40 w-full" />
     </div>
-  )
-}
-
-export function TechToggle({ tech, onToggle }: { tech: boolean; onToggle: () => void }) {
-  return (
-    <button
-      onClick={onToggle}
-      className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] cursor-pointer transition-colors border ${tech ? 'bg-white/10 text-white border-white/10' : 'text-white/50 hover:text-white border-white/5 hover:bg-white/5'}`}
-    >
-      <SlidersHorizontal size={13} /> {tech ? 'Hide technical details' : 'Show technical details'}
-    </button>
   )
 }
 
