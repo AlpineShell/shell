@@ -264,6 +264,7 @@ contextBridge.exposeInMainWorld('shell', {
     },
     launch: (id) => ipcRenderer.invoke('apps/launch', id),
     launchAdmin: (id) => ipcRenderer.invoke('apps/launch-admin', id),
+    windowCommand: (action) => ipcRenderer.invoke('apps/window-command', action),
     launchableOpenLocation: (id) => ipcRenderer.invoke('apps/app-open-location', id),
     launchableUninstall: (id) => ipcRenderer.invoke('apps/app-uninstall', id),
   },

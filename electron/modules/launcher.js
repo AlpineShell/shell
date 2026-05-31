@@ -2,7 +2,7 @@ const { app, shell: electronShell, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { execFile, exec } = require('child_process')
-const { forceForeground } = require('./winFocus')
+const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow } = require('./winFocus')
 const appIcons = require('./appIcons')
 
 const SCAN_DIRS = [
@@ -17,6 +17,7 @@ let shells = null
 let activeDisplayId = null
 let activeTopBar = null
 let hideTimeout = null
+let lastUserForeground = 0
 
 const LAUNCHER_WIDTH = 600
 
@@ -232,6 +233,18 @@ function isLauncherActive(win) {
   return activeTopBar === win
 }
 
+function isOwnShellWindow(hwnd) {
+  if (!shells) return false
+  for (const shell of shells.values()) {
+    for (const win of [shell.topBar, shell.desktop]) {
+      try {
+        if (win && !win.isDestroyed() && win.getNativeWindowHandle().readUInt32LE(0) === hwnd) return true
+      } catch {}
+    }
+  }
+  return false
+}
+
 function animatedHide() {
   if (!activeTopBar || activeTopBar.isDestroyed()) return
   activeTopBar.webContents.send('launcher/start-close')
@@ -253,6 +266,11 @@ function showLauncher(displayId) {
   const shell = shells.get(displayId)
   if (!shell || shell.topBar.isDestroyed()) return
   const topBar = shell.topBar
+
+  try {
+    const fg = getForegroundWindow()
+    if (fg && !isOwnShellWindow(fg)) lastUserForeground = fg
+  } catch {}
 
   if (hideTimeout) {
     clearTimeout(hideTimeout)
@@ -413,6 +431,16 @@ module.exports = {
     },
     'launcher/open-location': (_event, id) => openItemLocation(findItem(id)),
     'apps/catalog': () => index,
+    'apps/window-command': (_event, action) => {
+      const hwnd = lastUserForeground
+      animatedHide()
+      if (!hwnd) return { ok: false }
+      if (action === 'minimize') minimizeWindow(hwnd)
+      else if (action === 'maximize') maximizeWindow(hwnd)
+      else if (action === 'close') closeWindow(hwnd)
+      else return { ok: false }
+      return { ok: true }
+    },
     'apps/launch': (_event, id) => launchItem(findItem(id)),
     'apps/launch-admin': (_event, id) => launchAdminItem(findItem(id)),
     'apps/app-open-location': (_event, id) => openItemLocation(findItem(id)),

@@ -324,6 +324,7 @@ declare global {
         onCatalogChanged: (callback: (data: LauncherItem[]) => void) => void
         launch: (id: number) => Promise<{ success: boolean }>
         launchAdmin: (id: number) => Promise<{ success: boolean }>
+        windowCommand: (action: 'minimize' | 'maximize' | 'close') => Promise<{ ok: boolean }>
         launchableOpenLocation: (id: number) => Promise<{ success: boolean }>
         launchableUninstall: (id: number) => Promise<{ success: boolean }>
       }

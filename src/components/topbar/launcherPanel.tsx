@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2 } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2 } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 
@@ -121,6 +121,22 @@ const SETTINGS: SettingCommand[] = [
     icon: Wallpaper,
     keywords: ["wallpaper", "background", "desktop", "image", "theme"],
   },
+]
+
+type WindowAction = "minimize" | "maximize" | "close"
+
+interface WindowCommand {
+  action: WindowAction
+  label: string
+  hint: string
+  icon: typeof Minimize2
+  keywords: string[]
+}
+
+const WINDOW_COMMANDS: WindowCommand[] = [
+  { action: "minimize", label: "Minimize this window", hint: "Minimize the window you were just using", icon: Minimize2, keywords: ["minimize", "min", "hide window"] },
+  { action: "maximize", label: "Maximize this window", hint: "Make the window you were just using full screen", icon: Maximize2, keywords: ["maximize", "max", "fullscreen", "full screen"] },
+  { action: "close", label: "Close this window", hint: "Close the window you were just using", icon: X, keywords: ["close", "close window", "quit", "exit"] },
 ]
 
 const ALPINE_SETTINGS_ID = -1
@@ -317,6 +333,17 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     return out.map((r) => r.setting)
   }, [query])
 
+  const matchedWindowCommands = useMemo(() => {
+    if (!query.trim()) return []
+    const out: { cmd: WindowCommand; s: number }[] = []
+    for (const cmd of WINDOW_COMMANDS) {
+      let best = score(query, cmd.label)
+      for (const k of cmd.keywords) best = Math.max(best, score(query, k))
+      if (best >= 0) out.push({ cmd, s: best })
+    }
+    out.sort((a, b) => b.s - a.s)
+    return out.map((r) => r.cmd)
+  }, [query])
 
   const results = useMemo(() => {
     if (!query.trim()) return []
@@ -331,27 +358,29 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     const settingsScore = ALPINE_SETTINGS_KEYWORDS.reduce((m, k) => Math.max(m, score(query, k)), -1)
     const settingsAlreadyOpen = matchedOpenApps.some((a) => a.path.toLowerCase() === ALPINE_SETTINGS_PATH)
     const showSettings = settingsScore >= 0 && !settingsAlreadyOpen
-    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length + (showSettings ? 1 : 0)
+    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length + matchedWindowCommands.length + (showSettings ? 1 : 0)
     const limit = Math.max(1, MAX_RESULTS - taken)
     const list = scored.slice(0, limit).map((r) => r.item)
     if (showSettings) list.push(ALPINE_SETTINGS_ITEM)
     return list
-  }, [query, items, mathResult, mapResult, matchedOpenApps, matchedSettings])
+  }, [query, items, mathResult, mapResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
 
   const mathOffset = mathResult ? 1 : 0
   const mapOffset = mathOffset + (mapResult ? 1 : 0)
   const openOffset = mapOffset + matchedOpenApps.length
   const settingsOffset = openOffset + matchedSettings.length
-  const totalCount = settingsOffset + results.length
+  const winOffset = settingsOffset + matchedWindowCommands.length
+  const totalCount = winOffset + results.length
 
   const selectedEntry = useMemo(() => {
     if (mathResult && selected === 0) return { type: "math" as const }
     if (mapResult && selected === mathOffset) return { type: "map" as const, result: mapResult }
     if (selected >= mapOffset && selected < openOffset) return { type: "open" as const, app: matchedOpenApps[selected - mapOffset] }
     if (selected >= openOffset && selected < settingsOffset) return { type: "setting" as const, setting: matchedSettings[selected - openOffset] }
-    if (selected >= settingsOffset) return { type: "app" as const, item: results[selected - settingsOffset] }
+    if (selected >= settingsOffset && selected < winOffset) return { type: "wincmd" as const, cmd: matchedWindowCommands[selected - settingsOffset] }
+    if (selected >= winOffset) return { type: "app" as const, item: results[selected - winOffset] }
     return null
-  }, [selected, mathResult, mapResult, matchedOpenApps, matchedSettings, results, mathOffset, mapOffset, openOffset, settingsOffset])
+  }, [selected, mathResult, mapResult, matchedOpenApps, matchedSettings, matchedWindowCommands, results, mathOffset, mapOffset, openOffset, settingsOffset, winOffset])
 
   const contextActions = useMemo(() => {
     if (!contextOpen || !selectedEntry) return []
@@ -481,6 +510,9 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
         window.launcher.hide()
       } else if (selectedEntry.type === "setting" && selectedEntry.setting) {
         enterCommand(selectedEntry.setting.id)
+      } else if (selectedEntry.type === "wincmd" && selectedEntry.cmd) {
+        window.shell.apps.windowCommand(selectedEntry.cmd.action)
+        window.launcher.hide()
       } else if (selectedEntry.type === "app" && selectedEntry.item) {
         if (selectedEntry.item.id === ALPINE_SETTINGS_ID) {
           window.shell.windows.openSettings()
@@ -681,11 +713,34 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                           </button>
                         )
                       })}
-                      {(matchedOpenApps.length > 0 || matchedSettings.length > 0) && results.length > 0 && (
+                      {matchedWindowCommands.length > 0 && (matchedOpenApps.length > 0 || matchedSettings.length > 0) && (
+                        <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
+                      )}
+                      {matchedWindowCommands.map((cmd, i) => {
+                        const idx = settingsOffset + i
+                        const Icon = cmd.icon
+                        return (
+                          <button
+                            key={`wincmd-${cmd.action}`}
+                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
+                            onClick={() => { window.shell.apps.windowCommand(cmd.action); window.launcher.hide() }}
+                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
+                              idx === selected ? selectedBg : hoverBg
+                            }`}
+                          >
+                            <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className={`text-[13px] truncate ${textColor}`}>{cmd.label}</span>
+                              <span className={`text-[11px] truncate ${dimText}`}>{cmd.hint}</span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                      {(matchedOpenApps.length > 0 || matchedSettings.length > 0 || matchedWindowCommands.length > 0) && results.length > 0 && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
                       {results.map((item, i) => {
-                        const idx = settingsOffset + i
+                        const idx = winOffset + i
                         const isAlpineSettings = item.id === ALPINE_SETTINGS_ID
                         return (
                           <button

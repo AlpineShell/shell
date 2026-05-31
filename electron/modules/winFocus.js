@@ -9,9 +9,32 @@ const SetForegroundWindow = user32.func('__stdcall', 'SetForegroundWindow', 'int
 const BringWindowToTop = user32.func('__stdcall', 'BringWindowToTop', 'int', ['uintptr_t'])
 const AttachThreadInput = user32.func('__stdcall', 'AttachThreadInput', 'int', ['uint32', 'uint32', 'int'])
 const GetCurrentThreadId = kernel32.func('__stdcall', 'GetCurrentThreadId', 'uint32', [])
+const ShowWindow = user32.func('__stdcall', 'ShowWindow', 'int', ['uintptr_t', 'int'])
+const PostMessageW = user32.func('__stdcall', 'PostMessageW', 'int', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t'])
+const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
+
+const SW_MAXIMIZE = 3
+const SW_MINIMIZE = 6
+const WM_CLOSE = 0x0010
 
 function toNum(v) {
   return typeof v === 'bigint' ? Number(v) : v
+}
+
+function getForegroundWindow() {
+  return toNum(GetForegroundWindow())
+}
+
+function minimizeWindow(hwnd) {
+  if (hwnd && IsWindow(hwnd)) ShowWindow(hwnd, SW_MINIMIZE)
+}
+
+function maximizeWindow(hwnd) {
+  if (hwnd && IsWindow(hwnd)) ShowWindow(hwnd, SW_MAXIMIZE)
+}
+
+function closeWindow(hwnd) {
+  if (hwnd && IsWindow(hwnd)) PostMessageW(hwnd, WM_CLOSE, 0, 0)
 }
 
 function forceForeground(hwnd) {
@@ -38,4 +61,4 @@ function forceForeground(hwnd) {
   }
 }
 
-module.exports = { forceForeground }
+module.exports = { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow }
