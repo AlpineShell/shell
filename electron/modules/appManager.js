@@ -488,6 +488,7 @@ let installedById = new Map()
 let installedInFlight = null
 let installedListPromise = null
 let installedListResolve = null
+let installedRetries = 0
 
 const DESKTOP_SCRIPT = `$paths=@('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKLM:\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall')
 $out=foreach($p in $paths){ if(Test-Path $p){ Get-ChildItem $p -ErrorAction SilentlyContinue | ForEach-Object { $i=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($i.DisplayName -and -not $i.SystemComponent -and -not $i.ParentKeyName){ [PSCustomObject]@{ key=$_.PSChildName; name=$i.DisplayName; publisher=$i.Publisher; version=$i.DisplayVersion; icon=$i.DisplayIcon; loc=$i.InstallLocation; uninstall=$i.UninstallString; quiet=$i.QuietUninstallString } } } } }
@@ -514,6 +515,8 @@ async function runPsScript(script) {
   try {
     fs.writeFileSync(file, script, 'utf8')
     return await run(`powershell -NoProfile -ExecutionPolicy Bypass -File "${file}"`)
+  } catch {
+    return ''
   } finally {
     try { fs.unlinkSync(file) } catch {}
   }
@@ -700,10 +703,18 @@ function markInstalledListReady() {
 function refreshInstalledShared() {
   if (!installedInFlight) {
     installedListPromise = new Promise((resolve) => { installedListResolve = resolve })
-    installedInFlight = refreshInstalled().finally(() => {
-      installedInFlight = null
-      markInstalledListReady()
-    })
+    installedInFlight = refreshInstalled()
+      .catch(() => {})
+      .finally(() => {
+        installedInFlight = null
+        markInstalledListReady()
+        if (cachedInstalled.length > 0) {
+          installedRetries = 0
+        } else if (installedRetries < 3) {
+          installedRetries++
+          setTimeout(() => { refreshInstalledShared().then(broadcastInstalled).catch(() => {}) }, 2000)
+        }
+      })
   }
   return installedInFlight
 }
