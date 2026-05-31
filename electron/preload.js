@@ -241,6 +241,7 @@ contextBridge.exposeInMainWorld('shell', {
     },
     setStartup: (id, enabled) => ipcRenderer.invoke('apps/startup-set', { id, enabled }),
     clearPending: (id) => ipcRenderer.invoke('apps/startup-clear-pending', { id }),
+    removeStartup: (id) => ipcRenderer.invoke('apps/startup-remove', { id }),
     applySystemChanges: () => ipcRenderer.invoke('apps/startup-apply-system'),
     history: () => ipcRenderer.invoke('apps/startup-history'),
     onStartupHistoryChanged: (callback) => {

@@ -302,6 +302,7 @@ async function refreshStartup() {
     e.category = classifyTarget(e.target)
     e.blurb = blurbForTarget(e.target)
     e.locked = e.category === 'system'
+    e.missing = !!e.target && !e.target.toLowerCase().startsWith('shell:') && !fs.existsSync(e.target)
   }
 
   result.sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.friendlyName.localeCompare(b.friendlyName))
@@ -368,6 +369,36 @@ function clearPending({ id }) {
   if (entry) entry.pending = null
   broadcastStartup()
   return cachedStartup
+}
+
+function removeStartup({ id }) {
+  const entry = cachedStartup.find((e) => e.id === id)
+  const info = toggleInfoById.get(id)
+  if (!entry) return { ok: false, error: 'Item not found.' }
+  if (entry.locked) return { ok: false, error: 'This item is protected.' }
+  if (entry.scope !== 'user') return { ok: false, error: 'This item needs administrator approval to remove.' }
+  try {
+    if (entry.source === 'registry') {
+      execSync(`reg delete "${entry.location}" /v "${entry.name}" /f`, { windowsHide: true })
+      if (info && info.kind === 'approved') {
+        try { execSync(`reg delete "${info.approvedKey}" /v "${info.approvedValue}" /f`, { windowsHide: true }) } catch {}
+      }
+    } else if (entry.source === 'folder') {
+      fs.unlinkSync(entry.command)
+    } else if (entry.source === 'task' && info && info.taskPath) {
+      execSync(`schtasks /delete /tn "${info.taskPath}" /f`, { windowsHide: true })
+    } else {
+      return { ok: false, error: 'Could not remove this startup item.' }
+    }
+  } catch {
+    return { ok: false, error: 'Could not remove this startup item.' }
+  }
+  cachedStartup = cachedStartup.filter((e) => e.id !== id)
+  pendingChanges.delete(id)
+  toggleInfoById.delete(id)
+  broadcastStartup()
+  refreshStartup().then(() => broadcastStartup()).catch(() => {})
+  return { ok: true }
 }
 
 function buildElevatedLine({ info, enabled }) {
@@ -814,6 +845,7 @@ module.exports = {
     'apps/startup-list': () => getStartup(),
     'apps/startup-set': (_event, payload) => setStartup(payload),
     'apps/startup-clear-pending': (_event, payload) => clearPending(payload),
+    'apps/startup-remove': (_event, payload) => removeStartup(payload),
     'apps/startup-apply-system': () => applySystemChanges(),
     'apps/startup-history': () => history,
     'apps/startup-undo': (_event, payload) => undo(payload),

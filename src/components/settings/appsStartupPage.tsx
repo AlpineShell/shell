@@ -89,6 +89,7 @@ export default function AppsStartupPage() {
 
 function StartupRow({ entry, running }: { entry: StartupEntry; running?: RunningApp }) {
   const [locating, setLocating] = useState(false)
+  const [removing, setRemoving] = useState(false)
   const effectiveOn = entry.pending ? entry.pending === 'enable' : entry.enabled
   const heavy = running?.band === 'heavy'
 
@@ -98,36 +99,55 @@ function StartupRow({ entry, running }: { entry: StartupEntry; running?: Running
     try { await window.shell.apps.openLocation(entry.target!) } finally { setLocating(false) }
   }
 
+  async function remove() {
+    if (removing) return
+    setRemoving(true)
+    const result = await window.shell.apps.removeStartup(entry.id)
+    if (!result.ok) setRemoving(false)
+  }
+
   return (
     <div className="flex items-center gap-3 px-3 min-h-14 py-2 rounded-lg bg-neutral-900 border border-white/5">
       <AppIcon icon={entry.icon} name={entry.friendlyName} />
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[13px] text-white/90 truncate">{entry.friendlyName}</span>
-          {running && (
+          <span className={`text-[13px] truncate ${entry.missing ? 'text-white/55' : 'text-white/90'}`}>{entry.friendlyName}</span>
+          {!entry.missing && running && (
             <span className="flex items-center gap-1 text-[11px] text-emerald-300/90 shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Open now
             </span>
           )}
-          {heavy && <span className="text-[11px] text-amber-300/80 shrink-0">· Uses a lot of memory</span>}
+          {!entry.missing && heavy && <span className="text-[11px] text-amber-300/80 shrink-0">· Uses a lot of memory</span>}
         </div>
-        <span className="text-[11px] text-white/45 truncate">{entry.blurb || (effectiveOn ? 'Opens when you start your PC' : 'Off')}</span>
+        <span className="text-[11px] text-white/45 truncate">{entry.missing ? 'This app is no longer on your PC' : (entry.blurb || (effectiveOn ? 'Opens when you start your PC' : 'Off'))}</span>
       </div>
-      {entry.target && (
+      {entry.missing ? (
         <button
-          onClick={openLocation}
-          disabled={locating}
-          title="Open file location"
-          aria-label="Open file location"
-          className="w-8 h-8 flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 cursor-pointer transition-colors shrink-0 disabled:hover:bg-transparent"
+          onClick={remove}
+          disabled={removing}
+          className="h-7 w-20 flex items-center justify-center rounded-md text-[12px] text-white/60 hover:text-red-200 hover:bg-red-500/15 cursor-pointer transition-colors shrink-0 disabled:cursor-default disabled:text-white/60 disabled:hover:bg-transparent"
         >
-          {locating ? <Spinner size={15} /> : <FolderOpen size={15} />}
+          {removing ? <Spinner size={13} /> : 'Remove'}
         </button>
-      )}
-      {entry.locked ? (
-        <Lock size={15} className="text-white/30 shrink-0" />
       ) : (
-        <Toggle checked={effectiveOn} pending={!!entry.pending} onChange={() => window.shell.apps.setStartup(entry.id, !effectiveOn)} />
+        <>
+          {entry.target && (
+            <button
+              onClick={openLocation}
+              disabled={locating}
+              title="Open file location"
+              aria-label="Open file location"
+              className="w-8 h-8 flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 cursor-pointer transition-colors shrink-0 disabled:hover:bg-transparent"
+            >
+              {locating ? <Spinner size={15} /> : <FolderOpen size={15} />}
+            </button>
+          )}
+          {entry.locked ? (
+            <Lock size={15} className="text-white/30 shrink-0" />
+          ) : (
+            <Toggle checked={effectiveOn} pending={!!entry.pending} onChange={() => window.shell.apps.setStartup(entry.id, !effectiveOn)} />
+          )}
+        </>
       )}
     </div>
   )

@@ -26,6 +26,7 @@ interface StartupEntry {
   pending: 'enable' | 'disable' | null
   running: boolean
   location: string
+  missing: boolean
 }
 
 interface RunningApp {
@@ -306,6 +307,7 @@ declare global {
         onStartupChanged: (callback: (data: StartupEntry[]) => void) => void
         setStartup: (id: string, enabled: boolean) => Promise<StartupEntry[]>
         clearPending: (id: string) => Promise<StartupEntry[]>
+        removeStartup: (id: string) => Promise<{ ok: boolean; error?: string }>
         applySystemChanges: () => Promise<{ ok: boolean; error?: string }>
         history: () => Promise<StartupHistoryEntry[]>
         onStartupHistoryChanged: (callback: (data: StartupHistoryEntry[]) => void) => void
