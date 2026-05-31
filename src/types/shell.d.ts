@@ -316,6 +316,12 @@ declare global {
         uninstall: (id: string) => Promise<{ ok: boolean; error?: string }>
         openApp: (id: string) => Promise<{ ok: boolean }>
         openAppLocation: (id: string) => Promise<{ ok: boolean }>
+        catalog: () => Promise<LauncherItem[]>
+        onCatalogChanged: (callback: (data: LauncherItem[]) => void) => void
+        launch: (id: number) => Promise<{ success: boolean }>
+        launchAdmin: (id: number) => Promise<{ success: boolean }>
+        launchableOpenLocation: (id: number) => Promise<{ success: boolean }>
+        launchableUninstall: (id: number) => Promise<{ success: boolean }>
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>

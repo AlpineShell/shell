@@ -1,7 +1,7 @@
 const { app, shell: electronShell, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
-const { execFile } = require('child_process')
+const { execFile, exec } = require('child_process')
 const { forceForeground } = require('./winFocus')
 const appIcons = require('./appIcons')
 
@@ -19,6 +19,12 @@ let activeTopBar = null
 let hideTimeout = null
 
 const LAUNCHER_WIDTH = 600
+
+function publishIndex() {
+  if (!broadcast) return
+  broadcast('launcher/index-changed', index)
+  broadcast('apps/catalog-changed', index)
+}
 
 function walkShortcuts(dir, out) {
   let entries
@@ -158,7 +164,7 @@ async function buildIndex() {
   items.sort((a, b) => a.name.localeCompare(b.name))
   for (let i = 0; i < items.length; i++) items[i].id = i
   index = items
-  if (broadcast) broadcast('launcher/index-changed', index)
+  publishIndex()
 
   const generic = await appIcons.ensureGenericIcon()
 
@@ -183,7 +189,7 @@ async function buildIndex() {
       items.sort((a, b) => a.name.localeCompare(b.name))
       for (let i = 0; i < items.length; i++) items[i].id = i
       index = items
-      if (broadcast) broadcast('launcher/index-changed', index)
+      publishIndex()
     }
   }).catch((e) => console.error('[launcher] UWP error:', e.message))
 
@@ -193,7 +199,7 @@ async function buildIndex() {
     for (let k = 0; k < iconItems.length; k++) iconItems[k].icon = icons[k] || generic
   }
   for (const item of items) if (!item.icon) item.icon = generic
-  if (broadcast) broadcast('launcher/index-changed', index)
+  publishIndex()
 }
 
 let rebuildTimer = null
@@ -294,34 +300,24 @@ function handleBlur(topBar) {
   animatedHide()
 }
 
-module.exports = {
-  handlers: {
-    'launcher/index': () => index,
-    'launcher/show': (event) => {
-      const win = BrowserWindow.fromWebContents(event.sender)
-      const { screen } = require('electron')
-      const display = win ? screen.getDisplayMatching(win.getBounds()) : screen.getPrimaryDisplay()
-      showLauncher(display.id)
-    },
-    'launcher/hide': () => animatedHide(),
-    'launcher/launch': (_event, id) => {
-      const item = index.find((i) => i.id === id)
-      if (!item) return { success: false }
-      animatedHide()
-      if (item.lnkPath) {
-        electronShell.openPath(item.lnkPath).then((err) => {
-          if (err) {
-            console.error('[launcher] openPath failed for', item.lnkPath, '-', err)
-            const { execFile } = require('child_process')
-            execFile('explorer.exe', [item.lnkPath], (e) => {
-              if (e && e.code !== 1) console.error('[launcher] explorer fallback error:', e.message)
-            })
-          }
+function findItem(id) {
+  return index.find((i) => i.id === id)
+}
+
+function launchItem(item) {
+  if (!item) return { success: false }
+  if (item.lnkPath) {
+    electronShell.openPath(item.lnkPath).then((err) => {
+      if (err) {
+        console.error('[launcher] openPath failed for', item.lnkPath, '-', err)
+        execFile('explorer.exe', [item.lnkPath], (e) => {
+          if (e && e.code !== 1) console.error('[launcher] explorer fallback error:', e.message)
         })
-      } else if (item.appId) {
-        const { execFile } = require('child_process')
-        const escapedAppId = item.appId.replace(/"/g, '\\"')
-        const script = `
+      }
+    })
+  } else if (item.appId) {
+    const escapedAppId = item.appId.replace(/"/g, '\\"')
+    const script = `
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -342,39 +338,69 @@ public static class UwpLauncher {
 "@
 [void][UwpLauncher]::Launch("${escapedAppId}")
 `
-        execFile('powershell', ['-NoProfile', '-Command', script], (e) => {
-          if (e && e.code !== 1) console.error('[launcher] launch UWP error:', e.message)
-        })
-      }
-      return { success: true }
+    execFile('powershell', ['-NoProfile', '-Command', script], (e) => {
+      if (e && e.code !== 1) console.error('[launcher] launch UWP error:', e.message)
+    })
+  }
+  return { success: true }
+}
+
+function launchAdminItem(item) {
+  if (!item) return { success: false }
+  const target = item.lnkPath || (item.appId ? `shell:AppsFolder\\${item.appId}` : null)
+  if (target) {
+    exec(`powershell -NoProfile -Command "Start-Process '${target.replace(/'/g, "''")}' -Verb RunAs"`)
+  }
+  return { success: true }
+}
+
+function uninstallItem(item) {
+  if (!item) return { success: false }
+  if (item.appId) {
+    const family = item.appId.split('!')[0]
+    exec(`powershell -NoProfile -Command "Get-AppxPackage '${family}' | Remove-AppxPackage"`)
+  } else {
+    electronShell.openExternal('ms-settings:appsfeatures')
+  }
+  return { success: true }
+}
+
+function openItemLocation(item) {
+  if (!item || !item.lnkPath) return { success: false }
+  electronShell.showItemInFolder(item.lnkPath)
+  return { success: true }
+}
+
+module.exports = {
+  handlers: {
+    'launcher/index': () => index,
+    'launcher/show': (event) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      const { screen } = require('electron')
+      const display = win ? screen.getDisplayMatching(win.getBounds()) : screen.getPrimaryDisplay()
+      showLauncher(display.id)
+    },
+    'launcher/hide': () => animatedHide(),
+    'launcher/launch': (_event, id) => {
+      const item = findItem(id)
+      if (!item) return { success: false }
+      animatedHide()
+      return launchItem(item)
     },
     'launcher/launch-admin': (_event, id) => {
-      const item = index.find((i) => i.id === id)
+      const item = findItem(id)
       if (!item) return { success: false }
       animatedHide()
-      const target = item.lnkPath || (item.appId ? `shell:AppsFolder\\${item.appId}` : null)
-      if (target) {
-        const { exec } = require('child_process')
-        exec(`powershell -NoProfile -Command "Start-Process '${target.replace(/'/g, "''")}' -Verb RunAs"`)
-      }
-      return { success: true }
+      return launchAdminItem(item)
     },
     'launcher/uninstall': (_event, id) => {
-      const item = index.find((i) => i.id === id)
+      const item = findItem(id)
       if (!item) return { success: false }
       animatedHide()
-      if (item.appId) {
-        const family = item.appId.split('!')[0]
-        const { exec } = require('child_process')
-        exec(`powershell -NoProfile -Command "Get-AppxPackage '${family}' | Remove-AppxPackage"`)
-      } else {
-        electronShell.openExternal('ms-settings:appsfeatures')
-      }
-      return { success: true }
+      return uninstallItem(item)
     },
     'launcher/close-window': (_event, hwnd) => {
       animatedHide()
-      const { exec } = require('child_process')
       exec(`powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).AppActivate([int]0); Add-Type -Name W -Namespace W -MemberDefinition '[DllImport(\\\"user32.dll\\\")] public static extern int PostMessage(IntPtr h,uint m,int w,int l);'; [W.W]::PostMessage([IntPtr]${hwnd}, 0x0010, 0, 0)"`)
       return { success: true }
     },
@@ -383,12 +409,12 @@ public static class UwpLauncher {
       try { process.kill(pid) } catch {}
       return { success: true }
     },
-    'launcher/open-location': (_event, id) => {
-      const item = index.find((i) => i.id === id)
-      if (!item || !item.lnkPath) return { success: false }
-      electronShell.showItemInFolder(item.lnkPath)
-      return { success: true }
-    },
+    'launcher/open-location': (_event, id) => openItemLocation(findItem(id)),
+    'apps/catalog': () => index,
+    'apps/launch': (_event, id) => launchItem(findItem(id)),
+    'apps/launch-admin': (_event, id) => launchAdminItem(findItem(id)),
+    'apps/app-open-location': (_event, id) => openItemLocation(findItem(id)),
+    'apps/app-uninstall': (_event, id) => uninstallItem(findItem(id)),
   },
   setShells,
   showFromHotkey,

@@ -251,8 +251,8 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   }
 
   useEffect(() => {
-    window.launcher.index().then(setItems)
-    window.launcher.onIndexChanged(setItems)
+    window.shell.apps.catalog().then(setItems)
+    window.shell.apps.onCatalogChanged(setItems)
     window.shell.windows.openApps().then(setOpenApps)
     window.shell.windows.onOpenAppsChanged(setOpenApps)
     Promise.all([

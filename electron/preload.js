@@ -257,5 +257,13 @@ contextBridge.exposeInMainWorld('shell', {
     uninstall: (id) => ipcRenderer.invoke('apps/installed-uninstall', { id }),
     openApp: (id) => ipcRenderer.invoke('apps/installed-open', { id }),
     openAppLocation: (id) => ipcRenderer.invoke('apps/installed-open-location', { id }),
+    catalog: () => ipcRenderer.invoke('apps/catalog'),
+    onCatalogChanged: (callback) => {
+      ipcRenderer.on('apps/catalog-changed', (_, data) => callback(data))
+    },
+    launch: (id) => ipcRenderer.invoke('apps/launch', id),
+    launchAdmin: (id) => ipcRenderer.invoke('apps/launch-admin', id),
+    launchableOpenLocation: (id) => ipcRenderer.invoke('apps/app-open-location', id),
+    launchableUninstall: (id) => ipcRenderer.invoke('apps/app-uninstall', id),
   },
 })
