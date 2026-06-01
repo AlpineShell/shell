@@ -268,4 +268,21 @@ contextBridge.exposeInMainWorld('shell', {
     launchableOpenLocation: (id) => ipcRenderer.invoke('apps/app-open-location', id),
     launchableUninstall: (id) => ipcRenderer.invoke('apps/app-uninstall', id),
   },
+  updates: {
+    getState: () => ipcRenderer.invoke('updates/get-state'),
+    check: () => ipcRenderer.invoke('updates/check'),
+    download: () => ipcRenderer.invoke('updates/download'),
+    install: () => ipcRenderer.invoke('updates/install'),
+    onStateChanged: (callback) => {
+      ipcRenderer.on('updates/state-changed', (_, data) => callback(data))
+    },
+  },
+  windowsUpdate: {
+    getState: () => ipcRenderer.invoke('windows-update/get-state'),
+    check: () => ipcRenderer.invoke('windows-update/check'),
+    openSettings: () => ipcRenderer.invoke('windows-update/open-settings'),
+    onStateChanged: (callback) => {
+      ipcRenderer.on('windows-update/state-changed', (_, data) => callback(data))
+    },
+  },
 })

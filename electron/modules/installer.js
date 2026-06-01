@@ -17,6 +17,7 @@ function getInstallDir() {
 }
 
 function getInstalledExePath() {
+  if (app.isPackaged && !isPortableRun()) return process.execPath
   const exeName = app.isPackaged ? path.basename(process.execPath) : `${PRODUCT_NAME}.exe`
   return path.join(getInstallDir(), exeName)
 }
@@ -115,14 +116,8 @@ function getDirSize(dirPath) {
   return total
 }
 
-function uninstall() {
-  try { regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', 'explorer.exe') } catch {}
-  try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell') } catch {}
-
-  try { regAdd('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'AutoRestartShell', '1', 'REG_DWORD') } catch {}
-  try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'RestartApps') } catch {}
-  try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
-  try { execSync('schtasks /change /tn "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" /enable', { windowsHide: true }) } catch {}
+function revertSystemChanges() {
+  revertShell()
 
   const cursorKey = 'HKCU\\Control Panel\\Cursors'
   for (const name of CURSOR_REGISTRY_NAMES) {
@@ -136,6 +131,11 @@ function uninstall() {
 
   const flagPath = path.join(app.getPath('userData'), '.setup-complete')
   if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath)
+}
+
+function uninstall() {
+  revertSystemChanges()
+
   try { fs.rmdirSync(app.getPath('userData')) } catch {}
 
   const shortcutPath = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', `${PRODUCT_NAME}.lnk`)
@@ -170,6 +170,7 @@ module.exports = {
   createShortcuts,
   registerUninstaller,
   uninstall,
+  revertSystemChanges,
   revertShell,
   relaunchFromInstalled,
 }

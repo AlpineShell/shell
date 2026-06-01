@@ -93,6 +93,31 @@ interface ForegroundColorData extends TopBarColor {
 type ForegroundColorBroadcast = ForegroundColorData | { displayId: number }
 
 declare global {
+  type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+
+  interface UpdateState {
+    status: UpdateStatus
+    currentVersion: string
+    availableVersion: string | null
+    progressPercent: number
+    error: string | null
+  }
+
+  type WindowsUpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'error'
+
+  interface WindowsUpdateItem {
+    title: string
+    kb: string | null
+    sizeBytes: number
+  }
+
+  interface WindowsUpdateState {
+    status: WindowsUpdateStatus
+    updates: WindowsUpdateItem[]
+    lastCheckedAt: number | null
+    error: string | null
+  }
+
   interface WifiNetwork {
     ssid: string
     signal: number
@@ -389,6 +414,19 @@ declare global {
         settings: () => Promise<TraySettings>
         setSettings: (partial: Partial<TraySettings>) => Promise<TraySettings>
         onSettingsChanged: (callback: (data: TraySettings) => void) => void
+      }
+      updates: {
+        getState: () => Promise<UpdateState>
+        check: () => Promise<UpdateState>
+        download: () => Promise<void>
+        install: () => Promise<void>
+        onStateChanged: (callback: (state: UpdateState) => void) => void
+      }
+      windowsUpdate: {
+        getState: () => Promise<WindowsUpdateState>
+        check: () => Promise<WindowsUpdateState>
+        openSettings: () => Promise<void>
+        onStateChanged: (callback: (state: WindowsUpdateState) => void) => void
       }
     }
   }

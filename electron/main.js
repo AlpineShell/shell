@@ -32,6 +32,8 @@ let screenshot = null
 try { screenshot = require('./modules/screenshot') } catch (e) { console.error('[main] screenshot load error:', e.message) }
 const { processAutostart } = require('./modules/autostart')
 const installer = require('./modules/installer')
+const updater = require('./modules/updater')
+const windowsUpdate = require('./modules/windowsUpdate')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -377,6 +379,12 @@ openApps.setShellAppsProvider(() => {
 })
 
 app.whenReady().then(async () => {
+  if (process.argv.includes('--uninstall-cleanup')) {
+    installer.revertSystemChanges()
+    app.exit(0)
+    return
+  }
+
   if (process.argv.includes('--uninstall')) {
     installer.uninstall()
     app.quit()
@@ -400,7 +408,7 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, launcherHotkey, trayLayout, trayHost, appManager)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, launcherHotkey, trayLayout, trayHost, appManager, updater, windowsUpdate)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
