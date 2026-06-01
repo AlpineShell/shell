@@ -141,7 +141,7 @@ function startInstall() {
   const script = buildInstallScript(progressFilePath)
   const encoded = Buffer.from(script, 'utf16le').toString('base64')
   const launcher =
-    'Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand ' +
+    'Start-Process powershell -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList "-NoProfile -WindowStyle Hidden -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' +
     encoded +
     '"'
 
