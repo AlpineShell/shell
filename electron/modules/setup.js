@@ -1,6 +1,6 @@
 const { app } = require('electron')
 const path = require('path')
-const { execSync, execFileSync } = require('child_process')
+const { execSync, execFileSync, spawn } = require('child_process')
 const fs = require('fs')
 const installer = require('./installer')
 
@@ -121,6 +121,26 @@ function hasGpoShellOverride() {
 function verifyShellWrite() {
   const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
   return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
+}
+
+function isDefaultShell() {
+  const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
+  return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
+}
+
+function killExplorer() {
+  try {
+    execSync('taskkill /f /im explorer.exe', { windowsHide: true })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function restartExplorer() {
+  try {
+    spawn('explorer.exe', [], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+  } catch (e) {}
 }
 
 function getSetupStatus() {
@@ -247,6 +267,11 @@ module.exports = {
       installer.revertShell()
       return { success: true }
     },
+    'setup/set-shell': () => {
+      setAsShell()
+      setStartup()
+      return { success: verifyShellWrite() }
+    },
     'setup/uninstall': () => {
       installer.uninstall()
       return { success: true }
@@ -254,6 +279,9 @@ module.exports = {
   },
 
   isFirstRun,
+  isDefaultShell,
+  killExplorer,
+  restartExplorer,
 
   start(b) {
     broadcast = b

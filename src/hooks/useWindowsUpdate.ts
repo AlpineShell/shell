@@ -2,7 +2,7 @@ import { useShellState } from './useShellState'
 
 export function useWindowsUpdate() {
   const state = useShellState<WindowsUpdateState>(
-    { status: 'idle', updates: [], lastCheckedAt: null, error: null },
+    { status: 'idle', updates: [], lastCheckedAt: null, rebootRequired: false, error: null },
     window.shell.windowsUpdate.getState,
     window.shell.windowsUpdate.onStateChanged
   )
@@ -10,6 +10,6 @@ export function useWindowsUpdate() {
   return {
     state,
     check: window.shell.windowsUpdate.check,
-    openSettings: window.shell.windowsUpdate.openSettings,
+    install: window.shell.windowsUpdate.install,
   }
 }

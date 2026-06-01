@@ -43,6 +43,8 @@ const {
 
 const isDev = !app.isPackaged
 const BASE_URL = isDev ? 'http://localhost:5173' : null
+const shouldTakeOverExplorer = !isDev || process.env.ALPINE_KILL_EXPLORER === '1'
+let killedExplorer = false
 
 app.commandLine.appendSwitch('disable-features', 'NetworkServiceSandbox')
 
@@ -441,6 +443,10 @@ app.whenReady().then(async () => {
 })
 
 function startShellMode() {
+  if (shouldTakeOverExplorer && !setup.isDefaultShell()) {
+    killedExplorer = setup.killExplorer()
+  }
+
   if (altTab) altTab.setShells(shells)
 
   const screenshotWindow = createScreenshotWindow()
@@ -499,10 +505,18 @@ function startShellMode() {
 
 app.on('will-quit', () => {
   unregisterAll()
+  restoreExplorerIfKilled()
 })
+
+function restoreExplorerIfKilled() {
+  if (!killedExplorer) return
+  killedExplorer = false
+  try { setup.restartExplorer() } catch {}
+}
 
 function gracefulShutdown() {
   try { unregisterAll() } catch {}
+  restoreExplorerIfKilled()
   app.exit(0)
 }
 
@@ -510,3 +524,13 @@ process.on('SIGINT', gracefulShutdown)
 process.on('SIGTERM', gracefulShutdown)
 process.on('SIGBREAK', gracefulShutdown)
 process.on('SIGHUP', gracefulShutdown)
+
+process.on('uncaughtException', (err) => {
+  console.error('[main] Uncaught exception:', err)
+  restoreExplorerIfKilled()
+})
+
+process.on('unhandledRejection', (err) => {
+  console.error('[main] Unhandled rejection:', err)
+  restoreExplorerIfKilled()
+})

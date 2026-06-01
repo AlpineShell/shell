@@ -103,7 +103,7 @@ declare global {
     error: string | null
   }
 
-  type WindowsUpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'error'
+  type WindowsUpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'installing' | 'restart-required' | 'installed' | 'error'
 
   interface WindowsUpdateItem {
     title: string
@@ -115,6 +115,7 @@ declare global {
     status: WindowsUpdateStatus
     updates: WindowsUpdateItem[]
     lastCheckedAt: number | null
+    rebootRequired: boolean
     error: string | null
   }
 
@@ -262,6 +263,7 @@ declare global {
       relaunch: () => Promise<void>
       restartWindows: () => Promise<void>
       revertShell: () => Promise<{ success: boolean }>
+      setShell: () => Promise<{ success: boolean }>
       uninstall: () => Promise<{ success: boolean }>
       onProgress: (callback: (step: string) => void) => void
     }
@@ -425,7 +427,7 @@ declare global {
       windowsUpdate: {
         getState: () => Promise<WindowsUpdateState>
         check: () => Promise<WindowsUpdateState>
-        openSettings: () => Promise<void>
+        install: () => Promise<WindowsUpdateState>
         onStateChanged: (callback: (state: WindowsUpdateState) => void) => void
       }
     }

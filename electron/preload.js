@@ -114,6 +114,7 @@ contextBridge.exposeInMainWorld('setup', {
   relaunch: () => ipcRenderer.invoke('setup/relaunch'),
   restartWindows: () => ipcRenderer.invoke('setup/restart-windows'),
   revertShell: () => ipcRenderer.invoke('setup/revert-shell'),
+  setShell: () => ipcRenderer.invoke('setup/set-shell'),
   uninstall: () => ipcRenderer.invoke('setup/uninstall'),
   onProgress: (callback) => {
     ipcRenderer.on('setup/progress', (_, step) => callback(step))
@@ -280,7 +281,7 @@ contextBridge.exposeInMainWorld('shell', {
   windowsUpdate: {
     getState: () => ipcRenderer.invoke('windows-update/get-state'),
     check: () => ipcRenderer.invoke('windows-update/check'),
-    openSettings: () => ipcRenderer.invoke('windows-update/open-settings'),
+    install: () => ipcRenderer.invoke('windows-update/install'),
     onStateChanged: (callback) => {
       ipcRenderer.on('windows-update/state-changed', (_, data) => callback(data))
     },
