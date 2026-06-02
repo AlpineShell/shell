@@ -2,6 +2,7 @@ const { execSync, exec } = require('child_process')
 const { shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { APPROVED_BASE, parseApprovedMap, isMsixStateEnabled } = require('./startupState')
 
 const BLOCKED_EXECUTABLES = [
   'explorer.exe',
@@ -11,7 +12,6 @@ const BLOCKED_EXECUTABLES = [
 const RUN_KEYS = [
   'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
   'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
-  'HKCU\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run',
   'HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run',
 ]
 
@@ -82,7 +82,7 @@ function getRunEntries(keys) {
       const lines = result.split('\n')
 
       for (const line of lines) {
-        const match = line.match(/^\s+(\S+)\s+REG_(?:SZ|EXPAND_SZ)\s+(.+)/)
+        const match = line.match(/^\s+(\S.*?)\s+REG_(?:SZ|EXPAND_SZ)\s+(.+)/)
         if (!match) continue
 
         const name = match[1].trim()
@@ -109,27 +109,53 @@ function deleteRunOnceEntry(registryKey, name) {
 function getStartupFolderEntries() {
   const entries = []
 
-  for (const folder of STARTUP_FOLDERS) {
+  STARTUP_FOLDERS.forEach((folder, index) => {
+    const scope = index === 0 ? 'user' : 'common'
     try {
-      if (!fs.existsSync(folder)) continue
+      if (!fs.existsSync(folder)) return
 
       for (const file of fs.readdirSync(folder)) {
         const ext = path.extname(file).toLowerCase()
-        if (ext === '.desktop.ini' || file.toLowerCase() === 'desktop.ini') continue
+        if (file.toLowerCase() === 'desktop.ini') continue
 
         const fullPath = path.join(folder, file)
         const stat = fs.statSync(fullPath)
         if (!stat.isFile()) continue
 
         if (ext === '.lnk' || ext === '.exe' || ext === '.bat' || ext === '.cmd' || ext === '.vbs') {
-          entries.push({ name: path.basename(file, ext), command: fullPath, isShortcut: ext === '.lnk' })
+          entries.push({ name: path.basename(file, ext), command: fullPath, isShortcut: ext === '.lnk', file, scope })
         }
       }
     } catch {
     }
-  }
+  })
 
   return entries
+}
+
+function readApprovedMapSync(fullKey) {
+  try {
+    const out = execSync(`reg query "${fullKey}"`, { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    return parseApprovedMap(out)
+  } catch {
+    return new Map()
+  }
+}
+
+function readMsixStateEnabled(aumid, taskId) {
+  const packageFamilyName = (aumid || '').split('!')[0]
+  if (!packageFamilyName || !taskId) return null
+  try {
+    const out = execSync(
+      `reg query "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\${packageFamilyName}\\${taskId}" /v State`,
+      { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+    )
+    const match = out.match(/State\s+REG_DWORD\s+0x([0-9a-fA-F]+)/)
+    if (!match) return null
+    return isMsixStateEnabled(parseInt(match[1], 16))
+  } catch {
+    return null
+  }
 }
 
 function launchEntry(entry) {
@@ -144,6 +170,45 @@ function launchEntry(entry) {
   } catch (e) {
     console.error(`[autostart] Failed to launch ${entry.name}:`, e.message)
   }
+}
+
+const MSIX_STARTUP_PS = `$OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+Get-AppxPackage | ForEach-Object {
+  $pkg = $_
+  try {
+    $manifest = $pkg | Get-AppxPackageManifest
+    $startupTasks = $manifest | Select-Xml -XPath '//*[local-name()="Extension"][@Category="windows.startupTask"]'
+    if (-not $startupTasks) { return }
+    $apps = $manifest | Select-Xml -XPath '//*[local-name()="Application"]'
+    $appId = $null
+    if ($apps) { $appId = $apps[0].Node.Id }
+    foreach ($task in $startupTasks) {
+      $st = $task.Node.StartupTask
+      if (-not $st) { continue }
+      $taskId = $st.TaskId
+      $enabled = "$($st.Enabled)".ToLower() -eq 'true'
+      $statePath = "HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\$($pkg.PackageFamilyName)\\$taskId"
+      try {
+        $state = (Get-ItemProperty -LiteralPath $statePath -Name State -ErrorAction Stop).State
+        $enabled = ($state -eq 2 -or $state -eq 4)
+      } catch {}
+      Write-Output "$($pkg.PackageFamilyName)!$appId|$taskId|$($st.DisplayName)|$($enabled.ToString().ToLower())"
+    }
+  } catch {}
+}
+`
+
+function parseMsixStartupOutput(output) {
+  const entries = []
+  for (const line of (output || '').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const [aumid, taskId, displayName, enabled] = trimmed.split('|')
+    if (!aumid || !taskId) continue
+    const name = displayName && !/^ms-resource:/i.test(displayName) ? displayName : aumid.split('!')[0]
+    entries.push({ name, aumid, taskId, enabled: enabled === 'true' })
+  }
+  return entries
 }
 
 function getMsixCached() {
@@ -165,14 +230,7 @@ function refreshMsixCache() {
         return
       }
 
-      const entries = []
-      for (const line of stdout.split('\n')) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-        const [aumid, displayName] = trimmed.split('|')
-        if (!aumid) continue
-        entries.push({ name: displayName || aumid.split('!')[0], aumid })
-      }
+      const entries = parseMsixStartupOutput(stdout)
 
       try {
         fs.writeFileSync(MSIX_CACHE_FILE, JSON.stringify(entries, null, 2), 'utf8')
@@ -186,24 +244,8 @@ function refreshMsixCache() {
 
 function getMsixStartupEntries() {
   try {
-    const script = `Get-AppxPackage | ForEach-Object {
-  $pkg = $_
-  try {
-    $manifest = $pkg | Get-AppxPackageManifest
-    $startupTasks = $manifest | Select-Xml -XPath '//*[local-name()="Extension"][@Category="windows.startupTask"]'
-    foreach($task in $startupTasks) {
-      if($task.Node.StartupTask.Enabled -eq 'true') {
-        $apps = $manifest | Select-Xml -XPath '//*[local-name()="Application"]'
-        $appId = $apps[0].Node.Id
-        Write-Output "$($pkg.PackageFamilyName)!$appId|$($task.Node.StartupTask.DisplayName)"
-      }
-    }
-  } catch {}
-}
-`
-
     const tmpFile = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'alpine-msix-query.ps1')
-    fs.writeFileSync(tmpFile, script, 'utf8')
+    fs.writeFileSync(tmpFile, MSIX_STARTUP_PS, 'utf8')
 
     const result = execSync(
       `powershell -NoProfile -ExecutionPolicy Bypass -File "${tmpFile}"`,
@@ -212,16 +254,7 @@ function getMsixStartupEntries() {
 
     try { fs.unlinkSync(tmpFile) } catch {}
 
-    const entries = []
-    for (const line of result.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      const [aumid, displayName] = trimmed.split('|')
-      if (!aumid) continue
-      entries.push({ name: displayName || aumid.split('!')[0], aumid })
-    }
-
-    return entries
+    return parseMsixStartupOutput(result)
   } catch (e) {
     console.error('[autostart] Failed to query MSIX startup tasks:', e.message)
     return []
@@ -266,46 +299,42 @@ function launchMsixApps(entries) {
   )
 }
 
-function getScheduledLogonTasks() {
-  const entries = []
+function readApprovedState() {
+  return {
+    run: { HKCU: readApprovedMapSync(`HKCU\\${APPROVED_BASE}\\Run`), HKLM: readApprovedMapSync(`HKLM\\${APPROVED_BASE}\\Run`) },
+    run32: { HKCU: readApprovedMapSync(`HKCU\\${APPROVED_BASE}\\Run32`), HKLM: readApprovedMapSync(`HKLM\\${APPROVED_BASE}\\Run32`) },
+    folder: { user: readApprovedMapSync(`HKCU\\${APPROVED_BASE}\\StartupFolder`), common: readApprovedMapSync(`HKLM\\${APPROVED_BASE}\\StartupFolder`) },
+  }
+}
 
-  try {
-    const xml = execSync(
-      'schtasks /query /xml ONE',
-      { windowsHide: true, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }
-    )
+function isRunEntryDisabled(entry, approved) {
+  const hive = entry.registryKey.startsWith('HKLM') ? 'HKLM' : 'HKCU'
+  const map = /WOW6432Node/i.test(entry.registryKey) ? approved.run32 : approved.run
+  return map[hive].get(entry.name.toLowerCase()) === true
+}
 
-    const taskBlocks = xml.split('<?xml')
-    for (const block of taskBlocks) {
-      if (!block.trim()) continue
+function isFolderEntryDisabled(entry, approved) {
+  return approved.folder[entry.scope]?.get(entry.file.toLowerCase()) === true
+}
 
-      const hasLogonTrigger = /<LogonTrigger>/.test(block)
-      if (!hasLogonTrigger) continue
-
-      const isEnabled = !/<Enabled>false<\/Enabled>/i.test(block.split('</Settings>')[0] || '')
-
-      if (!isEnabled) continue
-
-      const commandMatch = block.match(/<Command>([^<]+)<\/Command>/)
-      if (!commandMatch) continue
-
-      const command = expandEnvVars(commandMatch[1].trim())
-      const argsMatch = block.match(/<Arguments>([^<]+)<\/Arguments>/)
-      const args = argsMatch ? expandEnvVars(argsMatch[1].trim()) : ''
-
-      const uriMatch = block.match(/<URI>([^<]+)<\/URI>/)
-      const name = uriMatch ? uriMatch[1].replace(/^\\/, '') : path.basename(command, '.exe')
-
-      if (name.toLowerCase().includes('alpineshell')) continue
-
-      const fullCommand = args ? `"${command}" ${args}` : `"${command}"`
-      entries.push({ name, command: fullCommand })
-    }
-  } catch (e) {
-    console.error('[autostart] Failed to query scheduled tasks:', e.message)
+function getEnabledMsixEntries() {
+  const cached = getMsixCached()
+  let entries
+  if (cached && cached.length > 0 && cached.every(e => e && e.aumid && e.taskId)) {
+    entries = cached
+    refreshMsixCache()
+  } else {
+    entries = getMsixStartupEntries()
+    try {
+      fs.mkdirSync(path.dirname(MSIX_CACHE_FILE), { recursive: true })
+      fs.writeFileSync(MSIX_CACHE_FILE, JSON.stringify(entries, null, 2), 'utf8')
+    } catch {}
   }
 
-  return entries
+  return entries.filter(entry => {
+    const fresh = readMsixStateEnabled(entry.aumid, entry.taskId)
+    return fresh === null ? entry.enabled === true : fresh
+  })
 }
 
 function processAutostart() {
@@ -319,20 +348,17 @@ function processAutostart() {
   const runEntries = getRunEntries(RUN_KEYS)
   const runOnceEntries = getRunEntries(RUN_ONCE_KEYS)
   const folderEntries = getStartupFolderEntries()
-  const scheduledEntries = getScheduledLogonTasks()
+  const approved = readApprovedState()
 
   for (const entry of runOnceEntries) {
     deleteRunOnceEntry(entry.registryKey, entry.name)
   }
 
-  const allEntries = [...runEntries, ...runOnceEntries, ...folderEntries, ...scheduledEntries]
-  const launchableEntries = allEntries.filter(entry => {
-    if (isBlockedEntry(entry)) {
-      console.log(`[autostart] Blocked: ${entry.name} (${entry.command})`)
-      return false
-    }
-    return true
-  })
+  const launchableEntries = [
+    ...runEntries.filter(entry => !isBlockedEntry(entry) && !isRunEntryDisabled(entry, approved)),
+    ...runOnceEntries.filter(entry => !isBlockedEntry(entry)),
+    ...folderEntries.filter(entry => !isBlockedEntry(entry) && !isFolderEntryDisabled(entry, approved)),
+  ]
 
   disableExplorerRestart()
 
@@ -340,24 +366,13 @@ function processAutostart() {
     launchEntry(entry)
   }
 
-  const cached = getMsixCached()
-
-  if (cached && cached.length > 0) {
-    console.log(`[autostart] Launching ${cached.length} MSIX apps from cache...`)
-    launchMsixApps(cached)
-    refreshMsixCache()
-  } else {
-    console.log('[autostart] No MSIX cache, querying packages (first boot)...')
-    const msixEntries = getMsixStartupEntries()
-    try {
-      fs.mkdirSync(path.dirname(MSIX_CACHE_FILE), { recursive: true })
-      fs.writeFileSync(MSIX_CACHE_FILE, JSON.stringify(msixEntries, null, 2), 'utf8')
-    } catch {}
-    launchMsixApps(msixEntries)
+  const enabledMsix = getEnabledMsixEntries()
+  if (enabledMsix.length > 0) {
+    console.log(`[autostart] Launching ${enabledMsix.length} enabled MSIX startup apps...`)
+    launchMsixApps(enabledMsix)
   }
 
-  console.log(`[autostart] Launched ${launchableEntries.length} classic entries (${runEntries.length} registry, ${runOnceEntries.length} run-once, ${folderEntries.length} startup folder, ${scheduledEntries.length} scheduled tasks)`)
-
+  console.log(`[autostart] Launched ${launchableEntries.length} classic entries (${runEntries.length} registry, ${runOnceEntries.length} run-once, ${folderEntries.length} startup folder) and ${enabledMsix.length} MSIX apps`)
 }
 
 module.exports = {
