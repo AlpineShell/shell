@@ -19,7 +19,7 @@ interface StartupEntry {
   command: string
   target: string | null
   icon: string | null
-  source: 'registry' | 'folder' | 'task'
+  source: 'registry' | 'folder' | 'task' | 'msix'
   sourceLabel: string
   scope: 'user' | 'system'
   enabled: boolean

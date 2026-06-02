@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Settings, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
+import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Monitor, Settings, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
 import { useDarkText } from "../../themeContext";
 import WifiMenu from "./wifiMenu";
 import BluetoothMenu from "./bluetoothMenu";
@@ -83,11 +83,10 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                     </div>
                     <div className="flex flex-col gap-2">
                         <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
-                        {monitors.map((m, i) => (
+                        {monitors.map((m) => (
                             <Slider
                                 key={m.id}
-                                Icon={monitors.length > 1 ? undefined : Sun}
-                                iconSrc={monitors.length > 1 ? `/icons/monitor/Monitor ${i + 1}.svg` : undefined}
+                                Icon={monitors.length > 1 ? Monitor : Sun}
                                 value={m.brightness}
                                 onChange={(v) => setMonitorBrightness(m.id, v)}
                                 darkText={darkText}

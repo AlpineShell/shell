@@ -224,6 +224,57 @@ async function readScheduledLogonTasks() {
   return entries
 }
 
+const MSIX_STARTUP_SCRIPT = `Get-AppxPackage | ForEach-Object {
+  $pkg = $_
+  try {
+    $m = $pkg | Get-AppxPackageManifest
+    $tasks = $m | Select-Xml -XPath '//*[local-name()="Extension"][@Category="windows.startupTask"]'
+    if (-not $tasks) { return }
+    $apps = $m | Select-Xml -XPath '//*[local-name()="Application"]'
+    $appId = $null
+    if ($apps) { $appId = $apps[0].Node.Id }
+    foreach ($t in $tasks) {
+      $st = $t.Node.StartupTask
+      if (-not $st) { continue }
+      $taskId = $st.TaskId
+      $display = $st.DisplayName
+      $enabled = "$($st.Enabled)".ToLower()
+      $statePath = "HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\$($pkg.PackageFamilyName)\\$taskId"
+      try {
+        $s = (Get-ItemProperty -LiteralPath $statePath -Name State -ErrorAction Stop).State
+        if ($s -eq 2 -or $s -eq 4) { $enabled = 'true' } else { $enabled = 'false' }
+      } catch {}
+      Write-Output "$($pkg.PackageFamilyName)!$appId|$taskId|$display|$enabled|$($pkg.Name)"
+    }
+  } catch {}
+}`
+
+async function readMsixStartupEntries() {
+  const out = await runPsScript(MSIX_STARTUP_SCRIPT)
+  const entries = []
+  for (const line of out.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const [aumid, taskId, display, enabled, pkgName] = trimmed.split('|')
+    if (!aumid || !taskId) continue
+    const displayName = (display || '').trim()
+    const usableDisplay = displayName && !/^ms-resource:/i.test(displayName) ? displayName : null
+    entries.push({
+      source: 'msix',
+      sourceLabel: 'Microsoft Store app',
+      name: usableDisplay || prettyPackageName(pkgName) || aumid.split('!')[0],
+      command: aumid,
+      scope: 'user',
+      location: 'Packaged app',
+      aumid,
+      packageFamilyName: aumid.split('!')[0],
+      taskId,
+      enabledMsix: enabled === 'true',
+    })
+  }
+  return entries
+}
+
 async function runningExeNames() {
   const out = await run('tasklist /fo csv /nh')
   const set = new Set()
@@ -235,10 +286,11 @@ async function runningExeNames() {
 }
 
 async function refreshStartup() {
-  const [regEntries, folderEntries, taskEntries, runningNames] = await Promise.all([
+  const [regEntries, folderEntries, taskEntries, msixEntries, runningNames] = await Promise.all([
     readRegistryRunEntries(),
     Promise.resolve(readFolderEntries()),
     readScheduledLogonTasks(),
+    readMsixStartupEntries(),
     runningExeNames(),
   ])
 
@@ -294,12 +346,31 @@ async function refreshStartup() {
     })
   }
 
+  for (const e of msixEntries) {
+    const id = `msix|${e.aumid}|${e.taskId}`
+    toggleInfoById.set(id, { kind: 'msix', packageFamilyName: e.packageFamilyName, taskId: e.taskId })
+    result.push({
+      id,
+      name: e.name,
+      command: e.command,
+      target: null,
+      icon: null,
+      source: e.source,
+      sourceLabel: e.sourceLabel,
+      scope: e.scope,
+      enabled: e.enabledMsix,
+      pending: pendingPendingState(id),
+      running: false,
+      location: e.location,
+    })
+  }
+
   await enrichPaths(result.map((e) => e.target).filter(Boolean))
   const iconMap = await appIcons.resolveExeIcons(result.map((e) => e.target))
   for (const e of result) {
     e.icon = iconMap.get(e.target) || null
     e.friendlyName = friendlyName(e.target, e.name)
-    e.category = classifyTarget(e.target)
+    e.category = e.source === 'msix' ? 'app' : classifyTarget(e.target)
     e.blurb = blurbForTarget(e.target)
     e.locked = e.category === 'system'
     e.missing = !!e.target && !e.target.toLowerCase().startsWith('shell:') && !fs.existsSync(e.target)
@@ -333,6 +404,20 @@ function setStartup({ id, enabled }, record = true) {
   const entry = cachedStartup.find((e) => e.id === id)
   const info = toggleInfoById.get(id)
   if (!entry || !info) return cachedStartup
+
+  if (info.kind === 'msix') {
+    const from = entry.enabled
+    const statePath = `HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\${info.packageFamilyName}\\${info.taskId}`
+    try {
+      execSync(`reg add "${statePath}" /v State /t REG_DWORD /d ${enabled ? 2 : 1} /f`, { windowsHide: true })
+      entry.enabled = enabled
+      entry.pending = null
+      if (record && from !== enabled) addHistory({ id, name: entry.name, from, to: enabled, scope: 'user' })
+    } catch {
+    }
+    broadcastStartup()
+    return cachedStartup
+  }
 
   if (entry.scope === 'user' && info.kind === 'approved') {
     const from = entry.enabled
