@@ -127,18 +127,44 @@ export default function UpdatesPage() {
           <>
             <div className="flex items-center justify-between gap-3 px-1 pt-3 pb-1">
               <span className="text-[11px] uppercase tracking-wider text-white/40">Windows</span>
-              <WindowsInstallButton status={windows.state.status} onInstall={windows.install} />
+              {windowsActionable && !installing && windows.state.updates.length > 1 && (
+                <PrimaryButton onClick={() => windows.install()}>
+                  <Download size={14} />
+                  Install all
+                </PrimaryButton>
+              )}
             </div>
-            {windows.state.updates.map((update, i) => (
+            {installing && windows.state.installingId === null && (
               <Row
-                key={`${update.kb ?? update.title}-${i}`}
-                icon={<Download size={18} className="text-white/35" />}
-                title={update.title}
-                detail={[update.kb, update.sizeBytes > 0 ? formatBytes(update.sizeBytes) : null]
-                  .filter(Boolean)
-                  .join(' · ')}
+                icon={<Spinner size={18} />}
+                title={windows.state.progressLabel || 'Installing updates…'}
+                detail="This can take a while for large updates."
+                action={<ProgressBar percent={windows.state.progressPercent} />}
               />
-            ))}
+            )}
+            {windows.state.updates.map((update, i) => {
+              const installingThis = installing && windows.state.installingId === update.updateId
+              return (
+                <Row
+                  key={`${update.kb ?? update.title}-${i}`}
+                  icon={<Download size={18} className="text-white/35" />}
+                  title={update.title}
+                  detail={[update.kb, update.sizeBytes > 0 ? formatBytes(update.sizeBytes) : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  action={
+                    installingThis ? (
+                      <ProgressBar percent={windows.state.progressPercent} />
+                    ) : update.updateId ? (
+                      <SecondaryButton onClick={() => windows.install(update.updateId)} disabled={installing}>
+                        <Download size={13} />
+                        Install
+                      </SecondaryButton>
+                    ) : undefined
+                  }
+                />
+              )
+            })}
           </>
         )}
 
@@ -250,17 +276,7 @@ function AlpineAction({
   install: () => void
 }) {
   if (state.status === 'downloading') {
-    return (
-      <div className="flex items-center gap-2.5 w-40">
-        <div className="relative flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
-          <div
-            className="absolute left-0 top-0 bottom-0 bg-blue-500 transition-all"
-            style={{ width: `${Math.min(100, Math.max(0, state.progressPercent))}%` }}
-          />
-        </div>
-        <span className="text-xs text-white/50 shrink-0 tabular-nums">{Math.round(state.progressPercent)}%</span>
-      </div>
-    )
+    return <ProgressBar percent={state.progressPercent} />
   }
 
   if (state.status === 'downloaded') {
@@ -280,30 +296,35 @@ function AlpineAction({
   )
 }
 
-function WindowsInstallButton({
-  status,
-  onInstall,
+function SecondaryButton({
+  onClick,
+  disabled,
+  children,
 }: {
-  status: WindowsUpdateStatus
-  onInstall: () => void
+  onClick: () => void
+  disabled?: boolean
+  children: React.ReactNode
 }) {
-  if (status === 'downloading' || status === 'installing') {
-    return (
-      <button
-        disabled
-        className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 text-white/90 text-[12px] font-medium cursor-not-allowed opacity-60"
-      >
-        <Spinner size={14} />
-        {status === 'downloading' ? 'Downloading…' : 'Installing…'}
-      </button>
-    )
-  }
-
   return (
-    <PrimaryButton onClick={onInstall}>
-      <Download size={14} />
-      Install updates
-    </PrimaryButton>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 text-white/90 text-[12px] font-medium hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      {children}
+    </button>
+  )
+}
+
+function ProgressBar({ percent }: { percent: number }) {
+  const clamped = Math.min(100, Math.max(0, percent))
+  return (
+    <div className="flex items-center gap-2.5 w-40">
+      <div className="relative flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div className="absolute left-0 top-0 bottom-0 bg-blue-500 transition-all" style={{ width: `${clamped}%` }} />
+      </div>
+      <span className="text-xs text-white/50 shrink-0 tabular-nums">{Math.round(clamped)}%</span>
+    </div>
   )
 }
 

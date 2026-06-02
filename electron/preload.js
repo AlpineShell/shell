@@ -285,7 +285,7 @@ contextBridge.exposeInMainWorld('shell', {
   windowsUpdate: {
     getState: () => ipcRenderer.invoke('windows-update/get-state'),
     check: () => ipcRenderer.invoke('windows-update/check'),
-    install: () => ipcRenderer.invoke('windows-update/install'),
+    install: (updateId) => ipcRenderer.invoke('windows-update/install', { updateId }),
     onStateChanged: (callback) => {
       ipcRenderer.on('windows-update/state-changed', (_, data) => callback(data))
     },

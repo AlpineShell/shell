@@ -115,6 +115,7 @@ declare global {
     title: string
     kb: string | null
     sizeBytes: number
+    updateId: string
   }
 
   interface WindowsUpdateState {
@@ -122,6 +123,9 @@ declare global {
     updates: WindowsUpdateItem[]
     lastCheckedAt: number | null
     rebootRequired: boolean
+    progressPercent: number
+    progressLabel: string | null
+    installingId: string | null
     error: string | null
   }
 
@@ -435,7 +439,7 @@ declare global {
       windowsUpdate: {
         getState: () => Promise<WindowsUpdateState>
         check: () => Promise<WindowsUpdateState>
-        install: () => Promise<WindowsUpdateState>
+        install: (updateId?: string) => Promise<WindowsUpdateState>
         onStateChanged: (callback: (state: WindowsUpdateState) => void) => void
       }
     }
