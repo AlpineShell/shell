@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw, ScrollText } from 'lucide-react'
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
 import { PageHeader, Spinner } from './appsShared'
@@ -22,6 +22,14 @@ function formatTime(timestamp: number): string {
   })
 }
 
+function formatLogTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
 function restart() {
   window.shell.system.powerAction('restart')
 }
@@ -30,6 +38,10 @@ export default function UpdatesPage() {
   const alpine = useUpdate()
   const windows = useWindowsUpdate()
   const didCheck = useRef(false)
+
+  const [showLogs, setShowLogs] = useState(false)
+  const [logs, setLogs] = useState<WindowsUpdateLogEntry[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
 
   useEffect(() => {
     if (didCheck.current) return
@@ -46,8 +58,9 @@ export default function UpdatesPage() {
     alpine.state.status === 'available' ||
     alpine.state.status === 'downloading' ||
     alpine.state.status === 'downloaded'
-  const windowsActionable = windows.state.status === 'available' && windows.state.updates.length > 0
-  const hasUpdates = alpineActionable || windowsActionable
+  const alpineBusy = alpine.state.status === 'downloading' || alpine.state.status === 'downloaded'
+  const showWindowsList = windows.state.status === 'available' || installing
+  const windowsRows = showWindowsList ? windows.state.updates : []
 
   const errorMessage =
     alpine.state.status === 'error'
@@ -56,9 +69,25 @@ export default function UpdatesPage() {
         ? windows.state.error
         : null
 
+  const hasRows = (!restartRequired && alpineActionable) || windowsRows.length > 0
+  const showEmptyState = !restartRequired && !errorMessage && !hasRows
+
   function refresh() {
     alpine.check()
     windows.check()
+  }
+
+  async function toggleLogs() {
+    const next = !showLogs
+    setShowLogs(next)
+    if (next) {
+      setLogsLoading(true)
+      try {
+        setLogs(await windows.logs())
+      } finally {
+        setLogsLoading(false)
+      }
+    }
   }
 
   return (
@@ -69,19 +98,31 @@ export default function UpdatesPage() {
           checking,
           installing,
           restartRequired,
-          hasUpdates,
+          hasUpdates: hasRows,
           lastCheckedAt: windows.state.lastCheckedAt,
         })}
       >
-        <button
-          onClick={refresh}
-          disabled={checking || installing}
-          title="Check for updates"
-          aria-label="Check for updates"
-          className="-m-1 p-1 inline-flex items-center justify-center text-white/50 hover:text-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {checking ? <Spinner size={16} /> : <RefreshCw size={16} />}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleLogs}
+            title="View Windows Update logs"
+            aria-label="View Windows Update logs"
+            className={`-m-1 p-1 inline-flex items-center justify-center transition-colors cursor-pointer ${
+              showLogs ? 'text-white/90' : 'text-white/50 hover:text-white/90'
+            }`}
+          >
+            <ScrollText size={16} />
+          </button>
+          <button
+            onClick={refresh}
+            disabled={checking || installing || alpineBusy}
+            title="Check for updates"
+            aria-label="Check for updates"
+            className="-m-1 p-1 inline-flex items-center justify-center text-white/50 hover:text-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {checking ? <Spinner size={16} /> : <RefreshCw size={16} />}
+          </button>
+        </div>
       </PageHeader>
 
       {errorMessage && (
@@ -91,69 +132,119 @@ export default function UpdatesPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-1">
-        {restartRequired && (
-          <Row
-            icon={<AlertTriangle size={20} className="text-amber-400" />}
-            title="Restart required"
-            detail="Restart your device to finish installing Windows updates."
-            action={
-              <PrimaryButton onClick={restart}>
-                <RotateCcw size={14} />
-                Restart now
-              </PrimaryButton>
-            }
-          />
-        )}
+      {(restartRequired || hasRows) && (
+        <div className="flex flex-col gap-1">
+          {restartRequired && (
+            <Row
+              icon={<AlertTriangle size={20} className="text-amber-400" />}
+              title="Restart required"
+              detail="Restart your device to finish installing Windows updates."
+              action={
+                <PrimaryButton onClick={restart}>
+                  <RotateCcw size={14} />
+                  Restart now
+                </PrimaryButton>
+              }
+            />
+          )}
 
-        {!restartRequired && alpineActionable && (
-          <Row
-            icon={<AppWindow size={20} className="text-white/70" />}
-            title="Alpine Shell"
-            detail={alpineDetail(alpine.state)}
-            action={<AlpineAction state={alpine.state} download={alpine.download} install={alpine.install} />}
-          />
-        )}
+          {!restartRequired && alpineActionable && (
+            <Row
+              icon={<AppWindow size={20} className="text-white/70" />}
+              title="Alpine Shell"
+              detail={alpineDetail(alpine.state)}
+              action={
+                <AlpineAction
+                  state={alpine.state}
+                  download={alpine.download}
+                  install={alpine.install}
+                  disabled={installing}
+                />
+              }
+            />
+          )}
 
-        {!restartRequired &&
-          windows.state.updates.map((update, i) => {
-            const installingThis = installing && windows.state.installingId === update.updateId
-            return (
-              <Row
-                key={`${update.updateId || update.kb || update.title}-${i}`}
-                icon={<Download size={18} className="text-white/35" />}
-                title={update.title}
-                detail={[update.kb, update.sizeBytes > 0 ? formatBytes(update.sizeBytes) : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-                action={
-                  installingThis ? (
-                    <ProgressBar percent={windows.state.progressPercent} />
-                  ) : update.updateId ? (
-                    <SecondaryButton onClick={() => windows.install(update.updateId)} disabled={installing}>
-                      <Download size={13} />
-                      Install
-                    </SecondaryButton>
-                  ) : undefined
-                }
-              />
-            )
-          })}
+          {!restartRequired &&
+            windowsRows.map((update, i) => {
+              const installingThis = installing && windows.state.installingId === update.updateId
+              return (
+                <Row
+                  key={`${update.updateId || update.kb || update.title}-${i}`}
+                  icon={<Download size={18} className="text-white/35" />}
+                  title={update.title}
+                  detail={[
+                    update.kb,
+                    update.tier === 'feature'
+                      ? 'Major version upgrade — installed separately'
+                      : update.tier === 'enablement'
+                        ? 'Version upgrade'
+                        : update.sizeBytes > 0
+                          ? formatBytes(update.sizeBytes)
+                          : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  action={
+                    update.tier === 'feature' ? undefined : installingThis ? (
+                      <ProgressBar percent={windows.state.progressPercent} />
+                    ) : update.updateId ? (
+                      <SecondaryButton onClick={() => windows.install(update.updateId)} disabled={installing}>
+                        <Download size={13} />
+                        Install
+                      </SecondaryButton>
+                    ) : undefined
+                  }
+                />
+              )
+            })}
+        </div>
+      )}
 
-        {!restartRequired && !hasUpdates && !installing && (
-          <Row
-            icon={checking ? <Spinner size={18} /> : <CheckCircle2 size={20} className="text-emerald-400" />}
-            title={checking ? 'Checking for updates…' : "You're up to date"}
-            detail={
-              checking
-                ? 'Looking for the latest versions.'
-                : `Alpine Shell ${alpine.state.currentVersion}${
-                    windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''
-                  }`
-            }
-          />
-        )}
-      </div>
+      {showEmptyState && (
+        <div className="flex flex-col items-center justify-center gap-2.5 py-14 text-center">
+          {checking ? (
+            <Spinner size={22} />
+          ) : (
+            <CheckCircle2 size={26} className="text-emerald-400" />
+          )}
+          <span className="text-[13px] text-white/70">
+            {checking ? 'Checking for updates…' : "You're up to date"}
+          </span>
+          {!checking && (
+            <span className="text-[11px] text-white/40">
+              Alpine Shell {alpine.state.currentVersion}
+              {windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''}
+            </span>
+          )}
+        </div>
+      )}
+
+      {showLogs && (
+        <div className="flex flex-col gap-2">
+          <span className="text-[11px] uppercase tracking-wider text-white/40 px-1">Windows Update logs</span>
+          <div className="flex flex-col rounded-lg bg-neutral-900 border border-white/5 max-h-64 overflow-y-auto">
+            {logsLoading ? (
+              <div className="px-3 py-2.5 text-[12px] text-white/40">Loading logs…</div>
+            ) : logs.length === 0 ? (
+              <div className="px-3 py-2.5 text-[12px] text-white/40">No recent Windows Update activity.</div>
+            ) : (
+              logs.map((entry, i) => (
+                <div
+                  key={`${entry.time}-${i}`}
+                  className="flex items-start gap-3 px-3 py-1.5 border-b border-white/5 last:border-b-0"
+                >
+                  <span className="text-[11px] text-white/30 tabular-nums shrink-0 whitespace-nowrap pt-px">
+                    {formatLogTime(entry.time)}
+                  </span>
+                  <span className={`text-[12px] ${entry.level === 'Error' ? 'text-red-300/90' : 'text-white/70'}`}>
+                    {entry.message}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -212,10 +303,12 @@ function AlpineAction({
   state,
   download,
   install,
+  disabled,
 }: {
   state: UpdateState
   download: () => void
   install: () => void
+  disabled?: boolean
 }) {
   if (state.status === 'downloading') {
     return <ProgressBar percent={state.progressPercent} />
@@ -223,7 +316,7 @@ function AlpineAction({
 
   if (state.status === 'downloaded') {
     return (
-      <PrimaryButton onClick={install}>
+      <PrimaryButton onClick={install} disabled={disabled}>
         <RotateCcw size={14} />
         Restart &amp; install
       </PrimaryButton>
@@ -231,7 +324,7 @@ function AlpineAction({
   }
 
   return (
-    <PrimaryButton onClick={download}>
+    <PrimaryButton onClick={download} disabled={disabled}>
       <Download size={14} />
       Download
     </PrimaryButton>
@@ -270,11 +363,20 @@ function ProgressBar({ percent }: { percent: number }) {
   )
 }
 
-function PrimaryButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function PrimaryButton({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void
+  disabled?: boolean
+  children: React.ReactNode
+}) {
   return (
     <button
       onClick={onClick}
-      className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md bg-white hover:bg-neutral-200 text-neutral-950 text-[12px] font-medium transition-colors cursor-pointer"
+      disabled={disabled}
+      className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md bg-white hover:bg-neutral-200 text-neutral-950 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
     >
       {children}
     </button>

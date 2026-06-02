@@ -111,11 +111,22 @@ declare global {
 
   type WindowsUpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'installing' | 'restart-required' | 'installed' | 'error'
 
+  type WindowsUpdateTier = 'quality' | 'enablement' | 'feature'
+
   interface WindowsUpdateItem {
     title: string
     kb: string | null
     sizeBytes: number
     updateId: string
+    isFeatureUpdate: boolean
+    tier: WindowsUpdateTier
+  }
+
+  interface WindowsUpdateLogEntry {
+    time: number
+    id: number
+    level: string
+    message: string
   }
 
   interface WindowsUpdateState {
@@ -440,6 +451,8 @@ declare global {
         getState: () => Promise<WindowsUpdateState>
         check: () => Promise<WindowsUpdateState>
         install: (updateId?: string) => Promise<WindowsUpdateState>
+        openWindowsUpdate: () => Promise<{ ok: boolean }>
+        logs: () => Promise<WindowsUpdateLogEntry[]>
         onStateChanged: (callback: (state: WindowsUpdateState) => void) => void
       }
     }

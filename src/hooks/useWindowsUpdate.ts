@@ -11,5 +11,7 @@ export function useWindowsUpdate() {
     state,
     check: window.shell.windowsUpdate.check,
     install: window.shell.windowsUpdate.install,
+    openWindowsUpdate: window.shell.windowsUpdate.openWindowsUpdate,
+    logs: window.shell.windowsUpdate.logs,
   }
 }

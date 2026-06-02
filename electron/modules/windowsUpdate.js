@@ -1,7 +1,26 @@
-const { app } = require('electron')
-const { execFile, spawn } = require('child_process')
+const { app, shell } = require('electron')
+const { execFile, spawn, execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
+
+let cachedBuild = null
+function getCurrentBuild() {
+  if (cachedBuild != null) return cachedBuild
+  try {
+    const out = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion" /v CurrentBuildNumber', { windowsHide: true, encoding: 'utf8' })
+    const match = out.match(/CurrentBuildNumber\s+REG_SZ\s+(\d+)/)
+    cachedBuild = match ? parseInt(match[1], 10) : 0
+  } catch {
+    cachedBuild = 0
+  }
+  return cachedBuild
+}
+
+function classifyTier(isFeature, build) {
+  if (!isFeature) return 'quality'
+  if (build >= 26100) return 'enablement'
+  return 'feature'
+}
 
 let state = {
   status: 'idle',
@@ -23,7 +42,7 @@ function setState(partial) {
 
 function searchWindowsUpdates() {
   const script =
-    "$ProgressPreference='SilentlyContinue'; $session = New-Object -ComObject Microsoft.Update.Session; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search(\"IsInstalled=0 and Type='Software'\"); $items = @(); foreach ($u in $result.Updates) { $kb = @($u.KBArticleIDs) -join ','; $items += [pscustomobject]@{ title = $u.Title; kb = $kb; sizeBytes = [int64]$u.MaxDownloadSize; updateId = $u.Identity.UpdateID } }; $items | ConvertTo-Json -Compress"
+    "$ProgressPreference='SilentlyContinue'; $session = New-Object -ComObject Microsoft.Update.Session; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search(\"IsInstalled=0 and Type='Software'\"); $items = @(); foreach ($u in $result.Updates) { $kb = @($u.KBArticleIDs) -join ','; $cat = @($u.Categories | ForEach-Object { $_.Name }); $items += [pscustomobject]@{ title = $u.Title; kb = $kb; sizeBytes = [int64]$u.MaxDownloadSize; updateId = $u.Identity.UpdateID; isFeature = [bool]($cat -contains 'Upgrades') } }; $items | ConvertTo-Json -Compress"
 
   return new Promise((resolve, reject) => {
     execFile(
@@ -44,12 +63,18 @@ function searchWindowsUpdates() {
         }
 
         const list = Array.isArray(parsed) ? parsed : [parsed]
-        const items = list.map((item) => ({
-          title: typeof item.title === 'string' ? item.title : String(item.title ?? ''),
-          kb: item.kb && item.kb.length ? item.kb : null,
-          sizeBytes: Number(item.sizeBytes) || 0,
-          updateId: item.updateId ? String(item.updateId) : '',
-        }))
+        const build = getCurrentBuild()
+        const items = list.map((item) => {
+          const isFeature = !!item.isFeature
+          return {
+            title: typeof item.title === 'string' ? item.title : String(item.title ?? ''),
+            kb: item.kb && item.kb.length ? item.kb : null,
+            sizeBytes: Number(item.sizeBytes) || 0,
+            updateId: item.updateId ? String(item.updateId) : '',
+            isFeatureUpdate: isFeature,
+            tier: classifyTier(isFeature, build),
+          }
+        })
 
         resolve(items)
       }
@@ -141,6 +166,7 @@ function buildInstallScript(progressFilePath, targetUpdateId) {
     "        Write-Progress-Record @{ phase = 'installing'; percent = $pct; index = ($ci + 1); total = $total; title = $t; rebootRequired = $false; error = $null }",
     '      }',
     '      $ires = $installer.EndInstall($ijob)',
+    '      try { $installer.Commit(0) } catch {}',
     '      $reboot = [bool]$ires.RebootRequired',
     '    } catch { $useAsync = $false }',
     '  }',
@@ -166,8 +192,10 @@ function buildInstallScript(progressFilePath, targetUpdateId) {
     '      $installResult = $installer.Install()',
     '      if ($installResult.RebootRequired) { $reboot = $true }',
     '    }',
+    '    try { $installer.Commit(0) } catch {}',
     '  }',
     '  if ($reboot) {',
+
     "    Write-Progress-Record @{ phase = 'restart-required'; percent = 100; index = $total; total = $total; title = $null; rebootRequired = $true; error = $null }",
     '  } else {',
     "    Write-Progress-Record @{ phase = 'installed'; percent = 100; index = $total; total = $total; title = $null; rebootRequired = $false; error = $null }",
@@ -313,9 +341,41 @@ function startInstall(targetUpdateId) {
   })
 }
 
+function readUpdateLogs() {
+  const script =
+    "$ErrorActionPreference='SilentlyContinue'; $e = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-WindowsUpdateClient/Operational' } -MaxEvents 50; $e | ForEach-Object { [pscustomobject]@{ time = $_.TimeCreated.ToString('o'); id = $_.Id; level = $_.LevelDisplayName; message = $_.Message } } | ConvertTo-Json -Compress"
+
+  return new Promise((resolve) => {
+    execFile(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      { maxBuffer: 8 * 1024 * 1024, timeout: 30000 },
+      (err, stdout) => {
+        if (err) return resolve([])
+        let parsed = []
+        try { parsed = JSON.parse((stdout || '').trim() || '[]') } catch { return resolve([]) }
+        if (!Array.isArray(parsed)) parsed = [parsed]
+        resolve(
+          parsed.map((entry) => ({
+            time: entry.time ? Date.parse(entry.time) : Date.now(),
+            id: Number(entry.id) || 0,
+            level: typeof entry.level === 'string' ? entry.level : '',
+            message: String(entry.message ?? '').split('\n')[0].trim(),
+          }))
+        )
+      }
+    )
+  })
+}
+
 module.exports = {
   handlers: {
     'windows-update/get-state': () => state,
+    'windows-update/open-windows-update': () => {
+      try { shell.openExternal('ms-settings:windowsupdate') } catch {}
+      return { ok: true }
+    },
+    'windows-update/logs': () => readUpdateLogs(),
     'windows-update/check': async () => {
       if (state.status === 'checking' || state.status === 'downloading' || state.status === 'installing') {
         return state
@@ -338,7 +398,12 @@ module.exports = {
       if (state.status === 'checking' || state.status === 'downloading' || state.status === 'installing') {
         return state
       }
-      startInstall(payload && payload.updateId)
+      const id = payload && payload.updateId
+      const target = state.updates.find((u) => u.updateId === id)
+      if (target && target.tier === 'feature') {
+        return state
+      }
+      startInstall(id)
       return state
     },
   },

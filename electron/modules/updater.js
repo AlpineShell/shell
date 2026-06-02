@@ -57,6 +57,7 @@ function toMessage(e) {
 }
 
 function runCheck(announce) {
+  if (state.status === 'downloading' || state.status === 'downloaded') return
   if (!app.isPackaged) {
     if (announce) {
       pushLog('info', 'Checking for updates…')
