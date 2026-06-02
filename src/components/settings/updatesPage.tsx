@@ -22,14 +22,6 @@ function formatTime(timestamp: number): string {
   })
 }
 
-function formatLogTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-}
-
 function restart() {
   window.shell.system.powerAction('restart')
 }
@@ -123,50 +115,30 @@ export default function UpdatesPage() {
           />
         )}
 
-        {!restartRequired && (windowsActionable || installing) && (
-          <>
-            <div className="flex items-center justify-between gap-3 px-1 pt-3 pb-1">
-              <span className="text-[11px] uppercase tracking-wider text-white/40">Windows</span>
-              {windowsActionable && !installing && windows.state.updates.length > 1 && (
-                <PrimaryButton onClick={() => windows.install()}>
-                  <Download size={14} />
-                  Install all
-                </PrimaryButton>
-              )}
-            </div>
-            {installing && windows.state.installingId === null && (
+        {!restartRequired &&
+          windows.state.updates.map((update, i) => {
+            const installingThis = installing && windows.state.installingId === update.updateId
+            return (
               <Row
-                icon={<Spinner size={18} />}
-                title={windows.state.progressLabel || 'Installing updates…'}
-                detail="This can take a while for large updates."
-                action={<ProgressBar percent={windows.state.progressPercent} />}
+                key={`${update.updateId || update.kb || update.title}-${i}`}
+                icon={<Download size={18} className="text-white/35" />}
+                title={update.title}
+                detail={[update.kb, update.sizeBytes > 0 ? formatBytes(update.sizeBytes) : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+                action={
+                  installingThis ? (
+                    <ProgressBar percent={windows.state.progressPercent} />
+                  ) : update.updateId ? (
+                    <SecondaryButton onClick={() => windows.install(update.updateId)} disabled={installing}>
+                      <Download size={13} />
+                      Install
+                    </SecondaryButton>
+                  ) : undefined
+                }
               />
-            )}
-            {windows.state.updates.map((update, i) => {
-              const installingThis = installing && windows.state.installingId === update.updateId
-              return (
-                <Row
-                  key={`${update.kb ?? update.title}-${i}`}
-                  icon={<Download size={18} className="text-white/35" />}
-                  title={update.title}
-                  detail={[update.kb, update.sizeBytes > 0 ? formatBytes(update.sizeBytes) : null]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  action={
-                    installingThis ? (
-                      <ProgressBar percent={windows.state.progressPercent} />
-                    ) : update.updateId ? (
-                      <SecondaryButton onClick={() => windows.install(update.updateId)} disabled={installing}>
-                        <Download size={13} />
-                        Install
-                      </SecondaryButton>
-                    ) : undefined
-                  }
-                />
-              )
-            })}
-          </>
-        )}
+            )
+          })}
 
         {!restartRequired && !hasUpdates && !installing && (
           <Row
@@ -180,36 +152,6 @@ export default function UpdatesPage() {
                   }`
             }
           />
-        )}
-      </div>
-
-      <ActivityLog entries={alpine.log} />
-    </div>
-  )
-}
-
-function ActivityLog({ entries }: { entries: UpdateLogEntry[] }) {
-  const ordered = entries.slice().reverse()
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-[11px] uppercase tracking-wider text-white/40 px-1">Activity</span>
-      <div className="flex flex-col rounded-lg bg-neutral-900 border border-white/5 max-h-44 overflow-y-auto">
-        {ordered.length === 0 ? (
-          <div className="px-3 py-2.5 text-[12px] text-white/40">No update activity yet.</div>
-        ) : (
-          ordered.map((entry, i) => (
-            <div
-              key={`${entry.time}-${i}`}
-              className="flex items-start gap-3 px-3 py-1.5 border-b border-white/5 last:border-b-0"
-            >
-              <span className="text-[11px] text-white/30 tabular-nums shrink-0 whitespace-nowrap pt-px">
-                {formatLogTime(entry.time)}
-              </span>
-              <span className={`text-[12px] ${entry.level === 'error' ? 'text-red-300/90' : 'text-white/70'}`}>
-                {entry.message}
-              </span>
-            </div>
-          ))
         )}
       </div>
     </div>
