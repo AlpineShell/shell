@@ -76,10 +76,11 @@ export default function UpdatesPage() {
         <button
           onClick={refresh}
           disabled={checking || installing}
-          className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/90 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Check for updates"
+          aria-label="Check for updates"
+          className="-m-1 p-1 inline-flex items-center justify-center text-white/50 hover:text-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {checking ? <Spinner size={14} /> : <RefreshCw size={14} />}
-          {checking ? 'Checking…' : 'Check for updates'}
+          {checking ? <Spinner size={16} /> : <RefreshCw size={16} />}
         </button>
       </PageHeader>
 
