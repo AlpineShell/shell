@@ -51,9 +51,9 @@ function spinner(label, color = c.cyan) {
   }
 }
 
-function killExplorer() {
+function killImage(image) {
   return new Promise((resolve) => {
-    exec('taskkill /F /IM explorer.exe', () => resolve())
+    exec(`taskkill /F /IM "${image}"`, () => resolve())
   })
 }
 
@@ -61,6 +61,51 @@ function startExplorer() {
   try {
     spawn('explorer.exe', [], { detached: true, stdio: 'ignore', windowsHide: false }).unref()
   } catch {}
+}
+
+function parseShellCommand(value) {
+  const trimmed = value.trim()
+  if (trimmed.startsWith('"')) {
+    const end = trimmed.indexOf('"', 1)
+    const exe = trimmed.slice(1, end > 0 ? end : trimmed.length)
+    const rest = end > 0 ? trimmed.slice(end + 1).trim() : ''
+    return { exe, args: parseArgs(rest) }
+  }
+  return { exe: trimmed, args: [] }
+}
+
+function parseArgs(value) {
+  const args = []
+  const re = /"([^"]*)"|(\S+)/g
+  let match
+  while ((match = re.exec(value))) args.push(match[1] !== undefined ? match[1] : match[2])
+  return args
+}
+
+function getRegisteredShell() {
+  return new Promise((resolve) => {
+    exec(
+      'reg query "HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" /v Shell',
+      { windowsHide: true },
+      (err, stdout) => {
+        if (err || !stdout) return resolve(null)
+        const match = stdout.match(/Shell\s+REG_(?:SZ|EXPAND_SZ)\s+(.+)/)
+        const value = match ? match[1].trim() : null
+        if (!value || /explorer\.exe/i.test(value)) return resolve(null)
+        resolve(parseShellCommand(value))
+      }
+    )
+  })
+}
+
+function restoreShell() {
+  if (userShell) {
+    try {
+      spawn(userShell.exe, userShell.args, { detached: true, stdio: 'ignore', windowsHide: false }).unref()
+      return
+    } catch {}
+  }
+  startExplorer()
 }
 
 function listeningPidsOnPort(port) {
@@ -107,6 +152,7 @@ function waitForPort(port) {
 let viteProc = null
 let electronProc = null
 let exiting = false
+let userShell = null
 
 function syncWrite(text) {
   try { fs.writeSync(1, text) } catch {}
@@ -116,10 +162,10 @@ function cleanup() {
   if (exiting) return
   exiting = true
 
-  startExplorer()
+  restoreShell()
 
   syncWrite(`\n${c.dim}[${c.yellow}shutdown${c.reset}${c.dim}]${c.reset} Stopping services...\n`)
-  syncWrite(`${c.dim}[${c.yellow}shutdown${c.reset}${c.dim}]${c.reset} Restoring explorer.exe...\n`)
+  syncWrite(`${c.dim}[${c.yellow}shutdown${c.reset}${c.dim}]${c.reset} ${userShell ? 'Restoring Alpine Shell...' : 'Restoring explorer.exe...'}\n`)
 
   if (electronProc?.pid) {
     try { spawn('taskkill', ['/F', '/T', '/PID', String(electronProc.pid)], { stdio: 'ignore', windowsHide: true, detached: true }).unref() } catch {}
@@ -152,7 +198,7 @@ process.on('SIGINT', cleanup)
 process.on('SIGTERM', cleanup)
 process.on('SIGBREAK', cleanup)
 process.on('exit', () => {
-  if (!exiting) startExplorer()
+  if (!exiting) restoreShell()
 })
 
 async function main() {
@@ -160,9 +206,11 @@ async function main() {
   process.stdout.write(`${c.cyan}${c.bold}${ALPINE}${c.reset}`)
   process.stdout.write(`${c.gray}  ─── Windows Desktop Shell ───${c.reset}\n\n`)
 
-  const killSpin = spinner('Killing explorer.exe', c.yellow)
-  await killExplorer()
-  killSpin.succeed('explorer.exe stopped')
+  userShell = await getRegisteredShell()
+  const killSpin = spinner('Stopping current shell', c.yellow)
+  await killImage('explorer.exe')
+  await killImage('Alpine Shell.exe')
+  killSpin.succeed(userShell ? 'Stopped Alpine Shell + explorer.exe' : 'explorer.exe stopped')
 
   const portSpin = spinner('Freeing port 5173', c.yellow)
   await freePort(5173)
