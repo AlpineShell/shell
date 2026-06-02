@@ -7,8 +7,15 @@ export function useUpdate() {
     window.shell.updates.onStateChanged
   )
 
+  const log = useShellState<UpdateLogEntry[]>(
+    [],
+    window.shell.updates.getLog,
+    window.shell.updates.onLogChanged
+  )
+
   return {
     state,
+    log,
     check: window.shell.updates.check,
     download: window.shell.updates.download,
     install: window.shell.updates.install,

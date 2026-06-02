@@ -22,6 +22,14 @@ function formatTime(timestamp: number): string {
   })
 }
 
+function formatLogTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
 function restart() {
   window.shell.system.powerAction('restart')
 }
@@ -146,6 +154,36 @@ export default function UpdatesPage() {
                   }`
             }
           />
+        )}
+      </div>
+
+      <ActivityLog entries={alpine.log} />
+    </div>
+  )
+}
+
+function ActivityLog({ entries }: { entries: UpdateLogEntry[] }) {
+  const ordered = entries.slice().reverse()
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-[11px] uppercase tracking-wider text-white/40 px-1">Activity</span>
+      <div className="flex flex-col rounded-lg bg-neutral-900 border border-white/5 max-h-44 overflow-y-auto">
+        {ordered.length === 0 ? (
+          <div className="px-3 py-2.5 text-[12px] text-white/40">No update activity yet.</div>
+        ) : (
+          ordered.map((entry, i) => (
+            <div
+              key={`${entry.time}-${i}`}
+              className="flex items-start gap-3 px-3 py-1.5 border-b border-white/5 last:border-b-0"
+            >
+              <span className="text-[11px] text-white/30 tabular-nums shrink-0 whitespace-nowrap pt-px">
+                {formatLogTime(entry.time)}
+              </span>
+              <span className={`text-[12px] ${entry.level === 'error' ? 'text-red-300/90' : 'text-white/70'}`}>
+                {entry.message}
+              </span>
+            </div>
+          ))
         )}
       </div>
     </div>

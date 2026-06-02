@@ -57,7 +57,7 @@ function isShellReplacement() {
 
   for (const hive of hives) {
     try {
-      const result = execSync(`reg query "${hive}" /v Shell`, { windowsHide: true, encoding: 'utf8' })
+      const result = execSync(`reg query "${hive}" /v Shell`, { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
       const match = result.match(/REG_SZ\s+(.+)/)
       if (!match) continue
       const shellValue = match[1].trim().toLowerCase()
@@ -78,7 +78,7 @@ function getRunEntries(keys) {
 
   for (const key of keys) {
     try {
-      const result = execSync(`reg query "${key}"`, { windowsHide: true, encoding: 'utf8' })
+      const result = execSync(`reg query "${key}"`, { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
       const lines = result.split('\n')
 
       for (const line of lines) {

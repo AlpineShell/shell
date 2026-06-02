@@ -103,6 +103,12 @@ declare global {
     error: string | null
   }
 
+  interface UpdateLogEntry {
+    time: number
+    level: 'info' | 'error'
+    message: string
+  }
+
   type WindowsUpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'installing' | 'restart-required' | 'installed' | 'error'
 
   interface WindowsUpdateItem {
@@ -419,10 +425,12 @@ declare global {
       }
       updates: {
         getState: () => Promise<UpdateState>
+        getLog: () => Promise<UpdateLogEntry[]>
         check: () => Promise<UpdateState>
         download: () => Promise<void>
         install: () => Promise<void>
         onStateChanged: (callback: (state: UpdateState) => void) => void
+        onLogChanged: (callback: (entries: UpdateLogEntry[]) => void) => void
       }
       windowsUpdate: {
         getState: () => Promise<WindowsUpdateState>
