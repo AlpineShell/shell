@@ -75,7 +75,7 @@ function runCheck(announce) {
 }
 
 autoUpdater.autoDownload = false
-autoUpdater.autoInstallOnAppQuit = true
+autoUpdater.autoInstallOnAppQuit = false
 
 autoUpdater.on('checking-for-update', () => {
   if (announceResult) pushLog('info', 'Checking for updates…')
@@ -123,6 +123,7 @@ module.exports = {
     'updates/download': () => {
       if (app.isPackaged) {
         pushLog('info', `Downloading version ${state.availableVersion ?? ''}…`)
+        setState({ status: 'downloading', progressPercent: 0 })
         autoUpdater.downloadUpdate().catch((e) => {
           pushLog('error', `Download failed: ${toMessage(e)}`)
           setState({ status: 'error', error: toMessage(e) })

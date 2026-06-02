@@ -188,10 +188,7 @@ export default function UpdatesPage() {
                     update.tier === 'feature' ? undefined : installingThis ? (
                       <ProgressBar percent={windows.state.progressPercent} />
                     ) : update.updateId ? (
-                      <SecondaryButton onClick={() => windows.install(update.updateId)} disabled={installing}>
-                        <Download size={13} />
-                        Install
-                      </SecondaryButton>
+                      <WindowsInstallButton onClick={() => windows.install(update.updateId)} disabled={installing} />
                     ) : undefined
                   }
                 />
@@ -310,24 +307,42 @@ function AlpineAction({
   install: () => void
   disabled?: boolean
 }) {
+  const [pending, setPending] = useState(false)
+  useEffect(() => {
+    setPending(false)
+  }, [state.status])
+
   if (state.status === 'downloading') {
     return <ProgressBar percent={state.progressPercent} />
   }
 
   if (state.status === 'downloaded') {
     return (
-      <PrimaryButton onClick={install} disabled={disabled}>
-        <RotateCcw size={14} />
+      <PrimaryButton onClick={() => { setPending(true); install() }} disabled={disabled || pending}>
+        {pending ? <Spinner size={14} /> : <RotateCcw size={14} />}
         Restart &amp; install
       </PrimaryButton>
     )
   }
 
   return (
-    <PrimaryButton onClick={download} disabled={disabled}>
-      <Download size={14} />
+    <PrimaryButton onClick={() => { setPending(true); download() }} disabled={disabled || pending}>
+      {pending ? <Spinner size={14} /> : <Download size={14} />}
       Download
     </PrimaryButton>
+  )
+}
+
+function WindowsInstallButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  const [pending, setPending] = useState(false)
+  useEffect(() => {
+    if (disabled) setPending(false)
+  }, [disabled])
+  return (
+    <SecondaryButton onClick={() => { setPending(true); onClick() }} disabled={disabled || pending}>
+      {pending ? <Spinner size={13} /> : <Download size={13} />}
+      Install
+    </SecondaryButton>
   )
 }
 
