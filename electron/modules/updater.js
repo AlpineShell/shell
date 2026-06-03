@@ -57,6 +57,7 @@ function toMessage(e) {
 }
 
 function runCheck(announce) {
+  if (state.status === 'downloading' || state.status === 'downloaded') return
   if (!app.isPackaged) {
     if (announce) {
       pushLog('info', 'Checking for updates…')
@@ -74,7 +75,7 @@ function runCheck(announce) {
 }
 
 autoUpdater.autoDownload = false
-autoUpdater.autoInstallOnAppQuit = true
+autoUpdater.autoInstallOnAppQuit = false
 
 autoUpdater.on('checking-for-update', () => {
   if (announceResult) pushLog('info', 'Checking for updates…')
@@ -122,6 +123,7 @@ module.exports = {
     'updates/download': () => {
       if (app.isPackaged) {
         pushLog('info', `Downloading version ${state.availableVersion ?? ''}…`)
+        setState({ status: 'downloading', progressPercent: 0 })
         autoUpdater.downloadUpdate().catch((e) => {
           pushLog('error', `Download failed: ${toMessage(e)}`)
           setState({ status: 'error', error: toMessage(e) })
@@ -134,7 +136,7 @@ module.exports = {
       if (app.isPackaged) {
         pendingVersion = state.availableVersion
         pushLog('info', `Installing version ${state.availableVersion ?? ''} — Alpine Shell will restart…`)
-        autoUpdater.quitAndInstall()
+        autoUpdater.quitAndInstall(true, true)
       }
       return undefined
     },

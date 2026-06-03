@@ -7,14 +7,11 @@ const os = require('os')
 const autostart = require('./autostart')
 const knownApps = require('../knownApps')
 const appIcons = require('./appIcons')
+const { APPROVED_BASE, APPROVED_ENABLED, APPROVED_DISABLED, parseApprovedMap } = require('./startupState')
 
 const CPU_CORES = os.cpus().length || 1
 
 const execAsync = promisify(exec)
-
-const APPROVED_BASE = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved'
-const APPROVED_ENABLED = '020000000000000000000000'
-const APPROVED_DISABLED = '030000000000000000000000'
 const STARTUP_EXTS = new Set(['.lnk', '.exe', '.bat', '.cmd', '.vbs'])
 
 let broadcastRef = null
@@ -123,14 +120,7 @@ function memoryBand(bytes) {
 
 async function readApprovedMap(fullKey) {
   const out = await run(`reg query "${fullKey}"`)
-  const map = new Map()
-  for (const line of out.split('\n')) {
-    const match = line.match(/^\s+(.+?)\s+REG_BINARY\s+([0-9A-Fa-f]+)/)
-    if (!match) continue
-    const firstByte = parseInt(match[2].slice(0, 2), 16)
-    map.set(match[1].trim().toLowerCase(), (firstByte & 0x03) === 0x03)
-  }
-  return map
+  return parseApprovedMap(out)
 }
 
 async function readRegistryRunEntries() {
@@ -224,7 +214,8 @@ async function readScheduledLogonTasks() {
   return entries
 }
 
-const MSIX_STARTUP_SCRIPT = `Get-AppxPackage | ForEach-Object {
+const MSIX_STARTUP_SCRIPT = `$OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+Get-AppxPackage | ForEach-Object {
   $pkg = $_
   try {
     $m = $pkg | Get-AppxPackageManifest
@@ -233,6 +224,7 @@ const MSIX_STARTUP_SCRIPT = `Get-AppxPackage | ForEach-Object {
     $apps = $m | Select-Xml -XPath '//*[local-name()="Application"]'
     $appId = $null
     if ($apps) { $appId = $apps[0].Node.Id }
+    $pkgDisplay = $m.Package.Properties.DisplayName
     foreach ($t in $tasks) {
       $st = $t.Node.StartupTask
       if (-not $st) { continue }
@@ -244,25 +236,50 @@ const MSIX_STARTUP_SCRIPT = `Get-AppxPackage | ForEach-Object {
         $s = (Get-ItemProperty -LiteralPath $statePath -Name State -ErrorAction Stop).State
         if ($s -eq 2 -or $s -eq 4) { $enabled = 'true' } else { $enabled = 'false' }
       } catch {}
-      Write-Output "$($pkg.PackageFamilyName)!$appId|$taskId|$display|$enabled|$($pkg.Name)"
+      Write-Output "$($pkg.PackageFamilyName)!$appId|$taskId|$display|$enabled|$($pkg.Name)|$pkgDisplay"
     }
   } catch {}
 }`
 
-async function readMsixStartupEntries() {
+async function readStartAppsMap() {
+  const out = await run('powershell -NoProfile -Command "Get-StartApps | ConvertTo-Json -Compress"')
+  const byAumid = new Map()
+  const byFamily = new Map()
+  let arr = []
+  try { arr = JSON.parse(out || '[]') } catch {}
+  if (!Array.isArray(arr)) arr = [arr]
+  for (const a of arr) {
+    if (!a || !a.AppID || !a.Name) continue
+    const aumid = String(a.AppID).toLowerCase()
+    byAumid.set(aumid, a.Name)
+    const family = aumid.split('!')[0]
+    if (!byFamily.has(family)) byFamily.set(family, a.Name)
+  }
+  return { byAumid, byFamily }
+}
+
+function resolveMsixName({ usableDisplay, aumid, pkgDisplay, pkgName }, startApps) {
+  const family = aumid.split('!')[0]
+  const resolved = startApps.byAumid.get(aumid.toLowerCase()) || startApps.byFamily.get(family.toLowerCase())
+  const display = (pkgDisplay || '').trim()
+  const usablePkgDisplay = display && !/^ms-resource:/i.test(display) ? display : null
+  return usableDisplay || resolved || usablePkgDisplay || prettyPackageName(pkgName) || family
+}
+
+async function readMsixStartupEntries(startApps) {
   const out = await runPsScript(MSIX_STARTUP_SCRIPT)
   const entries = []
   for (const line of out.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed) continue
-    const [aumid, taskId, display, enabled, pkgName] = trimmed.split('|')
+    const [aumid, taskId, display, enabled, pkgName, pkgDisplay] = trimmed.split('|')
     if (!aumid || !taskId) continue
     const displayName = (display || '').trim()
     const usableDisplay = displayName && !/^ms-resource:/i.test(displayName) ? displayName : null
     entries.push({
       source: 'msix',
       sourceLabel: 'Microsoft Store app',
-      name: usableDisplay || prettyPackageName(pkgName) || aumid.split('!')[0],
+      name: resolveMsixName({ usableDisplay, aumid, pkgDisplay, pkgName }, startApps),
       command: aumid,
       scope: 'user',
       location: 'Packaged app',
@@ -286,11 +303,12 @@ async function runningExeNames() {
 }
 
 async function refreshStartup() {
+  const startApps = await readStartAppsMap()
   const [regEntries, folderEntries, taskEntries, msixEntries, runningNames] = await Promise.all([
     readRegistryRunEntries(),
     Promise.resolve(readFolderEntries()),
     readScheduledLogonTasks(),
-    readMsixStartupEntries(),
+    readMsixStartupEntries(startApps),
     runningExeNames(),
   ])
 

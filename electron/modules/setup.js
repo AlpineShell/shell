@@ -113,6 +113,23 @@ function setStartup() {
   }
 }
 
+function ensureShellRegistration() {
+  if (!app.isPackaged) return
+  if (hasGpoShellOverride()) return
+
+  const desiredShell = getShellExePath()
+  const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
+  if (currentShell !== desiredShell) {
+    try { regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', desiredShell) } catch {}
+  }
+
+  const desiredRun = `"${installer.getInstalledExePath()}"`
+  const currentRun = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell')
+  if (currentRun !== desiredRun) {
+    try { regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', desiredRun) } catch {}
+  }
+}
+
 function hasGpoShellOverride() {
   const policyShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System', 'Shell')
   return policyShell !== null
@@ -280,6 +297,7 @@ module.exports = {
 
   isFirstRun,
   isDefaultShell,
+  ensureShellRegistration,
   killExplorer,
   restartExplorer,
 

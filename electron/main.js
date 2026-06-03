@@ -443,6 +443,8 @@ app.whenReady().then(async () => {
 })
 
 function startShellMode() {
+  if (!setup.isFirstRun()) setup.ensureShellRegistration()
+
   if (shouldTakeOverExplorer && !setup.isDefaultShell()) {
     killedExplorer = setup.killExplorer()
   }

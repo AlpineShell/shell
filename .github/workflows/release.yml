@@ -19,6 +19,17 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Validate release tag is strict semver
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '${GITHUB_REF_NAME}' is not a strict MAJOR.MINOR.PATCH version (got '${VERSION}')."
+            echo "::error::electron-updater compares with semver: 4 segments (e.g. 0.1.20260602.2) get mangled into a lower/pre-release version and clients will not update."
+            echo "::error::Use a 3-segment tag that is strictly greater than the last release, e.g. v0.1.20260603 or, for multiple builds per day, encode the build into the patch: v0.1.2026060201."
+            exit 1
+          fi
+
       - name: Set version from release tag
         shell: bash
         run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
