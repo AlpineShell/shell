@@ -21,6 +21,7 @@ const microphone = require('./modules/microphone')
 const battery = require('./modules/battery')
 const systemInfo = require('./modules/systemInfo')
 const launcher = require('./modules/launcher')
+const runCommand = require('./modules/runCommand')
 const launcherHotkey = require('./modules/launcherHotkey')
 const trayLayout = require('./modules/trayLayout')
 const appManager = require('./modules/appManager')
@@ -410,7 +411,7 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, launcherHotkey, trayLayout, trayHost, appManager, updater, windowsUpdate)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, runCommand, launcherHotkey, trayLayout, trayHost, appManager, updater, windowsUpdate)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())

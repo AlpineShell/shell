@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2, Loader2 } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 
@@ -91,6 +91,28 @@ function useAddressLookup(query: string): MapResult | null {
   return result
 }
 
+function useRunCommand(query: string): RunResult | null {
+  const [result, setResult] = useState<RunResult | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useEffect(() => {
+    setResult(null)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    const q = query.trim()
+    if (q.length < 2 || !window.shell.run) return
+
+    timerRef.current = setTimeout(() => {
+      window.shell.run.resolve(q).then((r) => setResult(r)).catch(() => setResult(null))
+    }, 90)
+
+    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+  }, [query])
+
+  return result
+}
+
+const RUN_ICONS = { folder: FolderOpen, file: FileText, url: Globe, shell: FolderOpen, command: Terminal }
+
 function staticMapUrl(lat: number, lon: number, width: number, height: number): string {
   const zoom = 15
   const x = Math.floor(((lon + 180) / 360) * Math.pow(2, zoom))
@@ -174,6 +196,12 @@ function openAppActions(app: OpenApp): ContextAction[] {
   return [
     { label: "Close window", icon: X, action: () => window.launcher.closeWindow(app.hwnd) },
     { label: "End task", icon: SkullIcon, action: () => window.launcher.endTask(app.id) },
+  ]
+}
+
+function runActions(query: string): ContextAction[] {
+  return [
+    { label: "Run in terminal", icon: Terminal, action: () => { window.shell.run.execTerminal(query); window.launcher.hide() } },
   ]
 }
 
@@ -308,6 +336,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
 
   const mathResult = useMemo(() => tryMath(query.trim()), [query])
   const mapResult = useAddressLookup(query)
+  const runResult = useRunCommand(activeCommand ? "" : query)
 
   const matchedOpenApps = useMemo(() => {
     if (!query.trim()) return []
@@ -361,19 +390,20 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     const settingsScore = ALPINE_SETTINGS_KEYWORDS.reduce((m, k) => Math.max(m, score(query, k)), -1)
     const settingsAlreadyOpen = matchedOpenApps.some((a) => a.path.toLowerCase() === ALPINE_SETTINGS_PATH)
     const showSettings = settingsScore >= 0 && !settingsAlreadyOpen
-    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length + matchedWindowCommands.length + (showSettings ? 1 : 0)
+    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + (runResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length + matchedWindowCommands.length + (showSettings ? 1 : 0)
     const limit = Math.max(1, MAX_RESULTS - taken)
     const list = scored.slice(0, limit).map((r) => r.item)
     if (showSettings) list.push(ALPINE_SETTINGS_ITEM)
     return list
-  }, [query, items, mathResult, mapResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
+  }, [query, items, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
 
   const mathOffset = mathResult ? 1 : 0
   const mapOffset = mathOffset + (mapResult ? 1 : 0)
   const openOffset = mapOffset + matchedOpenApps.length
   const settingsOffset = openOffset + matchedSettings.length
   const winOffset = settingsOffset + matchedWindowCommands.length
-  const totalCount = winOffset + results.length
+  const runOffset = winOffset + results.length
+  const totalCount = runOffset + (runResult ? 1 : 0)
 
   const selectedEntry = useMemo(() => {
     if (mathResult && selected === 0) return { type: "math" as const }
@@ -381,9 +411,10 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     if (selected >= mapOffset && selected < openOffset) return { type: "open" as const, app: matchedOpenApps[selected - mapOffset] }
     if (selected >= openOffset && selected < settingsOffset) return { type: "setting" as const, setting: matchedSettings[selected - openOffset] }
     if (selected >= settingsOffset && selected < winOffset) return { type: "wincmd" as const, cmd: matchedWindowCommands[selected - settingsOffset] }
-    if (selected >= winOffset) return { type: "app" as const, item: results[selected - winOffset] }
+    if (selected >= winOffset && selected < runOffset) return { type: "app" as const, item: results[selected - winOffset] }
+    if (runResult && selected === runOffset) return { type: "run" as const, run: runResult }
     return null
-  }, [selected, mathResult, mapResult, matchedOpenApps, matchedSettings, matchedWindowCommands, results, mathOffset, mapOffset, openOffset, settingsOffset, winOffset])
+  }, [selected, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands, results, mathOffset, mapOffset, openOffset, settingsOffset, winOffset, runOffset])
 
   async function runUninstall(item: LauncherItem) {
     setNotice({ text: `Removing ${item.name}…`, busy: true })
@@ -400,6 +431,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     if (!contextOpen || !selectedEntry) return []
     if (selectedEntry.type === "app" && selectedEntry.item) return appActions(selectedEntry.item, runUninstall)
     if (selectedEntry.type === "open") return openAppActions(selectedEntry.app)
+    if (selectedEntry.type === "run") return runActions(query)
     return []
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextOpen, selectedEntry])
@@ -407,7 +439,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   useEffect(() => {
     if (selected >= totalCount) setSelected(0)
     setContextOpen(false)
-  }, [results, mathResult])
+  }, [results, mathResult, runResult])
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -512,6 +544,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       setSelected((s) => Math.max(s - 1, 0))
     } else if (e.key === "ArrowRight" && selectedEntry && (
       selectedEntry.type === "open" ||
+      selectedEntry.type === "run" ||
       (selectedEntry.type === "app" && selectedEntry.item && selectedEntry.item.id !== ALPINE_SETTINGS_ID)
     )) {
       e.preventDefault()
@@ -534,6 +567,9 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
         enterCommand(selectedEntry.setting.id)
       } else if (selectedEntry.type === "wincmd" && selectedEntry.cmd) {
         window.shell.apps.windowCommand(selectedEntry.cmd.action)
+        window.launcher.hide()
+      } else if (selectedEntry.type === "run" && selectedEntry.run) {
+        window.shell.run.exec(query)
         window.launcher.hide()
       } else if (selectedEntry.type === "app" && selectedEntry.item) {
         if (selectedEntry.item.id === ALPINE_SETTINGS_ID) {
@@ -591,7 +627,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
               )}
               {contextOpen && selectedEntry ? (
                 <span className={`flex-1 text-[15px] truncate ${textColor}`}>
-                  {selectedEntry.type === "app" ? selectedEntry.item?.name : selectedEntry.type === "open" ? selectedEntry.app.name : ""}
+                  {selectedEntry.type === "app" ? selectedEntry.item?.name : selectedEntry.type === "open" ? selectedEntry.app.name : selectedEntry.type === "run" ? selectedEntry.run.display : ""}
                 </span>
               ) : (
                 <input
@@ -799,6 +835,27 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                           </button>
                         )
                       })}
+                      {runResult && (winOffset > 0 || results.length > 0) && (
+                        <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
+                      )}
+                      {runResult && (() => {
+                        const RunIcon = RUN_ICONS[runResult.kind]
+                        return (
+                          <button
+                            onMouseMove={() => { setSelected(runOffset); setContextOpen(false) }}
+                            onClick={() => { window.shell.run.exec(query); window.launcher.hide() }}
+                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
+                              runOffset === selected ? selectedBg : hoverBg
+                            }`}
+                          >
+                            <RunIcon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className={`text-[13px] truncate ${textColor}`}>{runResult.label}</span>
+                              <span className={`text-[11px] truncate ${dimText}`}>{runResult.display}</span>
+                            </div>
+                          </button>
+                        )
+                      })()}
                     </div>
                   </>
                 ) : query.trim() ? (

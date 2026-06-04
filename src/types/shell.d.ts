@@ -251,6 +251,12 @@ declare global {
     appId?: string
   }
 
+  interface RunResult {
+    kind: "folder" | "file" | "url" | "shell" | "command"
+    label: string
+    display: string
+  }
+
   interface TrayIcon {
     id: string
     hWnd: number
@@ -350,6 +356,11 @@ declare global {
         openSettings: () => Promise<void>
         closeSettings: () => Promise<void>
         setSettingsPage: (name: string) => Promise<void>
+      }
+      run: {
+        resolve: (query: string) => Promise<RunResult | null>
+        exec: (query: string) => Promise<{ ok: boolean }>
+        execTerminal: (query: string) => Promise<{ ok: boolean }>
       }
       apps: {
         startup: () => Promise<StartupEntry[]>

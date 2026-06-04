@@ -235,6 +235,11 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('tray/settings-changed', (_, data) => callback(data))
     },
   },
+  run: {
+    resolve: (query) => ipcRenderer.invoke('run/resolve', query),
+    exec: (query) => ipcRenderer.invoke('run/exec', query),
+    execTerminal: (query) => ipcRenderer.invoke('run/exec-terminal', query),
+  },
   apps: {
     startup: () => ipcRenderer.invoke('apps/startup-list'),
     onStartupChanged: (callback) => {
