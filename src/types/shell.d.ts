@@ -255,6 +255,7 @@ declare global {
     kind: "folder" | "file" | "url" | "shell" | "command"
     label: string
     display: string
+    runInTerminal: boolean
   }
 
   interface TrayIcon {

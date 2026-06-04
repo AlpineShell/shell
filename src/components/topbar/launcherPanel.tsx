@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText } from "lucide-react"
+import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 
@@ -199,10 +199,11 @@ function openAppActions(app: OpenApp): ContextAction[] {
   ]
 }
 
-function runActions(query: string): ContextAction[] {
-  return [
-    { label: "Run in terminal", icon: Terminal, action: () => { window.shell.run.execTerminal(query); window.launcher.hide() } },
-  ]
+function runActions(query: string, run: RunResult): ContextAction[] {
+  if (run.runInTerminal) {
+    return [{ label: "Run without terminal", icon: Play, action: () => { window.shell.run.exec(query); window.launcher.hide() } }]
+  }
+  return [{ label: "Run in terminal", icon: Terminal, action: () => { window.shell.run.execTerminal(query); window.launcher.hide() } }]
 }
 
 export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
@@ -431,7 +432,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     if (!contextOpen || !selectedEntry) return []
     if (selectedEntry.type === "app" && selectedEntry.item) return appActions(selectedEntry.item, runUninstall)
     if (selectedEntry.type === "open") return openAppActions(selectedEntry.app)
-    if (selectedEntry.type === "run") return runActions(query)
+    if (selectedEntry.type === "run") return runActions(query, selectedEntry.run)
     return []
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextOpen, selectedEntry])
@@ -569,7 +570,8 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
         window.shell.apps.windowCommand(selectedEntry.cmd.action)
         window.launcher.hide()
       } else if (selectedEntry.type === "run" && selectedEntry.run) {
-        window.shell.run.exec(query)
+        if (selectedEntry.run.runInTerminal) window.shell.run.execTerminal(query)
+        else window.shell.run.exec(query)
         window.launcher.hide()
       } else if (selectedEntry.type === "app" && selectedEntry.item) {
         if (selectedEntry.item.id === ALPINE_SETTINGS_ID) {
@@ -839,11 +841,11 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
                       {runResult && (() => {
-                        const RunIcon = RUN_ICONS[runResult.kind]
+                        const RunIcon = runResult.kind === "command" ? (runResult.runInTerminal ? Terminal : Play) : RUN_ICONS[runResult.kind]
                         return (
                           <button
                             onMouseMove={() => { setSelected(runOffset); setContextOpen(false) }}
-                            onClick={() => { window.shell.run.exec(query); window.launcher.hide() }}
+                            onClick={() => { if (runResult.runInTerminal) window.shell.run.execTerminal(query); else window.shell.run.exec(query); window.launcher.hide() }}
                             className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
                               runOffset === selected ? selectedBg : hoverBg
                             }`}

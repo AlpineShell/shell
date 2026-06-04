@@ -31,6 +31,48 @@ function splitCommand(input) {
   return { file: text.slice(0, space), args: text.slice(space + 1).trim() }
 }
 
+const SHELL_BASENAMES = new Set(['cmd', 'powershell', 'pwsh', 'wt', 'bash', 'wsl', 'ubuntu'])
+const SCRIPT_EXTS = new Set(['.bat', '.cmd', '.ps1', '.vbs'])
+const subsystemCache = new Map()
+
+function classifyExecutable(exePath) {
+  const key = exePath.toLowerCase()
+  if (subsystemCache.has(key)) return subsystemCache.get(key)
+  let kind = 'unknown'
+  let fd
+  try {
+    fd = fs.openSync(exePath, 'r')
+    const header = Buffer.alloc(4096)
+    const read = fs.readSync(fd, header, 0, 4096, 0)
+    if (read >= 64 && header.readUInt16LE(0) === 0x5a4d) {
+      const peOffset = header.readUInt32LE(0x3c)
+      if (peOffset + 94 <= read && header.readUInt32LE(peOffset) === 0x00004550) {
+        kind = header.readUInt16LE(peOffset + 92) === 3 ? 'console' : 'gui'
+      }
+    }
+  } catch {
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd) } catch {}
+  }
+  subsystemCache.set(key, kind)
+  return kind
+}
+
+function isAppExecutionAlias(exePath) {
+  if (!/\\WindowsApps\\/i.test(exePath)) return false
+  try { return fs.lstatSync(exePath).isSymbolicLink() } catch { return true }
+}
+
+function shouldRunInTerminal(exePath) {
+  const ext = path.extname(exePath).toLowerCase()
+  if (SHELL_BASENAMES.has(path.basename(exePath, ext).toLowerCase())) return false
+  if (SCRIPT_EXTS.has(ext)) return true
+  const kind = classifyExecutable(exePath)
+  if (kind === 'console') return true
+  if (kind === 'gui') return false
+  return isAppExecutionAlias(exePath)
+}
+
 let pathDirsCache = null
 function pathDirs() {
   if (!pathDirsCache) {
@@ -39,22 +81,37 @@ function pathDirs() {
   return pathDirsCache
 }
 
+const dirListingCache = new Map()
+function dirListing(dir) {
+  const key = dir.toLowerCase()
+  if (dirListingCache.has(key)) return dirListingCache.get(key)
+  let names
+  try { names = new Set(fs.readdirSync(dir).map((name) => name.toLowerCase())) } catch { names = new Set() }
+  dirListingCache.set(key, names)
+  return names
+}
+
+function existsLoose(filePath) {
+  if (fs.existsSync(filePath)) return true
+  try { fs.lstatSync(filePath); return true } catch { return false }
+}
+
 function resolveExecutable(token) {
   if (!token) return null
   const hasExtension = path.extname(token) !== ''
   if (/[\\/]/.test(token) || /^[a-zA-Z]:/.test(token)) {
-    if (fs.existsSync(token)) return token
-    if (!hasExtension) for (const ext of PATH_EXTS) if (fs.existsSync(token + ext)) return token + ext
+    if (existsLoose(token)) return token
+    if (!hasExtension) for (const ext of PATH_EXTS) if (existsLoose(token + ext)) return token + ext
     return null
   }
+  const lower = token.toLowerCase()
   for (const dir of pathDirs()) {
+    const names = dirListing(dir)
     if (hasExtension) {
-      const candidate = path.join(dir, token)
-      try { if (fs.existsSync(candidate)) return candidate } catch {}
+      if (names.has(lower)) return path.join(dir, token)
     } else {
       for (const ext of PATH_EXTS) {
-        const candidate = path.join(dir, token + ext)
-        try { if (fs.existsSync(candidate)) return candidate } catch {}
+        if (names.has(lower + ext)) return path.join(dir, token + ext)
       }
     }
   }
@@ -65,8 +122,8 @@ function resolve(raw) {
   const query = String(raw || '').trim()
   if (!query) return null
 
-  if (isUrl(query)) return { kind: 'url', label: 'Open link', display: query }
-  if (/^shell:/i.test(query)) return { kind: 'shell', label: 'Open', display: query }
+  if (isUrl(query)) return { kind: 'url', label: 'Open link', display: query, runInTerminal: false }
+  if (/^shell:/i.test(query)) return { kind: 'shell', label: 'Open', display: query, runInTerminal: false }
 
   const expanded = expandEnv(query)
   const hadEnv = expanded !== query
@@ -75,14 +132,18 @@ function resolve(raw) {
     try {
       if (fs.existsSync(expanded)) {
         const isDirectory = fs.statSync(expanded).isDirectory()
-        return { kind: isDirectory ? 'folder' : 'file', label: isDirectory ? 'Open folder' : 'Open', display: expanded }
+        return { kind: isDirectory ? 'folder' : 'file', label: isDirectory ? 'Open folder' : 'Open', display: expanded, runInTerminal: false }
       }
     } catch {}
     return null
   }
 
   const { file } = splitCommand(expanded)
-  if (resolveExecutable(file)) return { kind: 'command', label: 'Run', display: query }
+  const resolved = resolveExecutable(file)
+  if (resolved) {
+    const terminal = shouldRunInTerminal(resolved)
+    return { kind: 'command', label: terminal ? 'Run in terminal' : 'Run', display: query, runInTerminal: terminal }
+  }
 
   return null
 }
