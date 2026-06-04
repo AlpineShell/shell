@@ -349,9 +349,11 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const results = useMemo(() => {
     if (!query.trim()) return []
     const openPaths = new Set(matchedOpenApps.map((a) => a.path.toLowerCase()))
+    const openNames = new Set(matchedOpenApps.map((a) => a.name.toLowerCase()))
     const scored: { item: LauncherItem; s: number }[] = []
     for (const item of items) {
       if (openPaths.has(item.target.toLowerCase())) continue
+      if (openNames.has(item.name.toLowerCase())) continue
       const s = score(query, item.name)
       if (s >= 0) scored.push({ item, s })
     }

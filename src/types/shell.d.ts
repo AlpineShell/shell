@@ -245,9 +245,10 @@ declare global {
   interface LauncherItem {
     id: number
     name: string
-    lnkPath: string
+    lnkPath: string | null
     target: string
     icon: string | null
+    appId?: string
   }
 
   interface TrayIcon {

@@ -930,7 +930,7 @@ async function uninstallByLaunch({ appId, target, name }) {
   if (cachedInstalled.length === 0) { try { await refreshInstalledShared() } catch {} }
   const apps = [...installedById.values()]
 
-  if (appId) {
+  if (appId && String(appId).includes('!')) {
     const aumid = String(appId).toLowerCase()
     const family = String(appId).split('!')[0]
     let match = apps.find((a) => a.source === 'store' && a.launchTarget && a.launchTarget.toLowerCase() === aumid)

@@ -211,6 +211,53 @@ $results -join '|'`
   return out.trim().split('|').map((b64) => (b64 && b64.length > 10 ? `data:image/png;base64,${b64}` : null))
 }
 
+async function resolveAppIcons(appIds) {
+  if (!appIds.length) return []
+  const ids = appIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')
+  const script = `Add-Type -AssemblyName System.Drawing
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class AlpineAppIconExtractor {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Auto)]
+  public struct SHFILEINFO { public IntPtr hIcon; public int iIcon; public uint dwAttributes; [MarshalAs(UnmanagedType.ByValTStr, SizeConst=260)] public string szDisplayName; [MarshalAs(UnmanagedType.ByValTStr, SizeConst=80)] public string szTypeName; }
+  [DllImport("shell32.dll", CharSet=CharSet.Unicode)] public static extern int SHParseDisplayName(string name, IntPtr bc, out IntPtr pidl, uint inAttr, out uint outAttr);
+  [DllImport("shell32.dll", CharSet=CharSet.Auto)] public static extern IntPtr SHGetFileInfo(IntPtr pidl, uint attr, ref SHFILEINFO psfi, uint cb, uint flags);
+  [DllImport("shell32.dll")] public static extern void ILFree(IntPtr pidl);
+  [DllImport("user32.dll")] public static extern int DestroyIcon(IntPtr h);
+}
+'@
+$ids = @(${ids})
+$results = @()
+foreach ($id in $ids) {
+  $b64 = ''
+  $pidl = [IntPtr]::Zero
+  $attr = 0
+  try {
+    $hr = [AlpineAppIconExtractor]::SHParseDisplayName(('shell:AppsFolder\\' + $id), [IntPtr]::Zero, [ref]$pidl, 0, [ref]$attr)
+    if ($hr -eq 0 -and $pidl -ne [IntPtr]::Zero) {
+      $info = New-Object AlpineAppIconExtractor+SHFILEINFO
+      $sz = [uint32][Runtime.InteropServices.Marshal]::SizeOf([type]([AlpineAppIconExtractor+SHFILEINFO]))
+      $null = [AlpineAppIconExtractor]::SHGetFileInfo($pidl, 0, [ref]$info, $sz, (0x100 -bor 0x8))
+      if ($info.hIcon -ne [IntPtr]::Zero) {
+        $icon = [System.Drawing.Icon]::FromHandle($info.hIcon)
+        $bmp = $icon.ToBitmap()
+        $ms = New-Object System.IO.MemoryStream
+        $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+        $b64 = [Convert]::ToBase64String($ms.ToArray())
+        $ms.Dispose(); $bmp.Dispose(); $icon.Dispose()
+        [void][AlpineAppIconExtractor]::DestroyIcon($info.hIcon)
+      }
+    }
+  } catch {}
+  if ($pidl -ne [IntPtr]::Zero) { [AlpineAppIconExtractor]::ILFree($pidl) }
+  $results += $b64
+}
+$results -join '|'`
+  const out = await runPsScript(script)
+  return out.trim().split('|').map((b64) => (b64 && b64.length > 10 ? `data:image/png;base64,${b64}` : null))
+}
+
 let genericIconUrl = null
 
 async function ensureGenericIcon() {
@@ -254,6 +301,7 @@ function getGenericIcon() {
 module.exports = {
   iconForFile,
   resolveIcons,
+  resolveAppIcons,
   resolveExeIcons,
   ensureGenericIcon,
   getGenericIcon,

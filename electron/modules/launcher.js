@@ -59,68 +59,23 @@ function readUrlShortcut(filePath) {
   }
 }
 
-function getUwpApps() {
+function getStartApps() {
   return new Promise((resolve) => {
-    const script = `
-$apps = Get-StartApps | Where-Object { $_.AppID -match '!' }
-$pkgMap = @{}
-Get-AppxPackage | ForEach-Object { if (-not $pkgMap.ContainsKey($_.PackageFamilyName)) { $pkgMap[$_.PackageFamilyName] = $_ } }
-foreach ($a in $apps) {
-  $icon = ''
-  try {
-    $family = ($a.AppID -split '!')[0]
-    $appPart = ($a.AppID -split '!')[1]
-    $pkg = $pkgMap[$family]
-    if ($pkg) {
-      $manifest = Get-AppxPackageManifest -Package $pkg.PackageFullName
-      $allApps = @($manifest.Package.Applications.Application)
-      $app = $null
-      if ($appPart) { $app = $allApps | Where-Object { $_.Id -eq $appPart } | Select-Object -First 1 }
-      if (-not $app) { $app = $allApps[0] }
-      $logo = $null
-      if ($app -and $app.VisualElements) {
-        if ($app.VisualElements.Square44x44Logo) { $logo = $app.VisualElements.Square44x44Logo }
-        elseif ($app.VisualElements.Square150x150Logo) { $logo = $app.VisualElements.Square150x150Logo }
-      }
-      if (-not $logo) { $logo = $manifest.Package.Properties.Logo }
-      if ($logo) {
-        $logoDir = Split-Path (Join-Path $pkg.InstallLocation $logo)
-        $logoBase = [System.IO.Path]::GetFileNameWithoutExtension($logo)
-        $pattern = "^" + [Regex]::Escape($logoBase) + "\\.scale-(\\d+)\\.(png|jpg|jpeg)$"
-        $best = Get-ChildItem $logoDir -ErrorAction SilentlyContinue |
-          Where-Object { $_.Name -match $pattern } |
-          Sort-Object @{ Expression = { [int]([Regex]::Match($_.Name, 'scale-(\\d+)').Groups[1].Value) }; Descending = $true } |
-          Select-Object -First 1
-        if (-not $best) {
-          $best = Get-ChildItem $logoDir -Filter "$logoBase*" -ErrorAction SilentlyContinue |
-            Where-Object { $_.Extension -match '\\.(png|jpg|jpeg)$' -and $_.Name -notmatch 'contrast' } |
-            Sort-Object Length -Descending |
-            Select-Object -First 1
-        }
-        if ($best) {
-          $bytes = [System.IO.File]::ReadAllBytes($best.FullName)
-          $icon = [Convert]::ToBase64String($bytes)
-        }
-      }
-    }
-  } catch {}
-  Write-Output ($a.Name + '||' + $a.AppID + '||' + $icon)
-}
-`
-    execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 50 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
+    const script = 'Get-StartApps | Select-Object Name,AppID | ConvertTo-Json -Compress'
+    execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 16 * 1024 * 1024, windowsHide: true, timeout: 15000 }, (err, stdout) => {
       if (err) {
-        console.error('[launcher] UWP discovery error:', err.message)
+        console.error('[launcher] start apps discovery error:', err.message)
         return resolve([])
       }
+      let parsed = []
+      try { parsed = JSON.parse(stdout || '[]') } catch {}
+      if (!Array.isArray(parsed)) parsed = [parsed]
       const apps = []
-      for (const line of stdout.trim().split('\n')) {
-        const parts = line.trim().split('||')
-        if (parts.length >= 2 && parts[0] && parts[1]) {
-          const appId = parts[1].trim()
-          if (appId.toLowerCase().startsWith('windows.immersivecontrolpanel')) continue
-          const icon = parts[2] && parts[2].length > 10 ? `data:image/png;base64,${parts[2]}` : null
-          apps.push({ name: parts[0].trim(), appId, icon })
-        }
+      for (const entry of parsed) {
+        if (!entry || !entry.Name || !entry.AppID) continue
+        const name = String(entry.Name).trim()
+        const appId = String(entry.AppID).trim()
+        if (name && appId) apps.push({ name, appId })
       }
       resolve(apps)
     })
@@ -128,6 +83,12 @@ foreach ($a in $apps) {
 }
 
 const BLOCKED_NAMES = new Set(['settings'])
+const DOCUMENT_APPID_EXTS = new Set(['.txt', '.chm', '.hlp', '.pdf', '.html', '.htm', '.rtf', '.md', '.ini', '.log', '.url', '.website'])
+
+function isDocumentAppId(appId) {
+  if (!appId.includes('\\')) return false
+  return DOCUMENT_APPID_EXTS.has(path.extname(appId).toLowerCase())
+}
 
 async function buildIndex() {
   const shortcutPaths = []
@@ -172,30 +133,36 @@ async function buildIndex() {
 
   const generic = await appIcons.ensureGenericIcon()
 
-  getUwpApps().then((uwpApps) => {
-    let added = false
-    for (const uwp of uwpApps) {
-      const dedupeKey = uwp.name.toLowerCase()
+  getStartApps().then(async (startApps) => {
+    const newItems = []
+    for (const startApp of startApps) {
+      const dedupeKey = startApp.name.toLowerCase()
       if (BLOCKED_NAMES.has(dedupeKey)) continue
+      if (startApp.appId.toLowerCase().startsWith('windows.immersivecontrolpanel')) continue
+      if (isDocumentAppId(startApp.appId)) continue
       if (seenNames.has(dedupeKey)) continue
       seenNames.add(dedupeKey)
-      items.push({
-        id: items.length,
-        name: uwp.name,
+      const item = {
+        id: 0,
+        name: startApp.name,
         lnkPath: null,
-        appId: uwp.appId,
-        target: uwp.appId,
-        icon: uwp.icon || generic,
-      })
-      added = true
+        appId: startApp.appId,
+        target: startApp.appId,
+        icon: generic,
+      }
+      items.push(item)
+      newItems.push(item)
     }
-    if (added) {
-      items.sort((a, b) => a.name.localeCompare(b.name))
-      for (let i = 0; i < items.length; i++) items[i].id = i
-      index = items
-      publishIndex()
-    }
-  }).catch((e) => console.error('[launcher] UWP error:', e.message))
+    if (newItems.length === 0) return
+    items.sort((a, b) => a.name.localeCompare(b.name))
+    for (let i = 0; i < items.length; i++) items[i].id = i
+    index = items
+    publishIndex()
+
+    const icons = await appIcons.resolveAppIcons(newItems.map((i) => i.appId))
+    for (let k = 0; k < newItems.length; k++) if (icons[k]) newItems[k].icon = icons[k]
+    publishIndex()
+  }).catch((e) => console.error('[launcher] start apps error:', e.message))
 
   const iconItems = items.filter((i) => i.iconSource && i.iconSource.includes('\\'))
   if (iconItems.length > 0) {
@@ -337,30 +304,8 @@ function launchItem(item) {
       }
     })
   } else if (item.appId) {
-    const escapedAppId = item.appId.replace(/"/g, '\\"')
-    const script = `
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-[ComImport, Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IApplicationActivationManager {
-  [PreserveSig]
-  int ActivateApplication([In] string appUserModelId, [In] string arguments, [In] uint options, [Out] out uint processId);
-}
-public static class UwpLauncher {
-  public static int Launch(string appId) {
-    Type t = Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C"));
-    object obj = Activator.CreateInstance(t);
-    IApplicationActivationManager iam = (IApplicationActivationManager)obj;
-    uint pid;
-    return iam.ActivateApplication(appId, null, 0, out pid);
-  }
-}
-"@
-[void][UwpLauncher]::Launch("${escapedAppId}")
-`
-    execFile('powershell', ['-NoProfile', '-Command', script], { windowsHide: true }, (e) => {
-      if (e && e.code !== 1) console.error('[launcher] launch UWP error:', e.message)
+    execFile('explorer.exe', [`shell:AppsFolder\\${item.appId}`], { windowsHide: true }, (e) => {
+      if (e && e.code !== 1) console.error('[launcher] launch app error:', e.message)
     })
   }
   return { success: true }
