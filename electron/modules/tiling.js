@@ -23,6 +23,10 @@ const GetWindowTextLengthW = user32.func('__stdcall', 'GetWindowTextLengthW', 'i
 const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProcessId', 'uint32', ['uintptr_t', 'void *'])
 const GetWindow = user32.func('__stdcall', 'GetWindow', 'uintptr_t', ['uintptr_t', 'uint32'])
 
+const WINEVENTPROC = koffi.proto('__stdcall', 'TilingWinEventProc', 'void', ['uintptr_t', 'uint32', 'uintptr_t', 'int32', 'int32', 'uint32', 'uint32'])
+const SetWinEventHook = user32.func('__stdcall', 'SetWinEventHook', 'uintptr_t', ['uint32', 'uint32', 'uintptr_t', 'TilingWinEventProc *', 'uint32', 'uint32', 'uint32'])
+const UnhookWinEvent = user32.func('__stdcall', 'UnhookWinEvent', 'int', ['uintptr_t'])
+
 let DwmGetWindowAttribute = null
 if (dwmapi) {
   DwmGetWindowAttribute = dwmapi.func('__stdcall', 'DwmGetWindowAttribute', 'long', ['uintptr_t', 'uint32', 'void *', 'uint32'])
@@ -44,6 +48,16 @@ const SWP_FRAMECHANGED = 0x0020
 const SWP_ASYNCWINDOWPOS = 0x4000
 const DWMWA_CLOAKED = 14
 const DWMWA_EXTENDED_FRAME_BOUNDS = 9
+const EVENT_SYSTEM_FOREGROUND = 0x0003
+const EVENT_SYSTEM_MOVESIZESTART = 0x000A
+const EVENT_SYSTEM_MOVESIZEEND = 0x000B
+const EVENT_SYSTEM_MINIMIZESTART = 0x0016
+const EVENT_SYSTEM_MINIMIZEEND = 0x0017
+const EVENT_OBJECT_SHOW = 0x8002
+const WINEVENT_OUTOFCONTEXT = 0x0000
+const WINEVENT_SKIPOWNPROCESS = 0x0002
+const OBJID_WINDOW = 0
+const CHILDID_SELF = 0
 
 const STORE_FILE = 'tiling.json'
 const DEFAULT_CONFIG = {
@@ -63,6 +77,25 @@ let shellsRef = null
 let dynamicTimer = null
 let lastDynamicSnapshot = ''
 const snapStateByHwnd = new Map()
+
+let windowOrder = []
+let winEventHookHandle = null
+let winEventProcPointer = null
+let objectHookHandle = null
+let objectHookPointer = null
+let dynamicApplyTimers = []
+let dragActive = false
+let dragHwnd = 0
+let dragMode = null
+let dragWasDragToZone = false
+let dragStartZone = null
+let dragStartDisplayId = null
+let dragStartRect = null
+let dragWatchdog = null
+
+const DYNAMIC_APPLY_DELAYS = [8, 24, 80, 200, 420]
+const DRAG_WATCHDOG_MS = 4000
+const RESIZE_THRESHOLD = 6
 
 function toNum(v) {
   return typeof v === 'bigint' ? Number(v) : v
@@ -387,28 +420,90 @@ function computeLayout(count) {
   return layoutSpiral(count)
 }
 
-function applyDynamic() {
-  const windows = enumManageableWindows()
+function reconcileOrder(currentHwnds) {
+  const present = new Set(currentHwnds)
+  windowOrder = windowOrder.filter((h) => present.has(h))
+  const known = new Set(windowOrder)
+  const added = currentHwnds.filter((h) => !known.has(h)).sort((a, b) => a - b)
+  for (const h of added) windowOrder.push(h)
+}
+
+function orderIndex() {
+  const map = new Map()
+  windowOrder.forEach((h, i) => map.set(h, i))
+  return map
+}
+
+function orderedForDisplay(hwnds) {
+  const index = orderIndex()
+  const rank = (h) => (index.has(h) ? index.get(h) : Number.MAX_SAFE_INTEGER)
+  return hwnds.slice().sort((a, b) => rank(a) - rank(b))
+}
+
+function swapInOrder(a, b) {
+  const ia = windowOrder.indexOf(a)
+  const ib = windowOrder.indexOf(b)
+  if (ia === -1 || ib === -1 || ia === ib) return
+  windowOrder[ia] = b
+  windowOrder[ib] = a
+}
+
+function groupByDisplay(windows) {
   const byDisplay = new Map()
   for (const hwnd of windows) {
     const display = displayForWindow(hwnd)
     if (!byDisplay.has(display.id)) byDisplay.set(display.id, { display, hwnds: [] })
     byDisplay.get(display.id).hwnds.push(hwnd)
   }
+  return byDisplay
+}
+
+function layoutRectsForDisplay(display, ordered) {
+  const rects = computeLayout(ordered.length)
+  return ordered.map((hwnd, i) => ({ hwnd, rect: zoneRectDip(display, rects[i]) }))
+}
+
+function applyDynamic() {
+  if (dragActive && (!dragHwnd || !IsWindow(dragHwnd))) resetDragState()
+  if (dragActive) return
+  const windows = enumManageableWindows()
+  reconcileOrder(windows)
+  const byDisplay = groupByDisplay(windows)
 
   const snapshot = JSON.stringify(
-    [...byDisplay.values()].map((g) => [g.display.id, g.hwnds.slice().sort((a, b) => a - b)])
+    [...byDisplay.values()].map((g) => [g.display.id, orderedForDisplay(g.hwnds)])
       .sort((a, b) => a[0] - b[0])
   ) + `|${config.dynamicLayout}|${config.gap}|${config.margin}`
   if (snapshot === lastDynamicSnapshot) return
   lastDynamicSnapshot = snapshot
 
   for (const { display, hwnds } of byDisplay.values()) {
-    const ordered = hwnds.slice().sort((a, b) => a - b)
+    const ordered = orderedForDisplay(hwnds)
     const rects = computeLayout(ordered.length)
     for (let i = 0; i < ordered.length; i++) {
       try { tileWindow(ordered[i], rects[i], display) } catch (e) { /* skip */ }
     }
+  }
+}
+
+function runDynamicApply() {
+  if (!config.enabled || config.mode !== 'dynamic' || dragActive) return
+  try { applyDynamic() } catch (e) { console.error('[tiling] apply error:', e.message) }
+}
+
+function clearDynamicApplyTimers() {
+  for (const timer of dynamicApplyTimers) clearTimeout(timer)
+  dynamicApplyTimers = []
+}
+
+function scheduleDynamicApply() {
+  if (dynamicApplyTimers.length) return
+  for (const delay of DYNAMIC_APPLY_DELAYS) {
+    const timer = setTimeout(() => {
+      dynamicApplyTimers = dynamicApplyTimers.filter((t) => t !== timer)
+      runDynamicApply()
+    }, delay)
+    dynamicApplyTimers.push(timer)
   }
 }
 
@@ -417,6 +512,7 @@ function stopDynamic() {
     clearInterval(dynamicTimer)
     dynamicTimer = null
   }
+  clearDynamicApplyTimers()
   lastDynamicSnapshot = ''
 }
 
@@ -429,8 +525,277 @@ function startDynamic() {
 }
 
 function syncRuntime() {
+  if (config.enabled) installWinEventHook()
+  else uninstallWinEventHook()
   if (config.enabled && config.mode === 'dynamic') startDynamic()
   else stopDynamic()
+}
+
+function pointInRect(point, rect) {
+  return point.x >= rect.x && point.x < rect.x + rect.width &&
+    point.y >= rect.y && point.y < rect.y + rect.height
+}
+
+function displayForPoint(point) {
+  const displays = screen.getAllDisplays()
+  const containing = displays.find((d) =>
+    point.x >= d.bounds.x && point.x < d.bounds.x + d.bounds.width &&
+    point.y >= d.bounds.y && point.y < d.bounds.y + d.bounds.height
+  )
+  return containing || screen.getDisplayNearestPoint(point)
+}
+
+function zoneFromPoint(display, point) {
+  const wa = display.workArea
+  const rx = wa.width > 0 ? (point.x - wa.x) / wa.width : 0.5
+  const ry = wa.height > 0 ? (point.y - wa.y) / wa.height : 0.5
+  const side = rx < 0.5 ? 'left' : 'right'
+  if (ry < 0.22) return `top-${side}`
+  if (ry > 0.78) return `bottom-${side}`
+  return side
+}
+
+function complementZone(zone) {
+  switch (zone) {
+    case 'left': return 'right'
+    case 'right': return 'left'
+    case 'top-left': return 'top-right'
+    case 'top-right': return 'top-left'
+    case 'bottom-left': return 'bottom-right'
+    case 'bottom-right': return 'bottom-left'
+    default: return zone
+  }
+}
+
+function clearDragWatchdog() {
+  if (dragWatchdog) {
+    clearTimeout(dragWatchdog)
+    dragWatchdog = null
+  }
+}
+
+function resetDragState() {
+  clearDragWatchdog()
+  dragActive = false
+  dragHwnd = 0
+  dragMode = null
+  dragWasDragToZone = false
+  dragStartZone = null
+  dragStartDisplayId = null
+  dragStartRect = null
+}
+
+function armDragWatchdog() {
+  clearDragWatchdog()
+  dragWatchdog = setTimeout(() => {
+    resetDragState()
+    if (config.enabled && config.mode === 'dynamic') scheduleDynamicApply()
+  }, DRAG_WATCHDOG_MS)
+}
+
+function handleDragStart(hwnd) {
+  if (!config.enabled) return
+  if (dragActive && dragHwnd !== hwnd) resetDragState()
+  if (!hwnd || windowPid(hwnd) === ownPid() || !isManageable(hwnd)) return
+  if (config.mode === 'dynamic') {
+    dragActive = true
+    dragHwnd = hwnd
+    dragMode = 'dynamic'
+    dragStartRect = readRect(hwnd)
+    armDragWatchdog()
+  } else if (config.mode === 'snap' && config.dragToZone) {
+    dragActive = true
+    dragHwnd = hwnd
+    dragMode = 'snap'
+    dragWasDragToZone = true
+    dragStartZone = snapStateByHwnd.get(hwnd) || null
+    dragStartDisplayId = displayForWindow(hwnd).id
+    armDragWatchdog()
+  }
+}
+
+function wasResized(before, after) {
+  if (!before || !after) return false
+  const dw = Math.abs((after.right - after.left) - (before.right - before.left))
+  const dh = Math.abs((after.bottom - after.top) - (before.bottom - before.top))
+  return dw > RESIZE_THRESHOLD || dh > RESIZE_THRESHOLD
+}
+
+function handleDynamicDrop(draggedHwnd, startRect) {
+  if (!IsWindow(draggedHwnd)) {
+    lastDynamicSnapshot = ''
+    scheduleDynamicApply()
+    return
+  }
+  const resized = wasResized(startRect, readRect(draggedHwnd))
+  const cursor = screen.getCursorScreenPoint()
+  const display = displayForPoint(cursor)
+  const windows = enumManageableWindows()
+  reconcileOrder(windows)
+  if (!resized) {
+    const onDisplay = windows.filter((h) => h === draggedHwnd || displayForWindow(h).id === display.id)
+    const ordered = orderedForDisplay(onDisplay)
+    const layout = layoutRectsForDisplay(display, ordered)
+    const target = layout.find(({ hwnd, rect }) => hwnd !== draggedHwnd && pointInRect(cursor, rect))
+    if (target) swapInOrder(draggedHwnd, target.hwnd)
+  }
+  lastDynamicSnapshot = ''
+  applyDynamic()
+}
+
+function findZoneOccupant(display, zone, excludeHwnd) {
+  const zoneRect = zoneRectDip(display, ZONES[zone])
+  for (const hwnd of enumManageableWindows()) {
+    if (hwnd === excludeHwnd) continue
+    if (displayForWindow(hwnd).id !== display.id) continue
+    const center = rectCenterDip(hwnd)
+    if (center && pointInRect(center, zoneRect)) return hwnd
+  }
+  return 0
+}
+
+function evictZone(zone, display, keep) {
+  for (const [h, z] of [...snapStateByHwnd]) {
+    if (keep.includes(h)) continue
+    if (!IsWindow(h)) { snapStateByHwnd.delete(h); continue }
+    if (z === zone && displayForWindow(h).id === display.id) snapStateByHwnd.delete(h)
+  }
+}
+
+function handleSnapDrop(draggedHwnd, startZone, startDisplayId) {
+  if (!IsWindow(draggedHwnd)) return
+  const cursor = screen.getCursorScreenPoint()
+  const display = displayForPoint(cursor)
+  const targetZone = zoneFromPoint(display, cursor)
+
+  const occupant = findZoneOccupant(display, targetZone, draggedHwnd)
+
+  tileWindow(draggedHwnd, ZONES[targetZone], display)
+  snapStateByHwnd.set(draggedHwnd, targetZone)
+
+  if (occupant && occupant !== draggedHwnd) {
+    const swapZone = startZone && startZone !== targetZone && ZONES[startZone] ? startZone : complementZone(targetZone)
+    const swapDisplay = (startZone && startDisplayId != null
+      ? screen.getAllDisplays().find((d) => d.id === startDisplayId)
+      : null) || display
+    evictZone(swapZone, swapDisplay, [draggedHwnd, occupant])
+    tileWindow(occupant, ZONES[swapZone], swapDisplay)
+    snapStateByHwnd.set(occupant, swapZone)
+  }
+}
+
+function handleDragEnd(hwnd) {
+  const wasDragging = dragActive && dragHwnd === hwnd
+  const mode = dragMode
+  const wasDragToZone = dragWasDragToZone
+  const startZone = dragStartZone
+  const startDisplayId = dragStartDisplayId
+  const startRect = dragStartRect
+  resetDragState()
+
+  if (!config.enabled || !wasDragging) {
+    if (config.enabled && config.mode === 'dynamic') scheduleDynamicApply()
+    return
+  }
+
+  try {
+    if (mode === 'dynamic') {
+      handleDynamicDrop(hwnd, startRect)
+    } else if (mode === 'snap' && wasDragToZone) {
+      handleSnapDrop(hwnd, startZone, startDisplayId)
+    }
+  } catch (e) {
+    console.error('[tiling] drop error:', e.message)
+  }
+}
+
+function onWinEvent(_hook, event, hwndRaw, idObject, idChild) {
+  try {
+    if (!config.enabled) return
+    if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
+    const hwnd = toNum(hwndRaw)
+    if (!hwnd) return
+
+    if (event === EVENT_SYSTEM_MOVESIZESTART) { handleDragStart(hwnd); return }
+    if (event === EVENT_SYSTEM_MOVESIZEEND) { handleDragEnd(hwnd); return }
+
+    if (config.mode !== 'dynamic') return
+
+    if (dragActive) {
+      if (event === EVENT_SYSTEM_FOREGROUND && hwnd !== dragHwnd) {
+        resetDragState()
+        scheduleDynamicApply()
+      }
+      return
+    }
+
+    if (event === EVENT_SYSTEM_FOREGROUND || event === EVENT_SYSTEM_MINIMIZESTART ||
+        event === EVENT_SYSTEM_MINIMIZEEND || event === EVENT_OBJECT_SHOW) {
+      scheduleDynamicApply()
+    }
+  } catch (e) {
+    console.error('[tiling] win event error:', e.message)
+  }
+}
+
+function installWinEventHook() {
+  if (winEventHookHandle || objectHookHandle) return
+  try {
+    winEventProcPointer = koffi.register(onWinEvent, koffi.pointer(WINEVENTPROC))
+    winEventHookHandle = SetWinEventHook(
+      EVENT_SYSTEM_FOREGROUND,
+      EVENT_SYSTEM_MINIMIZEEND,
+      0,
+      winEventProcPointer,
+      0,
+      0,
+      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+    )
+    if (!toNum(winEventHookHandle)) {
+      console.error('[tiling] Failed to install system win event hook')
+      winEventHookHandle = null
+      try { koffi.unregister(winEventProcPointer) } catch (_) {}
+      winEventProcPointer = null
+    }
+
+    objectHookPointer = koffi.register(onWinEvent, koffi.pointer(WINEVENTPROC))
+    objectHookHandle = SetWinEventHook(
+      EVENT_OBJECT_SHOW,
+      EVENT_OBJECT_SHOW,
+      0,
+      objectHookPointer,
+      0,
+      0,
+      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+    )
+    if (!toNum(objectHookHandle)) {
+      console.error('[tiling] Failed to install object win event hook')
+      objectHookHandle = null
+      try { koffi.unregister(objectHookPointer) } catch (_) {}
+      objectHookPointer = null
+    }
+  } catch (e) {
+    console.error('[tiling] win event hook install error:', e.message)
+  }
+}
+
+function uninstallWinEventHook() {
+  if (winEventHookHandle) {
+    try { UnhookWinEvent(winEventHookHandle) } catch (_) {}
+    winEventHookHandle = null
+  }
+  if (winEventProcPointer) {
+    try { koffi.unregister(winEventProcPointer) } catch (_) {}
+    winEventProcPointer = null
+  }
+  if (objectHookHandle) {
+    try { UnhookWinEvent(objectHookHandle) } catch (_) {}
+    objectHookHandle = null
+  }
+  if (objectHookPointer) {
+    try { koffi.unregister(objectHookPointer) } catch (_) {}
+    objectHookPointer = null
+  }
 }
 
 function handleHotkey(direction, shift) {
@@ -443,7 +808,11 @@ function handleHotkey(direction, shift) {
 }
 
 function setConfig(partial) {
+  const previous = config
   config = sanitizeConfig({ ...config, ...partial })
+  if (dragActive && (config.mode !== previous.mode || config.enabled !== previous.enabled || config.dragToZone !== previous.dragToZone)) {
+    resetDragState()
+  }
   saveConfig()
   syncRuntime()
   if (broadcastRef) broadcastRef('tiling/config-changed', config)
@@ -471,5 +840,6 @@ module.exports = {
     broadcastRef = broadcast
     loadConfig()
     syncRuntime()
+    app.on('will-quit', () => uninstallWinEventHook())
   },
 }

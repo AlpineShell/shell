@@ -58,10 +58,9 @@ export default function TilingPage() {
                 />
                 <ToggleRow
                   label="Drag to zone"
-                  description="Drag a window onto an on-screen zone grid to snap it. Coming soon."
-                  checked={false}
-                  disabled
-                  onChange={() => {}}
+                  description="Drag a window to a screen edge or corner to snap it there. Dropping it on a snapped window swaps the two."
+                  checked={config.dragToZone}
+                  onChange={(v) => setConfig({ dragToZone: v })}
                 />
               </div>
             </Section>
@@ -81,6 +80,9 @@ export default function TilingPage() {
                   <option value="master-stack">Master + stack</option>
                 </select>
               </div>
+              <p className="text-xs text-white/50 mt-3">
+                New windows tile into place instantly. Drag a tile onto another to swap their positions.
+              </p>
             </Section>
           )}
 
