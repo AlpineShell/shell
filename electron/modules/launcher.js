@@ -226,7 +226,8 @@ function animatedHide() {
     if (topBar.isDestroyed()) return
     topBar.webContents.send('launcher/hide')
     topBar.setFocusable(false)
-    topBar.setAlwaysOnTop(false)
+    if (typeof topBar.restorePassiveTopBar === 'function') topBar.restorePassiveTopBar()
+    else topBar.setAlwaysOnTop(false)
   }, 110)
 }
 
@@ -247,9 +248,12 @@ function showLauncher(displayId) {
   }
 
   if (activeTopBar && activeTopBar !== topBar && !activeTopBar.isDestroyed()) {
-    activeTopBar.webContents.send('launcher/hide')
-    activeTopBar.setFocusable(false)
-    activeTopBar.setAlwaysOnTop(false)
+    const previousTopBar = activeTopBar
+    activeTopBar = null
+    previousTopBar.webContents.send('launcher/hide')
+    previousTopBar.setFocusable(false)
+    if (typeof previousTopBar.restorePassiveTopBar === 'function') previousTopBar.restorePassiveTopBar()
+    else previousTopBar.setAlwaysOnTop(false)
   }
 
   topBar.webContents.send('topbar/close-menus')

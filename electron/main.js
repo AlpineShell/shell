@@ -136,7 +136,7 @@ function createTopBarWindow(display) {
   const INTERACTIVE_CENTER = 120
   let ignoring = true
 
-  const cursorTracker = setInterval(() => {
+  function evaluateCursorInteraction() {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
@@ -163,7 +163,21 @@ function createTopBarWindow(display) {
         win.webContents.send('topbar/close-menus')
       }
     }
-  }, 50)
+  }
+
+  win.restorePassiveTopBar = () => {
+    if (win.isDestroyed()) return
+    const bounds = win.getBounds()
+    if (bounds.height !== TOP_BAR_HEIGHT) {
+      win.setBounds({ ...bounds, height: TOP_BAR_HEIGHT })
+    }
+    win.setAlwaysOnTop(false)
+    ignoring = true
+    win.setIgnoreMouseEvents(true)
+    evaluateCursorInteraction()
+  }
+
+  const cursorTracker = setInterval(evaluateCursorInteraction, 50)
 
   const onSetHeight = (event, height) => {
     if (win.isDestroyed()) return

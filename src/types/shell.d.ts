@@ -233,6 +233,7 @@ declare global {
     isInstalled: boolean
     installedVersion: string | null
     currentVersion: string
+    isFirstRun: boolean
   }
 
   interface LauncherItem {

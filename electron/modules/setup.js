@@ -4,31 +4,33 @@ const { execSync, execFileSync, spawn } = require('child_process')
 const fs = require('fs')
 const installer = require('./installer')
 
+const CURSOR_VARIANT = 'Bibata-Original-Ice'
+
 const CURSOR_REGISTRY_MAP = {
-  'Arrow': 'Normal Select.cur',
-  'Help': 'Help Select.cur',
-  'AppStarting': 'Working In Background.ani',
+  'Arrow': 'Pointer.cur',
+  'Help': 'Help.cur',
+  'AppStarting': 'Work.ani',
   'Wait': 'Busy.ani',
-  'Crosshair': 'Precision Select.cur',
-  'IBeam': 'Text Select.cur',
-  'NWPen': 'HandWriting.cur',
+  'Crosshair': 'Cross.cur',
+  'IBeam': 'Text.cur',
+  'NWPen': 'Handwriting.cur',
   'No': 'Unavailable.cur',
-  'SizeNS': 'Vertical Resize.cur',
-  'SizeWE': 'Horizontal Resize.cur',
-  'SizeNWSE': 'Diagonal Resize 1.cur',
-  'SizeNESW': 'Diagonal Resize 2.cur',
+  'SizeNS': 'Vert.cur',
+  'SizeWE': 'Horz.cur',
+  'SizeNWSE': 'Dgn1.cur',
+  'SizeNESW': 'Dgn2.cur',
   'SizeAll': 'Move.cur',
-  'UpArrow': 'Alternate Select.cur',
-  'Hand': 'Link Select.cur',
-  'Pin': 'Location Select.cur',
-  'Person': 'Person Select.cur',
+  'UpArrow': 'Alternate.cur',
+  'Hand': 'Link.cur',
+  'Pin': 'Pin.cur',
+  'Person': 'Person.cur',
 }
 
 function getCursorSourceDir() {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'cursor', 'Moga White')
+    return path.join(process.resourcesPath, 'cursor', CURSOR_VARIANT)
   }
-  return path.join(__dirname, '..', '..', 'public', 'cursor', 'Moga White')
+  return path.join(__dirname, '..', '..', 'public', 'cursor', CURSOR_VARIANT)
 }
 
 function getCursorInstallDir() {
@@ -166,13 +168,14 @@ function getSetupStatus() {
   const currentCursor = regQuery('HKCU\\Control Panel\\Cursors', '')
 
   return {
-    isShell: currentShell !== null && currentShell !== 'explorer.exe',
+    isShell: currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe'),
     hasStartup: startupEntry !== null,
     hasCursor: currentCursor === 'Alpine Shell',
     gpoBlocked: hasGpoShellOverride(),
     isInstalled: installer.isInstalled(),
     installedVersion: installer.getInstalledVersion(),
     currentVersion: app.getVersion(),
+    isFirstRun: isFirstRun(),
   }
 }
 

@@ -343,12 +343,17 @@ async function showSwitcher() {
 function hideSwitcher() {
   switcherActive = false
   windowList = []
-  if (activeTopBar && !activeTopBar.isDestroyed()) {
-    activeTopBar.webContents.send('alttab/hide')
-    activeTopBar.setAlwaysOnTop(false)
-    activeTopBar.setBounds({ ...activeTopBar.getBounds(), height: 24 })
-  }
+  const topBar = activeTopBar
   activeTopBar = null
+  if (topBar && !topBar.isDestroyed()) {
+    topBar.webContents.send('alttab/hide')
+    if (typeof topBar.restorePassiveTopBar === 'function') {
+      topBar.restorePassiveTopBar()
+    } else {
+      topBar.setAlwaysOnTop(false)
+      topBar.setBounds({ ...topBar.getBounds(), height: 24 })
+    }
+  }
 }
 
 function cycleSelection(forward) {

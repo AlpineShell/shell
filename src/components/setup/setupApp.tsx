@@ -35,7 +35,7 @@ export default function SetupApp() {
     window.setup.onProgress(setCurrentStep)
   }, [])
 
-  const isUpdate = !!status?.isInstalled
+  const isUpdate = !!status && !status.isFirstRun
   const verb = isUpdate ? 'Update' : 'Install'
   const verbIng = isUpdate ? 'Updating' : 'Installing'
   const verbPast = isUpdate ? 'updated' : 'installed'
@@ -122,7 +122,7 @@ export default function SetupApp() {
                   <div>
                     <div className="text-[15px] font-medium">Custom Cursor</div>
                     <div className="text-sm text-white/60 mt-0.5">
-                      Install the Moga White cursor pack
+                      Install the Bibata cursor pack
                     </div>
                   </div>
                   <Toggle checked={installCursor} onChange={setInstallCursor} />
