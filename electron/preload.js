@@ -297,4 +297,12 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('windows-update/state-changed', (_, data) => callback(data))
     },
   },
+  tiling: {
+    config: () => ipcRenderer.invoke('tiling/config-get'),
+    setConfig: (partial) => ipcRenderer.invoke('tiling/config-set', partial),
+    onConfigChanged: (callback) => {
+      ipcRenderer.on('tiling/config-changed', (_, data) => callback(data))
+    },
+    snap: (direction) => ipcRenderer.invoke('tiling/snap', direction),
+  },
 })

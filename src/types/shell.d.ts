@@ -283,6 +283,19 @@ declare global {
     showOverflow: boolean
   }
 
+  type TilingMode = 'snap' | 'dynamic'
+  type TilingDynamicLayout = 'bsp' | 'columns' | 'master-stack'
+
+  interface TilingConfig {
+    enabled: boolean
+    mode: TilingMode
+    gap: number
+    margin: number
+    hotkeys: boolean
+    dragToZone: boolean
+    dynamicLayout: TilingDynamicLayout
+  }
+
   interface Window {
     setup: {
       status: () => Promise<SetupStatus>
@@ -467,6 +480,12 @@ declare global {
         openWindowsUpdate: () => Promise<{ ok: boolean }>
         logs: () => Promise<WindowsUpdateLogEntry[]>
         onStateChanged: (callback: (state: WindowsUpdateState) => void) => void
+      }
+      tiling: {
+        config: () => Promise<TilingConfig>
+        setConfig: (partial: Partial<TilingConfig>) => Promise<TilingConfig>
+        onConfigChanged: (callback: (config: TilingConfig) => void) => void
+        snap: (direction: 'left' | 'right' | 'up' | 'down') => Promise<boolean>
       }
     }
   }

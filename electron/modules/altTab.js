@@ -63,6 +63,10 @@ const VK_SHIFT = 0x10
 const VK_S = 0x53
 const VK_LWIN = 0x5B
 const VK_RWIN = 0x5C
+const VK_LEFT = 0x25
+const VK_UP = 0x26
+const VK_RIGHT = 0x27
+const VK_DOWN = 0x28
 const SW_RESTORE = 9
 const SRCCOPY = 0x00CC0020
 const PW_RENDERFULLCONTENT = 2
@@ -91,6 +95,8 @@ let winLauncherEnabled = false
 let winLauncherCallback = null
 let winDown = false
 let winTapped = false
+
+let tilingKeyCallback = null
 
 const iconCache = new Map()
 const thumbnailCache = new Map()
@@ -388,6 +394,20 @@ function hookCallback(nCode, wParam, lParam) {
     const isKeyDown = (wp === WM_KEYDOWN || wp === WM_SYSKEYDOWN)
     const isKeyUp = (wp === WM_KEYUP || wp === WM_SYSKEYUP)
 
+    if (isKeyDown && tilingKeyCallback && (vkCode === VK_LEFT || vkCode === VK_RIGHT || vkCode === VK_UP || vkCode === VK_DOWN)) {
+      const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      if (winHeld) {
+        const shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) !== 0
+        const direction = vkCode === VK_LEFT ? 'left' : vkCode === VK_RIGHT ? 'right' : vkCode === VK_UP ? 'up' : 'down'
+        let handled = false
+        try { handled = tilingKeyCallback(direction, shiftDown) } catch (e) { console.error('[altTab] tiling key error:', e.message) }
+        if (handled) {
+          winTapped = false
+          return 1
+        }
+      }
+    }
+
     if (winLauncherEnabled) {
       if (vkCode === VK_LWIN || vkCode === VK_RWIN) {
         if (isKeyDown && !winDown) {
@@ -517,6 +537,10 @@ module.exports = {
 
   onWinLauncher(callback) {
     winLauncherCallback = callback
+  },
+
+  onTilingKey(callback) {
+    tilingKeyCallback = callback
   },
 
   start(_broadcast) {

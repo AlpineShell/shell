@@ -1,0 +1,475 @@
+const { app, screen } = require('electron')
+const path = require('path')
+const fs = require('fs')
+const koffi = require('koffi')
+
+const user32 = koffi.load('user32.dll')
+let dwmapi = null
+try { dwmapi = koffi.load('dwmapi.dll') } catch (_) {}
+
+const WNDENUMPROC = koffi.proto('__stdcall', 'TilingEnumProc', 'int', ['uintptr_t', 'intptr_t'])
+
+const SetWindowPos = user32.func('__stdcall', 'SetWindowPos', 'int', ['uintptr_t', 'uintptr_t', 'int', 'int', 'int', 'int', 'uint32'])
+const GetWindowRect = user32.func('__stdcall', 'GetWindowRect', 'int', ['uintptr_t', 'void *'])
+const GetForegroundWindow = user32.func('__stdcall', 'GetForegroundWindow', 'uintptr_t', [])
+const ShowWindow = user32.func('__stdcall', 'ShowWindow', 'int', ['uintptr_t', 'int'])
+const IsIconic = user32.func('__stdcall', 'IsIconic', 'int', ['uintptr_t'])
+const IsZoomed = user32.func('__stdcall', 'IsZoomed', 'int', ['uintptr_t'])
+const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
+const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
+const EnumWindows = user32.func('__stdcall', 'EnumWindows', 'int', ['TilingEnumProc *', 'intptr_t'])
+const GetWindowLongW = user32.func('__stdcall', 'GetWindowLongW', 'int32', ['uintptr_t', 'int'])
+const GetWindowTextLengthW = user32.func('__stdcall', 'GetWindowTextLengthW', 'int', ['uintptr_t'])
+const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProcessId', 'uint32', ['uintptr_t', 'void *'])
+const GetWindow = user32.func('__stdcall', 'GetWindow', 'uintptr_t', ['uintptr_t', 'uint32'])
+
+let DwmGetWindowAttribute = null
+if (dwmapi) {
+  DwmGetWindowAttribute = dwmapi.func('__stdcall', 'DwmGetWindowAttribute', 'long', ['uintptr_t', 'uint32', 'void *', 'uint32'])
+}
+
+const GWL_STYLE = -16
+const GWL_EXSTYLE = -20
+const WS_THICKFRAME = 0x00040000
+const WS_CHILD = 0x40000000
+const WS_EX_TOOLWINDOW = 0x00000080
+const WS_EX_NOACTIVATE = 0x08000000
+const GW_OWNER = 4
+const SW_MINIMIZE = 6
+const SW_MAXIMIZE = 3
+const SW_RESTORE = 9
+const SWP_NOZORDER = 0x0004
+const SWP_NOACTIVATE = 0x0010
+const SWP_FRAMECHANGED = 0x0020
+const SWP_ASYNCWINDOWPOS = 0x4000
+const DWMWA_CLOAKED = 14
+const DWMWA_EXTENDED_FRAME_BOUNDS = 9
+
+const STORE_FILE = 'tiling.json'
+const DEFAULT_CONFIG = {
+  enabled: false,
+  mode: 'snap',
+  gap: 8,
+  margin: 0,
+  hotkeys: true,
+  dragToZone: false,
+  dynamicLayout: 'bsp',
+}
+
+let config = { ...DEFAULT_CONFIG }
+let storePath = null
+let broadcastRef = null
+let shellsRef = null
+let dynamicTimer = null
+let lastDynamicSnapshot = ''
+const snapStateByHwnd = new Map()
+
+function toNum(v) {
+  return typeof v === 'bigint' ? Number(v) : v
+}
+
+function getStorePath() {
+  if (!storePath) storePath = path.join(app.getPath('userData'), STORE_FILE)
+  return storePath
+}
+
+function sanitizeConfig(raw) {
+  const next = { ...DEFAULT_CONFIG }
+  if (!raw || typeof raw !== 'object') return next
+  if (typeof raw.enabled === 'boolean') next.enabled = raw.enabled
+  if (raw.mode === 'snap' || raw.mode === 'dynamic') next.mode = raw.mode
+  if (typeof raw.gap === 'number' && isFinite(raw.gap)) next.gap = Math.max(0, Math.min(64, Math.round(raw.gap)))
+  if (typeof raw.margin === 'number' && isFinite(raw.margin)) next.margin = Math.max(0, Math.min(96, Math.round(raw.margin)))
+  if (typeof raw.hotkeys === 'boolean') next.hotkeys = raw.hotkeys
+  if (typeof raw.dragToZone === 'boolean') next.dragToZone = raw.dragToZone
+  if (raw.dynamicLayout === 'bsp' || raw.dynamicLayout === 'columns' || raw.dynamicLayout === 'master-stack') {
+    next.dynamicLayout = raw.dynamicLayout
+  }
+  return next
+}
+
+function loadConfig() {
+  try {
+    const file = getStorePath()
+    if (fs.existsSync(file)) config = sanitizeConfig(JSON.parse(fs.readFileSync(file, 'utf8')))
+  } catch (e) {
+    console.error('[tiling] load error:', e.message)
+  }
+}
+
+function saveConfig() {
+  try {
+    const dir = path.dirname(getStorePath())
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(getStorePath(), JSON.stringify(config))
+  } catch (e) {
+    console.error('[tiling] save error:', e.message)
+  }
+}
+
+function readRect(hwnd) {
+  const buf = Buffer.alloc(16)
+  if (!GetWindowRect(hwnd, buf)) return null
+  return {
+    left: buf.readInt32LE(0),
+    top: buf.readInt32LE(4),
+    right: buf.readInt32LE(8),
+    bottom: buf.readInt32LE(12),
+  }
+}
+
+function readExtendedFrame(hwnd) {
+  if (!DwmGetWindowAttribute) return null
+  const buf = Buffer.alloc(16)
+  const hr = DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, buf, 16)
+  if (hr !== 0) return null
+  return {
+    left: buf.readInt32LE(0),
+    top: buf.readInt32LE(4),
+    right: buf.readInt32LE(8),
+    bottom: buf.readInt32LE(12),
+  }
+}
+
+function frameInsets(hwnd) {
+  const win = readRect(hwnd)
+  const ext = readExtendedFrame(hwnd)
+  if (!win || !ext) return { left: 0, top: 0, right: 0, bottom: 0 }
+  return {
+    left: ext.left - win.left,
+    top: ext.top - win.top,
+    right: win.right - ext.right,
+    bottom: win.bottom - ext.bottom,
+  }
+}
+
+function isCloaked(hwnd) {
+  if (!DwmGetWindowAttribute) return false
+  const buf = Buffer.alloc(4)
+  DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, buf, 4)
+  return buf.readUInt32LE(0) !== 0
+}
+
+function ownPid() {
+  return process.pid
+}
+
+function windowPid(hwnd) {
+  const buf = Buffer.alloc(4)
+  GetWindowThreadProcessId(hwnd, buf)
+  return buf.readUInt32LE(0)
+}
+
+function isManageable(hwnd) {
+  if (!IsWindow(hwnd) || !IsWindowVisible(hwnd)) return false
+  if (IsIconic(hwnd)) return false
+  if (GetWindowTextLengthW(hwnd) <= 0) return false
+  if (windowPid(hwnd) === ownPid()) return false
+  const style = GetWindowLongW(hwnd, GWL_STYLE)
+  if (style & WS_CHILD) return false
+  if (!(style & WS_THICKFRAME)) return false
+  const exStyle = GetWindowLongW(hwnd, GWL_EXSTYLE)
+  if (exStyle & WS_EX_TOOLWINDOW) return false
+  if (exStyle & WS_EX_NOACTIVATE) return false
+  if (toNum(GetWindow(hwnd, GW_OWNER)) !== 0) return false
+  if (isCloaked(hwnd)) return false
+  return true
+}
+
+function enumManageableWindows() {
+  const windows = []
+  const cb = koffi.register((hwnd) => {
+    const h = toNum(hwnd)
+    if (isManageable(h)) windows.push(h)
+    return 1
+  }, koffi.pointer(WNDENUMPROC))
+  try {
+    EnumWindows(cb, 0)
+  } finally {
+    koffi.unregister(cb)
+  }
+  return windows
+}
+
+function rectCenterDip(hwnd) {
+  const r = readRect(hwnd)
+  if (!r) return null
+  const centerPhysical = { x: Math.round((r.left + r.right) / 2), y: Math.round((r.top + r.bottom) / 2) }
+  try {
+    return screen.screenToDipPoint(centerPhysical)
+  } catch {
+    return centerPhysical
+  }
+}
+
+function displayForWindow(hwnd) {
+  const center = rectCenterDip(hwnd)
+  if (!center) return screen.getPrimaryDisplay()
+  const displays = screen.getAllDisplays()
+  const containing = displays.find((d) =>
+    center.x >= d.bounds.x && center.x < d.bounds.x + d.bounds.width &&
+    center.y >= d.bounds.y && center.y < d.bounds.y + d.bounds.height
+  )
+  return containing || screen.getDisplayNearestPoint(center)
+}
+
+const ZONES = {
+  left: { x: 0, y: 0, w: 0.5, h: 1 },
+  right: { x: 0.5, y: 0, w: 0.5, h: 1 },
+  'top-left': { x: 0, y: 0, w: 0.5, h: 0.5 },
+  'bottom-left': { x: 0, y: 0.5, w: 0.5, h: 0.5 },
+  'top-right': { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+  'bottom-right': { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+  full: { x: 0, y: 0, w: 1, h: 1 },
+}
+
+function zoneRectDip(display, normRect) {
+  const wa = display.workArea
+  const margin = config.margin
+  const halfGap = config.gap / 2
+  const innerX = wa.x + margin
+  const innerY = wa.y + margin
+  const innerW = Math.max(1, wa.width - margin * 2)
+  const innerH = Math.max(1, wa.height - margin * 2)
+  return {
+    x: Math.round(innerX + normRect.x * innerW + halfGap),
+    y: Math.round(innerY + normRect.y * innerH + halfGap),
+    width: Math.max(1, Math.round(normRect.w * innerW - config.gap)),
+    height: Math.max(1, Math.round(normRect.h * innerH - config.gap)),
+  }
+}
+
+function tileWindow(hwnd, normRect, display) {
+  if (!hwnd || !IsWindow(hwnd)) return false
+  if (IsZoomed(hwnd) || IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE)
+
+  const dipRect = zoneRectDip(display, normRect)
+  let physical
+  try {
+    physical = screen.dipToScreenRect(null, dipRect)
+  } catch {
+    physical = dipRect
+  }
+
+  const insets = frameInsets(hwnd)
+  const x = physical.x - insets.left
+  const y = physical.y - insets.top
+  const w = physical.width + insets.left + insets.right
+  const h = physical.height + insets.top + insets.bottom
+
+  const flags = SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS
+  SetWindowPos(hwnd, 0, x, y, w, h, flags)
+  return true
+}
+
+function transitionZone(current, direction) {
+  switch (direction) {
+    case 'left':
+      if (current === 'right') return 'left'
+      if (current === 'top-right') return 'top-left'
+      if (current === 'bottom-right') return 'bottom-left'
+      return 'left'
+    case 'right':
+      if (current === 'left') return 'right'
+      if (current === 'top-left') return 'top-right'
+      if (current === 'bottom-left') return 'bottom-right'
+      return 'right'
+    case 'up':
+      if (current === 'left') return 'top-left'
+      if (current === 'right') return 'top-right'
+      if (current === 'bottom-left') return 'top-left'
+      if (current === 'bottom-right') return 'top-right'
+      return 'maximize'
+    case 'down':
+      if (current === 'left') return 'bottom-left'
+      if (current === 'right') return 'bottom-right'
+      if (current === 'top-left') return 'bottom-left'
+      if (current === 'top-right') return 'bottom-right'
+      if (current === 'maximize') return 'restore'
+      return 'minimize'
+    default:
+      return current
+  }
+}
+
+function neighborDisplay(display, direction) {
+  const displays = screen.getAllDisplays().slice().sort((a, b) => a.bounds.x - b.bounds.x)
+  const index = displays.findIndex((d) => d.id === display.id)
+  if (index === -1) return display
+  const target = direction === 'left' ? index - 1 : index + 1
+  if (target < 0 || target >= displays.length) return null
+  return displays[target]
+}
+
+function doSnap(direction, shift) {
+  const hwnd = toNum(GetForegroundWindow())
+  if (!hwnd || !IsWindow(hwnd) || windowPid(hwnd) === ownPid()) return
+  const display = displayForWindow(hwnd)
+
+  if (shift && (direction === 'left' || direction === 'right')) {
+    const target = neighborDisplay(display, direction)
+    if (!target) return
+    const current = snapStateByHwnd.get(hwnd)
+    const zoneName = current && ZONES[current] ? current : 'full'
+    tileWindow(hwnd, ZONES[zoneName], target)
+    snapStateByHwnd.set(hwnd, zoneName)
+    return
+  }
+
+  const current = snapStateByHwnd.get(hwnd) || null
+  const next = transitionZone(current, direction)
+
+  if (next === 'maximize') {
+    ShowWindow(hwnd, SW_MAXIMIZE)
+    snapStateByHwnd.set(hwnd, 'maximize')
+    return
+  }
+  if (next === 'minimize') {
+    ShowWindow(hwnd, SW_MINIMIZE)
+    snapStateByHwnd.delete(hwnd)
+    return
+  }
+  if (next === 'restore') {
+    ShowWindow(hwnd, SW_RESTORE)
+    snapStateByHwnd.delete(hwnd)
+    return
+  }
+  if (ZONES[next]) {
+    tileWindow(hwnd, ZONES[next], display)
+    snapStateByHwnd.set(hwnd, next)
+  }
+}
+
+function layoutColumns(count) {
+  const rects = []
+  for (let i = 0; i < count; i++) rects.push({ x: i / count, y: 0, w: 1 / count, h: 1 })
+  return rects
+}
+
+function layoutMasterStack(count) {
+  if (count === 1) return [{ x: 0, y: 0, w: 1, h: 1 }]
+  const rects = [{ x: 0, y: 0, w: 0.6, h: 1 }]
+  const stackCount = count - 1
+  for (let i = 0; i < stackCount; i++) {
+    rects.push({ x: 0.6, y: i / stackCount, w: 0.4, h: 1 / stackCount })
+  }
+  return rects
+}
+
+function layoutSpiral(count) {
+  const rects = []
+  let x = 0
+  let y = 0
+  let w = 1
+  let h = 1
+  for (let i = 0; i < count; i++) {
+    if (i === count - 1) {
+      rects.push({ x, y, w, h })
+      break
+    }
+    if (i % 2 === 0) {
+      rects.push({ x, y, w: w / 2, h })
+      x += w / 2
+      w /= 2
+    } else {
+      rects.push({ x, y, w, h: h / 2 })
+      y += h / 2
+      h /= 2
+    }
+  }
+  return rects
+}
+
+function computeLayout(count) {
+  if (count <= 0) return []
+  if (config.dynamicLayout === 'columns') return layoutColumns(count)
+  if (config.dynamicLayout === 'master-stack') return layoutMasterStack(count)
+  return layoutSpiral(count)
+}
+
+function applyDynamic() {
+  const windows = enumManageableWindows()
+  const byDisplay = new Map()
+  for (const hwnd of windows) {
+    const display = displayForWindow(hwnd)
+    if (!byDisplay.has(display.id)) byDisplay.set(display.id, { display, hwnds: [] })
+    byDisplay.get(display.id).hwnds.push(hwnd)
+  }
+
+  const snapshot = JSON.stringify(
+    [...byDisplay.values()].map((g) => [g.display.id, g.hwnds.slice().sort((a, b) => a - b)])
+      .sort((a, b) => a[0] - b[0])
+  ) + `|${config.dynamicLayout}|${config.gap}|${config.margin}`
+  if (snapshot === lastDynamicSnapshot) return
+  lastDynamicSnapshot = snapshot
+
+  for (const { display, hwnds } of byDisplay.values()) {
+    const ordered = hwnds.slice().sort((a, b) => a - b)
+    const rects = computeLayout(ordered.length)
+    for (let i = 0; i < ordered.length; i++) {
+      try { tileWindow(ordered[i], rects[i], display) } catch (e) { /* skip */ }
+    }
+  }
+}
+
+function stopDynamic() {
+  if (dynamicTimer) {
+    clearInterval(dynamicTimer)
+    dynamicTimer = null
+  }
+  lastDynamicSnapshot = ''
+}
+
+function startDynamic() {
+  if (dynamicTimer) return
+  applyDynamic()
+  dynamicTimer = setInterval(() => {
+    try { applyDynamic() } catch (e) { console.error('[tiling] dynamic error:', e.message) }
+  }, 1000)
+}
+
+function syncRuntime() {
+  if (config.enabled && config.mode === 'dynamic') startDynamic()
+  else stopDynamic()
+}
+
+function handleHotkey(direction, shift) {
+  if (!config.enabled || !config.hotkeys || config.mode !== 'snap') return false
+  if (shift && direction !== 'left' && direction !== 'right') return false
+  setImmediate(() => {
+    try { doSnap(direction, shift) } catch (e) { console.error('[tiling] snap error:', e.message) }
+  })
+  return true
+}
+
+function setConfig(partial) {
+  config = sanitizeConfig({ ...config, ...partial })
+  saveConfig()
+  syncRuntime()
+  if (broadcastRef) broadcastRef('tiling/config-changed', config)
+  return config
+}
+
+module.exports = {
+  handlers: {
+    'tiling/config-get': () => config,
+    'tiling/config-set': (_event, partial) => setConfig(partial || {}),
+    'tiling/snap': (_event, direction) => {
+      if (!config.enabled) return false
+      setImmediate(() => { try { doSnap(direction, false) } catch (e) { console.error('[tiling] snap error:', e.message) } })
+      return true
+    },
+  },
+
+  setShells(shells) {
+    shellsRef = shells
+  },
+
+  handleHotkey,
+
+  start(broadcast) {
+    broadcastRef = broadcast
+    loadConfig()
+    syncRuntime()
+  },
+}

@@ -25,6 +25,7 @@ const runCommand = require('./modules/runCommand')
 const launcherHotkey = require('./modules/launcherHotkey')
 const trayLayout = require('./modules/trayLayout')
 const appManager = require('./modules/appManager')
+const tiling = require('./modules/tiling')
 let trayHost = null
 try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[main] trayHost load error:', e.message) }
 let altTab = null
@@ -411,7 +412,7 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, runCommand, launcherHotkey, trayLayout, trayHost, appManager, updater, windowsUpdate)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, runCommand, launcherHotkey, trayLayout, trayHost, appManager, tiling, updater, windowsUpdate)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
@@ -451,6 +452,11 @@ function startShellMode() {
   }
 
   if (altTab) altTab.setShells(shells)
+
+  tiling.setShells(shells)
+  if (altTab && altTab.onTilingKey) {
+    altTab.onTilingKey((direction, shift) => tiling.handleHotkey(direction, shift))
+  }
 
   const screenshotWindow = createScreenshotWindow()
   if (screenshot) {
