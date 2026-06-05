@@ -1054,15 +1054,86 @@ function writeRatioFromEdge(layout, prev, moved) {
   }
 }
 
+function cloneRatioEntry(entry) {
+  if (!entry || typeof entry !== 'object') return entry
+  const out = {}
+  if (typeof entry.master === 'number') out.master = entry.master
+  if (Array.isArray(entry.stack)) out.stack = entry.stack.slice()
+  if (Array.isArray(entry.widths)) out.widths = entry.widths.slice()
+  if (entry.nodes) out.nodes = { ...entry.nodes }
+  return out
+}
+
+function interpolateMoved(moved, t) {
+  const scale = (edge) => (edge ? { ...edge, newEdge: edge.oldEdge + (edge.newEdge - edge.oldEdge) * t } : null)
+  return { ...moved, vertical: scale(moved.vertical), horizontal: scale(moved.horizontal) }
+}
+
+function tiledLayoutFits(ordered, display) {
+  const ratioStore = getRatioStore(config.dynamicLayout, ordered.length)
+  const rects = computeLayout(ordered.length, ratioStore)
+  for (let i = 0; i < ordered.length; i++) {
+    const min = minSizeByHwnd.get(ordered[i])
+    if (!min) continue
+    const cell = zoneRectDip(display, rects[i])
+    if (cell.width < min.w - OVERSIZE_TOLERANCE || cell.height < min.h - OVERSIZE_TOLERANCE) return false
+  }
+  return true
+}
+
+function rescueFloated(hwnd, prev) {
+  const display = screen.getAllDisplays().find((d) => d.id === prev.displayId) || displayForWindow(hwnd)
+  const ordered = orderedForDisplay(enumManageableWindows().filter((h) => displayForWindow(h).id === display.id))
+  const byCount = config.ratios[config.dynamicLayout]
+  if (byCount) delete byCount[String(ordered.length)]
+  saveConfig()
+  if (broadcastRef) broadcastRef('tiling/config-changed', config)
+}
+
 function applyResizeToRatios(hwnd) {
   const prev = lastAppliedDipByHwnd.get(hwnd)
-  if (!prev || prev.layoutIndex < 0) return
+  if (!prev) return
+  if (prev.layoutIndex < 0) {
+    rescueFloated(hwnd, prev)
+    return
+  }
   const content = contentDipRect(hwnd)
   if (!content) return
   const display = screen.getAllDisplays().find((d) => d.id === prev.displayId) || displayForWindow(hwnd)
   const moved = detectMovedEdge(prev.dipRect, content, display)
   if (!moved) return
-  writeRatioFromEdge(config.dynamicLayout, prev, moved)
+
+  const layout = config.dynamicLayout
+  getRatioStore(layout, prev.count)
+  const byCount = config.ratios[layout]
+  const key = String(prev.count)
+  const backup = cloneRatioEntry(byCount[key])
+
+  writeRatioFromEdge(layout, prev, moved)
+
+  if (config.handleOversized) {
+    const ordered = orderedForDisplay(
+      enumManageableWindows().filter((h) => displayForWindow(h).id === display.id)
+    )
+    if (ordered.length === prev.count && !tiledLayoutFits(ordered, display)) {
+      let low = 0
+      let high = 1
+      let best = null
+      for (let iter = 0; iter < 14; iter++) {
+        const mid = (low + high) / 2
+        byCount[key] = cloneRatioEntry(backup)
+        writeRatioFromEdge(layout, prev, interpolateMoved(moved, mid))
+        if (tiledLayoutFits(ordered, display)) {
+          best = cloneRatioEntry(byCount[key])
+          low = mid
+        } else {
+          high = mid
+        }
+      }
+      byCount[key] = best || cloneRatioEntry(backup)
+    }
+  }
+
   saveConfig()
   if (broadcastRef) broadcastRef('tiling/config-changed', config)
 }
