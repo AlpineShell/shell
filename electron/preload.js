@@ -26,6 +26,25 @@ contextBridge.exposeInMainWorld('alpineBoot', {
   wifi: () => bootWifi,
 })
 
+function paintDesktopBackgroundEarly() {
+  if (new URLSearchParams(window.location.search).get('mode') !== 'desktop') return
+  const apply = () => {
+    const el = document.documentElement
+    if (!el) return
+    el.style.backgroundColor = '#1a1a2e'
+    if (bootWallpaper) {
+      el.style.backgroundImage = `url("${bootWallpaper}")`
+      el.style.backgroundSize = 'cover'
+      el.style.backgroundPosition = 'center'
+    }
+  }
+  apply()
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', apply, { once: true })
+  }
+}
+try { paintDesktopBackgroundEarly() } catch {}
+
 contextBridge.exposeInMainWorld('topbar', {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
   setHeight: (height) => ipcRenderer.send('topbar/set-height', height),

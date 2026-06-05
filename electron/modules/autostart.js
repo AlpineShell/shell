@@ -35,35 +35,37 @@ const MSIX_LAUNCHER_SRC = path.join(scriptsDir, 'msixLauncher.cs')
 const MSIX_QUERY = path.join(scriptsDir, 'msixQuery.ps1')
 const CSC_PATH = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'
 
+function execText(cmd, opts = {}) {
+  return new Promise((resolve) => {
+    exec(cmd, { windowsHide: true, encoding: 'utf8', ...opts }, (err, stdout) => {
+      resolve(err ? '' : (stdout || ''))
+    })
+  })
+}
+
 function isBlockedEntry(entry) {
   const cmd = entry.command.replace(/"/g, '').toLowerCase()
   const basename = path.basename(cmd.split(/\s+/)[0])
   return BLOCKED_EXECUTABLES.some(blocked => basename === blocked || basename === blocked + '.exe')
 }
 
-function disableExplorerRestart() {
-  try {
-    execSync('reg add "HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" /v RestartApps /t REG_DWORD /d 0 /f', { windowsHide: true, encoding: 'utf8' })
-  } catch {
-  }
+async function disableExplorerRestart() {
+  await execText('reg add "HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" /v RestartApps /t REG_DWORD /d 0 /f')
   console.log('[autostart] Explorer restart prevention applied')
 }
 
-function isShellReplacement() {
+async function isShellReplacement() {
   const hives = [
     'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon',
     'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon',
   ]
 
   for (const hive of hives) {
-    try {
-      const result = execSync(`reg query "${hive}" /v Shell`, { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-      const match = result.match(/REG_SZ\s+(.+)/)
-      if (!match) continue
-      const shellValue = match[1].trim().toLowerCase()
-      if (!shellValue.includes('explorer.exe')) return true
-    } catch {
-    }
+    const result = await execText(`reg query "${hive}" /v Shell`)
+    const match = result.match(/REG_SZ\s+(.+)/)
+    if (!match) continue
+    const shellValue = match[1].trim().toLowerCase()
+    if (!shellValue.includes('explorer.exe')) return true
   }
 
   return false
@@ -73,37 +75,31 @@ function expandEnvVars(str) {
   return str.replace(/%([^%]+)%/g, (_, key) => process.env[key] || `%${key}%`)
 }
 
-function getRunEntries(keys) {
+async function getRunEntries(keys) {
   const entries = []
 
   for (const key of keys) {
-    try {
-      const result = execSync(`reg query "${key}"`, { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-      const lines = result.split('\n')
+    const result = await execText(`reg query "${key}"`)
+    const lines = result.split('\n')
 
-      for (const line of lines) {
-        const match = line.match(/^\s+(\S.*?)\s+REG_(?:SZ|EXPAND_SZ)\s+(.+)/)
-        if (!match) continue
+    for (const line of lines) {
+      const match = line.match(/^\s+(\S.*?)\s+REG_(?:SZ|EXPAND_SZ)\s+(.+)/)
+      if (!match) continue
 
-        const name = match[1].trim()
-        const value = expandEnvVars(match[2].trim())
+      const name = match[1].trim()
+      const value = expandEnvVars(match[2].trim())
 
-        if (name.toLowerCase() === 'alpineshell') continue
+      if (name.toLowerCase() === 'alpineshell') continue
 
-        entries.push({ name, command: value, registryKey: key })
-      }
-    } catch {
+      entries.push({ name, command: value, registryKey: key })
     }
   }
 
   return entries
 }
 
-function deleteRunOnceEntry(registryKey, name) {
-  try {
-    execSync(`reg delete "${registryKey}" /v "${name}" /f`, { windowsHide: true, encoding: 'utf8' })
-  } catch {
-  }
+async function deleteRunOnceEntry(registryKey, name) {
+  await execText(`reg delete "${registryKey}" /v "${name}" /f`)
 }
 
 function getStartupFolderEntries() {
@@ -133,29 +129,26 @@ function getStartupFolderEntries() {
   return entries
 }
 
-function readApprovedMapSync(fullKey) {
+async function readApprovedMap(fullKey) {
+  const out = await execText(`reg query "${fullKey}"`)
+  if (!out) return new Map()
   try {
-    const out = execSync(`reg query "${fullKey}"`, { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
     return parseApprovedMap(out)
   } catch {
     return new Map()
   }
 }
 
-function readMsixStateEnabled(aumid, taskId) {
+async function readMsixStateEnabled(aumid, taskId) {
   const packageFamilyName = (aumid || '').split('!')[0]
   if (!packageFamilyName || !taskId) return null
-  try {
-    const out = execSync(
-      `reg query "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\${packageFamilyName}\\${taskId}" /v State`,
-      { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
-    )
-    const match = out.match(/State\s+REG_DWORD\s+0x([0-9a-fA-F]+)/)
-    if (!match) return null
-    return isMsixStateEnabled(parseInt(match[1], 16))
-  } catch {
-    return null
-  }
+  const out = await execText(
+    `reg query "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\${packageFamilyName}\\${taskId}" /v State`
+  )
+  if (!out) return null
+  const match = out.match(/State\s+REG_DWORD\s+0x([0-9a-fA-F]+)/)
+  if (!match) return null
+  return isMsixStateEnabled(parseInt(match[1], 16))
 }
 
 function launchEntry(entry) {
@@ -242,14 +235,14 @@ function refreshMsixCache() {
   )
 }
 
-function getMsixStartupEntries() {
+async function getMsixStartupEntries() {
   try {
     const tmpFile = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'alpine-msix-query.ps1')
     fs.writeFileSync(tmpFile, MSIX_STARTUP_PS, 'utf8')
 
-    const result = execSync(
+    const result = await execText(
       `powershell -NoProfile -ExecutionPolicy Bypass -File "${tmpFile}"`,
-      { windowsHide: true, encoding: 'utf8', timeout: 30000 }
+      { timeout: 30000 }
     )
 
     try { fs.unlinkSync(tmpFile) } catch {}
@@ -299,11 +292,17 @@ function launchMsixApps(entries) {
   )
 }
 
-function readApprovedState() {
+async function readApprovedState() {
+  const [run, run32, folderUser, folderCommon] = await Promise.all([
+    Promise.all([readApprovedMap(`HKCU\\${APPROVED_BASE}\\Run`), readApprovedMap(`HKLM\\${APPROVED_BASE}\\Run`)]),
+    Promise.all([readApprovedMap(`HKCU\\${APPROVED_BASE}\\Run32`), readApprovedMap(`HKLM\\${APPROVED_BASE}\\Run32`)]),
+    readApprovedMap(`HKCU\\${APPROVED_BASE}\\StartupFolder`),
+    readApprovedMap(`HKLM\\${APPROVED_BASE}\\StartupFolder`),
+  ])
   return {
-    run: { HKCU: readApprovedMapSync(`HKCU\\${APPROVED_BASE}\\Run`), HKLM: readApprovedMapSync(`HKLM\\${APPROVED_BASE}\\Run`) },
-    run32: { HKCU: readApprovedMapSync(`HKCU\\${APPROVED_BASE}\\Run32`), HKLM: readApprovedMapSync(`HKLM\\${APPROVED_BASE}\\Run32`) },
-    folder: { user: readApprovedMapSync(`HKCU\\${APPROVED_BASE}\\StartupFolder`), common: readApprovedMapSync(`HKLM\\${APPROVED_BASE}\\StartupFolder`) },
+    run: { HKCU: run[0], HKLM: run[1] },
+    run32: { HKCU: run32[0], HKLM: run32[1] },
+    folder: { user: folderUser, common: folderCommon },
   }
 }
 
@@ -317,41 +316,41 @@ function isFolderEntryDisabled(entry, approved) {
   return approved.folder[entry.scope]?.get(entry.file.toLowerCase()) === true
 }
 
-function getEnabledMsixEntries() {
+async function getEnabledMsixEntries() {
   const cached = getMsixCached()
   let entries
   if (cached && cached.length > 0 && cached.every(e => e && e.aumid && e.taskId)) {
     entries = cached
     refreshMsixCache()
   } else {
-    entries = getMsixStartupEntries()
+    entries = await getMsixStartupEntries()
     try {
       fs.mkdirSync(path.dirname(MSIX_CACHE_FILE), { recursive: true })
       fs.writeFileSync(MSIX_CACHE_FILE, JSON.stringify(entries, null, 2), 'utf8')
     } catch {}
   }
 
-  return entries.filter(entry => {
-    const fresh = readMsixStateEnabled(entry.aumid, entry.taskId)
-    return fresh === null ? entry.enabled === true : fresh
-  })
+  const fresh = await Promise.all(entries.map(entry => readMsixStateEnabled(entry.aumid, entry.taskId)))
+  return entries.filter((entry, i) => (fresh[i] === null ? entry.enabled === true : fresh[i]))
 }
 
-function processAutostart() {
-  if (!isShellReplacement()) {
+async function processAutostart() {
+  if (!(await isShellReplacement())) {
     console.log('[autostart] Not the registered shell, skipping autostart')
     return
   }
 
   console.log('[autostart] Processing startup entries...')
 
-  const runEntries = getRunEntries(RUN_KEYS)
-  const runOnceEntries = getRunEntries(RUN_ONCE_KEYS)
+  const [runEntries, runOnceEntries, approved] = await Promise.all([
+    getRunEntries(RUN_KEYS),
+    getRunEntries(RUN_ONCE_KEYS),
+    readApprovedState(),
+  ])
   const folderEntries = getStartupFolderEntries()
-  const approved = readApprovedState()
 
   for (const entry of runOnceEntries) {
-    deleteRunOnceEntry(entry.registryKey, entry.name)
+    await deleteRunOnceEntry(entry.registryKey, entry.name)
   }
 
   const launchableEntries = [
@@ -360,13 +359,13 @@ function processAutostart() {
     ...folderEntries.filter(entry => !isBlockedEntry(entry) && !isFolderEntryDisabled(entry, approved)),
   ]
 
-  disableExplorerRestart()
+  await disableExplorerRestart()
 
   for (const entry of launchableEntries) {
     launchEntry(entry)
   }
 
-  const enabledMsix = getEnabledMsixEntries()
+  const enabledMsix = await getEnabledMsixEntries()
   if (enabledMsix.length > 0) {
     console.log(`[autostart] Launching ${enabledMsix.length} enabled MSIX startup apps...`)
     launchMsixApps(enabledMsix)

@@ -85,6 +85,7 @@ function createDesktopWindow(display) {
     skipTaskbar: true,
     focusable: false,
     transparent: false,
+    backgroundColor: '#1a1a2e',
     roundedCorners: false,
     thickFrame: false,
     webPreferences: {
@@ -308,6 +309,7 @@ function createSetupWindow() {
     resizable: false,
     center: true,
     transparent: false,
+    backgroundColor: '#001C30',
     skipTaskbar: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -498,7 +500,7 @@ function startShellMode() {
     }
   }
 
-  if (!isDev) processAutostart()
+  if (!isDev) setTimeout(() => { processAutostart().catch((e) => console.error('[autostart] processAutostart error:', e)) }, 1500)
 
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)
