@@ -9,6 +9,9 @@ export function useTiling() {
     hotkeys: true,
     dragToZone: false,
     dynamicLayout: 'bsp',
+    ratios: {},
+    handleOversized: true,
+    centerOversized: false,
   })
 
   useEffect(() => {

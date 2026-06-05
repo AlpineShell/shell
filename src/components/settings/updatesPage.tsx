@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw, ScrollText } from 'lucide-react'
+import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react'
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
 import { PageHeader, Spinner } from './appsShared'
@@ -22,14 +22,6 @@ function formatTime(timestamp: number): string {
   })
 }
 
-function formatLogTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-}
-
 function restart() {
   window.shell.system.powerAction('restart')
 }
@@ -38,10 +30,6 @@ export default function UpdatesPage() {
   const alpine = useUpdate()
   const windows = useWindowsUpdate()
   const didCheck = useRef(false)
-
-  const [showLogs, setShowLogs] = useState(false)
-  const [logs, setLogs] = useState<WindowsUpdateLogEntry[]>([])
-  const [logsLoading, setLogsLoading] = useState(false)
 
   useEffect(() => {
     if (didCheck.current) return
@@ -77,19 +65,6 @@ export default function UpdatesPage() {
     windows.check()
   }
 
-  async function toggleLogs() {
-    const next = !showLogs
-    setShowLogs(next)
-    if (next) {
-      setLogsLoading(true)
-      try {
-        setLogs(await windows.logs())
-      } finally {
-        setLogsLoading(false)
-      }
-    }
-  }
-
   return (
     <div className="flex flex-col gap-5 w-full">
       <PageHeader
@@ -103,16 +78,6 @@ export default function UpdatesPage() {
         })}
       >
         <div className="flex items-center gap-1">
-          <button
-            onClick={toggleLogs}
-            title="View Windows Update logs"
-            aria-label="View Windows Update logs"
-            className={`-m-1 p-1 inline-flex items-center justify-center transition-colors cursor-pointer ${
-              showLogs ? 'text-white/90' : 'text-white/50 hover:text-white/90'
-            }`}
-          >
-            <ScrollText size={16} />
-          </button>
           <button
             onClick={refresh}
             disabled={checking || installing || alpineBusy}
@@ -213,33 +178,6 @@ export default function UpdatesPage() {
               {windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''}
             </span>
           )}
-        </div>
-      )}
-
-      {showLogs && (
-        <div className="flex flex-col gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-white/40 px-1">Windows Update logs</span>
-          <div className="flex flex-col rounded-lg bg-neutral-900 border border-white/5 max-h-64 overflow-y-auto">
-            {logsLoading ? (
-              <div className="px-3 py-2.5 text-[12px] text-white/40">Loading logs…</div>
-            ) : logs.length === 0 ? (
-              <div className="px-3 py-2.5 text-[12px] text-white/40">No recent Windows Update activity.</div>
-            ) : (
-              logs.map((entry, i) => (
-                <div
-                  key={`${entry.time}-${i}`}
-                  className="flex items-start gap-3 px-3 py-1.5 border-b border-white/5 last:border-b-0"
-                >
-                  <span className="text-[11px] text-white/30 tabular-nums shrink-0 whitespace-nowrap pt-px">
-                    {formatLogTime(entry.time)}
-                  </span>
-                  <span className={`text-[12px] ${entry.level === 'Error' ? 'text-red-300/90' : 'text-white/70'}`}>
-                    {entry.message}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
         </div>
       )}
     </div>

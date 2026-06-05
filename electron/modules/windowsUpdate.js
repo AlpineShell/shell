@@ -341,33 +341,6 @@ function startInstall(targetUpdateId) {
   })
 }
 
-function readUpdateLogs() {
-  const script =
-    "$ErrorActionPreference='SilentlyContinue'; $e = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-WindowsUpdateClient/Operational' } -MaxEvents 50; $e | ForEach-Object { [pscustomobject]@{ time = $_.TimeCreated.ToString('o'); id = $_.Id; level = $_.LevelDisplayName; message = $_.Message } } | ConvertTo-Json -Compress"
-
-  return new Promise((resolve) => {
-    execFile(
-      'powershell',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
-      { maxBuffer: 8 * 1024 * 1024, timeout: 30000 },
-      (err, stdout) => {
-        if (err) return resolve([])
-        let parsed = []
-        try { parsed = JSON.parse((stdout || '').trim() || '[]') } catch { return resolve([]) }
-        if (!Array.isArray(parsed)) parsed = [parsed]
-        resolve(
-          parsed.map((entry) => ({
-            time: entry.time ? Date.parse(entry.time) : Date.now(),
-            id: Number(entry.id) || 0,
-            level: typeof entry.level === 'string' ? entry.level : '',
-            message: String(entry.message ?? '').split('\n')[0].trim(),
-          }))
-        )
-      }
-    )
-  })
-}
-
 module.exports = {
   handlers: {
     'windows-update/get-state': () => state,
@@ -375,7 +348,6 @@ module.exports = {
       try { shell.openExternal('ms-settings:windowsupdate') } catch {}
       return { ok: true }
     },
-    'windows-update/logs': () => readUpdateLogs(),
     'windows-update/check': async () => {
       if (state.status === 'checking' || state.status === 'downloading' || state.status === 'installing') {
         return state

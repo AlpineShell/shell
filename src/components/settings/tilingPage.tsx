@@ -81,8 +81,21 @@ export default function TilingPage() {
                 </select>
               </div>
               <p className="text-xs text-white/50 mt-3">
-                New windows tile into place instantly. Drag a tile onto another to swap their positions.
+                New windows tile into place instantly. Drag a tile onto another to swap their positions, or drag
+                the edge between two tiles to resize the split.
               </p>
+              <div className="flex items-center justify-between gap-4 mt-1">
+                <div className="min-w-0">
+                  <div className="text-sm">Split sizes</div>
+                  <div className="text-xs text-white/50 mt-0.5">Reset every layout back to even splits.</div>
+                </div>
+                <button
+                  onClick={() => setConfig({ ratios: {} })}
+                  className="shrink-0 h-8 px-3 inline-flex items-center rounded-md border border-white/10 bg-white/5 text-white/90 text-xs font-medium hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  Reset split sizes
+                </button>
+              </div>
             </Section>
           )}
 
@@ -104,6 +117,47 @@ export default function TilingPage() {
                 suffix="px"
                 onChange={(v) => setConfig({ margin: v })}
               />
+            </div>
+          </Section>
+
+          <Section title="Oversized windows">
+            <div className="flex flex-col gap-3">
+              <ToggleRow
+                label="Keep oversized windows on screen"
+                description="Apps with a large minimum size (e.g. GitHub Desktop) can't shrink to fit a tile. When on, they're kept fully visible instead of overflowing onto their neighbors."
+                checked={config.handleOversized}
+                onChange={(v) => setConfig({ handleOversized: v })}
+              />
+              {config.handleOversized && (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-sm">Placement</div>
+                    <div className="text-xs text-white/50 mt-0.5">
+                      {config.centerOversized
+                        ? 'Float the window centered on screen.'
+                        : 'Align the window to its zone edge.'}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => setConfig({ centerOversized: false })}
+                      className={`h-8 px-3 inline-flex items-center rounded-md border border-white/5 text-xs transition-colors cursor-pointer ${
+                        !config.centerOversized ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5'
+                      }`}
+                    >
+                      Edge
+                    </button>
+                    <button
+                      onClick={() => setConfig({ centerOversized: true })}
+                      className={`h-8 px-3 inline-flex items-center rounded-md border border-white/5 text-xs transition-colors cursor-pointer ${
+                        config.centerOversized ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5'
+                      }`}
+                    >
+                      Center
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </Section>
         </>

@@ -122,13 +122,6 @@ declare global {
     tier: WindowsUpdateTier
   }
 
-  interface WindowsUpdateLogEntry {
-    time: number
-    id: number
-    level: string
-    message: string
-  }
-
   interface WindowsUpdateState {
     status: WindowsUpdateStatus
     updates: WindowsUpdateItem[]
@@ -286,6 +279,12 @@ declare global {
   type TilingMode = 'snap' | 'dynamic'
   type TilingDynamicLayout = 'bsp' | 'columns' | 'master-stack'
 
+  interface TilingRatios {
+    'master-stack'?: Record<string, { master: number; stack?: number[] }>
+    columns?: Record<string, { widths: number[] }>
+    bsp?: Record<string, { nodes: Record<string, number> }>
+  }
+
   interface TilingConfig {
     enabled: boolean
     mode: TilingMode
@@ -294,6 +293,9 @@ declare global {
     hotkeys: boolean
     dragToZone: boolean
     dynamicLayout: TilingDynamicLayout
+    ratios: TilingRatios
+    handleOversized: boolean
+    centerOversized: boolean
   }
 
   interface Window {
@@ -478,7 +480,6 @@ declare global {
         check: () => Promise<WindowsUpdateState>
         install: (updateId?: string) => Promise<WindowsUpdateState>
         openWindowsUpdate: () => Promise<{ ok: boolean }>
-        logs: () => Promise<WindowsUpdateLogEntry[]>
         onStateChanged: (callback: (state: WindowsUpdateState) => void) => void
       }
       tiling: {
