@@ -1,4 +1,4 @@
-const { spawn } = require('child_process')
+const { spawn, execFile } = require('child_process')
 
 const TYPE_DEFINITION = [
   'Add-Type -TypeDefinition @\'',
@@ -53,11 +53,24 @@ function escapeForSingleQuote(value) {
   return String(value).replace(/'/g, "''").replace(/[\r\n]/g, '')
 }
 
-function activate(aumid) {
-  if (!aumid) return
+function isPackagedAumid(appId) {
+  return appId.includes('!')
+}
+
+function activatePackaged(aumid) {
   ensureProcess()
   const safe = escapeForSingleQuote(aumid)
   ps.stdin.write(`try { $__hr = [AlpineAppActivator]::Activate('${safe}'); if ($__hr -ne 0) { [Console]::Out.WriteLine('ALPINE_ACT_FAIL ${safe} ' + ('0x{0:X8}' -f $__hr)) } } catch { [Console]::Out.WriteLine('ALPINE_ACT_FAIL ${safe} ' + $_.Exception.Message) }\n`)
+}
+
+function activateViaAppsFolder(appId) {
+  execFile('explorer.exe', [`shell:AppsFolder\\${appId}`], { windowsHide: true })
+}
+
+function activate(appId) {
+  if (!appId) return
+  if (isPackagedAumid(appId)) activatePackaged(appId)
+  else activateViaAppsFolder(appId)
 }
 
 function warm() {
