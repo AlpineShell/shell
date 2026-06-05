@@ -7,6 +7,7 @@ const os = require('os')
 const autostart = require('./autostart')
 const knownApps = require('../knownApps')
 const appIcons = require('./appIcons')
+const appActivator = require('../appActivator')
 const { APPROVED_BASE, APPROVED_ENABLED, APPROVED_DISABLED, parseApprovedMap } = require('./startupState')
 
 const CPU_CORES = os.cpus().length || 1
@@ -975,7 +976,7 @@ function openApp({ id }) {
   if (!app) return { ok: false }
   try {
     if (app.launchKind === 'exe' && app.launchTarget) { shell.openPath(app.launchTarget); return { ok: true } }
-    if (app.launchKind === 'aumid' && app.launchTarget) { exec(`explorer.exe shell:AppsFolder\\${app.launchTarget}`, { windowsHide: true }); return { ok: true } }
+    if (app.launchKind === 'aumid' && app.launchTarget) { appActivator.activate(app.launchTarget); return { ok: true } }
     if (app.installLocation) { shell.openPath(app.installLocation); return { ok: true } }
   } catch {}
   return { ok: false }

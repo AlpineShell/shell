@@ -5,6 +5,7 @@ const { execFile, exec } = require('child_process')
 const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow } = require('./winFocus')
 const appIcons = require('./appIcons')
 const appManager = require('./appManager')
+const appActivator = require('../appActivator')
 
 const SCAN_DIRS = [
   path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -298,24 +299,23 @@ function launchItem(item) {
     electronShell.openPath(item.lnkPath).then((err) => {
       if (err) {
         console.error('[launcher] openPath failed for', item.lnkPath, '-', err)
-        execFile('explorer.exe', [item.lnkPath], (e) => {
-          if (e && e.code !== 1) console.error('[launcher] explorer fallback error:', e.message)
+        execFile('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${item.lnkPath.replace(/'/g, "''")}'`], { windowsHide: true }, (e) => {
+          if (e) console.error('[launcher] start-process fallback error:', e.message)
         })
       }
     })
   } else if (item.appId) {
-    execFile('explorer.exe', [`shell:AppsFolder\\${item.appId}`], { windowsHide: true }, (e) => {
-      if (e && e.code !== 1) console.error('[launcher] launch app error:', e.message)
-    })
+    appActivator.activate(item.appId)
   }
   return { success: true }
 }
 
 function launchAdminItem(item) {
   if (!item) return { success: false }
-  const target = item.lnkPath || (item.appId ? `shell:AppsFolder\\${item.appId}` : null)
-  if (target) {
-    exec(`powershell -NoProfile -Command "Start-Process '${target.replace(/'/g, "''")}' -Verb RunAs"`, { windowsHide: true })
+  if (item.lnkPath) {
+    exec(`powershell -NoProfile -Command "Start-Process '${item.lnkPath.replace(/'/g, "''")}' -Verb RunAs"`, { windowsHide: true })
+  } else if (item.appId) {
+    appActivator.activate(item.appId)
   }
   return { success: true }
 }
@@ -393,6 +393,7 @@ module.exports = {
   handleBlur,
   start(b) {
     broadcast = b
+    appActivator.warm()
     buildIndex().catch((e) => console.error('[launcher] initial index error:', e.message))
     watchScanDirs()
   },
