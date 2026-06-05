@@ -100,6 +100,8 @@ let dragStartZone = null
 let dragStartDisplayId = null
 let dragStartRect = null
 let dragWatchdog = null
+let liveResizeTimer = null
+let liveResizeContext = null
 
 const DYNAMIC_APPLY_DELAYS = [8, 24, 80, 200, 420]
 const DRAG_WATCHDOG_MS = 4000
@@ -107,6 +109,7 @@ const RESIZE_THRESHOLD = 6
 const MIN_FRACTION = 0.05
 const OVERSIZE_TOLERANCE = 8
 const SNAP_CORRECT_DELAY = 60
+const LIVE_RESIZE_INTERVAL = 16
 
 function toNum(v) {
   return typeof v === 'bigint' ? Number(v) : v
@@ -885,6 +888,7 @@ function clearDragWatchdog() {
 
 function resetDragState() {
   clearDragWatchdog()
+  stopLiveResize()
   dragActive = false
   dragHwnd = 0
   dragMode = null
@@ -912,6 +916,7 @@ function handleDragStart(hwnd) {
     dragMode = 'dynamic'
     dragStartRect = readRect(hwnd)
     armDragWatchdog()
+    startLiveResize(hwnd)
   } else if (config.mode === 'snap' && config.dragToZone) {
     dragActive = true
     dragHwnd = hwnd
@@ -995,9 +1000,8 @@ function clampRatio(value) {
   return Math.max(MIN_FRACTION, Math.min(1 - MIN_FRACTION, value))
 }
 
-function writeBspFromEdge(prev, moved) {
+function writeBspFromEdge(prev, moved, store) {
   const count = prev.count
-  const store = getRatioStore('bsp', count)
   const subs = spiralSubRects(count)
   if (moved.vertical) {
     const oldF = splitFractionX(moved.vertical.oldEdge, moved.vertical.side, moved)
@@ -1033,9 +1037,8 @@ function writeBspFromEdge(prev, moved) {
   }
 }
 
-function writeRatioFromEdge(layout, prev, moved) {
-  if (layout === 'bsp') { writeBspFromEdge(prev, moved); return }
-  const store = getRatioStore(layout, prev.count)
+function writeRatioFromEdge(layout, prev, moved, store) {
+  if (layout === 'bsp') { writeBspFromEdge(prev, moved, store); return }
   if (layout === 'master-stack') {
     if (moved.vertical && prev.count > 1) {
       store.master = clampRatio(splitFractionX(moved.vertical.newEdge, moved.vertical.side, moved))
@@ -1069,9 +1072,8 @@ function interpolateMoved(moved, t) {
   return { ...moved, vertical: scale(moved.vertical), horizontal: scale(moved.horizontal) }
 }
 
-function tiledLayoutFits(ordered, display) {
-  const ratioStore = getRatioStore(config.dynamicLayout, ordered.length)
-  const rects = computeLayout(ordered.length, ratioStore)
+function storeFits(store, ordered, display) {
+  const rects = computeLayout(ordered.length, store)
   for (let i = 0; i < ordered.length; i++) {
     const min = minSizeByHwnd.get(ordered[i])
     if (!min) continue
@@ -1079,6 +1081,25 @@ function tiledLayoutFits(ordered, display) {
     if (cell.width < min.w - OVERSIZE_TOLERANCE || cell.height < min.h - OVERSIZE_TOLERANCE) return false
   }
   return true
+}
+
+function computeResizedStore(layout, prev, moved, ordered, display) {
+  const real = getRatioStore(layout, prev.count)
+  const result = cloneRatioEntry(real)
+  writeRatioFromEdge(layout, prev, moved, result)
+  if (config.handleOversized && ordered && ordered.length === prev.count && !storeFits(result, ordered, display)) {
+    let low = 0
+    let high = 1
+    let best = null
+    for (let iter = 0; iter < 14; iter++) {
+      const mid = (low + high) / 2
+      const cand = cloneRatioEntry(real)
+      writeRatioFromEdge(layout, prev, interpolateMoved(moved, mid), cand)
+      if (storeFits(cand, ordered, display)) { best = cand; low = mid } else high = mid
+    }
+    return best || cloneRatioEntry(real)
+  }
+  return result
 }
 
 function rescueFloated(hwnd, prev) {
@@ -1104,38 +1125,67 @@ function applyResizeToRatios(hwnd) {
   if (!moved) return
 
   const layout = config.dynamicLayout
+  const ordered = orderedForDisplay(enumManageableWindows().filter((h) => displayForWindow(h).id === display.id))
+  const resized = computeResizedStore(layout, prev, moved, ordered, display)
   getRatioStore(layout, prev.count)
-  const byCount = config.ratios[layout]
-  const key = String(prev.count)
-  const backup = cloneRatioEntry(byCount[key])
-
-  writeRatioFromEdge(layout, prev, moved)
-
-  if (config.handleOversized) {
-    const ordered = orderedForDisplay(
-      enumManageableWindows().filter((h) => displayForWindow(h).id === display.id)
-    )
-    if (ordered.length === prev.count && !tiledLayoutFits(ordered, display)) {
-      let low = 0
-      let high = 1
-      let best = null
-      for (let iter = 0; iter < 14; iter++) {
-        const mid = (low + high) / 2
-        byCount[key] = cloneRatioEntry(backup)
-        writeRatioFromEdge(layout, prev, interpolateMoved(moved, mid))
-        if (tiledLayoutFits(ordered, display)) {
-          best = cloneRatioEntry(byCount[key])
-          low = mid
-        } else {
-          high = mid
-        }
-      }
-      byCount[key] = best || cloneRatioEntry(backup)
-    }
-  }
-
+  config.ratios[layout][String(prev.count)] = resized
   saveConfig()
   if (broadcastRef) broadcastRef('tiling/config-changed', config)
+}
+
+function liveTile(hwnd, normRect, display) {
+  if (!hwnd || !IsWindow(hwnd)) return
+  const dipRect = zoneRectDip(display, normRect)
+  let physical
+  try {
+    physical = screen.dipToScreenRect(null, dipRect)
+  } catch {
+    physical = dipRect
+  }
+  const insets = frameInsets(hwnd)
+  SetWindowPos(
+    hwnd,
+    0,
+    physical.x - insets.left,
+    physical.y - insets.top,
+    physical.width + insets.left + insets.right,
+    physical.height + insets.top + insets.bottom,
+    SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS
+  )
+}
+
+function liveResizeTick() {
+  try {
+    const ctx = liveResizeContext
+    if (!ctx || !dragActive || dragHwnd !== ctx.hwnd || !IsWindow(ctx.hwnd)) { stopLiveResize(); return }
+    if (!wasResized(dragStartRect, readRect(ctx.hwnd))) return
+    const content = contentDipRect(ctx.hwnd)
+    if (!content) return
+    const moved = detectMovedEdge(ctx.prev.dipRect, content, ctx.display)
+    if (!moved) return
+    const live = computeResizedStore(config.dynamicLayout, ctx.prev, moved, ctx.ordered, ctx.display)
+    const rects = computeLayout(ctx.ordered.length, live)
+    for (let i = 0; i < ctx.ordered.length; i++) {
+      if (ctx.ordered[i] === ctx.hwnd) continue
+      try { liveTile(ctx.ordered[i], rects[i], ctx.display) } catch (e) { /* skip */ }
+    }
+  } catch (e) { /* skip */ }
+}
+
+function startLiveResize(hwnd) {
+  stopLiveResize()
+  const prev = lastAppliedDipByHwnd.get(hwnd)
+  if (!prev || prev.layoutIndex < 0) return
+  const display = screen.getAllDisplays().find((d) => d.id === prev.displayId) || displayForWindow(hwnd)
+  const ordered = orderedForDisplay(enumManageableWindows().filter((h) => displayForWindow(h).id === display.id))
+  if (ordered.length < 2 || ordered.length !== prev.count) return
+  liveResizeContext = { hwnd, prev, display, ordered }
+  liveResizeTimer = setInterval(liveResizeTick, LIVE_RESIZE_INTERVAL)
+}
+
+function stopLiveResize() {
+  if (liveResizeTimer) { clearInterval(liveResizeTimer); liveResizeTimer = null }
+  liveResizeContext = null
 }
 
 function handleDynamicDrop(draggedHwnd, startRect) {
