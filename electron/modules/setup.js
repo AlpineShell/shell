@@ -116,13 +116,16 @@ function setStartup() {
 }
 
 function ensureShellRegistration() {
-  if (!app.isPackaged) return
-  if (hasGpoShellOverride()) return
+  if (!app.isPackaged) return null
+  if (hasGpoShellOverride()) return null
 
   const desiredShell = getShellExePath()
-  const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
+  let currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
   if (currentShell !== desiredShell) {
-    try { regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', desiredShell) } catch {}
+    try {
+      regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', desiredShell)
+      currentShell = desiredShell
+    } catch {}
   }
 
   const desiredRun = `"${installer.getInstalledExePath()}"`
@@ -130,6 +133,8 @@ function ensureShellRegistration() {
   if (currentRun !== desiredRun) {
     try { regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', desiredRun) } catch {}
   }
+
+  return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
 }
 
 function hasGpoShellOverride() {

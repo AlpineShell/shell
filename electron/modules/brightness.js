@@ -79,16 +79,30 @@ function cleanName(physName, deviceName, index) {
 }
 
 
-function detectInternalDisplay() {
+function isInternalVideoOutput(values) {
+  return values.some(v => v === 16 || v === 2147483648 || v === 6 || v === 11 || v === 13)
+}
+
+const INTERNAL_PROBE_CMD =
+  'powershell -NoProfile -Command "' +
+  "$ErrorActionPreference='SilentlyContinue';$v='';$b='';" +
+  "try{$v=((Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorConnectionParams).VideoOutputTechnology -join ',')}catch{};" +
+  "try{$b=(@((Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness)[0])}catch{};" +
+  "($v + '#' + $b)" +
+  '"'
+
+function probeInternalAndBrightness() {
   return new Promise((resolve) => {
-    exec(
-      'powershell -NoProfile -Command "(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorConnectionParams).VideoOutputTechnology"',
-      (err, stdout) => {
-        if (err) return resolve(false)
-        const values = stdout.trim().split(/\r?\n/).map(v => parseInt(v.trim(), 10)).filter(v => !isNaN(v))
-        resolve(values.some(v => v === 16 || v === 2147483648 || v === 6 || v === 11 || v === 13))
-      }
-    )
+    exec(INTERNAL_PROBE_CMD, (err, stdout) => {
+      if (err) return resolve({ hasInternal: false, brightness: null })
+      const line = (stdout || '').trim()
+      const sep = line.indexOf('#')
+      const votPart = sep >= 0 ? line.slice(0, sep) : line
+      const brPart = sep >= 0 ? line.slice(sep + 1) : ''
+      const values = votPart.split(',').map(v => parseInt(v.trim(), 10)).filter(v => !isNaN(v))
+      const brightness = parseInt(brPart.trim(), 10)
+      resolve({ hasInternal: isInternalVideoOutput(values), brightness: isNaN(brightness) ? null : brightness })
+    })
   })
 }
 
@@ -226,20 +240,24 @@ async function enumerate() {
     }
   }
 
-  if (hasInternalDisplay === null) hasInternalDisplay = await detectInternalDisplay()
+  let internalBrightness
+  if (hasInternalDisplay === null) {
+    const probe = await probeInternalAndBrightness()
+    hasInternalDisplay = probe.hasInternal
+    internalBrightness = probe.brightness
+  } else if (hasInternalDisplay) {
+    internalBrightness = await wmiGetBrightness()
+  }
 
-  if (hasInternalDisplay) {
-    const wmiBrightness = await wmiGetBrightness()
-    if (wmiBrightness !== null) {
-      newMonitors.push({
-        id: 'internal',
-        name: 'Built-in Display',
-        type: 'internal',
-        brightness: wmiBrightness,
-        hMon: null,
-        ddcMax: null,
-      })
-    }
+  if (hasInternalDisplay && internalBrightness != null) {
+    newMonitors.push({
+      id: 'internal',
+      name: 'Built-in Display',
+      type: 'internal',
+      brightness: internalBrightness,
+      hMon: null,
+      ddcMax: null,
+    })
   }
 
   monitors = newMonitors
