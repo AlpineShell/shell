@@ -3,7 +3,7 @@
 # Alpine Shell 
 A Windows desktop shell.
 
-## Requirements
+## Requirements 
 
 - Windows 10/11 
 - Node.js 18+
