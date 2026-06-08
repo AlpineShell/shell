@@ -17,7 +17,8 @@ export function useFlyUnderBar(
   cornerRefs: React.RefObject<HTMLElement | SVGElement | null>[],
   cornerSize: number,
   active: boolean,
-  closing: boolean
+  closing: boolean,
+  instantEnter = false
 ) {
   const frameRef = useRef(0);
 
@@ -41,6 +42,11 @@ export function useFlyUnderBar(
       body.style.transform = `translateY(${bodyOffset}px)`;
       for (const corner of corners) corner.style.transform = `translateY(${cornerOffset}px)`;
     };
+
+    if (!closing && instantEnter) {
+      apply(0);
+      return;
+    }
 
     apply(from);
 

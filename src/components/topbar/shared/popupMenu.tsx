@@ -4,10 +4,12 @@ import { useTopbarBg, useDarkText, useFullscreenWindow, useMenuOpenChange } from
 import { useFlyUnderBar } from "../../../hooks/useFlyUnderBar";
 
 const CORNER = 16;
-
-let forceCloseActive: (() => void) | null = null;
-
 const SCREEN_PAD = 0;
+const SLIDE_MS = 320;
+
+type MenuGeometry = { center: number; width: number; height: number };
+
+let activeMenu: { close: () => void; measure: () => MenuGeometry | null } | null = null;
 
 interface PopupMenuProps {
     trigger: ReactNode;
@@ -24,6 +26,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     const wrapperRef = useRef<HTMLDivElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
     const bodyRef = useRef<HTMLDivElement>(null);
+    const boxRef = useRef<HTMLDivElement>(null);
     const cornerLeftRef = useRef<SVGSVGElement>(null);
     const cornerRightRef = useRef<SVGSVGElement>(null);
     const [open, setOpen] = useState(false);
@@ -31,36 +34,105 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
     const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const closeAnimTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const suppressHeight = useRef(false);
+    const suppressReset = useRef(false);
+    const morphFromRef = useRef<MenuGeometry | null>(null);
+    const morphingRef = useRef(false);
 
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
 
-    useFlyUnderBar(bodyRef, [cornerLeftRef, cornerRightRef], CORNER, open, closing);
+    const selfRef = useRef<{ close: () => void; measure: () => MenuGeometry | null } | null>(null);
+    if (!selfRef.current) {
+        selfRef.current = {
+            measure: () => {
+                const box = boxRef.current;
+                if (!box) return null;
+                const rect = box.getBoundingClientRect();
+                if (rect.width <= 0) return null;
+                return { center: rect.left + rect.width / 2, width: rect.width, height: rect.height };
+            },
+            close: () => {
+                clearTimeout(closeTimer.current);
+                clearTimeout(closeAnimTimer.current);
+                suppressReset.current = true;
+                setOpen(false);
+                setClosing(false);
+            },
+        };
+    }
+
+    useFlyUnderBar(bodyRef, [cornerLeftRef, cornerRightRef], CORNER, open, closing, morphFromRef.current !== null);
 
     useEffect(() => {
         if (open) {
             onOpenRef.current?.();
         } else {
-            onMenuOpenChange(false);
-            if (!suppressHeight.current) window.topbar.setHeight(24);
-            suppressHeight.current = false;
+            if (!suppressReset.current) {
+                onMenuOpenChange(false);
+                window.topbar.setHeight(24);
+            }
+            suppressReset.current = false;
         }
     }, [open]);
 
-    function reportMenuBounds() {
-        requestAnimationFrame(() => {
-            if (popupRef.current) {
-                const rect = popupRef.current.getBoundingClientRect();
-                onMenuOpenChange(true, { left: rect.left - CORNER, right: rect.right + CORNER });
-            }
-        });
+    function reportBounds(center: number, width: number) {
+        onMenuOpenChange(true, { left: center - width / 2 - CORNER, right: center + width / 2 + CORNER });
     }
 
     useLayoutEffect(() => {
         if (!open) return;
         repositionPopup();
-        reportMenuBounds();
+    }, [open]);
+
+    useLayoutEffect(() => {
+        if (!open) return;
+        const popup = popupRef.current;
+        const box = boxRef.current;
+        const wrapper = wrapperRef.current;
+        if (!popup || !box || !wrapper) return;
+
+        box.style.width = "";
+        box.style.height = "";
+        const boxRect = box.getBoundingClientRect();
+        const width = boxRect.width;
+        const height = boxRect.height;
+        const triggerRect = wrapper.getBoundingClientRect();
+        const triggerCenter = triggerRect.left + triggerRect.width / 2;
+        const left = Math.max(SCREEN_PAD, Math.min(triggerCenter - width / 2, window.innerWidth - width - SCREEN_PAD));
+        const center = left + width / 2;
+        reportBounds(center, width);
+
+        const from = morphFromRef.current;
+        morphFromRef.current = null;
+        if (!from || from.width <= 0) return;
+
+        morphingRef.current = true;
+        let raf = 0;
+        let startTime = 0;
+        const step = (now: number) => {
+            if (!startTime) startTime = now;
+            const progress = Math.min(1, (now - startTime) / SLIDE_MS);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const c = from.center + (center - from.center) * eased;
+            const w = from.width + (width - from.width) * eased;
+            const h = from.height + (height - from.height) * eased;
+            popup.style.transform = `translateX(${(c - center) - (w - width) / 2}px)`;
+            box.style.width = `${w}px`;
+            box.style.height = `${h}px`;
+            if (progress < 1) {
+                raf = requestAnimationFrame(step);
+            } else {
+                box.style.width = "";
+                box.style.height = "";
+                popup.style.transform = "";
+                morphingRef.current = false;
+            }
+        };
+        raf = requestAnimationFrame(step);
+        return () => {
+            cancelAnimationFrame(raf);
+            morphingRef.current = false;
+        };
     }, [open]);
 
     useEffect(() => {
@@ -69,11 +141,13 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         if (!popup) return;
         let prevWidth = popup.offsetWidth;
         const observer = new ResizeObserver((entries) => {
+            if (morphingRef.current) return;
             const width = entries[0]?.contentRect.width ?? popup.offsetWidth;
             if (width === prevWidth) return;
             prevWidth = width;
             repositionPopup();
-            reportMenuBounds();
+            const geometry = selfRef.current?.measure();
+            if (geometry) reportBounds(geometry.center, geometry.width);
         });
         observer.observe(popup);
         return () => observer.disconnect();
@@ -85,9 +159,15 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         return () => remove();
     }, [open]);
 
+    useEffect(() => () => {
+        clearTimeout(closeTimer.current);
+        clearTimeout(closeAnimTimer.current);
+        if (activeMenu === selfRef.current) activeMenu = null;
+    }, []);
+
     function triggerClose() {
+        if (activeMenu === selfRef.current) activeMenu = null;
         setClosing(true);
-        forceCloseActive = null;
         closeAnimTimer.current = setTimeout(() => {
             setOpen(false);
             setClosing(false);
@@ -109,22 +189,21 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         clearTimeout(closeTimer.current);
         clearTimeout(closeAnimTimer.current);
         setClosing(false);
-        if (!open) {
-            if (forceCloseActive) forceCloseActive();
-            if (wrapperRef.current) {
-                const rect = wrapperRef.current.getBoundingClientRect();
-                setPopupStyle({ position: "fixed", top: Math.round(rect.bottom), left: -9999 });
-            }
-            window.topbar.setHeight(500);
-            requestAnimationFrame(() => setOpen(true));
+        const other = activeMenu && activeMenu !== selfRef.current ? activeMenu : null;
+        if (other) {
+            morphFromRef.current = other.measure();
+            other.close();
+        } else if (!open) {
+            morphFromRef.current = null;
         }
-        forceCloseActive = () => {
-            clearTimeout(closeTimer.current);
-            clearTimeout(closeAnimTimer.current);
-            suppressHeight.current = true;
-            setOpen(false);
-            setClosing(false);
-        };
+        activeMenu = selfRef.current;
+        if (open) return;
+        if (wrapperRef.current) {
+            const rect = wrapperRef.current.getBoundingClientRect();
+            setPopupStyle({ position: "fixed", top: Math.round(rect.bottom), left: -9999 });
+        }
+        window.topbar.setHeight(500);
+        requestAnimationFrame(() => setOpen(true));
     }
 
     function handleLeave() {
@@ -175,6 +254,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                     <div ref={bodyRef}>
                         <div style={{ position: "relative" }}>
                             <div
+                                ref={boxRef}
                                 className="overflow-hidden rounded-b-2xl shadow-xl"
                                 style={{ backgroundColor: BG }}
                             >
