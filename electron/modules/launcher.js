@@ -228,7 +228,7 @@ function animatedHide() {
     topBar.setFocusable(false)
     if (typeof topBar.restorePassiveTopBar === 'function') topBar.restorePassiveTopBar()
     else topBar.setAlwaysOnTop(false)
-  }, 110)
+  }, 300)
 }
 
 function showLauncher(displayId) {

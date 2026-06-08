@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play } from "lucide-react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
+import { useFlyUnderBar } from "../../hooks/useFlyUnderBar"
 
 const CORNER = 12
 const MAX_RESULTS = 5
@@ -236,6 +237,11 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const cornerLeftRef = useRef<HTMLDivElement>(null)
+  const cornerRightRef = useRef<HTMLDivElement>(null)
+
+  useFlyUnderBar(bodyRef, [cornerLeftRef, cornerRightRef], CORNER, true, closing)
 
   const sortedWallpapers = useMemo(() => {
     if (!query.trim()) return wallpapers
@@ -606,15 +612,15 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     >
       <div
         ref={panelRef}
-        className={`absolute ${closing ? "menu-exit" : "menu-enter"}`}
-        style={{ top: 24, left, width: panelWidth, outline: "none", transition: WIDTH_TRANSITION }}
+        className="absolute"
+        style={{ top: 24, left, width: panelWidth, outline: "none", transition: WIDTH_TRANSITION, clipPath: "inset(0 -2000px -2000px -2000px)" }}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={contextOpen ? handleKey : undefined}
         tabIndex={-1}
       >
-        <div className="absolute top-0 right-full" style={{ width: CORNER, height: CORNER, background: cornerBg }} />
-        <div className="absolute top-0 left-full" style={{ width: CORNER, height: CORNER, background: cornerBgRight }} />
-        <div className="relative">
+        <div ref={cornerLeftRef} className="absolute top-0 right-full" style={{ width: CORNER, height: CORNER, background: cornerBg }} />
+        <div ref={cornerRightRef} className="absolute top-0 left-full" style={{ width: CORNER, height: CORNER, background: cornerBgRight }} />
+        <div ref={bodyRef} className="relative">
           <div className="overflow-hidden rounded-b-xl shadow-2xl flex flex-col" style={{ backgroundColor: bg, transition: "background-color 300ms ease" }}>
             <div className={`flex items-center gap-2 px-4 h-12 shrink-0 ${textColor}`}>
               {contextOpen ? (

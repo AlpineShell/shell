@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTopbarBg, useDarkText, useFullscreenWindow, useMenuOpenChange } from "../../themeContext";
+import { useFlyUnderBar } from "../../../hooks/useFlyUnderBar";
 
 const CORNER = 16;
 
@@ -22,6 +23,9 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     const onMenuOpenChange = useMenuOpenChange();
     const wrapperRef = useRef<HTMLDivElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const cornerLeftRef = useRef<SVGSVGElement>(null);
+    const cornerRightRef = useRef<SVGSVGElement>(null);
     const [open, setOpen] = useState(false);
     const [closing, setClosing] = useState(false);
     const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
@@ -31,6 +35,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
 
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
+
+    useFlyUnderBar(bodyRef, [cornerLeftRef, cornerRightRef], CORNER, open, closing);
 
     useEffect(() => {
         if (open) {
@@ -85,7 +91,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         closeAnimTimer.current = setTimeout(() => {
             setOpen(false);
             setClosing(false);
-        }, 100);
+        }, 300);
     }
 
     function repositionPopup() {
@@ -139,12 +145,13 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             {open && createPortal(
                 <div
                     ref={popupRef}
-                    className={`z-5 ${closing ? "menu-exit" : "menu-enter"}`}
+                    className="z-5"
                     style={popupStyle}
                     onMouseEnter={handleEnter}
                     onMouseLeave={handleLeave}
                 >
                     <svg
+                        ref={cornerLeftRef}
                         className="absolute right-full"
                         width={CORNER}
                         height={CORNER}
@@ -155,6 +162,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                         {borderColor && <path d={`M0 0 A${CORNER} ${CORNER} 0 0 1 ${CORNER} ${CORNER}`} fill="none" stroke={borderColor} strokeWidth={1} />}
                     </svg>
                     <svg
+                        ref={cornerRightRef}
                         className="absolute left-full"
                         width={CORNER}
                         height={CORNER}
@@ -164,27 +172,29 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                         <path d={`M${CORNER} 0 H0 V${CORNER} A${CORNER} ${CORNER} 0 0 1 ${CORNER} 0 Z`} fill={BG} />
                         {borderColor && <path d={`M${CORNER} 0 A${CORNER} ${CORNER} 0 0 0 0 ${CORNER}`} fill="none" stroke={borderColor} strokeWidth={1} />}
                     </svg>
-                    <div style={{ position: "relative" }}>
-                        <div
-                            className="overflow-hidden rounded-b-2xl shadow-xl"
-                            style={{ backgroundColor: BG }}
-                        >
-                            {children}
+                    <div ref={bodyRef}>
+                        <div style={{ position: "relative" }}>
+                            <div
+                                className="overflow-hidden rounded-b-2xl shadow-xl"
+                                style={{ backgroundColor: BG }}
+                            >
+                                {children}
+                            </div>
+                            {borderColor && (
+                                <div style={{
+                                    position: "absolute",
+                                    top: CORNER - 0.5,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    borderLeft: `1px solid ${borderColor}`,
+                                    borderRight: `1px solid ${borderColor}`,
+                                    borderBottom: `1px solid ${borderColor}`,
+                                    borderRadius: "0 0 16px 16px",
+                                    pointerEvents: "none",
+                                }} />
+                            )}
                         </div>
-                        {borderColor && (
-                            <div style={{
-                                position: "absolute",
-                                top: CORNER - 0.5,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                borderLeft: `1px solid ${borderColor}`,
-                                borderRight: `1px solid ${borderColor}`,
-                                borderBottom: `1px solid ${borderColor}`,
-                                borderRadius: "0 0 16px 16px",
-                                pointerEvents: "none",
-                            }} />
-                        )}
                     </div>
                 </div>,
                 document.body
