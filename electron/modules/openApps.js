@@ -1,7 +1,9 @@
 const { execFile } = require('child_process')
+const { app } = require('electron')
 const os = require('os')
 const fs = require('fs')
 const path = require('path')
+const koffi = require('koffi')
 const appIcons = require('./appIcons')
 
 let lastSnapshot = null
@@ -15,6 +17,35 @@ let queryReady = false
 let lastApps = null
 let shellAppsProvider = null
 let broadcastFn = null
+
+const user32 = koffi.load('user32.dll')
+const OPEN_APPS_WIN_EVENT_PROC = koffi.proto('__stdcall', 'OpenAppsWinEventProc', 'void', ['uintptr_t', 'uint32', 'uintptr_t', 'int32', 'int32', 'uint32', 'uint32'])
+const SetWinEventHook = user32.func('__stdcall', 'SetWinEventHook', 'uintptr_t', ['uint32', 'uint32', 'uintptr_t', 'OpenAppsWinEventProc *', 'uint32', 'uint32', 'uint32'])
+const UnhookWinEvent = user32.func('__stdcall', 'UnhookWinEvent', 'int', ['uintptr_t'])
+
+const EVENT_OBJECT_CREATE = 0x8000
+const EVENT_OBJECT_HIDE = 0x8003
+const EVENT_OBJECT_NAMECHANGE = 0x800c
+const WINEVENT_OUTOFCONTEXT = 0x0000
+const WINEVENT_SKIPOWNPROCESS = 0x0002
+const OBJID_WINDOW = 0
+const CHILDID_SELF = 0
+
+const REFRESH_DEBOUNCE_MS = 300
+const BACKSTOP_INTERVAL_MS = 30000
+const FALLBACK_POLL_MS = 2000
+
+let winEventProcPointer = null
+let lifecycleHookHandle = null
+let nameChangeHookHandle = null
+let refreshTimer = null
+let backstopInterval = null
+let refreshing = false
+let refreshQueued = false
+
+function toNum(v) {
+  return typeof v === 'bigint' ? Number(v) : v
+}
 
 function withShellApps(apps) {
   const extras = shellAppsProvider ? shellAppsProvider() : []
@@ -147,6 +178,76 @@ function snapshot(apps) {
   return JSON.stringify(apps.map((a) => ({ hwnd: a.hwnd, title: a.title })).sort((a, b) => a.hwnd - b.hwnd))
 }
 
+async function refreshOpenApps() {
+  if (!broadcastFn) return
+  if (refreshing) { refreshQueued = true; return }
+  refreshing = true
+  try {
+    lastApps = await getOpenApps()
+    const merged = withShellApps(lastApps)
+    const current = snapshot(merged)
+    if (current !== lastSnapshot) {
+      lastSnapshot = current
+      broadcastFn('windows/open-apps-changed', merged)
+    }
+  } finally {
+    refreshing = false
+    if (refreshQueued) {
+      refreshQueued = false
+      scheduleRefresh()
+    }
+  }
+}
+
+function scheduleRefresh() {
+  if (refreshTimer) clearTimeout(refreshTimer)
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null
+    refreshOpenApps()
+  }, REFRESH_DEBOUNCE_MS)
+}
+
+function onWindowEvent(_hook, _event, _hwnd, idObject, idChild) {
+  try {
+    if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
+    scheduleRefresh()
+  } catch (e) {
+    console.error('[openApps] win event error:', e?.message ?? e)
+  }
+}
+
+function installWindowEventHooks() {
+  try {
+    winEventProcPointer = koffi.register(onWindowEvent, koffi.pointer(OPEN_APPS_WIN_EVENT_PROC))
+    lifecycleHookHandle = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE, 0, winEventProcPointer, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)
+    nameChangeHookHandle = SetWinEventHook(EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_NAMECHANGE, 0, winEventProcPointer, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)
+    if (!toNum(lifecycleHookHandle) && !toNum(nameChangeHookHandle)) {
+      uninstallWindowEventHooks()
+      return false
+    }
+    return true
+  } catch (e) {
+    console.error('[openApps] win event hook install error:', e?.message ?? e)
+    uninstallWindowEventHooks()
+    return false
+  }
+}
+
+function uninstallWindowEventHooks() {
+  if (lifecycleHookHandle) {
+    try { UnhookWinEvent(lifecycleHookHandle) } catch {}
+    lifecycleHookHandle = null
+  }
+  if (nameChangeHookHandle) {
+    try { UnhookWinEvent(nameChangeHookHandle) } catch {}
+    nameChangeHookHandle = null
+  }
+  if (winEventProcPointer) {
+    try { koffi.unregister(winEventProcPointer) } catch {}
+    winEventProcPointer = null
+  }
+}
+
 module.exports = {
   setShellAppsProvider(provider) {
     shellAppsProvider = provider
@@ -170,15 +271,15 @@ module.exports = {
   start(broadcast) {
     broadcastFn = broadcast
     compileDll()
+    refreshOpenApps()
 
-    setInterval(async () => {
-      lastApps = await getOpenApps()
-      const merged = withShellApps(lastApps)
-      const current = snapshot(merged)
-      if (current !== lastSnapshot) {
-        lastSnapshot = current
-        broadcast('windows/open-apps-changed', merged)
-      }
-    }, 2000)
+    const hooked = installWindowEventHooks()
+    backstopInterval = setInterval(refreshOpenApps, hooked ? BACKSTOP_INTERVAL_MS : FALLBACK_POLL_MS)
+
+    app.on('will-quit', () => {
+      uninstallWindowEventHooks()
+      if (refreshTimer) clearTimeout(refreshTimer)
+      if (backstopInterval) clearInterval(backstopInterval)
+    })
   },
 }
