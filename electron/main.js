@@ -32,6 +32,8 @@ let altTab = null
 try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
 let screenshot = null
 try { screenshot = require('./modules/screenshot') } catch (e) { console.error('[main] screenshot load error:', e.message) }
+let powerThrottling = null
+try { powerThrottling = require('./modules/powerThrottling') } catch (e) { console.error('[main] powerThrottling load error:', e.message) }
 const { processAutostart } = require('./modules/autostart')
 const installer = require('./modules/installer')
 const updater = require('./modules/updater')
@@ -48,7 +50,9 @@ const BASE_URL = isDev ? 'http://localhost:5173' : null
 const shouldTakeOverExplorer = !isDev || process.env.ALPINE_KILL_EXPLORER === '1'
 let killedExplorer = false
 
-app.commandLine.appendSwitch('disable-features', 'NetworkServiceSandbox')
+app.commandLine.appendSwitch('disable-features', 'NetworkServiceSandbox,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
 
 function getURL(mode, displayId) {
   const params = displayId != null ? `mode=${mode}&displayId=${displayId}` : `mode=${mode}`
@@ -92,6 +96,7 @@ function createDesktopWindow(display) {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false,
     },
   })
 
@@ -125,6 +130,7 @@ function createTopBarWindow(display) {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false,
     },
   })
 
@@ -490,6 +496,11 @@ function startShellMode() {
     createShellForDisplay(display)
   }
 
+  if (powerThrottling) {
+    powerThrottling.disableEcoQosForAllProcesses()
+    setTimeout(() => powerThrottling.disableEcoQosForAllProcesses(), 3000)
+  }
+
   if (process.env.ALPINE_TRAY_DEBUG) {
     try {
       require('./zorderDebug').start(() => {
@@ -506,6 +517,9 @@ function startShellMode() {
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)
     createShellForDisplay(newDisplay)
+    if (powerThrottling) {
+      setTimeout(() => powerThrottling.disableEcoQosForAllProcesses(), 1500)
+    }
   })
 
   screen.on('display-removed', (_event, oldDisplay) => {
