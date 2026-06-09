@@ -64,6 +64,11 @@ contextBridge.exposeInMainWorld('topbar', {
   onSearchIconChanged: (callback) => {
     ipcRenderer.on('topbar/search-icon-changed', (_, data) => callback(data))
   },
+  mediaVisualizer: () => ipcRenderer.invoke('topbar/media-visualizer-get'),
+  setMediaVisualizer: (value) => ipcRenderer.invoke('topbar/media-visualizer-set', value),
+  onMediaVisualizerChanged: (callback) => {
+    ipcRenderer.on('topbar/media-visualizer-changed', (_, data) => callback(data))
+  },
   onCloseMenus: (callback) => {
     const handler = () => callback()
     ipcRenderer.on('topbar/close-menus', handler)

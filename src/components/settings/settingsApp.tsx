@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, AppWindow, Command, House, MonitorCog, Paintbrush, Plug, RefreshCw, Search, X } from 'lucide-react'
 import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
@@ -170,11 +170,29 @@ export default function SettingsApp() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto px-5 pt-5 pb-6 bg-neutral-950 rounded-tl-xl">
-          <PageRouter path={currentPath} navigate={navigate} />
+          <PageErrorBoundary key={currentPath}>
+            <PageRouter path={currentPath} navigate={navigate} />
+          </PageErrorBoundary>
         </div>
       </main>
     </div>
   )
+}
+
+class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  componentDidCatch(error: unknown) {
+    console.error('[settings] page render error:', error)
+  }
+  render() {
+    if (this.state.failed) {
+      return <div className="text-sm text-white/50">This page failed to load. Try reopening Settings or restarting the shell.</div>
+    }
+    return this.props.children
+  }
 }
 
 function PageRouter({ path, navigate }: { path: string; navigate: (p: string) => void }) {

@@ -42,7 +42,7 @@ function setState(partial) {
 
 function searchWindowsUpdates() {
   const script =
-    "$ProgressPreference='SilentlyContinue'; $session = New-Object -ComObject Microsoft.Update.Session; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search(\"IsInstalled=0 and Type='Software'\"); $items = @(); foreach ($u in $result.Updates) { $kb = @($u.KBArticleIDs) -join ','; $cat = @($u.Categories | ForEach-Object { $_.Name }); $items += [pscustomobject]@{ title = $u.Title; kb = $kb; sizeBytes = [int64]$u.MaxDownloadSize; updateId = $u.Identity.UpdateID; isFeature = [bool]($cat -contains 'Upgrades') } }; $items | ConvertTo-Json -Compress"
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ProgressPreference='SilentlyContinue'; $session = New-Object -ComObject Microsoft.Update.Session; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search(\"IsInstalled=0 and Type='Software'\"); $items = @(); foreach ($u in $result.Updates) { $kb = @($u.KBArticleIDs) -join ','; $cat = @($u.Categories | ForEach-Object { $_.Name }); $items += [pscustomobject]@{ title = $u.Title; kb = $kb; sizeBytes = [int64]$u.MaxDownloadSize; updateId = $u.Identity.UpdateID; isFeature = [bool]($cat -contains 'Upgrades') } }; $items | ConvertTo-Json -Compress"
 
   return new Promise((resolve, reject) => {
     execFile(

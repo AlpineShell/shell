@@ -62,7 +62,7 @@ function readUrlShortcut(filePath) {
 
 function getStartApps() {
   return new Promise((resolve) => {
-    const script = 'Get-StartApps | Select-Object Name,AppID | ConvertTo-Json -Compress'
+    const script = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-StartApps | Select-Object Name,AppID | ConvertTo-Json -Compress'
     execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 16 * 1024 * 1024, windowsHide: true, timeout: 15000 }, (err, stdout) => {
       if (err) {
         console.error('[launcher] start apps discovery error:', err.message)

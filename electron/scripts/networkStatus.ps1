@@ -1,3 +1,4 @@
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ethernet = Get-NetAdapter | Where-Object { $_.Name -match 'Ethernet|^LAN' -and $_.Name -notmatch 'WLAN' -and $_.PhysicalMediaType -ne 'Unspecified' } | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
 if ($ethernet) {
     @{ signal = $null; connected = $true; type = 'ethernet'; ssid = $null } | ConvertTo-Json -Compress

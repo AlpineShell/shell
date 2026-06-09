@@ -66,7 +66,7 @@ async function enrichPaths(paths) {
   const id = ++metaSeq
   const listFile = path.join(os.tmpdir(), `alpine-meta-${id}.json`)
   const scriptFile = path.join(os.tmpdir(), `alpine-meta-${id}.ps1`)
-  const script = `$paths = Get-Content -Raw -LiteralPath '${listFile}' | ConvertFrom-Json\n$paths | ForEach-Object { $vi=$null; try { $vi = (Get-Item -LiteralPath $_ -ErrorAction Stop).VersionInfo } catch {}; [PSCustomObject]@{ p=$_; d=$vi.FileDescription; n=$vi.ProductName } } | ConvertTo-Json -Compress`
+  const script = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n$paths = Get-Content -Raw -LiteralPath '${listFile}' | ConvertFrom-Json\n$paths | ForEach-Object { $vi=$null; try { $vi = (Get-Item -LiteralPath $_ -ErrorAction Stop).VersionInfo } catch {}; [PSCustomObject]@{ p=$_; d=$vi.FileDescription; n=$vi.ProductName } } | ConvertTo-Json -Compress`
   try {
     fs.writeFileSync(listFile, JSON.stringify(need), 'utf8')
     fs.writeFileSync(scriptFile, script, 'utf8')
@@ -243,7 +243,7 @@ Get-AppxPackage | ForEach-Object {
 }`
 
 async function readStartAppsMap() {
-  const out = await run('powershell -NoProfile -Command "Get-StartApps | ConvertTo-Json -Compress"')
+  const out = await run('powershell -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-StartApps | ConvertTo-Json -Compress"')
   const byAumid = new Map()
   const byFamily = new Map()
   let arr = []
@@ -542,7 +542,7 @@ async function applySystemChanges() {
 }
 
 async function listRunning() {
-  const script = '$c=@{}; Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | ForEach-Object { $c[[int]$_.IDProcess]=[int]$_.PercentProcessorTime }; Get-Process | ForEach-Object { $p=$null; try { $p=$_.Path } catch {}; [PSCustomObject]@{ id=$_.Id; name=$_.ProcessName; path=$p; mem=$_.WorkingSet64; cpu=$c[$_.Id]; win=([int64]$_.MainWindowHandle) } } | ConvertTo-Json -Compress'
+  const script = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $c=@{}; Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | ForEach-Object { $c[[int]$_.IDProcess]=[int]$_.PercentProcessorTime }; Get-Process | ForEach-Object { $p=$null; try { $p=$_.Path } catch {}; [PSCustomObject]@{ id=$_.Id; name=$_.ProcessName; path=$p; mem=$_.WorkingSet64; cpu=$c[$_.Id]; win=([int64]$_.MainWindowHandle) } } | ConvertTo-Json -Compress'
   const out = await run(`powershell -NoProfile -Command "${script}"`)
   let raw = []
   try { raw = JSON.parse(out || '[]') } catch { raw = [] }
@@ -629,11 +629,13 @@ let installedListPromise = null
 let installedListResolve = null
 let installedRetries = 0
 
-const DESKTOP_SCRIPT = `$paths=@('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKLM:\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall')
+const DESKTOP_SCRIPT = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$paths=@('HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKLM:\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall')
 $out=foreach($p in $paths){ if(Test-Path $p){ Get-ChildItem $p -ErrorAction SilentlyContinue | ForEach-Object { $i=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($i.DisplayName -and -not $i.SystemComponent -and -not $i.ParentKeyName){ [PSCustomObject]@{ key=$_.PSChildName; name=$i.DisplayName; publisher=$i.Publisher; version=$i.DisplayVersion; icon=$i.DisplayIcon; loc=$i.InstallLocation; uninstall=$i.UninstallString; quiet=$i.QuietUninstallString } } } } }
 $out | ConvertTo-Json -Compress`
 
-const STORE_SCRIPT = `Get-AppxPackage | Where-Object { $_.InstallLocation -and $_.SignatureKind -ne 'System' -and -not $_.IsFramework -and -not $_.NonRemovable } | ForEach-Object {
+const STORE_SCRIPT = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Get-AppxPackage | Where-Object { $_.InstallLocation -and $_.SignatureKind -ne 'System' -and -not $_.IsFramework -and -not $_.NonRemovable } | ForEach-Object {
   $pkg=$_; $aumid=$null; $logo=$null; $dn=$null
   try {
     $m=Get-AppxPackageManifest $pkg

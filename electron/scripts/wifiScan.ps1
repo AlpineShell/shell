@@ -1,3 +1,4 @@
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $currentSsid = $null
 $wifiAdapter = Get-NetAdapter | Where-Object { $_.Name -match 'Wi-?Fi|WLAN' -and $_.Status -eq 'Up' } | Select-Object -First 1
 if ($wifiAdapter) {

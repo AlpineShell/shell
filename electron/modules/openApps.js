@@ -103,6 +103,7 @@ async function compileDll() {
   if (!fs.existsSync(DLL_PATH)) return
 
   const queryScript =
+    `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n` +
     `Add-Type -Path '${DLL_PATH}'\n` +
     `$wins = [TaskbarFilter]::GetTaskbarWindows()\n` +
     `$pids = @{}; Get-Process | ForEach-Object { $pids[$_.Id] = $_ }\n` +
@@ -151,6 +152,7 @@ async function parseApps(stdout) {
 }
 
 const FALLBACK_CMD =
+  `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ` +
   `$r = Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | ` +
   `ForEach-Object { $p = $null; try { $p = $_.MainModule.FileName } catch {}; ` +
   `[PSCustomObject]@{ id = $_.Id; hwnd = $_.MainWindowHandle.ToInt64(); name = $_.ProcessName; title = $_.MainWindowTitle; path = $p } } | ` +

@@ -2,21 +2,20 @@ const { spawn } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const appIcons = require('./appIcons')
 
 const iconCache = new Map()
 
 async function getAppIcon(appId) {
     if (!appId) return null
     if (iconCache.has(appId)) return iconCache.get(appId)
+    let b64 = null
     try {
-        const icon = await app.getFileIcon(`shell:AppsFolder\\${appId}`, { size: 'normal' })
-        const b64 = icon.toPNG().toString('base64')
-        iconCache.set(appId, b64)
-        return b64
-    } catch {
-        iconCache.set(appId, null)
-        return null
-    }
+        const [url] = await appIcons.resolveAppIcons([appId])
+        if (url) b64 = url.replace(/^data:image\/png;base64,/, '')
+    } catch {}
+    iconCache.set(appId, b64)
+    return b64
 }
 
 const SCRIPT_PATH = app.isPackaged
@@ -68,7 +67,7 @@ function initPS() {
 
     const script = fs.readFileSync(SCRIPT_PATH, 'utf8')
     pendingResolve = () => { resolveInit(); processNext() }
-    ps.stdin.write(`${script}\nWrite-Output '${DELIM}'\n`)
+    ps.stdin.write(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n${script}\nWrite-Output '${DELIM}'\n`)
   })
   return psReady
 }
@@ -94,6 +93,7 @@ async function runCmd(cmd) {
 
 let lastThumbnail = null
 let lastThumbnailType = null
+let lastAppIcon = null
 
 async function getMediaInfoFast() {
   const raw = await runCmd('MediaInfoFast')
@@ -120,19 +120,21 @@ async function getMediaThumbnail() {
 
 async function getMediaSession() {
   const raw = await runCmd('MediaInfo')
-  if (!raw) return { title: null, artist: null, appName: null, playing: false, thumbnail: null, thumbnailType: null }
+  if (!raw) return { title: null, artist: null, appName: null, appIcon: null, playing: false, thumbnail: null, thumbnailType: null }
   try {
     const parsed = JSON.parse(raw)
+    const appIcon = await getAppIcon(parsed.appId || null)
     return {
       title: parsed.title || null,
       artist: parsed.artist || null,
       appName: parsed.appName || null,
+      appIcon,
       playing: !!parsed.playing,
       thumbnail: parsed.thumbnail || null,
       thumbnailType: parsed.thumbnailType || null,
     }
   } catch {
-    return { title: null, artist: null, appName: null, playing: false, thumbnail: null, thumbnailType: null }
+    return { title: null, artist: null, appName: null, appIcon: null, playing: false, thumbnail: null, thumbnailType: null }
   }
 }
 
@@ -146,11 +148,12 @@ let broadcastRef = null
 function broadcastFast() {
   if (!broadcastRef) return
   getMediaInfoFast().then((current) => {
-    if (current.title !== lastTitle || current.artist !== lastArtist || current.playing !== lastPlaying) {
+    if (current.title !== lastTitle || current.artist !== lastArtist || current.playing !== lastPlaying || current.appIcon !== lastAppIcon) {
       const titleChanged = current.title !== lastTitle
       lastTitle = current.title
       lastArtist = current.artist
       lastAppName = current.appName
+      lastAppIcon = current.appIcon
       lastPlaying = current.playing
       broadcastRef('media/session-changed', {
         ...current,
@@ -165,6 +168,7 @@ function broadcastFast() {
             title: lastTitle,
             artist: lastArtist,
             appName: lastAppName,
+            appIcon: lastAppIcon,
             playing: lastPlaying,
             ...thumb,
           })
@@ -182,6 +186,7 @@ function pollUntilDifferent(key, prevValue, attempts) {
       lastTitle = current.title
       lastArtist = current.artist
       lastAppName = current.appName
+      lastAppIcon = current.appIcon
       lastPlaying = current.playing
       broadcastRef('media/session-changed', {
         ...current,
@@ -196,6 +201,7 @@ function pollUntilDifferent(key, prevValue, attempts) {
             title: lastTitle,
             artist: lastArtist,
             appName: lastAppName,
+            appIcon: lastAppIcon,
             playing: lastPlaying,
             ...thumb,
           })
@@ -230,6 +236,7 @@ module.exports = {
       lastTitle = initial.title
       lastArtist = initial.artist
       lastAppName = initial.appName
+      lastAppIcon = initial.appIcon
       lastPlaying = initial.playing
       lastThumbnail = initial.thumbnail
       lastThumbnailType = initial.thumbnailType

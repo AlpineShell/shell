@@ -2,6 +2,8 @@ param(
     [switch]$Discover
 )
 
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 $pnp = Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue |
     Where-Object { $_.InstanceId -match '^BTHENUM\\Dev_([0-9a-fA-F]{12})' -or $_.InstanceId -match '^BTHLE\\Dev_([0-9a-fA-F]{12})' } |
     Select-Object FriendlyName, InstanceId

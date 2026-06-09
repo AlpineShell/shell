@@ -53,7 +53,7 @@ function initPS() {
     const switchIdx = script.indexOf('\nswitch')
     const typeDef = switchIdx > 0 ? script.substring(0, switchIdx) : script
     pendingResolve = () => { resolveInit(); processNext() }
-    ps.stdin.write(`${typeDef}\nWrite-Output '${DELIM}'\n`)
+    ps.stdin.write(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n${typeDef}\nWrite-Output '${DELIM}'\n`)
   })
   return psReady
 }

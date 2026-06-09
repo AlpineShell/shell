@@ -83,5 +83,5 @@ function global:MediaThumbnail() {
 function global:MediaInfo() {
     $fast = MediaInfoFast | ConvertFrom-Json
     $thumb = MediaThumbnail | ConvertFrom-Json
-    return (@{ title = $fast.title; artist = $fast.artist; appName = $fast.appName; playing = $fast.playing; thumbnail = $thumb.thumbnail; thumbnailType = $thumb.thumbnailType } | ConvertTo-Json -Compress)
+    return (@{ title = $fast.title; artist = $fast.artist; appName = $fast.appName; playing = $fast.playing; appId = $fast.appId; thumbnail = $thumb.thumbnail; thumbnailType = $thumb.thumbnailType } | ConvertTo-Json -Compress)
 }

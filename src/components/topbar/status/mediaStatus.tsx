@@ -1,5 +1,6 @@
 import { useAudioPeak } from "../../../hooks/useAudioPeak";
 import { useMediaSession } from "../../../hooks/useMediaSession";
+import { useMediaVisualizer } from "../../../hooks/useMediaVisualizer";
 import { useDarkText } from "../../themeContext";
 import PopupMenu from "../shared/popupMenu";
 import MediaMenu from "./mediaMenu";
@@ -39,7 +40,9 @@ function MusicBars({ peak, color }: { peak: number; color: string }) {
 export default function MediaStatus() {
     const darkText = useDarkText();
     const media = useMediaSession();
-    const peak = useAudioPeak(media.playing);
+    const showVisualizer = useMediaVisualizer();
+    const useIcon = !showVisualizer && !!media.appIcon;
+    const peak = useAudioPeak(media.playing && !useIcon);
 
     if (!media.title) return null;
 
@@ -48,7 +51,11 @@ export default function MediaStatus() {
             onOpen={() => window.shell.media.session().then(media.update)}
             trigger={
                 <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-4.5 items-center gap-1.5`}>
-                    <MusicBars peak={peak} color={darkText ? "black" : "white"} />
+                    {useIcon ? (
+                        <img src={`data:image/png;base64,${media.appIcon}`} alt="" className="w-3.5 h-3.5 shrink-0 rounded-[3px]" draggable={false} />
+                    ) : (
+                        <MusicBars peak={peak} color={darkText ? "black" : "white"} />
+                    )}
                     <span className={`text-[12px] leading-none max-w-24 truncate ${darkText ? "text-black" : "text-white"}`}>
                         {media.title}
                     </span>

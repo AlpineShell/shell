@@ -354,6 +354,9 @@ declare global {
       searchIcon: () => Promise<boolean>
       setSearchIcon: (value: boolean) => Promise<boolean>
       onSearchIconChanged: (callback: (visible: boolean) => void) => void
+      mediaVisualizer: () => Promise<boolean>
+      setMediaVisualizer: (value: boolean) => Promise<boolean>
+      onMediaVisualizerChanged: (callback: (value: boolean) => void) => void
       foregroundColor: () => Promise<ForegroundColorData[]>
       onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => void
       onCloseMenus: (callback: () => void) => () => void

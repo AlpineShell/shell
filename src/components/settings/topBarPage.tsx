@@ -24,6 +24,7 @@ export default function TopBarPage() {
   const [colorOverride, setColorOverride] = useState<{ r: number; g: number; b: number } | null>(null)
   const [palette, setPalette] = useState<{ r: number; g: number; b: number; darkText: boolean }[]>([])
   const [searchIcon, setSearchIcon] = useState(false)
+  const [showVisualizer, setShowVisualizer] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -31,12 +32,14 @@ export default function TopBarPage() {
       window.topbar.colorOverride(),
       window.topbar.colorPalette(),
       window.topbar.searchIcon(),
-    ]).then(([c, pal, si]) => {
+      window.topbar.mediaVisualizer?.() ?? Promise.resolve(false),
+    ]).then(([c, pal, si, mv]) => {
       setColorOverride(c)
       setPalette(pal)
       setSearchIcon(si)
+      setShowVisualizer(mv)
       setLoaded(true)
-    })
+    }).catch(() => setLoaded(true))
   }, [])
 
   async function selectColor(color: { r: number; g: number; b: number } | null) {
@@ -47,6 +50,11 @@ export default function TopBarPage() {
   function toggleSearchIcon(value: boolean) {
     setSearchIcon(value)
     window.topbar.setSearchIcon(value)
+  }
+
+  function toggleVisualizer(value: boolean) {
+    setShowVisualizer(value)
+    window.topbar.setMediaVisualizer?.(value)
   }
 
   if (!loaded) return null
@@ -104,6 +112,15 @@ export default function TopBarPage() {
           description="Display the search button in the top bar. The hotkey still works either way."
           checked={searchIcon}
           onChange={toggleSearchIcon}
+        />
+      </Section>
+
+      <Section title="Media">
+        <ToggleRow
+          label="Show visualizer"
+          description="Show the audio visualizer instead of the playing app's icon. The bars only animate for audio playing on this PC, so leave this off if you often play to other devices."
+          checked={showVisualizer}
+          onChange={toggleVisualizer}
         />
       </Section>
     </div>

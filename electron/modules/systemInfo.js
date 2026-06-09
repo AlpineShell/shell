@@ -3,7 +3,7 @@ const os = require('os')
 
 function runPs(command) {
   return new Promise((resolve) => {
-    execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], { maxBuffer: 1024 * 1024 }, (err, stdout) => {
+    execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`], { maxBuffer: 1024 * 1024 }, (err, stdout) => {
       if (err || !stdout) return resolve(null)
       try { resolve(JSON.parse(stdout.trim())) } catch { resolve(null) }
     })

@@ -10,6 +10,7 @@ let lastWallpaperPath = null
 let lastPalette = []
 let userOverride = null
 let showSearchIcon = false
+let mediaShowVisualizer = false
 let storePath = null
 let broadcastRef = null
 
@@ -29,6 +30,9 @@ function loadOverride() {
       if (typeof data.showSearchIcon === 'boolean') {
         showSearchIcon = data.showSearchIcon
       }
+      if (typeof data.mediaShowVisualizer === 'boolean') {
+        mediaShowVisualizer = data.mediaShowVisualizer
+      }
     }
   } catch (e) {
     console.error('[topbarColor] load error:', e.message)
@@ -39,7 +43,7 @@ function saveOverride() {
   try {
     const dir = path.dirname(getStorePath())
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(getStorePath(), JSON.stringify({ color: userOverride, showSearchIcon }))
+    fs.writeFileSync(getStorePath(), JSON.stringify({ color: userOverride, showSearchIcon, mediaShowVisualizer }))
   } catch (e) {
     console.error('[topbarColor] save error:', e.message)
   }
@@ -243,6 +247,13 @@ module.exports = {
       saveOverride()
       if (broadcastRef) broadcastRef('topbar/search-icon-changed', showSearchIcon)
       return showSearchIcon
+    },
+    'topbar/media-visualizer-get': () => mediaShowVisualizer,
+    'topbar/media-visualizer-set': (_event, value) => {
+      mediaShowVisualizer = !!value
+      saveOverride()
+      if (broadcastRef) broadcastRef('topbar/media-visualizer-changed', mediaShowVisualizer)
+      return mediaShowVisualizer
     },
   },
 
