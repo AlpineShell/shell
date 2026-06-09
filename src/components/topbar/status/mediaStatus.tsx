@@ -50,7 +50,7 @@ export default function MediaStatus() {
         <PopupMenu
             onOpen={() => window.shell.media.session().then(media.update)}
             trigger={
-                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-4.5 items-center gap-1.5`}>
+                <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex ${useIcon ? "pl-0.5 pr-2" : "px-2"} rounded-full h-4.5 items-center gap-1.5`}>
                     {useIcon ? (
                         <img src={`data:image/png;base64,${media.appIcon}`} alt="" className="w-3.5 h-3.5 shrink-0 rounded-[3px]" draggable={false} />
                     ) : (
