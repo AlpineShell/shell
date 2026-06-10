@@ -174,6 +174,8 @@ function createTopBarWindow(display) {
 
   win.restorePassiveTopBar = () => {
     if (win.isDestroyed()) return
+    if (launcher.isLauncherActive(win)) return
+    if (altTab && altTab.isAltTabActive(win)) return
     const bounds = win.getBounds()
     if (bounds.height !== TOP_BAR_HEIGHT) {
       win.setBounds({ ...bounds, height: TOP_BAR_HEIGHT })

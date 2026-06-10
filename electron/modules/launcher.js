@@ -19,6 +19,7 @@ let shells = null
 let activeDisplayId = null
 let activeTopBar = null
 let hideTimeout = null
+let hideTimeoutTopBar = null
 let lastUserForeground = 0
 
 const LAUNCHER_WIDTH = 600
@@ -214,20 +215,35 @@ function isOwnShellWindow(hwnd) {
   return false
 }
 
+function finishHide(topBar) {
+  if (topBar.isDestroyed()) return
+  topBar.webContents.send('launcher/hide')
+  topBar.setFocusable(false)
+  if (typeof topBar.restorePassiveTopBar === 'function') topBar.restorePassiveTopBar()
+  else topBar.setAlwaysOnTop(false)
+}
+
+function flushPendingHide(keepTopBar) {
+  if (!hideTimeout) return
+  clearTimeout(hideTimeout)
+  hideTimeout = null
+  const topBar = hideTimeoutTopBar
+  hideTimeoutTopBar = null
+  if (topBar && topBar !== keepTopBar) finishHide(topBar)
+}
+
 function animatedHide() {
   if (!activeTopBar || activeTopBar.isDestroyed()) return
   activeTopBar.webContents.send('launcher/start-close')
-  if (hideTimeout) clearTimeout(hideTimeout)
   const topBar = activeTopBar
   activeTopBar = null
   activeDisplayId = null
+  flushPendingHide(topBar)
+  hideTimeoutTopBar = topBar
   hideTimeout = setTimeout(() => {
     hideTimeout = null
-    if (topBar.isDestroyed()) return
-    topBar.webContents.send('launcher/hide')
-    topBar.setFocusable(false)
-    if (typeof topBar.restorePassiveTopBar === 'function') topBar.restorePassiveTopBar()
-    else topBar.setAlwaysOnTop(false)
+    hideTimeoutTopBar = null
+    finishHide(topBar)
   }, 300)
 }
 
@@ -242,18 +258,12 @@ function showLauncher(displayId) {
     if (fg && !isOwnShellWindow(fg)) lastUserForeground = fg
   } catch {}
 
-  if (hideTimeout) {
-    clearTimeout(hideTimeout)
-    hideTimeout = null
-  }
+  flushPendingHide(topBar)
 
-  if (activeTopBar && activeTopBar !== topBar && !activeTopBar.isDestroyed()) {
+  if (activeTopBar && activeTopBar !== topBar) {
     const previousTopBar = activeTopBar
     activeTopBar = null
-    previousTopBar.webContents.send('launcher/hide')
-    previousTopBar.setFocusable(false)
-    if (typeof previousTopBar.restorePassiveTopBar === 'function') previousTopBar.restorePassiveTopBar()
-    else previousTopBar.setAlwaysOnTop(false)
+    finishHide(previousTopBar)
   }
 
   topBar.webContents.send('topbar/close-menus')

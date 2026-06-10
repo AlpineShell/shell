@@ -90,6 +90,9 @@ let altIsDown = false
 let switcherActive = false
 let selectedIndex = 0
 let windowList = []
+let pendingRestore = null
+
+const HIDE_ANIMATION_MS = 300
 
 let winLauncherEnabled = false
 let winLauncherCallback = null
@@ -331,6 +334,7 @@ async function showSwitcher() {
 
   const topBar = shell.topBar
   activeTopBar = topBar
+  flushPendingRestore(topBar)
 
   const bounds = topBar.getBounds()
   topBar.setBounds({ ...bounds, height: 600 })
@@ -340,20 +344,38 @@ async function showSwitcher() {
   topBar.webContents.send('alttab/show', { windows: windowList, selectedIndex })
 }
 
+function restorePassiveState(topBar) {
+  if (topBar.isDestroyed()) return
+  if (typeof topBar.restorePassiveTopBar === 'function') {
+    topBar.restorePassiveTopBar()
+  } else {
+    topBar.setAlwaysOnTop(false)
+    topBar.setBounds({ ...topBar.getBounds(), height: 24 })
+  }
+}
+
+function flushPendingRestore(keepTopBar) {
+  if (!pendingRestore) return
+  const { topBar, timer } = pendingRestore
+  clearTimeout(timer)
+  pendingRestore = null
+  if (topBar !== keepTopBar) restorePassiveState(topBar)
+}
+
 function hideSwitcher() {
   switcherActive = false
   windowList = []
   const topBar = activeTopBar
   activeTopBar = null
-  if (topBar && !topBar.isDestroyed()) {
-    topBar.webContents.send('alttab/hide')
-    if (typeof topBar.restorePassiveTopBar === 'function') {
-      topBar.restorePassiveTopBar()
-    } else {
-      topBar.setAlwaysOnTop(false)
-      topBar.setBounds({ ...topBar.getBounds(), height: 24 })
-    }
-  }
+  if (!topBar || topBar.isDestroyed()) return
+  topBar.webContents.send('alttab/hide')
+  topBar.setIgnoreMouseEvents(true)
+  flushPendingRestore(topBar)
+  const timer = setTimeout(() => {
+    pendingRestore = null
+    restorePassiveState(topBar)
+  }, HIDE_ANIMATION_MS)
+  pendingRestore = { topBar, timer }
 }
 
 function cycleSelection(forward) {
