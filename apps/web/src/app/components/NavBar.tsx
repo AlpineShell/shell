@@ -6,7 +6,7 @@ export default function NavBar() {
         <nav className="text-white p-8">
             <div className="container mx-auto flex items-center justify-between">
                 <Link href="/">
-                    <Image src="/Logo.svg" alt="Alpine Shell Logo" width={100} height={50} />
+                    <Image src="/Logo.svg" alt="Alpine Shell Logo" width={170} height={50} />
                 </Link>
                 <div>
                     <a href="#" className="px-4 rounded">Home</a>
