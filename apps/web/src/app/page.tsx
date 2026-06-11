@@ -39,6 +39,10 @@ export default function Home() {
           <p className="mt-3 max-w-xl text-xl text-gray-300">
             A Desktop that makes your PC clean and usable. Remove the slop and get productive :) 
           </p>
+          <div className="mt-8 flex gap-8">
+            <button>Learn more</button>
+            <button className="py-2 px-6 text-black bg-white rounded-full">Get Started</button>
+          </div>
         </section>
       </div>
     </main>
