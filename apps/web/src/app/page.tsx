@@ -6,45 +6,48 @@ const noise =
 
 export default function Home() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#050a1a] text-white">
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(125% 85% at 50% -10%, #1b3a8f 0%, #0b1430 45%, #050a1a 75%)",
-        }}
-      />
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(55% 45% at 78% 12%, rgba(56,108,255,0.28), transparent 70%)",
-        }}
-      />
+    <main className="relative bg-[#050a1a] text-white">
+      <section className="relative flex min-h-screen flex-col overflow-hidden">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(125% 85% at 50% -10%, #1b3a8f 0%, #0b1430 45%, #050a1a 75%)",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(55% 45% at 78% 12%, rgba(56,108,255,0.28), transparent 70%)",
+          }}
+        />
 
-      <StarField />
+        <StarField />
 
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 opacity-[0.13]"
-        style={{ backgroundImage: noise }}
-      />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 opacity-[0.13]"
+          style={{ backgroundImage: noise }}
+        />
 
-      <div className="relative z-10 flex min-h-screen flex-col">
-        <NavBar />
-        <section className="container mx-auto flex flex-1 flex-col items-center justify-center px-8 pb-24 text-center">
-          <h1 className="max-w-3xl font-averia text-5xl font-semibold tracking-tight sm:text-6xl">
-            Not their slop. Your PC!
-          </h1>
-          <p className="mt-3 max-w-xl text-xl text-gray-300">
-            A Desktop that makes your PC clean and usable. Remove the slop and get productive :) 
-          </p>
-          <div className="mt-8 flex gap-8">
-            <button>Learn more</button>
-            <button className="py-2 px-6 text-black bg-white rounded-full">Get Started</button>
+        <div className="relative z-10 flex flex-1 flex-col">
+          <NavBar />
+          <div className="container mx-auto flex flex-1 flex-col items-center justify-center px-8 pb-8 text-center">
+            <h1 className="max-w-3xl font-averia text-5xl font-semibold tracking-tight sm:text-6xl">
+              Not their slop. Your PC!
+            </h1>
+            <p className="mt-3 max-w-xl text-xl text-gray-300">
+              A Desktop that makes your PC clean and usable. Remove the slop and get productive :)
+            </p>
+            <div className="mt-8 flex gap-8">
+              <button>Learn more</button>
+              <button className="py-2 px-6 text-black bg-white rounded-full">Get Started</button>
+            </div>
           </div>
-        </section>
-      </div>
+          <div className="mx-auto h-[50vh] w-19/20 shrink-0 rounded-t-3xl bg-white text-black" />
+        </div>
+      </section>
     </main>
   );
 }
