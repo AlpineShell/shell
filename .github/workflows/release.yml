@@ -31,6 +31,7 @@ jobs:
           fi
 
       - name: Set version from release tag
+        working-directory: apps/desktop
         shell: bash
         run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
@@ -47,6 +48,6 @@ jobs:
 
       - name: Attach installer to GitHub Release
         shell: bash
-        run: gh release upload "${GITHUB_REF_NAME}" release/*.exe --clobber
+        run: gh release upload "${GITHUB_REF_NAME}" apps/desktop/release/*.exe --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

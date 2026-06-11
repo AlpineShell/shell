@@ -6,6 +6,16 @@ This file provides context for AI assistants working on the alpine-shell codebas
 
 Alpine Shell is a Windows desktop shell replacement built with Electron, React, TypeScript, and Tailwind CSS. It provides a topbar with system controls (volume, brightness, Wi-Fi, Bluetooth) and a desktop wallpaper layer. Windows only — uses Win32 APIs via koffi (FFI) and PowerShell for system integration.
 
+## Repository Layout
+
+This is a Bun-workspaces monorepo. Run all commands from the repo root.
+
+- `apps/desktop/` — the Electron desktop shell (the original app; package name `alpine-shell`). Its build/release config (electron-builder, R2 publish) lives in `apps/desktop/package.json`.
+- `apps/web/` — Next.js site for marketing + license sales (package name `@alpine/web`).
+- `packages/license/` — `@alpine/license`, the shared license/activation contract (types + key validation) imported by both the desktop app and the website.
+
+Unless noted otherwise, file paths in the sections below are relative to `apps/desktop/`.
+
 ## Architecture
 
 ### Two-Process Model (Electron)
@@ -29,9 +39,15 @@ React hooks in `src/hooks/` follow a consistent pattern:
 
 ## Commands
 
-- `bun start` — Start both Vite dev server and Electron (full app)
-- `bun run dev` — Start only the Vite dev server (for frontend iteration)
-- `bun run electron` — Start only Electron (requires Vite already running)
+Run from the repo root; Bun resolves the right workspace via `--filter`.
+
+- `bun start` — Start the full desktop app (Vite dev server + Electron). Replaces `explorer.exe` with Alpine Shell while running.
+- `bun run build` — Build the Windows installer (Vite build + electron-builder).
+- `bun run release` — Build the installer and publish it to R2.
+- `bun run web` — Start the Next.js website dev server (`apps/web`).
+- `bun run web:build` — Build the website.
+
+Desktop-only iteration: `bun --filter alpine-shell dev` (Vite server only), `bun --filter alpine-shell electron` (Electron only; requires Vite already running).
 
 ## Code Conventions
 
