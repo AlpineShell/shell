@@ -45,7 +45,9 @@ export default function Home() {
               <button className="py-2 px-6 text-black bg-white rounded-full">Get Started</button>
             </div>
           </div>
-          <div className="mx-auto h-[50vh] w-19/20 shrink-0 rounded-t-3xl bg-white text-black" />
+          <div className="container mx-auto px-8 shrink-0">
+            <div className="h-[50vh] rounded-t-3xl bg-white text-black" />
+          </div>
         </div>
       </section>
     </main>
