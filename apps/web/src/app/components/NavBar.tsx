@@ -14,7 +14,7 @@ export default function NavBar() {
                     <a href="#" className="px-4 rounded">Pricing</a>
                     <a href="#" className="px-4 rounded">Contact</a>
                 </div>
-                <button className="border border-white py-2 px-4 rounded-full">
+                <button className="border border-white py-2 px-4 rounded-full font-averia">
                     <p>Get your PC back</p>
                 </button>
             </div>

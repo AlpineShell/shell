@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Averia_Serif_Libre } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -9,6 +9,12 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const averiaSerifLibre = Averia_Serif_Libre({
+  variable: "--font-averia-serif-libre",
+  weight: ["400", "700"],
   subsets: ["latin"],
 });
 
@@ -25,7 +31,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${averiaSerifLibre.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#050a1a] text-white">{children}</body>
     </html>

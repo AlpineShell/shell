@@ -33,9 +33,12 @@ export default function Home() {
       <div className="relative z-10 flex min-h-screen flex-col">
         <NavBar />
         <section className="container mx-auto flex flex-1 flex-col items-center justify-center px-8 pb-24 text-center">
-          <h1 className="max-w-3xl text-5xl font-semibold tracking-tight sm:text-6xl">
-            Your PC, without the slop.
+          <h1 className="max-w-3xl font-averia text-5xl font-semibold tracking-tight sm:text-6xl">
+            Not their slop. Your PC!
           </h1>
+          <p className="mt-3 max-w-xl text-xl text-gray-300">
+            A Desktop that makes your PC clean and usable. Remove the slop and get productive :) 
+          </p>
         </section>
       </div>
     </main>
