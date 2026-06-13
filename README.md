@@ -8,7 +8,7 @@ A Windows desktop shell.
 - Windows 10/11 
 - Node.js 18+
 
-## Getting Started
+## Getting Started 
 
 ```bash
 bun install
