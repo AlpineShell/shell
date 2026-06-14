@@ -33,7 +33,7 @@ export default function Home() {
 
         <div className="relative z-10 flex flex-1 flex-col">
           <NavBar />
-          <div className="container mx-auto flex flex-1 flex-col items-center justify-center px-8 pb-8 text-center">
+          <div className="container mx-auto flex min-h-[50vh] flex-1 flex-col items-center justify-center px-8 pb-8 text-center">
             <h1 className="max-w-3xl font-averia text-5xl font-semibold tracking-tight sm:text-6xl">
               Not their slop. Your PC!
             </h1>
@@ -46,7 +46,15 @@ export default function Home() {
             </div>
           </div>
           <div className="container mx-auto px-8 shrink-0">
-            <div className="h-[50vh] rounded-t-3xl bg-white text-black" />
+            <div className="aspect-video w-full overflow-hidden rounded-t-3xl bg-white">
+              <iframe
+                className="h-full w-full"
+                src="https://www.youtube.com/embed/jxnqmhGL2aA?start=317"
+                title="Alpine Shell demo"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
           </div>
         </div>
       </section>
