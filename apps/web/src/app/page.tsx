@@ -31,6 +31,11 @@ export default function Home() {
           style={{ backgroundImage: noise }}
         />
 
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 top-[100vh] bg-white"
+        />
+
         <div className="relative z-10 flex flex-1 flex-col">
           <NavBar />
           <div className="container mx-auto flex min-h-[50vh] flex-1 flex-col items-center justify-center px-8 pb-8 text-center">
