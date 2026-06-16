@@ -94,7 +94,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         const wrapper = wrapperRef.current;
         const content = contentRef.current;
         if (!wrapper || !content) return null;
-        content.style.width = "";
+        content.style.width = "max-content";
         const contentRect = content.getBoundingClientRect();
         const bodyWidth = Math.round(contentRect.width);
         const bodyHeight = Math.round(contentRect.height);
