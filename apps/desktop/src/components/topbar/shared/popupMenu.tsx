@@ -251,6 +251,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                         zIndex: 5,
                         pointerEvents: shape ? "auto" : "none",
                         filter: "drop-shadow(0 12px 26px rgba(0,0,0,0.30))",
+                        willChange: "transform, opacity",
                     }}
                     onMouseEnter={handleEnter}
                     onMouseLeave={handleLeave}
