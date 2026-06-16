@@ -1,9 +1,12 @@
+import type { ChromeAnchor } from "./chromeShape";
+
 export interface ChromeSurface {
     id: number;
     centerX: number;
     bodyWidth: number;
     fullHeight: number;
     outline: boolean;
+    anchor: ChromeAnchor;
     contentEl: HTMLElement | null;
 }
 

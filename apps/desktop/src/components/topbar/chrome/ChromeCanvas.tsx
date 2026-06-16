@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { surfaceFillPath, barBorderPath, RADIUS, type ChromeGeometry } from "./chromeShape";
+import { surfaceFillPath, barBorderPath, RADIUS, type ChromeGeometry, type ChromeAnchor } from "./chromeShape";
 import { getChromeSurface, subscribeChromeSurface, type ChromeSurface } from "./chromeStore";
 
 const OPEN_MS = 460;
@@ -40,6 +40,8 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, s
         let halfBody = 0;
         let fullH = 0;
         let outline = false;
+        let anchor: ChromeAnchor = "center";
+        let lastClearH = 0;
         let morphFrom: { cx: number; halfBody: number; fullH: number } | null = null;
         let morphStart = -1;
         let contentEl: HTMLElement | null = null;
@@ -72,11 +74,13 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, s
                 halfBody = surface.bodyWidth / 2;
                 fullH = surface.fullHeight;
                 outline = surface.outline;
+                anchor = surface.anchor;
                 contentEl = surface.contentEl;
                 morphFrom = null;
                 animateOpen(1, OPEN_MS, "out");
             } else if (surface && previous) {
                 outline = surface.outline;
+                anchor = surface.anchor;
                 contentEl = surface.contentEl;
                 morphFrom = { cx, halfBody, fullH };
                 morphStart = now();
@@ -96,8 +100,6 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, s
             const p = propsRef.current;
             const screenW = window.innerWidth;
             const barBottom = p.barHeight;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.clearRect(0, 0, screenW, window.innerHeight);
 
             const surface = getChromeSurface();
             if (surface && morphFrom) {
@@ -117,8 +119,14 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, s
             const height = fullH * openValue;
             const surfaceActive = openValue > 0.004;
 
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const need = surfaceActive ? barBottom + fullH + 60 : barBottom + 4;
+            const clearH = Math.max(need, lastClearH);
+            ctx.clearRect(0, 0, screenW, clearH);
+            lastClearH = need;
+
             if (!p.suppressed) {
-                const geom: ChromeGeometry = { centerX: cx, bodyWidth: halfBody * 2, height, barBottom, screenWidth: screenW };
+                const geom: ChromeGeometry = { centerX: cx, bodyWidth: halfBody * 2, height, barBottom, screenWidth: screenW, anchor };
                 if (surfaceActive) {
                     ctx.fillStyle = p.bg;
                     ctx.fill(new Path2D(surfaceFillPath(geom)));
@@ -131,7 +139,9 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, s
             }
 
             if (contentEl) {
-                contentEl.style.height = `${Math.max(0, height - RADIUS * 0.4)}px`;
+                contentEl.style.height = `${fullH}px`;
+                const hidden = Math.max(0, fullH - height);
+                contentEl.style.clipPath = `inset(0 0 ${hidden}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
             }
 
             return surfaceActive || morphFrom !== null || (oStart >= 0 && now() - oStart < oDur);

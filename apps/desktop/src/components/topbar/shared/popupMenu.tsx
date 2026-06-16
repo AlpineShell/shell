@@ -1,14 +1,15 @@
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTopbarBg, useFullscreenWindow } from "../../themeContext";
-import { SHOULDER, RADIUS } from "../chrome/chromeShape";
+import { SHOULDER, RADIUS, type ChromeAnchor } from "../chrome/chromeShape";
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "../chrome/chromeStore";
 
 const SCREEN_PAD = 6;
+const EDGE_PAD = 0;
 const BAR_BOTTOM = 24;
 const CLOSE_MS = 300;
 
-type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number };
+type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number; anchor: ChromeAnchor };
 
 let activeMenu: { close: () => void } | null = null;
 
@@ -66,9 +67,18 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         body.style.width = `${bodyWidth}px`;
         const triggerRect = wrapper.getBoundingClientRect();
         const center = triggerRect.left + triggerRect.width / 2;
-        const half = bodyWidth / 2 + SHOULDER;
-        const centerX = Math.round(Math.max(SCREEN_PAD + half, Math.min(center, window.innerWidth - SCREEN_PAD - half)));
-        return { centerX, bodyWidth, bodyHeight, left: centerX - bodyWidth / 2 };
+        const screenW = window.innerWidth;
+        const half = bodyWidth / 2;
+        let anchor: ChromeAnchor = "center";
+        let centerX = Math.round(center);
+        if (center - half - SHOULDER < SCREEN_PAD) {
+            anchor = "left";
+            centerX = Math.round(EDGE_PAD + half);
+        } else if (center + half + SHOULDER > screenW - SCREEN_PAD) {
+            anchor = "right";
+            centerX = Math.round(screenW - EDGE_PAD - half);
+        }
+        return { centerX, bodyWidth, bodyHeight, left: centerX - bodyWidth / 2, anchor };
     }
 
     useLayoutEffect(() => {
@@ -79,20 +89,26 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
 
     useLayoutEffect(() => {
         if (!open || !shape) return;
-        if (clipRef.current) clipRef.current.style.height = "0px";
+        if (clipRef.current) {
+            clipRef.current.style.height = `${shape.bodyHeight}px`;
+            clipRef.current.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
+        }
         setChromeSurface({
             id: idRef.current,
             centerX: shape.centerX,
             bodyWidth: shape.bodyWidth,
             fullHeight: shape.bodyHeight,
             outline,
+            anchor: shape.anchor,
             contentEl: clipRef.current,
         });
+        const sideL = shape.anchor === "left" ? 0 : SHOULDER;
+        const sideR = shape.anchor === "right" ? 0 : SHOULDER;
         window.topbar.setActiveRegion({
             top: BAR_BOTTOM,
             bottom: BAR_BOTTOM + shape.bodyHeight,
-            left: shape.centerX - shape.bodyWidth / 2 - SHOULDER,
-            right: shape.centerX + shape.bodyWidth / 2 + SHOULDER,
+            left: shape.left - sideL,
+            right: shape.left + shape.bodyWidth + sideR,
         });
     }, [open, shape, outline]);
 
@@ -177,10 +193,9 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                         left: shape ? shape.left : -9999,
                         top: BAR_BOTTOM,
                         width: shape ? shape.bodyWidth : undefined,
-                        overflow: "hidden",
-                        borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`,
                         zIndex: 5,
                         pointerEvents: shape ? "auto" : "none",
+                        willChange: "clip-path",
                     }}
                 >
                     <div ref={bodyRef}>{children}</div>
