@@ -137,6 +137,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         if (isSwitch) {
             el.style.transition = "none";
             el.style.transform = "translateY(0px)";
+            el.style.clipPath = "inset(0 0 0 0)";
             el.style.opacity = "0";
             void el.offsetWidth;
             el.style.transition = `opacity ${SWITCH_MS}ms ease`;
@@ -145,12 +146,12 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         }
 
         el.style.transition = "none";
-        el.style.opacity = "0";
-        el.style.transform = `translateY(${-shape.height}px)`;
-        void el.offsetWidth;
-        el.style.transition = `transform ${ENTER_MS}ms ${ENTER_EASE}, opacity 180ms ease`;
-        el.style.opacity = "1";
         el.style.transform = "translateY(0px)";
+        el.style.opacity = "1";
+        el.style.clipPath = `inset(0 0 ${Math.max(0, shape.height - SHOULDER)}px 0)`;
+        void el.offsetWidth;
+        el.style.transition = `clip-path ${ENTER_MS}ms ${ENTER_EASE}`;
+        el.style.clipPath = "inset(0 0 0 0)";
     }, [open, shape]);
 
     useEffect(() => {
@@ -191,9 +192,9 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             entered.current = false;
             return;
         }
-        el.style.transition = `transform ${EXIT_MS}ms ${EXIT_EASE}, opacity ${EXIT_MS}ms ease`;
+        el.style.transition = `clip-path ${EXIT_MS}ms ${EXIT_EASE}, opacity ${EXIT_MS}ms ease`;
+        el.style.clipPath = `inset(0 0 ${Math.max(0, shape.height - SHOULDER)}px 0)`;
         el.style.opacity = "0";
-        el.style.transform = `translateY(${-shape.height}px)`;
         clearTimeout(closeTimer.current);
         closeTimer.current = setTimeout(() => {
             entered.current = false;
@@ -251,7 +252,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                         zIndex: 5,
                         pointerEvents: shape ? "auto" : "none",
                         filter: "drop-shadow(0 12px 26px rgba(0,0,0,0.30))",
-                        willChange: "transform, opacity",
+                        willChange: "clip-path, opacity",
                     }}
                     onMouseEnter={handleEnter}
                     onMouseLeave={handleLeave}
