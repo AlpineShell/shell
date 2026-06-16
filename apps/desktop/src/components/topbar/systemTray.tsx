@@ -147,7 +147,7 @@ function SystemTrayInner() {
             if (Math.hypot(e.clientX - s.startX, e.clientY - s.startY) < DRAG_THRESHOLD) return;
             s.active = true;
             setDragId(s.id);
-            if (s.source === "visible") window.topbar?.setHeight?.(DRAG_EXPAND_HEIGHT);
+            if (s.source === "visible") window.topbar?.setActiveRegion?.({ top: 0, bottom: DRAG_EXPAND_HEIGHT, left: 0, right: window.innerWidth });
         }
         s.lastX = e.clientX;
         s.lastY = e.clientY;
@@ -174,7 +174,7 @@ function SystemTrayInner() {
             clickTray(s.id, "left", s.el);
             return;
         }
-        window.topbar?.setHeight?.(24);
+        window.topbar?.setActiveRegion?.(null);
         if (s.source === "visible") {
             if (s.overCaret) hideIcon(s.id);
             else reorderTo(s.id, s.dropIndex);

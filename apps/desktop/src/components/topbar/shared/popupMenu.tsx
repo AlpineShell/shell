@@ -5,7 +5,6 @@ import { useTopbarBg, useDarkText, useFullscreenWindow, useMenuOpenChange } from
 const SHOULDER = 14;
 const RADIUS = 14;
 const SCREEN_PAD = 6;
-const WINDOW_HEIGHT = 600;
 
 const ENTER_MS = 320;
 const EXIT_MS = 240;
@@ -93,7 +92,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             return;
         }
         onMenuOpenChange(false);
-        window.topbar.setHeight(24);
+        window.topbar.setActiveRegion(null);
     }, [open]);
 
     function reportBounds(svgLeft: number, width: number) {
@@ -128,6 +127,12 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     useLayoutEffect(() => {
         if (!open || !shape) return;
         reportBounds(shape.left, shape.width);
+        window.topbar.setActiveRegion({
+            top: shape.top,
+            bottom: shape.top + shape.height,
+            left: shape.left,
+            right: shape.left + shape.width,
+        });
         const el = portalRef.current;
         if (!el) return;
 
@@ -232,7 +237,13 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         activeMenu = selfRef.current;
         if (open) return;
         entered.current = false;
-        window.topbar.setHeight(WINDOW_HEIGHT);
+        const triggerRect = wrapperRef.current?.getBoundingClientRect();
+        window.topbar.setActiveRegion({
+            top: triggerRect ? triggerRect.bottom : 24,
+            bottom: window.innerHeight,
+            left: 0,
+            right: window.innerWidth,
+        });
         setShape(null);
         setOpen(true);
     }

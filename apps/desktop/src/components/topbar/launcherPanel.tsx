@@ -315,9 +315,6 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       setWallpapers(list)
     })
     requestAnimationFrame(() => inputRef.current?.focus())
-    return () => {
-      window.topbar.setHeight(24)
-    }
   }, [])
 
   useEffect(() => {

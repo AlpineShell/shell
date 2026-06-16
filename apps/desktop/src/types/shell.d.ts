@@ -345,7 +345,7 @@ declare global {
     }
     topbar: {
       setIgnoreMouseEvents: (ignore: boolean) => void
-      setHeight: (height: number) => void
+      setActiveRegion: (region: { top: number; bottom: number; left: number; right: number } | null) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => void
       colorOverride: () => Promise<TopBarColor | null>

@@ -47,7 +47,7 @@ try { paintDesktopBackgroundEarly() } catch {}
 
 contextBridge.exposeInMainWorld('topbar', {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
-  setHeight: (height) => ipcRenderer.send('topbar/set-height', height),
+  setActiveRegion: (region) => ipcRenderer.send('topbar/set-active-region', region),
   color: () => ipcRenderer.invoke('topbar/color'),
   onColorChanged: (callback) => {
     ipcRenderer.on('topbar/color-changed', (_, data) => callback(data))
