@@ -50,7 +50,7 @@ export default function Home() {
               <button className="py-2 px-6 text-black bg-white rounded-full">Get Started</button>
             </div>
           </div>
-          <div className="container mx-auto px-8 shrink-0">
+          <div className="container mx-auto shrink-0">
             <div className="aspect-video w-full overflow-hidden rounded-t-3xl bg-white">
               <iframe
                 className="h-full w-full"
