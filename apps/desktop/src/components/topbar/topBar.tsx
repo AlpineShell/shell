@@ -11,6 +11,9 @@ import LauncherPanel from "./launcherPanel";
 import AltTabPanel from "./altTabPanel";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
+import ChromeCanvas from "./chrome/ChromeCanvas";
+
+const noop = () => {};
 
 export default function TopBar() {
     const wallpaperColor = useTopbarColor();
@@ -20,19 +23,11 @@ export default function TopBar() {
     const darkText = color?.darkText ?? false;
     const fullscreenWindow = fgColor !== null;
     const [hovered, setHovered] = useState(false);
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [menuGap, setMenuGap] = useState<{ left: number; right: number } | null>(null);
     const [launcherOpen, setLauncherOpen] = useState(false);
     const [launcherGap, setLauncherGap] = useState<{ left: number; right: number } | null>(null);
     const [altTabGap, setAltTabGap] = useState<{ left: number; right: number } | null>(null);
     const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
-    const activeGap = menuGap || launcherGap || altTabGap;
-    const showBorder = hovered || menuOpen || launcherGap !== null || altTabGap !== null;
-
-    function handleMenuChange(open: boolean, gap?: { left: number; right: number }) {
-        setMenuOpen(open);
-        setMenuGap(open && gap ? gap : null);
-    }
+    const panelGap = launcherGap || altTabGap;
 
     useEffect(() => {
         window.launcher.onShow(() => setLauncherOpen(true));
@@ -40,20 +35,19 @@ export default function TopBar() {
     }, []);
 
     return (
-        <ThemeProvider value={{ darkText, bg, fullscreenWindow, onMenuOpenChange: handleMenuChange }}>
+        <ThemeProvider value={{ darkText, bg, fullscreenWindow, onMenuOpenChange: noop }}>
+            <ChromeCanvas barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} suppressed={panelGap !== null} />
             <div
                 className="w-full flex justify-between items-center h-6 relative z-10 transition-colors duration-300"
                 style={{ backgroundColor: bg }}
                 onMouseEnter={() => setHovered(true)}
                 onMouseLeave={() => setHovered(false)}
             >
-                {activeGap ? (
+                {panelGap && (
                     <>
-                        <div style={{ position: "absolute", bottom: 0, left: 0, width: activeGap.left, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
-                        <div style={{ position: "absolute", bottom: 0, left: activeGap.right, right: 0, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
+                        <div style={{ position: "absolute", bottom: 0, left: 0, width: panelGap.left, height: 1, backgroundColor: borderColor }} />
+                        <div style={{ position: "absolute", bottom: 0, left: panelGap.right, right: 0, height: 1, backgroundColor: borderColor }} />
                     </>
-                ) : (
-                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
                 )}
                 <div className="flex items-center gap-1 relative z-1 self-stretch">
                     <SystemMenu />

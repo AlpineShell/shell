@@ -1,0 +1,179 @@
+import { useEffect, useRef } from "react";
+import { surfaceFillPath, barBorderPath, RADIUS, type ChromeGeometry } from "./chromeShape";
+import { getChromeSurface, subscribeChromeSurface, type ChromeSurface } from "./chromeStore";
+
+const OPEN_MS = 460;
+const CLOSE_MS = 300;
+const MORPH_MS = 400;
+
+const easeOutExpo = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
+const easeInCubic = (t: number) => t * t * t;
+
+interface ChromeCanvasProps {
+    barHeight: number;
+    bg: string;
+    barBorderColor: string;
+    hovered: boolean;
+    suppressed: boolean;
+}
+
+export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, suppressed }: ChromeCanvasProps) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const kickRef = useRef<(() => void) | undefined>(undefined);
+    const propsRef = useRef({ barHeight, bg, barBorderColor, hovered, suppressed });
+    propsRef.current = { barHeight, bg, barBorderColor, hovered, suppressed };
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        let openValue = 0;
+        let oFrom = 0;
+        let oTo = 0;
+        let oStart = -1;
+        let oDur = OPEN_MS;
+        let oEase: "out" | "in" = "out";
+        let cx = 0;
+        let halfBody = 0;
+        let fullH = 0;
+        let outline = false;
+        let morphFrom: { cx: number; halfBody: number; fullH: number } | null = null;
+        let morphStart = -1;
+        let contentEl: HTMLElement | null = null;
+        let lastSurface: ChromeSurface | null = null;
+        let running = false;
+        let raf = 0;
+
+        const now = () => performance.now();
+        const sampleOpen = () => {
+            if (oStart < 0) return oTo;
+            const t = Math.min(1, (now() - oStart) / oDur);
+            const eased = oEase === "out" ? easeOutExpo(t) : easeInCubic(t);
+            return oFrom + (oTo - oFrom) * eased;
+        };
+        const animateOpen = (to: number, dur: number, ease: "out" | "in") => {
+            oFrom = sampleOpen();
+            oTo = to;
+            oStart = now();
+            oDur = dur;
+            oEase = ease;
+        };
+
+        const syncSurface = () => {
+            const surface = getChromeSurface();
+            if (surface === lastSurface) return;
+            const previous = lastSurface;
+            lastSurface = surface;
+            if (surface && !previous) {
+                cx = surface.centerX;
+                halfBody = surface.bodyWidth / 2;
+                fullH = surface.fullHeight;
+                outline = surface.outline;
+                contentEl = surface.contentEl;
+                morphFrom = null;
+                animateOpen(1, OPEN_MS, "out");
+            } else if (surface && previous) {
+                outline = surface.outline;
+                contentEl = surface.contentEl;
+                morphFrom = { cx, halfBody, fullH };
+                morphStart = now();
+            } else if (!surface && previous) {
+                animateOpen(0, CLOSE_MS, "in");
+            }
+            kick();
+        };
+
+        const resize = () => {
+            canvas.width = Math.round(window.innerWidth * dpr);
+            canvas.height = Math.round(window.innerHeight * dpr);
+            kick();
+        };
+
+        const draw = () => {
+            const p = propsRef.current;
+            const screenW = window.innerWidth;
+            const barBottom = p.barHeight;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, screenW, window.innerHeight);
+
+            const surface = getChromeSurface();
+            if (surface && morphFrom) {
+                const mt = Math.min(1, (now() - morphStart) / MORPH_MS);
+                const me = easeOutExpo(mt);
+                cx = morphFrom.cx + (surface.centerX - morphFrom.cx) * me;
+                halfBody = morphFrom.halfBody + (surface.bodyWidth / 2 - morphFrom.halfBody) * me;
+                fullH = morphFrom.fullH + (surface.fullHeight - morphFrom.fullH) * me;
+                if (mt >= 1) morphFrom = null;
+            } else if (surface) {
+                cx = surface.centerX;
+                halfBody = surface.bodyWidth / 2;
+                fullH = surface.fullHeight;
+            }
+
+            openValue = sampleOpen();
+            const height = fullH * openValue;
+            const surfaceActive = openValue > 0.004;
+
+            if (!p.suppressed) {
+                const geom: ChromeGeometry = { centerX: cx, bodyWidth: halfBody * 2, height, barBottom, screenWidth: screenW };
+                if (surfaceActive) {
+                    ctx.fillStyle = p.bg;
+                    ctx.fill(new Path2D(surfaceFillPath(geom)));
+                }
+                if (p.hovered || surfaceActive) {
+                    ctx.strokeStyle = p.barBorderColor;
+                    ctx.lineWidth = 1;
+                    ctx.stroke(new Path2D(barBorderPath(geom, surfaceActive, outline)));
+                }
+            }
+
+            if (contentEl) {
+                contentEl.style.height = `${Math.max(0, height - RADIUS * 0.4)}px`;
+            }
+
+            return surfaceActive || morphFrom !== null || (oStart >= 0 && now() - oStart < oDur);
+        };
+
+        const tick = () => {
+            const animating = draw();
+            if (animating) {
+                raf = requestAnimationFrame(tick);
+            } else {
+                running = false;
+            }
+        };
+
+        function kick() {
+            if (!running) {
+                running = true;
+                raf = requestAnimationFrame(tick);
+            }
+        }
+
+        kickRef.current = kick;
+        resize();
+        const unsubscribe = subscribeChromeSurface(syncSurface);
+        window.addEventListener("resize", resize);
+        kick();
+
+        return () => {
+            cancelAnimationFrame(raf);
+            unsubscribe();
+            window.removeEventListener("resize", resize);
+        };
+    }, []);
+
+    useEffect(() => {
+        kickRef.current?.();
+    }, [barHeight, bg, barBorderColor, hovered, suppressed]);
+
+    return (
+        <canvas
+            ref={canvasRef}
+            style={{ position: "fixed", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }}
+        />
+    );
+}

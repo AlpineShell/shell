@@ -1,34 +1,16 @@
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useTopbarBg, useDarkText, useFullscreenWindow, useMenuOpenChange } from "../../themeContext";
+import { useTopbarBg, useFullscreenWindow } from "../../themeContext";
+import { SHOULDER, RADIUS } from "../chrome/chromeShape";
+import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "../chrome/chromeStore";
 
-const SHOULDER = 14;
-const RADIUS = 14;
 const SCREEN_PAD = 6;
+const BAR_BOTTOM = 24;
+const CLOSE_MS = 300;
 
-const ENTER_MS = 320;
-const EXIT_MS = 240;
-const SWITCH_MS = 150;
-const ENTER_EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
-const EXIT_EASE = "cubic-bezier(0.4, 0, 0.7, 0.2)";
-
-type Shape = { width: number; height: number; left: number; top: number };
+type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number };
 
 let activeMenu: { close: () => void } | null = null;
-
-function sidesSequence(width: number, height: number) {
-    const c = SHOULDER;
-    const r = RADIUS;
-    return `A${c} ${c} 0 0 0 ${width - c} ${c} L${width - c} ${height - r} A${r} ${r} 0 0 1 ${width - c - r} ${height} L${c + r} ${height} A${r} ${r} 0 0 1 ${c} ${height - r} L${c} ${c} A${c} ${c} 0 0 0 0 0`;
-}
-
-function fillPath(width: number, height: number) {
-    return `M0 0 L${width} 0 ${sidesSequence(width, height)} Z`;
-}
-
-function borderPath(width: number, height: number) {
-    return `M${width} 0 ${sidesSequence(width, height)}`;
-}
 
 interface PopupMenuProps {
     trigger: ReactNode;
@@ -38,23 +20,20 @@ interface PopupMenuProps {
 
 export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps) {
     const BG = useTopbarBg();
-    const darkText = useDarkText();
-    const fullscreenWindow = useFullscreenWindow();
-    const borderColor = fullscreenWindow ? (darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)") : null;
-    const onMenuOpenChange = useMenuOpenChange();
+    const outline = useFullscreenWindow();
 
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const portalRef = useRef<HTMLDivElement>(null);
-    const contentRef = useRef<HTMLDivElement>(null);
+    const clipRef = useRef<HTMLDivElement>(null);
+    const bodyRef = useRef<HTMLDivElement>(null);
 
     const [open, setOpen] = useState(false);
     const [shape, setShape] = useState<Shape | null>(null);
 
+    const idRef = useRef(0);
+    if (!idRef.current) idRef.current = nextSurfaceId();
     const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const switching = useRef(false);
     const suppressReset = useRef(false);
-    const entered = useRef(false);
 
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
@@ -66,7 +45,6 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                 clearTimeout(closeTimer.current);
                 clearTimeout(leaveTimer.current);
                 suppressReset.current = true;
-                entered.current = false;
                 setOpen(false);
                 setShape(null);
             },
@@ -74,100 +52,63 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     }
 
     useEffect(() => {
-        if (open) {
-            onOpenRef.current?.();
-            return;
-        }
-        if (suppressReset.current) {
-            suppressReset.current = false;
-            return;
-        }
-        onMenuOpenChange(false);
-        window.topbar.setActiveRegion(null);
+        if (open) onOpenRef.current?.();
     }, [open]);
-
-    function reportBounds(svgLeft: number, width: number) {
-        onMenuOpenChange(true, { left: svgLeft, right: svgLeft + width });
-    }
 
     function measureShape(): Shape | null {
         const wrapper = wrapperRef.current;
-        const content = contentRef.current;
-        if (!wrapper || !content) return null;
-        content.style.width = "max-content";
-        const contentRect = content.getBoundingClientRect();
-        const bodyWidth = Math.round(contentRect.width);
-        const bodyHeight = Math.round(contentRect.height);
-        content.style.width = `${bodyWidth}px`;
-        const width = bodyWidth + SHOULDER * 2;
+        const body = bodyRef.current;
+        if (!wrapper || !body) return null;
+        body.style.width = "max-content";
+        const rect = body.getBoundingClientRect();
+        const bodyWidth = Math.round(rect.width);
+        const bodyHeight = Math.round(rect.height);
+        body.style.width = `${bodyWidth}px`;
         const triggerRect = wrapper.getBoundingClientRect();
         const center = triggerRect.left + triggerRect.width / 2;
-        const maxLeft = window.innerWidth - width - SCREEN_PAD;
-        const left = Math.round(Math.max(SCREEN_PAD, Math.min(center - width / 2, maxLeft)));
-        const top = Math.round(triggerRect.bottom);
-        return { width, height: bodyHeight, left, top };
+        const half = bodyWidth / 2 + SHOULDER;
+        const centerX = Math.round(Math.max(SCREEN_PAD + half, Math.min(center, window.innerWidth - SCREEN_PAD - half)));
+        return { centerX, bodyWidth, bodyHeight, left: centerX - bodyWidth / 2 };
     }
 
     useLayoutEffect(() => {
         if (!open || shape) return;
         const next = measureShape();
-        if (!next) return;
-        setShape(next);
+        if (next) setShape(next);
     }, [open, shape]);
 
     useLayoutEffect(() => {
         if (!open || !shape) return;
-        reportBounds(shape.left, shape.width);
-        window.topbar.setActiveRegion({
-            top: shape.top,
-            bottom: shape.top + shape.height,
-            left: shape.left,
-            right: shape.left + shape.width,
+        if (clipRef.current) clipRef.current.style.height = "0px";
+        setChromeSurface({
+            id: idRef.current,
+            centerX: shape.centerX,
+            bodyWidth: shape.bodyWidth,
+            fullHeight: shape.bodyHeight,
+            outline,
+            contentEl: clipRef.current,
         });
-        const el = portalRef.current;
-        if (!el) return;
-
-        if (entered.current) return;
-        entered.current = true;
-
-        const isSwitch = switching.current;
-        switching.current = false;
-        el.style.transformOrigin = "top left";
-
-        if (isSwitch) {
-            el.style.transition = "none";
-            el.style.transform = "translateY(0px)";
-            el.style.clipPath = "inset(0 0 0 0)";
-            el.style.opacity = "0";
-            void el.offsetWidth;
-            el.style.transition = `opacity ${SWITCH_MS}ms ease`;
-            el.style.opacity = "1";
-            return;
-        }
-
-        el.style.transition = "none";
-        el.style.transform = "translateY(0px)";
-        el.style.opacity = "1";
-        el.style.clipPath = `inset(0 0 ${Math.max(0, shape.height - SHOULDER)}px 0)`;
-        void el.offsetWidth;
-        el.style.transition = `clip-path ${ENTER_MS}ms ${ENTER_EASE}`;
-        el.style.clipPath = "inset(0 0 0 0)";
-    }, [open, shape]);
+        window.topbar.setActiveRegion({
+            top: BAR_BOTTOM,
+            bottom: BAR_BOTTOM + shape.bodyHeight,
+            left: shape.centerX - shape.bodyWidth / 2 - SHOULDER,
+            right: shape.centerX + shape.bodyWidth / 2 + SHOULDER,
+        });
+    }, [open, shape, outline]);
 
     useEffect(() => {
         if (!open || !shape) return;
-        const content = contentRef.current;
-        if (!content) return;
-        let prev = content.offsetHeight;
+        const body = bodyRef.current;
+        if (!body) return;
+        let prevH = body.offsetHeight;
         const observer = new ResizeObserver(() => {
-            if (!entered.current) return;
             const next = measureShape();
             if (!next) return;
-            if (Math.abs(next.height - prev) < 1 && Math.abs(next.width - shape.width) < 1) return;
-            prev = next.height;
+            if (Math.abs(next.bodyHeight - prevH) < 1 && Math.abs(next.bodyWidth - shape.bodyWidth) < 1) return;
+            prevH = next.bodyHeight;
             setShape(next);
         });
-        observer.observe(content);
+        observer.observe(body);
         return () => observer.disconnect();
     }, [open, shape]);
 
@@ -181,44 +122,30 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         clearTimeout(closeTimer.current);
         clearTimeout(leaveTimer.current);
         if (activeMenu === selfRef.current) activeMenu = null;
+        clearChromeSurface(idRef.current);
     }, []);
 
     function triggerClose() {
         if (activeMenu === selfRef.current) activeMenu = null;
-        const el = portalRef.current;
-        if (!el || !shape) {
-            setOpen(false);
-            setShape(null);
-            entered.current = false;
-            return;
-        }
-        el.style.transition = `clip-path ${EXIT_MS}ms ${EXIT_EASE}, opacity ${EXIT_MS}ms ease`;
-        el.style.clipPath = `inset(0 0 ${Math.max(0, shape.height - SHOULDER)}px 0)`;
-        el.style.opacity = "0";
+        clearChromeSurface(idRef.current);
+        window.topbar.setActiveRegion(null);
         clearTimeout(closeTimer.current);
         closeTimer.current = setTimeout(() => {
-            entered.current = false;
             setOpen(false);
             setShape(null);
-        }, EXIT_MS);
+        }, CLOSE_MS);
     }
 
     function handleEnter() {
         clearTimeout(closeTimer.current);
         clearTimeout(leaveTimer.current);
         const other = activeMenu && activeMenu !== selfRef.current ? activeMenu : null;
-        if (other) {
-            switching.current = true;
-            other.close();
-        } else if (!open) {
-            switching.current = false;
-        }
+        if (other) other.close();
         activeMenu = selfRef.current;
         if (open) return;
-        entered.current = false;
         const triggerRect = wrapperRef.current?.getBoundingClientRect();
         window.topbar.setActiveRegion({
-            top: triggerRect ? triggerRect.bottom : 24,
+            top: triggerRect ? triggerRect.bottom : BAR_BOTTOM,
             bottom: window.innerHeight,
             left: 0,
             right: window.innerWidth,
@@ -242,52 +169,21 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             <div className="cursor-pointer">{trigger}</div>
             {open && createPortal(
                 <div
-                    ref={portalRef}
+                    ref={clipRef}
+                    onMouseEnter={handleEnter}
+                    onMouseLeave={handleLeave}
                     style={{
                         position: "fixed",
                         left: shape ? shape.left : -9999,
-                        top: shape ? shape.top : -9999,
-                        width: shape ? shape.width : undefined,
-                        height: shape ? shape.height : undefined,
+                        top: BAR_BOTTOM,
+                        width: shape ? shape.bodyWidth : undefined,
+                        overflow: "hidden",
+                        borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`,
                         zIndex: 5,
                         pointerEvents: shape ? "auto" : "none",
-                        filter: "drop-shadow(0 12px 26px rgba(0,0,0,0.30))",
-                        willChange: "clip-path, opacity",
                     }}
-                    onMouseEnter={handleEnter}
-                    onMouseLeave={handleLeave}
                 >
-                    {shape && (
-                        <svg
-                            width={shape.width}
-                            height={shape.height}
-                            viewBox={`0 0 ${shape.width} ${shape.height}`}
-                            style={{ display: "block", overflow: "visible", position: "absolute", top: 0, left: 0 }}
-                        >
-                            <path d={fillPath(shape.width, shape.height)} fill={BG} />
-                            {borderColor && (
-                                <path
-                                    d={borderPath(shape.width, shape.height)}
-                                    fill="none"
-                                    stroke={borderColor}
-                                    strokeWidth={1}
-                                    vectorEffect="non-scaling-stroke"
-                                />
-                            )}
-                        </svg>
-                    )}
-                    <div
-                        ref={contentRef}
-                        style={{
-                            position: "relative",
-                            marginLeft: SHOULDER,
-                            width: shape ? shape.width - SHOULDER * 2 : undefined,
-                            overflow: "hidden",
-                            borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`,
-                        }}
-                    >
-                        {children}
-                    </div>
+                    <div ref={bodyRef}>{children}</div>
                 </div>,
                 document.body
             )}
