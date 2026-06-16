@@ -8,15 +8,13 @@ const SCREEN_PAD = 6;
 
 const ENTER_MS = 320;
 const EXIT_MS = 240;
-const MORPH_MS = 340;
+const SWITCH_MS = 150;
 const ENTER_EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 const EXIT_EASE = "cubic-bezier(0.4, 0, 0.7, 0.2)";
-const MORPH_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 
-type Box = { left: number; top: number; width: number; height: number };
 type Shape = { width: number; height: number; left: number; top: number };
 
-let activeMenu: { close: () => void; measure: () => Box | null } | null = null;
+let activeMenu: { close: () => void } | null = null;
 
 function sidesSequence(width: number, height: number) {
     const c = SHOULDER;
@@ -54,23 +52,16 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
 
     const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const morphFrom = useRef<Box | null>(null);
+    const switching = useRef(false);
     const suppressReset = useRef(false);
     const entered = useRef(false);
 
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
 
-    const selfRef = useRef<{ close: () => void; measure: () => Box | null } | null>(null);
+    const selfRef = useRef<{ close: () => void } | null>(null);
     if (!selfRef.current) {
         selfRef.current = {
-            measure: () => {
-                const el = portalRef.current;
-                if (!el) return null;
-                const r = el.getBoundingClientRect();
-                if (r.width <= 0 || r.left <= -1000) return null;
-                return { left: r.left, top: r.top, width: r.width, height: r.height };
-            },
             close: () => {
                 clearTimeout(closeTimer.current);
                 clearTimeout(leaveTimer.current);
@@ -139,34 +130,21 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         if (entered.current) return;
         entered.current = true;
 
-        const from = morphFrom.current;
-        morphFrom.current = null;
+        const isSwitch = switching.current;
+        switching.current = false;
+        el.style.transformOrigin = "top left";
 
-        if (from && from.width > 0) {
-            const sx = from.width / shape.width;
-            const sy = from.height / shape.height;
-            const tx = from.left - shape.left;
-            const ty = from.top - shape.top;
+        if (isSwitch) {
             el.style.transition = "none";
-            el.style.transformOrigin = "top left";
-            el.style.opacity = "1";
-            el.style.transform = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`;
+            el.style.transform = "translateY(0px)";
+            el.style.opacity = "0";
             void el.offsetWidth;
-            el.style.transition = `transform ${MORPH_MS}ms ${MORPH_EASE}`;
-            el.style.transform = "translate(0px, 0px) scale(1, 1)";
-            const content = contentRef.current;
-            if (content) {
-                content.style.transition = "none";
-                content.style.opacity = "0";
-                void content.offsetWidth;
-                content.style.transition = `opacity ${Math.round(MORPH_MS * 0.6)}ms ease`;
-                content.style.opacity = "1";
-            }
+            el.style.transition = `opacity ${SWITCH_MS}ms ease`;
+            el.style.opacity = "1";
             return;
         }
 
         el.style.transition = "none";
-        el.style.transformOrigin = "top left";
         el.style.opacity = "0";
         el.style.transform = `translateY(${-shape.height}px)`;
         void el.offsetWidth;
@@ -229,10 +207,10 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         clearTimeout(leaveTimer.current);
         const other = activeMenu && activeMenu !== selfRef.current ? activeMenu : null;
         if (other) {
-            morphFrom.current = other.measure();
+            switching.current = true;
             other.close();
         } else if (!open) {
-            morphFrom.current = null;
+            switching.current = false;
         }
         activeMenu = selfRef.current;
         if (open) return;
