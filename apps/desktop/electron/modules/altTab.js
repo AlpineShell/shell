@@ -104,6 +104,11 @@ let tilingKeyCallback = null
 const iconCache = new Map()
 const thumbnailCache = new Map()
 
+function getCachedThumbnail(hwnd) {
+  const entry = thumbnailCache.get(hwnd)
+  return entry ? entry.url : null
+}
+
 function getHwnd(win) {
   return win.getNativeWindowHandle().readUInt32LE(0)
 }
@@ -182,7 +187,7 @@ function enumTaskWindows() {
 }
 
 function captureWindowThumbnail(hwnd) {
-  if (IsIconic(hwnd)) return thumbnailCache.get(hwnd) || null
+  if (IsIconic(hwnd)) return getCachedThumbnail(hwnd)
 
   const rectBuf = Buffer.alloc(16)
   GetWindowRect(hwnd, rectBuf)
@@ -190,10 +195,10 @@ function captureWindowThumbnail(hwnd) {
   const top = rectBuf.readInt32LE(4)
   const srcWidth = rectBuf.readInt32LE(8) - left
   const srcHeight = rectBuf.readInt32LE(12) - top
-  if (srcWidth <= 0 || srcHeight <= 0) return thumbnailCache.get(hwnd) || null
+  if (srcWidth <= 0 || srcHeight <= 0) return getCachedThumbnail(hwnd)
 
   const screenDC = GetDC(0)
-  if (!screenDC) return thumbnailCache.get(hwnd) || null
+  if (!screenDC) return getCachedThumbnail(hwnd)
   const memDC = CreateCompatibleDC(screenDC)
   const bmp = CreateCompatibleBitmap(screenDC, srcWidth, srcHeight)
   const oldBmp = SelectObject(memDC, bmp)
@@ -211,7 +216,7 @@ function captureWindowThumbnail(hwnd) {
     biHeader.writeUInt16LE(32, 14)
 
     const pixelData = Buffer.alloc(srcWidth * srcHeight * 4)
-    if (!GetDIBits(memDC, bmp, 0, srcHeight, pixelData, biHeader, 0)) return thumbnailCache.get(hwnd) || null
+    if (!GetDIBits(memDC, bmp, 0, srcHeight, pixelData, biHeader, 0)) return getCachedThumbnail(hwnd)
 
     for (let i = 3; i < pixelData.length; i += 4) {
       pixelData[i] = 255
@@ -221,10 +226,10 @@ function captureWindowThumbnail(hwnd) {
     const scale = Math.min(THUMBNAIL_MAX_WIDTH / srcWidth, THUMBNAIL_MAX_HEIGHT / srcHeight, 1.0)
     const resized = img.resize({ width: Math.round(srcWidth * scale), height: Math.round(srcHeight * scale), quality: 'good' })
     const dataUrl = resized.toDataURL()
-    thumbnailCache.set(hwnd, dataUrl)
+    thumbnailCache.set(hwnd, { url: dataUrl, ts: Date.now() })
     return dataUrl
   } catch (_) {
-    return thumbnailCache.get(hwnd) || null
+    return getCachedThumbnail(hwnd)
   } finally {
     SelectObject(memDC, oldBmp)
     DeleteObject(bmp)
@@ -272,6 +277,72 @@ async function buildWindowList() {
     results.push({ hwnd, title, processName, icon, thumbnail: thumbnail || '' })
   }
   return results
+}
+
+const THUMBNAIL_REFRESH_MS = 4000
+const MAX_FILLS_PER_SWEEP = 3
+
+let lastForegroundHwnd = 0
+let foregroundPollTimer = null
+let warmSweepTimer = null
+let foregroundCaptureTimer = null
+
+function toHwndNum(value) {
+  return typeof value === 'bigint' ? Number(value) : value
+}
+
+function warmCapture(hwnd) {
+  if (!hwnd) return
+  try {
+    if (IsIconic(hwnd) || isOwnWindow(hwnd) || !isAltTabWindow(hwnd)) return
+    captureWindowThumbnail(hwnd)
+  } catch (e) {
+    console.error('[altTab] warm capture error:', e.message)
+  }
+}
+
+function pollForeground() {
+  if (switcherActive) return
+  const fg = toHwndNum(GetForegroundWindow())
+  if (!fg || fg === lastForegroundHwnd) return
+  lastForegroundHwnd = fg
+  if (foregroundCaptureTimer) clearTimeout(foregroundCaptureTimer)
+  foregroundCaptureTimer = setTimeout(() => warmCapture(fg), 250)
+}
+
+function warmSweep() {
+  if (switcherActive) return
+  try {
+    const hwnds = enumTaskWindows()
+    const live = new Set(hwnds)
+    for (const key of [...thumbnailCache.keys()]) {
+      if (!live.has(key)) thumbnailCache.delete(key)
+    }
+    let fills = 0
+    for (const hwnd of hwnds) {
+      if (IsIconic(hwnd) || thumbnailCache.has(hwnd)) continue
+      captureWindowThumbnail(hwnd)
+      if (++fills >= MAX_FILLS_PER_SWEEP) break
+    }
+    warmCapture(toHwndNum(GetForegroundWindow()))
+  } catch (e) {
+    console.error('[altTab] warm sweep error:', e.message)
+  }
+}
+
+function startThumbnailWarmer() {
+  foregroundPollTimer = setInterval(pollForeground, 400)
+  warmSweepTimer = setInterval(warmSweep, THUMBNAIL_REFRESH_MS)
+  setTimeout(warmSweep, 1500)
+}
+
+function stopThumbnailWarmer() {
+  if (foregroundPollTimer) clearInterval(foregroundPollTimer)
+  if (warmSweepTimer) clearInterval(warmSweepTimer)
+  if (foregroundCaptureTimer) clearTimeout(foregroundCaptureTimer)
+  foregroundPollTimer = null
+  warmSweepTimer = null
+  foregroundCaptureTimer = null
 }
 
 function activateWindow(hwnd) {
@@ -572,8 +643,10 @@ module.exports = {
 
   start(_broadcast) {
     installHook()
+    startThumbnailWarmer()
     app.on('will-quit', () => {
       uninstallHook()
+      stopThumbnailWarmer()
     })
   },
 }
