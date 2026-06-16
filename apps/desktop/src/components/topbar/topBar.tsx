@@ -49,8 +49,8 @@ export default function TopBar() {
             >
                 {activeGap ? (
                     <>
-                        <div style={{ position: "absolute", bottom: 0, left: 0, width: activeGap.left, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease, width 320ms cubic-bezier(0.33, 1, 0.68, 1)" }} />
-                        <div style={{ position: "absolute", bottom: 0, left: activeGap.right, right: 0, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease, left 320ms cubic-bezier(0.33, 1, 0.68, 1)" }} />
+                        <div style={{ position: "absolute", bottom: 0, left: 0, width: activeGap.left, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
+                        <div style={{ position: "absolute", bottom: 0, left: activeGap.right, right: 0, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
                     </>
                 ) : (
                     <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 1, backgroundColor: borderColor, opacity: showBorder ? 1 : 0, transition: "opacity 150ms ease" }} />
