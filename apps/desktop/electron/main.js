@@ -34,6 +34,8 @@ let screenshot = null
 try { screenshot = require('./modules/screenshot') } catch (e) { console.error('[main] screenshot load error:', e.message) }
 let powerThrottling = null
 try { powerThrottling = require('./modules/powerThrottling') } catch (e) { console.error('[main] powerThrottling load error:', e.message) }
+let shellWindow = null
+try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error('[main] shellWindow load error:', e.message) }
 const { processAutostart } = require('./modules/autostart')
 const installer = require('./modules/installer')
 const updater = require('./modules/updater')
@@ -476,6 +478,9 @@ function startShellMode() {
     killedExplorer = setup.killExplorer()
   }
 
+  const actingAsShell = killedExplorer || (isAlpineShell ?? setup.isDefaultShell())
+  if (shellWindow && actingAsShell) shellWindow.register()
+
   if (altTab) altTab.setShells(shells)
 
   tiling.setShells(shells)
@@ -547,6 +552,7 @@ function startShellMode() {
 
 app.on('will-quit', () => {
   unregisterAll()
+  if (shellWindow) shellWindow.destroy()
   restoreExplorerIfKilled()
 })
 
@@ -558,6 +564,7 @@ function restoreExplorerIfKilled() {
 
 function gracefulShutdown() {
   try { unregisterAll() } catch {}
+  try { if (shellWindow) shellWindow.destroy() } catch {}
   restoreExplorerIfKilled()
   app.exit(0)
 }
