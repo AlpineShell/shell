@@ -68,7 +68,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                 const el = portalRef.current;
                 if (!el) return null;
                 const r = el.getBoundingClientRect();
-                if (r.width <= 0) return null;
+                if (r.width <= 0 || r.left <= -1000) return null;
                 return { left: r.left, top: r.top, width: r.width, height: r.height };
             },
             close: () => {
