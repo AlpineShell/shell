@@ -39,6 +39,9 @@ const GetSystemMetrics = user32.func('__stdcall', 'GetSystemMetrics', 'int', ['i
 
 const GetModuleHandleW = kernel32.func('__stdcall', 'GetModuleHandleW', 'uintptr_t', ['str16'])
 const RtlMoveMemory = kernel32.func('__stdcall', 'RtlMoveMemory', 'void', ['void *', 'uintptr_t', 'uintptr_t'])
+const OpenProcess = kernel32.func('__stdcall', 'OpenProcess', 'uintptr_t', ['uint32', 'int', 'uint32'])
+const QueryFullProcessImageNameW = kernel32.func('__stdcall', 'QueryFullProcessImageNameW', 'int', ['uintptr_t', 'uint32', 'void *', 'void *'])
+const CloseHandle = kernel32.func('__stdcall', 'CloseHandle', 'int', ['uintptr_t'])
 
 const CreateCompatibleDC = gdi32.func('__stdcall', 'CreateCompatibleDC', 'uintptr_t', ['uintptr_t'])
 const CreateDIBSection = gdi32.func('__stdcall', 'CreateDIBSection', 'uintptr_t', ['uintptr_t', 'void *', 'uint32', 'void *', 'uintptr_t', 'uint32'])
@@ -57,6 +60,7 @@ const NIN_SELECT = 0x0400
 const HWND_BROADCAST = 0xffff
 const SMTO_ABORTIFHUNG = 0x0002
 const SM_CXSMICON = 49
+const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
 const NIF_MESSAGE = 0x01
 const NIF_ICON = 0x02
@@ -75,6 +79,7 @@ const OFF64 = { hWnd: 8, uID: 16, uFlags: 20, uCallback: 24, hIcon: 32, szTip: 4
 const OFF32 = { hWnd: 4, uID: 8, uFlags: 12, uCallback: 16, hIcon: 20, szTip: 24, uVersion: 800, guid: 936 }
 
 const icons = new Map()
+const processPathCache = new Map()
 let broadcastRef = null
 let wndProcPtr = null
 let trayHwnd = 0
@@ -96,6 +101,39 @@ function readWideString(buf, off, maxChars) {
     s += String.fromCharCode(c)
   }
   return s
+}
+
+function getOwnerExeName(hWndRaw) {
+  const key = toNum(hWndRaw)
+  const cached = processPathCache.get(key)
+  if (cached) return cached
+  let exe = null
+  try {
+    const pidBuf = Buffer.alloc(4)
+    GetWindowThreadProcessId(hWndRaw, pidBuf)
+    const pid = pidBuf.readUInt32LE(0)
+    if (pid) {
+      const hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
+      if (toNum(hProcess)) {
+        try {
+          const pathBuf = Buffer.alloc(520 * 2)
+          const sizeBuf = Buffer.alloc(4)
+          sizeBuf.writeUInt32LE(520, 0)
+          if (QueryFullProcessImageNameW(hProcess, 0, pathBuf, sizeBuf)) {
+            const len = sizeBuf.readUInt32LE(0)
+            const base = readWideString(pathBuf, 0, len).split('\\').pop()
+            if (base) exe = base.toLowerCase()
+          }
+        } finally {
+          CloseHandle(hProcess)
+        }
+      }
+    }
+  } catch (_) {
+    exe = null
+  }
+  if (exe) processPathCache.set(key, exe)
+  return exe
 }
 
 function readGuid(buf, off) {
@@ -170,6 +208,8 @@ function publicState() {
 
 function computeId(guid, hWndRaw, uID) {
   if (guid) return `guid:${guid}`
+  const exe = getOwnerExeName(hWndRaw)
+  if (exe) return `app:${exe}:${uID}`
   return `w:${toNum(hWndRaw)}:${uID}`
 }
 
@@ -340,6 +380,7 @@ function reapDeadOwners() {
   for (const [id, r] of icons) {
     if (!IsWindow(r.hWndRaw)) {
       icons.delete(id)
+      processPathCache.delete(toNum(r.hWndRaw))
       changed = true
     }
   }
