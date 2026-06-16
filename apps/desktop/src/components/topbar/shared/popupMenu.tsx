@@ -1,15 +1,37 @@
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTopbarBg, useDarkText, useFullscreenWindow, useMenuOpenChange } from "../../themeContext";
-import { useFlyUnderBar } from "../../../hooks/useFlyUnderBar";
 
-const CORNER = 16;
-const SCREEN_PAD = 0;
-const SLIDE_MS = 320;
+const SHOULDER = 14;
+const RADIUS = 14;
+const SCREEN_PAD = 6;
+const WINDOW_HEIGHT = 600;
 
-type MenuGeometry = { center: number; width: number; height: number };
+const ENTER_MS = 320;
+const EXIT_MS = 240;
+const MORPH_MS = 340;
+const ENTER_EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
+const EXIT_EASE = "cubic-bezier(0.4, 0, 0.7, 0.2)";
+const MORPH_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 
-let activeMenu: { close: () => void; measure: () => MenuGeometry | null } | null = null;
+type Box = { left: number; top: number; width: number; height: number };
+type Shape = { width: number; height: number; left: number; top: number };
+
+let activeMenu: { close: () => void; measure: () => Box | null } | null = null;
+
+function sidesSequence(width: number, height: number) {
+    const c = SHOULDER;
+    const r = RADIUS;
+    return `A${c} ${c} 0 0 0 ${width - c} ${c} L${width - c} ${height - r} A${r} ${r} 0 0 1 ${width - c - r} ${height} L${c + r} ${height} A${r} ${r} 0 0 1 ${c} ${height - r} L${c} ${c} A${c} ${c} 0 0 0 0 0`;
+}
+
+function fillPath(width: number, height: number) {
+    return `M0 0 L${width} 0 ${sidesSequence(width, height)} Z`;
+}
+
+function borderPath(width: number, height: number) {
+    return `M${width} 0 ${sidesSequence(width, height)}`;
+}
 
 interface PopupMenuProps {
     trigger: ReactNode;
@@ -23,135 +45,147 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     const fullscreenWindow = useFullscreenWindow();
     const borderColor = fullscreenWindow ? (darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)") : null;
     const onMenuOpenChange = useMenuOpenChange();
+
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const popupRef = useRef<HTMLDivElement>(null);
-    const bodyRef = useRef<HTMLDivElement>(null);
-    const boxRef = useRef<HTMLDivElement>(null);
-    const cornerLeftRef = useRef<SVGSVGElement>(null);
-    const cornerRightRef = useRef<SVGSVGElement>(null);
+    const portalRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+
     const [open, setOpen] = useState(false);
-    const [closing, setClosing] = useState(false);
-    const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
+    const [shape, setShape] = useState<Shape | null>(null);
+
     const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const closeAnimTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const morphFrom = useRef<Box | null>(null);
     const suppressReset = useRef(false);
-    const morphFromRef = useRef<MenuGeometry | null>(null);
-    const morphingRef = useRef(false);
+    const entered = useRef(false);
 
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
 
-    const selfRef = useRef<{ close: () => void; measure: () => MenuGeometry | null } | null>(null);
+    const selfRef = useRef<{ close: () => void; measure: () => Box | null } | null>(null);
     if (!selfRef.current) {
         selfRef.current = {
             measure: () => {
-                const box = boxRef.current;
-                if (!box) return null;
-                const rect = box.getBoundingClientRect();
-                if (rect.width <= 0) return null;
-                return { center: rect.left + rect.width / 2, width: rect.width, height: rect.height };
+                const el = portalRef.current;
+                if (!el) return null;
+                const r = el.getBoundingClientRect();
+                if (r.width <= 0) return null;
+                return { left: r.left, top: r.top, width: r.width, height: r.height };
             },
             close: () => {
                 clearTimeout(closeTimer.current);
-                clearTimeout(closeAnimTimer.current);
+                clearTimeout(leaveTimer.current);
                 suppressReset.current = true;
+                entered.current = false;
                 setOpen(false);
-                setClosing(false);
+                setShape(null);
             },
         };
     }
-
-    useFlyUnderBar(bodyRef, [cornerLeftRef, cornerRightRef], CORNER, open, closing, morphFromRef.current !== null);
 
     useEffect(() => {
         if (open) {
             onOpenRef.current?.();
-        } else {
-            if (!suppressReset.current) {
-                onMenuOpenChange(false);
-                window.topbar.setHeight(24);
-            }
-            suppressReset.current = false;
+            return;
         }
+        if (suppressReset.current) {
+            suppressReset.current = false;
+            return;
+        }
+        onMenuOpenChange(false);
+        window.topbar.setHeight(24);
     }, [open]);
 
-    function reportBounds(center: number, width: number) {
-        onMenuOpenChange(true, { left: center - width / 2 - CORNER, right: center + width / 2 + CORNER });
+    function reportBounds(svgLeft: number, width: number) {
+        onMenuOpenChange(true, { left: svgLeft, right: svgLeft + width });
+    }
+
+    function measureShape(): Shape | null {
+        const wrapper = wrapperRef.current;
+        const content = contentRef.current;
+        if (!wrapper || !content) return null;
+        content.style.width = "";
+        const contentRect = content.getBoundingClientRect();
+        const bodyWidth = Math.round(contentRect.width);
+        const bodyHeight = Math.round(contentRect.height);
+        content.style.width = `${bodyWidth}px`;
+        const width = bodyWidth + SHOULDER * 2;
+        const triggerRect = wrapper.getBoundingClientRect();
+        const center = triggerRect.left + triggerRect.width / 2;
+        const maxLeft = window.innerWidth - width - SCREEN_PAD;
+        const left = Math.round(Math.max(SCREEN_PAD, Math.min(center - width / 2, maxLeft)));
+        const top = Math.round(triggerRect.bottom);
+        return { width, height: bodyHeight, left, top };
     }
 
     useLayoutEffect(() => {
-        if (!open) return;
-        repositionPopup();
-    }, [open]);
+        if (!open || shape) return;
+        const next = measureShape();
+        if (!next) return;
+        setShape(next);
+    }, [open, shape]);
 
     useLayoutEffect(() => {
-        if (!open) return;
-        const popup = popupRef.current;
-        const box = boxRef.current;
-        const wrapper = wrapperRef.current;
-        if (!popup || !box || !wrapper) return;
+        if (!open || !shape) return;
+        reportBounds(shape.left, shape.width);
+        const el = portalRef.current;
+        if (!el) return;
 
-        box.style.width = "";
-        box.style.height = "";
-        const boxRect = box.getBoundingClientRect();
-        const width = boxRect.width;
-        const height = boxRect.height;
-        const triggerRect = wrapper.getBoundingClientRect();
-        const triggerCenter = triggerRect.left + triggerRect.width / 2;
-        const left = Math.max(SCREEN_PAD, Math.min(triggerCenter - width / 2, window.innerWidth - width - SCREEN_PAD));
-        const center = left + width / 2;
-        reportBounds(center, width);
+        if (entered.current) return;
+        entered.current = true;
 
-        const from = morphFromRef.current;
-        morphFromRef.current = null;
-        if (!from || from.width <= 0) return;
+        const from = morphFrom.current;
+        morphFrom.current = null;
 
-        morphingRef.current = true;
-        let raf = 0;
-        let startTime = 0;
-        const step = (now: number) => {
-            if (!startTime) startTime = now;
-            const progress = Math.min(1, (now - startTime) / SLIDE_MS);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            const c = from.center + (center - from.center) * eased;
-            const w = from.width + (width - from.width) * eased;
-            const h = from.height + (height - from.height) * eased;
-            popup.style.transform = `translateX(${(c - center) - (w - width) / 2}px)`;
-            box.style.width = `${w}px`;
-            box.style.height = `${h}px`;
-            if (progress < 1) {
-                raf = requestAnimationFrame(step);
-            } else {
-                box.style.width = "";
-                box.style.height = "";
-                popup.style.transform = "";
-                morphingRef.current = false;
+        if (from && from.width > 0) {
+            const sx = from.width / shape.width;
+            const sy = from.height / shape.height;
+            const tx = from.left - shape.left;
+            const ty = from.top - shape.top;
+            el.style.transition = "none";
+            el.style.transformOrigin = "top left";
+            el.style.opacity = "1";
+            el.style.transform = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`;
+            void el.offsetWidth;
+            el.style.transition = `transform ${MORPH_MS}ms ${MORPH_EASE}`;
+            el.style.transform = "translate(0px, 0px) scale(1, 1)";
+            const content = contentRef.current;
+            if (content) {
+                content.style.transition = "none";
+                content.style.opacity = "0";
+                void content.offsetWidth;
+                content.style.transition = `opacity ${Math.round(MORPH_MS * 0.6)}ms ease`;
+                content.style.opacity = "1";
             }
-        };
-        raf = requestAnimationFrame(step);
-        return () => {
-            cancelAnimationFrame(raf);
-            morphingRef.current = false;
-        };
-    }, [open]);
+            return;
+        }
+
+        el.style.transition = "none";
+        el.style.transformOrigin = "top left";
+        el.style.opacity = "0";
+        el.style.transform = `translateY(${-shape.height}px)`;
+        void el.offsetWidth;
+        el.style.transition = `transform ${ENTER_MS}ms ${ENTER_EASE}, opacity 180ms ease`;
+        el.style.opacity = "1";
+        el.style.transform = "translateY(0px)";
+    }, [open, shape]);
 
     useEffect(() => {
-        if (!open) return;
-        const popup = popupRef.current;
-        if (!popup) return;
-        let prevWidth = popup.offsetWidth;
-        const observer = new ResizeObserver((entries) => {
-            if (morphingRef.current) return;
-            const width = entries[0]?.contentRect.width ?? popup.offsetWidth;
-            if (width === prevWidth) return;
-            prevWidth = width;
-            repositionPopup();
-            const geometry = selfRef.current?.measure();
-            if (geometry) reportBounds(geometry.center, geometry.width);
+        if (!open || !shape) return;
+        const content = contentRef.current;
+        if (!content) return;
+        let prev = content.offsetHeight;
+        const observer = new ResizeObserver(() => {
+            if (!entered.current) return;
+            const next = measureShape();
+            if (!next) return;
+            if (Math.abs(next.height - prev) < 1 && Math.abs(next.width - shape.width) < 1) return;
+            prev = next.height;
+            setShape(next);
         });
-        observer.observe(popup);
+        observer.observe(content);
         return () => observer.disconnect();
-    }, [open]);
+    }, [open, shape]);
 
     useEffect(() => {
         if (!open) return;
@@ -161,53 +195,50 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
 
     useEffect(() => () => {
         clearTimeout(closeTimer.current);
-        clearTimeout(closeAnimTimer.current);
+        clearTimeout(leaveTimer.current);
         if (activeMenu === selfRef.current) activeMenu = null;
     }, []);
 
     function triggerClose() {
         if (activeMenu === selfRef.current) activeMenu = null;
-        setClosing(true);
-        closeAnimTimer.current = setTimeout(() => {
+        const el = portalRef.current;
+        if (!el || !shape) {
             setOpen(false);
-            setClosing(false);
-        }, 300);
-    }
-
-    function repositionPopup() {
-        const wrapper = wrapperRef.current;
-        const popup = popupRef.current;
-        if (!wrapper || !popup) return;
-        const rect = wrapper.getBoundingClientRect();
-        const popupWidth = popup.offsetWidth;
-        const centerX = rect.left + rect.width / 2;
-        const left = Math.round(Math.max(SCREEN_PAD, Math.min(centerX - popupWidth / 2, window.innerWidth - popupWidth - SCREEN_PAD)));
-        setPopupStyle({ position: "fixed", top: Math.round(rect.bottom), left });
+            setShape(null);
+            entered.current = false;
+            return;
+        }
+        el.style.transition = `transform ${EXIT_MS}ms ${EXIT_EASE}, opacity ${EXIT_MS}ms ease`;
+        el.style.opacity = "0";
+        el.style.transform = `translateY(${-shape.height}px)`;
+        clearTimeout(closeTimer.current);
+        closeTimer.current = setTimeout(() => {
+            entered.current = false;
+            setOpen(false);
+            setShape(null);
+        }, EXIT_MS);
     }
 
     function handleEnter() {
         clearTimeout(closeTimer.current);
-        clearTimeout(closeAnimTimer.current);
-        setClosing(false);
+        clearTimeout(leaveTimer.current);
         const other = activeMenu && activeMenu !== selfRef.current ? activeMenu : null;
         if (other) {
-            morphFromRef.current = other.measure();
+            morphFrom.current = other.measure();
             other.close();
         } else if (!open) {
-            morphFromRef.current = null;
+            morphFrom.current = null;
         }
         activeMenu = selfRef.current;
         if (open) return;
-        if (wrapperRef.current) {
-            const rect = wrapperRef.current.getBoundingClientRect();
-            setPopupStyle({ position: "fixed", top: Math.round(rect.bottom), left: -9999 });
-        }
-        window.topbar.setHeight(500);
-        requestAnimationFrame(() => setOpen(true));
+        entered.current = false;
+        window.topbar.setHeight(WINDOW_HEIGHT);
+        setShape(null);
+        setOpen(true);
     }
 
     function handleLeave() {
-        closeTimer.current = setTimeout(() => triggerClose(), 80);
+        leaveTimer.current = setTimeout(() => triggerClose(), 80);
     }
 
     return (
@@ -218,63 +249,53 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             onMouseEnter={handleEnter}
             onMouseLeave={handleLeave}
         >
-            <div className="cursor-pointer">
-                {trigger}
-            </div>
+            <div className="cursor-pointer">{trigger}</div>
             {open && createPortal(
                 <div
-                    ref={popupRef}
-                    className="z-5"
-                    style={popupStyle}
+                    ref={portalRef}
+                    style={{
+                        position: "fixed",
+                        left: shape ? shape.left : -9999,
+                        top: shape ? shape.top : -9999,
+                        width: shape ? shape.width : undefined,
+                        height: shape ? shape.height : undefined,
+                        zIndex: 5,
+                        pointerEvents: shape ? "auto" : "none",
+                        filter: "drop-shadow(0 12px 26px rgba(0,0,0,0.30))",
+                    }}
                     onMouseEnter={handleEnter}
                     onMouseLeave={handleLeave}
                 >
-                    <svg
-                        ref={cornerLeftRef}
-                        className="absolute right-full"
-                        width={CORNER}
-                        height={CORNER}
-                        viewBox={`0 0 ${CORNER} ${CORNER}`}
-                        style={{ top: -0.5, overflow: "visible", display: "block" }}
-                    >
-                        <path d={`M0 0 H${CORNER} V${CORNER} A${CORNER} ${CORNER} 0 0 0 0 0 Z`} fill={BG} />
-                        {borderColor && <path d={`M0 0 A${CORNER} ${CORNER} 0 0 1 ${CORNER} ${CORNER}`} fill="none" stroke={borderColor} strokeWidth={1} />}
-                    </svg>
-                    <svg
-                        ref={cornerRightRef}
-                        className="absolute left-full"
-                        width={CORNER}
-                        height={CORNER}
-                        viewBox={`0 0 ${CORNER} ${CORNER}`}
-                        style={{ top: -0.5, overflow: "visible", display: "block" }}
-                    >
-                        <path d={`M${CORNER} 0 H0 V${CORNER} A${CORNER} ${CORNER} 0 0 1 ${CORNER} 0 Z`} fill={BG} />
-                        {borderColor && <path d={`M${CORNER} 0 A${CORNER} ${CORNER} 0 0 0 0 ${CORNER}`} fill="none" stroke={borderColor} strokeWidth={1} />}
-                    </svg>
-                    <div ref={bodyRef}>
-                        <div style={{ position: "relative" }}>
-                            <div
-                                ref={boxRef}
-                                className="overflow-hidden rounded-b-2xl shadow-xl"
-                                style={{ backgroundColor: BG }}
-                            >
-                                {children}
-                            </div>
+                    {shape && (
+                        <svg
+                            width={shape.width}
+                            height={shape.height}
+                            viewBox={`0 0 ${shape.width} ${shape.height}`}
+                            style={{ display: "block", overflow: "visible", position: "absolute", top: 0, left: 0 }}
+                        >
+                            <path d={fillPath(shape.width, shape.height)} fill={BG} />
                             {borderColor && (
-                                <div style={{
-                                    position: "absolute",
-                                    top: CORNER - 0.5,
-                                    left: 0,
-                                    right: 0,
-                                    bottom: 0,
-                                    borderLeft: `1px solid ${borderColor}`,
-                                    borderRight: `1px solid ${borderColor}`,
-                                    borderBottom: `1px solid ${borderColor}`,
-                                    borderRadius: "0 0 16px 16px",
-                                    pointerEvents: "none",
-                                }} />
+                                <path
+                                    d={borderPath(shape.width, shape.height)}
+                                    fill="none"
+                                    stroke={borderColor}
+                                    strokeWidth={1}
+                                    vectorEffect="non-scaling-stroke"
+                                />
                             )}
-                        </div>
+                        </svg>
+                    )}
+                    <div
+                        ref={contentRef}
+                        style={{
+                            position: "relative",
+                            marginLeft: SHOULDER,
+                            width: shape ? shape.width - SHOULDER * 2 : undefined,
+                            overflow: "hidden",
+                            borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`,
+                        }}
+                    >
+                        {children}
                     </div>
                 </div>,
                 document.body
