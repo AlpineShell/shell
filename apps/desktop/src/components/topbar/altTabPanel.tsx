@@ -1,9 +1,8 @@
 import { createPortal } from "react-dom"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
 import { useFlyUnderBar } from "../../hooks/useFlyUnderBar"
-
-const CORNER = 12
+import { SHOULDER, RADIUS, fillPath, borderPath } from "./shared/menuShape"
 
 interface AltTabPanelProps {
   onGapChange: (gap: { left: number; right: number } | null) => void
@@ -61,13 +60,12 @@ export default function AltTabPanel({ onGapChange }: AltTabPanelProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [visible, setVisible] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
-  const cornerLeftRef = useRef<HTMLDivElement>(null)
-  const cornerRightRef = useRef<HTMLDivElement>(null)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  useFlyUnderBar(bodyRef, [cornerLeftRef, cornerRightRef], CORNER, visible, closing)
+  useFlyUnderBar(bodyRef, [], SHOULDER, visible, closing)
 
   useEffect(() => {
     window.alttab.onShow((data) => {
@@ -84,72 +82,62 @@ export default function AltTabPanel({ onGapChange }: AltTabPanelProps) {
         setClosing(false)
         setWindows([])
         setSelectedIndex(0)
+        setSize(null)
       }, 300)
     })
     window.alttab.onSelectionChanged(setSelectedIndex)
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!visible) {
       onGapChange(null)
       return
     }
     const panel = panelRef.current
     if (!panel) return
-    const reportGap = () => {
-      const left = Math.round((window.innerWidth - panel.offsetWidth) / 2) - CORNER
-      const right = left + panel.offsetWidth + CORNER * 2
-      onGapChange({ left, right })
+    const update = () => {
+      const rect = panel.getBoundingClientRect()
+      const w = Math.round(rect.width) + SHOULDER * 2
+      const h = Math.round(rect.height)
+      setSize((prev) => (prev && Math.abs(prev.w - w) < 1 && Math.abs(prev.h - h) < 1 ? prev : { w, h }))
+      const left = Math.round((window.innerWidth - w) / 2)
+      onGapChange({ left, right: left + w })
     }
-    reportGap()
-    const observer = new ResizeObserver(reportGap)
+    update()
+    const observer = new ResizeObserver(update)
     observer.observe(panel)
     return () => observer.disconnect()
   }, [visible])
 
   if (!visible || windows.length === 0) return null
 
-  const cornerBg = borderColor
-    ? `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${bg} ${CORNER + 0.5}px)`
-    : `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${bg} ${CORNER}px)`
-  const cornerBgRight = borderColor
-    ? `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${bg} ${CORNER + 0.5}px)`
-    : `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${bg} ${CORNER}px)`
-
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center" style={{ pointerEvents: "none" }}>
       <div style={{ marginTop: 24, position: "relative", clipPath: "inset(0 -2000px -2000px -2000px)" }}>
-        <div ref={cornerLeftRef} className="absolute top-0 right-full" style={{ width: CORNER, height: CORNER, background: cornerBg }} />
-        <div ref={cornerRightRef} className="absolute top-0 left-full" style={{ width: CORNER, height: CORNER, background: cornerBgRight }} />
-        <div ref={bodyRef}>
-          <div className="relative">
-            <div
-              ref={panelRef}
-              className="overflow-hidden rounded-b-xl shadow-2xl p-3"
-              style={{ backgroundColor: bg, transition: "background-color 300ms ease", maxWidth: "90vw" }}
+        <div ref={bodyRef} style={{ position: "relative", willChange: "transform" }}>
+          {size && (
+            <svg
+              width={size.w}
+              height={size.h}
+              viewBox={`0 0 ${size.w} ${size.h}`}
+              style={{ position: "absolute", top: 0, left: -SHOULDER, display: "block", overflow: "visible", filter: "drop-shadow(0 14px 30px rgba(0,0,0,0.32))" }}
             >
-              <div className="flex flex-wrap justify-center gap-2">
-                {windows.map((w, i) => (
-                  <WindowEntry key={w.hwnd} window={w} selected={i === selectedIndex} darkText={darkText} />
-                ))}
-              </div>
+              <path d={fillPath(size.w, size.h)} fill={bg} />
+              {borderColor && (
+                <path d={borderPath(size.w, size.h)} fill="none" stroke={borderColor} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              )}
+            </svg>
+          )}
+          <div
+            ref={panelRef}
+            className="relative overflow-hidden p-3"
+            style={{ borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`, maxWidth: "90vw" }}
+          >
+            <div className="flex flex-wrap justify-center gap-2">
+              {windows.map((w, i) => (
+                <WindowEntry key={w.hwnd} window={w} selected={i === selectedIndex} darkText={darkText} />
+              ))}
             </div>
-            {borderColor && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: CORNER,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  borderLeft: `0.5px solid ${borderColor}`,
-                  borderRight: `0.5px solid ${borderColor}`,
-                  borderBottom: `0.5px solid ${borderColor}`,
-                  borderRadius: "0 0 12px 12px",
-                  pointerEvents: "none",
-                }}
-              />
-            )}
           </div>
         </div>
       </div>
