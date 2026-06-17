@@ -114,7 +114,7 @@ function useRunCommand(query: string): RunResult | null {
 
 const RUN_ICONS = { folder: FolderOpen, file: FileText, url: Globe, shell: FolderOpen, command: Terminal }
 
-function staticMapUrl(lat: number, lon: number, width: number, height: number): string {
+function staticMapUrl(lat: number, lon: number): string {
   const zoom = 15
   const x = Math.floor(((lon + 180) / 360) * Math.pow(2, zoom))
   const latRad = (lat * Math.PI) / 180
@@ -227,7 +227,6 @@ export default function LauncherPanel() {
   const committed = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const resultsRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const idRef = useRef(0)
@@ -295,9 +294,9 @@ export default function LauncherPanel() {
 
   useEffect(() => {
     window.shell.apps.catalog().then(setItems)
-    window.shell.apps.onCatalogChanged(setItems)
+    const offCatalog = window.shell.apps.onCatalogChanged(setItems)
     window.shell.windows.openApps().then(setOpenApps)
-    window.shell.windows.onOpenAppsChanged(setOpenApps)
+    const offOpenApps = window.shell.windows.onOpenAppsChanged(setOpenApps)
     Promise.all([
       window.shell.windows.wallpaperMine(),
       window.shell.windows.wallpaperPresets(),
@@ -306,6 +305,10 @@ export default function LauncherPanel() {
       setWallpapers(list)
     })
     requestAnimationFrame(() => inputRef.current?.focus())
+    return () => {
+      offCatalog()
+      offOpenApps()
+    }
   }, [])
 
   function registerSurface() {
@@ -644,7 +647,7 @@ export default function LauncherPanel() {
                 />
               )}
             </div>
-            <div ref={resultsRef}>
+            <div>
                 {notice ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
@@ -718,7 +721,7 @@ export default function LauncherPanel() {
                             </div>
                             <div className="flex-1 rounded-md overflow-hidden relative">
                               <img
-                                src={staticMapUrl(mapResult.lat, mapResult.lon, 256, 256)}
+                                src={staticMapUrl(mapResult.lat, mapResult.lon)}
                                 alt=""
                                 className="w-full h-full object-cover"
                                 draggable={false}

@@ -152,7 +152,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                 contentEl.style.clipPath = `inset(${slide}px ${rightHidden}px ${vHidden - slide}px ${leftHidden}px round 0 0 ${r}px ${r}px)`;
             }
 
-            return surfaceActive || morphFrom !== null || (oStart >= 0 && now() - oStart < oDur);
+            return morphFrom !== null || (oStart >= 0 && now() - oStart < oDur);
         };
 
         const tick = () => {

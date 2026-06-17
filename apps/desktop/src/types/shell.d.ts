@@ -372,7 +372,7 @@ declare global {
         wallpaperMine: () => Promise<{ name: string; path: string; thumbnail: string; url: string; addedAt: number }[]>
         wallpaperMineDelete: (filePath: string) => Promise<boolean>
         openApps: () => Promise<OpenApp[]>
-        onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => void
+        onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => () => void
         openSettings: () => Promise<void>
         closeSettings: () => Promise<void>
         setSettingsPage: (name: string) => Promise<void>
@@ -401,7 +401,7 @@ declare global {
         openApp: (id: string) => Promise<{ ok: boolean }>
         openAppLocation: (id: string) => Promise<{ ok: boolean }>
         catalog: () => Promise<LauncherItem[]>
-        onCatalogChanged: (callback: (data: LauncherItem[]) => void) => void
+        onCatalogChanged: (callback: (data: LauncherItem[]) => void) => () => void
         launch: (id: number) => Promise<{ success: boolean }>
         launchAdmin: (id: number) => Promise<{ success: boolean }>
         windowCommand: (action: 'minimize' | 'maximize' | 'close') => Promise<{ ok: boolean }>

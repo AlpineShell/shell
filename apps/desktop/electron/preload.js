@@ -163,7 +163,9 @@ contextBridge.exposeInMainWorld('shell', {
     wallpaperMineDelete: (filePath) => ipcRenderer.invoke('windows/wallpaper-mine-delete', filePath),
     openApps: () => ipcRenderer.invoke('windows/open-apps'),
     onOpenAppsChanged: (callback) => {
-      ipcRenderer.on('windows/open-apps-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('windows/open-apps-changed', handler)
+      return () => ipcRenderer.removeListener('windows/open-apps-changed', handler)
     },
     openSettings: () => ipcRenderer.invoke('windows/open-settings'),
     closeSettings: () => ipcRenderer.invoke('windows/close-settings'),
@@ -294,7 +296,9 @@ contextBridge.exposeInMainWorld('shell', {
     openAppLocation: (id) => ipcRenderer.invoke('apps/installed-open-location', { id }),
     catalog: () => ipcRenderer.invoke('apps/catalog'),
     onCatalogChanged: (callback) => {
-      ipcRenderer.on('apps/catalog-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('apps/catalog-changed', handler)
+      return () => ipcRenderer.removeListener('apps/catalog-changed', handler)
     },
     launch: (id) => ipcRenderer.invoke('apps/launch', id),
     launchAdmin: (id) => ipcRenderer.invoke('apps/launch-admin', id),
