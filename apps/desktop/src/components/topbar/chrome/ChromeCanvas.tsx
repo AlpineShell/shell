@@ -84,6 +84,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                 morphFrom = { cx, halfBody, fullH };
                 morphStart = now();
             } else if (!surface && previous) {
+                morphFrom = null;
                 animateOpen(0, CLOSE_MS, "in");
             }
             kick();
@@ -136,9 +137,18 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
             }
 
             if (contentEl) {
-                contentEl.style.height = `${fullH}px`;
-                const hidden = Math.max(0, fullH - height);
-                contentEl.style.clipPath = `inset(0 0 ${hidden}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
+                const naturalH = surface ? surface.fullHeight : fullH;
+                const topHidden = Math.max(0, naturalH - height);
+                const bgLeft = cx - halfBody;
+                const bgRight = cx + halfBody;
+                const contentLeft = surface ? surface.centerX - surface.bodyWidth / 2 : bgLeft;
+                const contentRight = surface ? surface.centerX + surface.bodyWidth / 2 : bgRight;
+                const leftHidden = Math.max(0, bgLeft - contentLeft);
+                const rightHidden = Math.max(0, contentRight - bgRight);
+                const r = Math.min(RADIUS, halfBody, height / 2);
+                contentEl.style.height = `${naturalH}px`;
+                contentEl.style.translate = `0px ${-topHidden}px`;
+                contentEl.style.clipPath = `inset(${topHidden}px ${rightHidden}px 0px ${leftHidden}px round 0 0 ${r}px ${r}px)`;
             }
 
             return surfaceActive || morphFrom !== null || (oStart >= 0 && now() - oStart < oDur);

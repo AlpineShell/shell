@@ -13,7 +13,6 @@ const WALLPAPER_TILE_WIDTH = 200
 const WALLPAPER_TILE_GAP = 12
 const WALLPAPER_PANEL_PADDING_X = 16
 const WALLPAPER_MAX_VISIBLE = 5
-const SIZE_TRANSITION = "width 400ms cubic-bezier(0.16, 1, 0.3, 1)"
 
 function wallpaperPanelWidth(visibleCount: number): number {
   if (visibleCount <= 0) return LAUNCHER_WIDTH_DEFAULT
@@ -608,7 +607,7 @@ export default function LauncherPanel() {
       <div
         ref={panelRef}
         className="absolute"
-        style={{ top: BAR_BOTTOM, left: "50%", width: panelWidth, transform: "translateX(-50%)", outline: "none", overflow: "hidden", borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`, transition: SIZE_TRANSITION, willChange: "clip-path" }}
+        style={{ top: BAR_BOTTOM, left: "50%", width: panelWidth, transform: "translateX(-50%)", outline: "none", overflow: "hidden", borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`, willChange: "clip-path" }}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={contextOpen ? handleKey : undefined}
         tabIndex={-1}
