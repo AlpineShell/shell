@@ -95,7 +95,7 @@ export default function TermsPage() {
     <>
       <NavBar />
       <main className="flex-1">
-        <div className="px-8 py-16">
+        <div className="px-8 pb-16 pt-32">
           <div className="container mx-auto">
             <div className="max-w-3xl">
               <h1 className="font-averia text-4xl font-semibold tracking-tight sm:text-5xl">

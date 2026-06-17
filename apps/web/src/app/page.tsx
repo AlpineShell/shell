@@ -8,6 +8,7 @@ const noise =
 export default function Home() {
   return (
     <main className="relative bg-[#050a1a] text-white">
+      <NavBar theme="light" />
       <section className="relative flex min-h-screen flex-col overflow-hidden">
         <div
           className="absolute inset-0"
@@ -38,8 +39,7 @@ export default function Home() {
         />
 
         <div className="relative z-10 flex flex-1 flex-col">
-          <NavBar />
-          <div className="container mx-auto flex min-h-[50vh] flex-1 flex-col items-center justify-center px-8 pb-8 text-center">
+          <div className="container mx-auto flex min-h-[50vh] flex-1 flex-col items-center justify-center px-8 pb-8 pt-24 text-center">
             <h1 className="max-w-3xl font-averia text-5xl font-semibold tracking-tight sm:text-6xl">
               Not their slop. Your PC!
             </h1>
@@ -52,7 +52,7 @@ export default function Home() {
             </div>
           </div>
           <div className="container mx-auto shrink-0">
-            <div className="aspect-video w-full overflow-hidden rounded-t-3xl bg-white">
+            <div className="aspect-video w-full overflow-hidden rounded-3xl bg-white">
               <iframe
                 className="h-full w-full"
                 src="https://www.youtube.com/embed/jxnqmhGL2aA?start=317"
