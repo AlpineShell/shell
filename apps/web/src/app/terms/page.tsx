@@ -85,7 +85,7 @@ const sections: TermsSection[] = [
   {
     title: "11. Governing law",
     paragraphs: [
-      "These Terms are governed by the laws of [your jurisdiction], without regard to its conflict-of-law rules. Any disputes will be handled by the courts located in [your jurisdiction].",
+      "These Terms are governed by the laws of Switzerland, without regard to its conflict-of-law rules and excluding the United Nations Convention on Contracts for the International Sale of Goods (CISG). Any disputes arising out of or in connection with these Terms are subject to the exclusive jurisdiction of the competent courts of Switzerland.",
     ],
   },
 ];
