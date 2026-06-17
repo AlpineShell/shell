@@ -48,7 +48,7 @@ const {
 } = require('./modules/appbar')
 
 const isDev = !app.isPackaged
-const BASE_URL = isDev ? 'http://localhost:5173' : null
+const BASE_URL = isDev ? 'http://127.0.0.1:5173' : null
 const shouldTakeOverExplorer = !isDev || process.env.ALPINE_KILL_EXPLORER === '1'
 let killedExplorer = false
 
@@ -112,7 +112,7 @@ function forceShellBounds(shell) {
   if (!shell) return
   const { x, y, width, height } = shell.display.bounds
   if (!shell.desktop.isDestroyed()) shell.desktop.setBounds({ x, y, width, height })
-  if (!shell.topBar.isDestroyed()) shell.topBar.setBounds({ x, y, width, height: TOP_BAR_HEIGHT })
+  if (!shell.topBar.isDestroyed()) shell.topBar.setBounds({ x, y, width, height })
 }
 
 function createTopBarWindow(display) {
@@ -120,7 +120,7 @@ function createTopBarWindow(display) {
 
   const win = new BrowserWindow({
     x, y, width,
-    height: TOP_BAR_HEIGHT,
+    height: display.bounds.height,
     frame: false,
     resizable: false,
     movable: false,
@@ -144,6 +144,7 @@ function createTopBarWindow(display) {
   const INTERACTIVE_LEFT = 40
   const INTERACTIVE_CENTER = 120
   let ignoring = true
+  let activeRegion = null
 
   function evaluateCursorInteraction() {
     if (win.isDestroyed()) return
@@ -152,15 +153,21 @@ function createTopBarWindow(display) {
     const bounds = win.getBounds()
     const cursor = screen.getCursorScreenPoint()
 
-    const isExpanded = bounds.height > TOP_BAR_HEIGHT
-    const inBounds = cursor.y >= bounds.y && cursor.y < bounds.y + bounds.height &&
+    const inBarRow = cursor.y >= bounds.y && cursor.y < bounds.y + TOP_BAR_HEIGHT &&
                      cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width
     const inLeftZone = cursor.x < bounds.x + INTERACTIVE_LEFT
     const inRightZone = cursor.x >= bounds.x + bounds.width - INTERACTIVE_RIGHT
     const centerX = bounds.x + bounds.width / 2
     const inCenterZone = cursor.x >= centerX - INTERACTIVE_CENTER / 2 && cursor.x < centerX + INTERACTIVE_CENTER / 2
-    const inInteractive = inBounds &&
-      (isExpanded || inLeftZone || inRightZone || inCenterZone)
+
+    let inInteractive
+    if (activeRegion) {
+      const inMenu = cursor.y >= bounds.y + activeRegion.top && cursor.y < bounds.y + activeRegion.bottom &&
+                     cursor.x >= bounds.x + activeRegion.left && cursor.x < bounds.x + activeRegion.right
+      inInteractive = inBarRow || inMenu
+    } else {
+      inInteractive = inBarRow && (inLeftZone || inRightZone || inCenterZone)
+    }
 
     if (inInteractive && ignoring) {
       ignoring = false
@@ -168,7 +175,7 @@ function createTopBarWindow(display) {
     } else if (!inInteractive && !ignoring) {
       ignoring = true
       win.setIgnoreMouseEvents(true)
-      if (isExpanded) {
+      if (activeRegion) {
         win.webContents.send('topbar/close-menus')
       }
     }
@@ -178,10 +185,7 @@ function createTopBarWindow(display) {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
-    const bounds = win.getBounds()
-    if (bounds.height !== TOP_BAR_HEIGHT) {
-      win.setBounds({ ...bounds, height: TOP_BAR_HEIGHT })
-    }
+    activeRegion = null
     win.setAlwaysOnTop(false)
     ignoring = true
     win.setIgnoreMouseEvents(true)
@@ -190,27 +194,26 @@ function createTopBarWindow(display) {
 
   const cursorTracker = setInterval(evaluateCursorInteraction, 50)
 
-  const onSetHeight = (event, height) => {
+  const onSetActiveRegion = (event, region) => {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
-    if (event.sender === win.webContents) {
-      const bounds = win.getBounds()
-      win.setBounds({ ...bounds, height })
-      if (height > TOP_BAR_HEIGHT) {
-        win.setAlwaysOnTop(true, 'screen-saver')
-      } else {
-        win.setAlwaysOnTop(false)
-      }
-      win.webContents.invalidate()
+    if (event.sender !== win.webContents) return
+    if (region) {
+      activeRegion = region
+      win.setAlwaysOnTop(true, 'screen-saver')
+    } else {
+      activeRegion = null
+      win.setAlwaysOnTop(false)
     }
+    evaluateCursorInteraction()
   }
-  ipcMain.on('topbar/set-height', onSetHeight)
+  ipcMain.on('topbar/set-active-region', onSetActiveRegion)
 
   win.on('blur', () => launcher.handleBlur(win))
   win.on('closed', () => {
     clearInterval(cursorTracker)
-    ipcMain.removeListener('topbar/set-height', onSetHeight)
+    ipcMain.removeListener('topbar/set-active-region', onSetActiveRegion)
   })
 
   win.webContents.once('did-finish-load', () => {
@@ -261,7 +264,7 @@ function repositionShell(display) {
   const { x, y, width, height } = display.bounds
 
   shell.desktop.setBounds({ x, y, width, height })
-  shell.topBar.setBounds({ x, y, width, height: TOP_BAR_HEIGHT })
+  shell.topBar.setBounds({ x, y, width, height })
 
   try {
     unregisterAppBar(shell.topBar)

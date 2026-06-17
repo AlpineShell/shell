@@ -271,9 +271,6 @@ function showLauncher(displayId) {
   topBar.setIgnoreMouseEvents(false)
   topBar.setAlwaysOnTop(true, 'screen-saver')
 
-  const bounds = topBar.getBounds()
-  topBar.setBounds({ ...bounds, height: 600 })
-
   topBar.webContents.send('launcher/show', { displayId })
   try {
     const hwnd = topBar.getNativeWindowHandle().readUInt32LE(0)

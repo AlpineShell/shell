@@ -1,15 +1,17 @@
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useTopbarBg, useDarkText, useFullscreenWindow, useMenuOpenChange } from "../../themeContext";
-import { useFlyUnderBar } from "../../../hooks/useFlyUnderBar";
+import { useTopbarBg, useFullscreenWindow } from "../../themeContext";
+import { SHOULDER, RADIUS, type ChromeAnchor } from "../chrome/chromeShape";
+import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "../chrome/chromeStore";
 
-const CORNER = 16;
-const SCREEN_PAD = 0;
-const SLIDE_MS = 320;
+const SCREEN_PAD = 6;
+const EDGE_PAD = 0;
+const BAR_BOTTOM = 24;
+const CLOSE_MS = 300;
 
-type MenuGeometry = { center: number; width: number; height: number };
+type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number; anchor: ChromeAnchor };
 
-let activeMenu: { close: () => void; measure: () => MenuGeometry | null } | null = null;
+let activeMenu: { close: () => void } | null = null;
 
 interface PopupMenuProps {
     trigger: ReactNode;
@@ -19,139 +21,112 @@ interface PopupMenuProps {
 
 export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps) {
     const BG = useTopbarBg();
-    const darkText = useDarkText();
-    const fullscreenWindow = useFullscreenWindow();
-    const borderColor = fullscreenWindow ? (darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)") : null;
-    const onMenuOpenChange = useMenuOpenChange();
+    const outline = useFullscreenWindow();
+
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const popupRef = useRef<HTMLDivElement>(null);
+    const clipRef = useRef<HTMLDivElement>(null);
     const bodyRef = useRef<HTMLDivElement>(null);
-    const boxRef = useRef<HTMLDivElement>(null);
-    const cornerLeftRef = useRef<SVGSVGElement>(null);
-    const cornerRightRef = useRef<SVGSVGElement>(null);
+
     const [open, setOpen] = useState(false);
-    const [closing, setClosing] = useState(false);
-    const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
+    const [shape, setShape] = useState<Shape | null>(null);
+
+    const idRef = useRef(0);
+    if (!idRef.current) idRef.current = nextSurfaceId();
     const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const closeAnimTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const suppressReset = useRef(false);
-    const morphFromRef = useRef<MenuGeometry | null>(null);
-    const morphingRef = useRef(false);
 
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
 
-    const selfRef = useRef<{ close: () => void; measure: () => MenuGeometry | null } | null>(null);
+    const selfRef = useRef<{ close: () => void } | null>(null);
     if (!selfRef.current) {
         selfRef.current = {
-            measure: () => {
-                const box = boxRef.current;
-                if (!box) return null;
-                const rect = box.getBoundingClientRect();
-                if (rect.width <= 0) return null;
-                return { center: rect.left + rect.width / 2, width: rect.width, height: rect.height };
-            },
             close: () => {
                 clearTimeout(closeTimer.current);
-                clearTimeout(closeAnimTimer.current);
+                clearTimeout(leaveTimer.current);
                 suppressReset.current = true;
                 setOpen(false);
-                setClosing(false);
+                setShape(null);
             },
         };
     }
 
-    useFlyUnderBar(bodyRef, [cornerLeftRef, cornerRightRef], CORNER, open, closing, morphFromRef.current !== null);
-
     useEffect(() => {
-        if (open) {
-            onOpenRef.current?.();
-        } else {
-            if (!suppressReset.current) {
-                onMenuOpenChange(false);
-                window.topbar.setHeight(24);
-            }
-            suppressReset.current = false;
-        }
+        if (open) onOpenRef.current?.();
     }, [open]);
 
-    function reportBounds(center: number, width: number) {
-        onMenuOpenChange(true, { left: center - width / 2 - CORNER, right: center + width / 2 + CORNER });
+    function measureShape(): Shape | null {
+        const wrapper = wrapperRef.current;
+        const body = bodyRef.current;
+        if (!wrapper || !body) return null;
+        body.style.width = "max-content";
+        const rect = body.getBoundingClientRect();
+        const bodyWidth = Math.round(rect.width);
+        const bodyHeight = Math.round(rect.height);
+        body.style.width = `${bodyWidth}px`;
+        const triggerRect = wrapper.getBoundingClientRect();
+        const center = triggerRect.left + triggerRect.width / 2;
+        const screenW = window.innerWidth;
+        const half = bodyWidth / 2;
+        let anchor: ChromeAnchor = "center";
+        let centerX = Math.round(center);
+        if (center - half - SHOULDER < SCREEN_PAD) {
+            anchor = "left";
+            centerX = Math.round(EDGE_PAD + half);
+        } else if (center + half + SHOULDER > screenW - SCREEN_PAD) {
+            anchor = "right";
+            centerX = Math.round(screenW - EDGE_PAD - half);
+        }
+        return { centerX, bodyWidth, bodyHeight, left: centerX - bodyWidth / 2, anchor };
     }
 
     useLayoutEffect(() => {
-        if (!open) return;
-        repositionPopup();
-    }, [open]);
+        if (!open || shape) return;
+        const next = measureShape();
+        if (next) setShape(next);
+    }, [open, shape]);
 
     useLayoutEffect(() => {
-        if (!open) return;
-        const popup = popupRef.current;
-        const box = boxRef.current;
-        const wrapper = wrapperRef.current;
-        if (!popup || !box || !wrapper) return;
-
-        box.style.width = "";
-        box.style.height = "";
-        const boxRect = box.getBoundingClientRect();
-        const width = boxRect.width;
-        const height = boxRect.height;
-        const triggerRect = wrapper.getBoundingClientRect();
-        const triggerCenter = triggerRect.left + triggerRect.width / 2;
-        const left = Math.max(SCREEN_PAD, Math.min(triggerCenter - width / 2, window.innerWidth - width - SCREEN_PAD));
-        const center = left + width / 2;
-        reportBounds(center, width);
-
-        const from = morphFromRef.current;
-        morphFromRef.current = null;
-        if (!from || from.width <= 0) return;
-
-        morphingRef.current = true;
-        let raf = 0;
-        let startTime = 0;
-        const step = (now: number) => {
-            if (!startTime) startTime = now;
-            const progress = Math.min(1, (now - startTime) / SLIDE_MS);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            const c = from.center + (center - from.center) * eased;
-            const w = from.width + (width - from.width) * eased;
-            const h = from.height + (height - from.height) * eased;
-            popup.style.transform = `translateX(${(c - center) - (w - width) / 2}px)`;
-            box.style.width = `${w}px`;
-            box.style.height = `${h}px`;
-            if (progress < 1) {
-                raf = requestAnimationFrame(step);
-            } else {
-                box.style.width = "";
-                box.style.height = "";
-                popup.style.transform = "";
-                morphingRef.current = false;
-            }
-        };
-        raf = requestAnimationFrame(step);
-        return () => {
-            cancelAnimationFrame(raf);
-            morphingRef.current = false;
-        };
-    }, [open]);
+        if (!open || !shape) return;
+        if (clipRef.current) {
+            clipRef.current.style.height = `${shape.bodyHeight}px`;
+            clipRef.current.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
+        }
+        setChromeSurface({
+            id: idRef.current,
+            centerX: shape.centerX,
+            bodyWidth: shape.bodyWidth,
+            fullHeight: shape.bodyHeight,
+            outline,
+            anchor: shape.anchor,
+            contentEl: clipRef.current,
+        });
+        const sideL = shape.anchor === "left" ? 0 : SHOULDER;
+        const sideR = shape.anchor === "right" ? 0 : SHOULDER;
+        window.topbar.setActiveRegion({
+            top: BAR_BOTTOM,
+            bottom: BAR_BOTTOM + shape.bodyHeight,
+            left: shape.left - sideL,
+            right: shape.left + shape.bodyWidth + sideR,
+        });
+    }, [open, shape, outline]);
 
     useEffect(() => {
-        if (!open) return;
-        const popup = popupRef.current;
-        if (!popup) return;
-        let prevWidth = popup.offsetWidth;
-        const observer = new ResizeObserver((entries) => {
-            if (morphingRef.current) return;
-            const width = entries[0]?.contentRect.width ?? popup.offsetWidth;
-            if (width === prevWidth) return;
-            prevWidth = width;
-            repositionPopup();
-            const geometry = selfRef.current?.measure();
-            if (geometry) reportBounds(geometry.center, geometry.width);
+        if (!open || !shape) return;
+        const body = bodyRef.current;
+        if (!body) return;
+        let prevH = body.offsetHeight;
+        const observer = new ResizeObserver(() => {
+            const next = measureShape();
+            if (!next) return;
+            if (Math.abs(next.bodyHeight - prevH) < 1 && Math.abs(next.bodyWidth - shape.bodyWidth) < 1) return;
+            prevH = next.bodyHeight;
+            setShape(next);
         });
-        observer.observe(popup);
+        observer.observe(body);
         return () => observer.disconnect();
-    }, [open]);
+    }, [open, shape]);
 
     useEffect(() => {
         if (!open) return;
@@ -161,53 +136,42 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
 
     useEffect(() => () => {
         clearTimeout(closeTimer.current);
-        clearTimeout(closeAnimTimer.current);
+        clearTimeout(leaveTimer.current);
         if (activeMenu === selfRef.current) activeMenu = null;
+        clearChromeSurface(idRef.current);
     }, []);
 
     function triggerClose() {
         if (activeMenu === selfRef.current) activeMenu = null;
-        setClosing(true);
-        closeAnimTimer.current = setTimeout(() => {
+        clearChromeSurface(idRef.current);
+        window.topbar.setActiveRegion(null);
+        clearTimeout(closeTimer.current);
+        closeTimer.current = setTimeout(() => {
             setOpen(false);
-            setClosing(false);
-        }, 300);
-    }
-
-    function repositionPopup() {
-        const wrapper = wrapperRef.current;
-        const popup = popupRef.current;
-        if (!wrapper || !popup) return;
-        const rect = wrapper.getBoundingClientRect();
-        const popupWidth = popup.offsetWidth;
-        const centerX = rect.left + rect.width / 2;
-        const left = Math.round(Math.max(SCREEN_PAD, Math.min(centerX - popupWidth / 2, window.innerWidth - popupWidth - SCREEN_PAD)));
-        setPopupStyle({ position: "fixed", top: Math.round(rect.bottom), left });
+            setShape(null);
+        }, CLOSE_MS);
     }
 
     function handleEnter() {
         clearTimeout(closeTimer.current);
-        clearTimeout(closeAnimTimer.current);
-        setClosing(false);
+        clearTimeout(leaveTimer.current);
         const other = activeMenu && activeMenu !== selfRef.current ? activeMenu : null;
-        if (other) {
-            morphFromRef.current = other.measure();
-            other.close();
-        } else if (!open) {
-            morphFromRef.current = null;
-        }
+        if (other) other.close();
         activeMenu = selfRef.current;
         if (open) return;
-        if (wrapperRef.current) {
-            const rect = wrapperRef.current.getBoundingClientRect();
-            setPopupStyle({ position: "fixed", top: Math.round(rect.bottom), left: -9999 });
-        }
-        window.topbar.setHeight(500);
-        requestAnimationFrame(() => setOpen(true));
+        const triggerRect = wrapperRef.current?.getBoundingClientRect();
+        window.topbar.setActiveRegion({
+            top: triggerRect ? triggerRect.bottom : BAR_BOTTOM,
+            bottom: window.innerHeight,
+            left: 0,
+            right: window.innerWidth,
+        });
+        setShape(null);
+        setOpen(true);
     }
 
     function handleLeave() {
-        closeTimer.current = setTimeout(() => triggerClose(), 80);
+        leaveTimer.current = setTimeout(() => triggerClose(), 80);
     }
 
     return (
@@ -218,64 +182,23 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             onMouseEnter={handleEnter}
             onMouseLeave={handleLeave}
         >
-            <div className="cursor-pointer">
-                {trigger}
-            </div>
+            <div className="cursor-pointer">{trigger}</div>
             {open && createPortal(
                 <div
-                    ref={popupRef}
-                    className="z-5"
-                    style={popupStyle}
+                    ref={clipRef}
                     onMouseEnter={handleEnter}
                     onMouseLeave={handleLeave}
+                    style={{
+                        position: "fixed",
+                        left: shape ? shape.left : -9999,
+                        top: BAR_BOTTOM,
+                        width: shape ? shape.bodyWidth : undefined,
+                        zIndex: 5,
+                        pointerEvents: shape ? "auto" : "none",
+                        willChange: "clip-path",
+                    }}
                 >
-                    <svg
-                        ref={cornerLeftRef}
-                        className="absolute right-full"
-                        width={CORNER}
-                        height={CORNER}
-                        viewBox={`0 0 ${CORNER} ${CORNER}`}
-                        style={{ top: -0.5, overflow: "visible", display: "block" }}
-                    >
-                        <path d={`M0 0 H${CORNER} V${CORNER} A${CORNER} ${CORNER} 0 0 0 0 0 Z`} fill={BG} />
-                        {borderColor && <path d={`M0 0 A${CORNER} ${CORNER} 0 0 1 ${CORNER} ${CORNER}`} fill="none" stroke={borderColor} strokeWidth={1} />}
-                    </svg>
-                    <svg
-                        ref={cornerRightRef}
-                        className="absolute left-full"
-                        width={CORNER}
-                        height={CORNER}
-                        viewBox={`0 0 ${CORNER} ${CORNER}`}
-                        style={{ top: -0.5, overflow: "visible", display: "block" }}
-                    >
-                        <path d={`M${CORNER} 0 H0 V${CORNER} A${CORNER} ${CORNER} 0 0 1 ${CORNER} 0 Z`} fill={BG} />
-                        {borderColor && <path d={`M${CORNER} 0 A${CORNER} ${CORNER} 0 0 0 0 ${CORNER}`} fill="none" stroke={borderColor} strokeWidth={1} />}
-                    </svg>
-                    <div ref={bodyRef}>
-                        <div style={{ position: "relative" }}>
-                            <div
-                                ref={boxRef}
-                                className="overflow-hidden rounded-b-2xl shadow-xl"
-                                style={{ backgroundColor: BG }}
-                            >
-                                {children}
-                            </div>
-                            {borderColor && (
-                                <div style={{
-                                    position: "absolute",
-                                    top: CORNER - 0.5,
-                                    left: 0,
-                                    right: 0,
-                                    bottom: 0,
-                                    borderLeft: `1px solid ${borderColor}`,
-                                    borderRight: `1px solid ${borderColor}`,
-                                    borderBottom: `1px solid ${borderColor}`,
-                                    borderRadius: "0 0 16px 16px",
-                                    pointerEvents: "none",
-                                }} />
-                            )}
-                        </div>
-                    </div>
+                    <div ref={bodyRef}>{children}</div>
                 </div>,
                 document.body
             )}

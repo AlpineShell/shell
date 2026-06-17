@@ -139,7 +139,7 @@ async function freePort(port) {
 function waitForPort(port) {
   return new Promise((resolve) => {
     const tryConnect = () => {
-      const req = http.get(`http://localhost:${port}`, () => {
+      const req = http.get(`http://127.0.0.1:${port}`, () => {
         req.destroy()
         resolve()
       })

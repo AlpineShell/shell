@@ -407,8 +407,6 @@ async function showSwitcher() {
   activeTopBar = topBar
   flushPendingRestore(topBar)
 
-  const bounds = topBar.getBounds()
-  topBar.setBounds({ ...bounds, height: 600 })
   topBar.setAlwaysOnTop(true, 'screen-saver')
   topBar.setIgnoreMouseEvents(false)
 
@@ -421,7 +419,6 @@ function restorePassiveState(topBar) {
     topBar.restorePassiveTopBar()
   } else {
     topBar.setAlwaysOnTop(false)
-    topBar.setBounds({ ...topBar.getBounds(), height: 24 })
   }
 }
 

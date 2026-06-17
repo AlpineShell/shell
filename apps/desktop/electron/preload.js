@@ -47,7 +47,7 @@ try { paintDesktopBackgroundEarly() } catch {}
 
 contextBridge.exposeInMainWorld('topbar', {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
-  setHeight: (height) => ipcRenderer.send('topbar/set-height', height),
+  setActiveRegion: (region) => ipcRenderer.send('topbar/set-active-region', region),
   color: () => ipcRenderer.invoke('topbar/color'),
   onColorChanged: (callback) => {
     ipcRenderer.on('topbar/color-changed', (_, data) => callback(data))
@@ -123,10 +123,14 @@ contextBridge.exposeInMainWorld('launcher', {
     ipcRenderer.on('launcher/show', (_, data) => callback(data))
   },
   onStartClose: (callback) => {
-    ipcRenderer.on('launcher/start-close', () => callback())
+    const handler = () => callback()
+    ipcRenderer.on('launcher/start-close', handler)
+    return () => ipcRenderer.removeListener('launcher/start-close', handler)
   },
   onHide: (callback) => {
-    ipcRenderer.on('launcher/hide', () => callback())
+    const handler = () => callback()
+    ipcRenderer.on('launcher/hide', handler)
+    return () => ipcRenderer.removeListener('launcher/hide', handler)
   },
 })
 
@@ -159,7 +163,9 @@ contextBridge.exposeInMainWorld('shell', {
     wallpaperMineDelete: (filePath) => ipcRenderer.invoke('windows/wallpaper-mine-delete', filePath),
     openApps: () => ipcRenderer.invoke('windows/open-apps'),
     onOpenAppsChanged: (callback) => {
-      ipcRenderer.on('windows/open-apps-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('windows/open-apps-changed', handler)
+      return () => ipcRenderer.removeListener('windows/open-apps-changed', handler)
     },
     openSettings: () => ipcRenderer.invoke('windows/open-settings'),
     closeSettings: () => ipcRenderer.invoke('windows/close-settings'),
@@ -290,7 +296,9 @@ contextBridge.exposeInMainWorld('shell', {
     openAppLocation: (id) => ipcRenderer.invoke('apps/installed-open-location', { id }),
     catalog: () => ipcRenderer.invoke('apps/catalog'),
     onCatalogChanged: (callback) => {
-      ipcRenderer.on('apps/catalog-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('apps/catalog-changed', handler)
+      return () => ipcRenderer.removeListener('apps/catalog-changed', handler)
     },
     launch: (id) => ipcRenderer.invoke('apps/launch', id),
     launchAdmin: (id) => ipcRenderer.invoke('apps/launch-admin', id),
