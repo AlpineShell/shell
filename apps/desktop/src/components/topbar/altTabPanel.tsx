@@ -1,12 +1,13 @@
 import { createPortal } from "react-dom"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
-import { useFlyUnderBar } from "../../hooks/useFlyUnderBar"
-import { SHOULDER, RADIUS, fillPath, borderPath } from "./shared/menuShape"
+import { useDarkText, useFullscreenWindow } from "../themeContext"
+import { RADIUS } from "./chrome/chromeShape"
+import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
 
-interface AltTabPanelProps {
-  onGapChange: (gap: { left: number; right: number } | null) => void
-}
+const BAR_BOTTOM = 24
+const CLOSE_MS = 300
+
+type Shape = { bodyWidth: number; bodyHeight: number }
 
 function WindowEntry({ window, selected, darkText }: { window: AltTabWindow; selected: boolean; darkText: boolean }) {
   const [thumbWidth, setThumbWidth] = useState(200)
@@ -50,95 +51,114 @@ function WindowEntry({ window, selected, darkText }: { window: AltTabWindow; sel
   )
 }
 
-export default function AltTabPanel({ onGapChange }: AltTabPanelProps) {
-  const bg = useTopbarBg()
+export default function AltTabPanel() {
   const darkText = useDarkText()
-  const fullscreenWindow = useFullscreenWindow()
-  const borderColor = fullscreenWindow ? (darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)") : null
+  const outline = useFullscreenWindow()
 
   const [windows, setWindows] = useState<AltTabWindow[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [visible, setVisible] = useState(false)
-  const [closing, setClosing] = useState(false)
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const bodyRef = useRef<HTMLDivElement>(null)
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [showId, setShowId] = useState(0)
+  const [shape, setShape] = useState<Shape | null>(null)
 
-  useFlyUnderBar(bodyRef, [], SHOULDER, visible, closing)
+  const clipRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const idRef = useRef(0)
+  if (!idRef.current) idRef.current = nextSurfaceId()
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     window.alttab.onShow((data) => {
       clearTimeout(closeTimer.current)
-      setClosing(false)
       setWindows(data.windows)
       setSelectedIndex(data.selectedIndex)
       setVisible(true)
+      setShowId((n) => n + 1)
     })
     window.alttab.onHide(() => {
-      setClosing(true)
+      clearChromeSurface(idRef.current)
       closeTimer.current = setTimeout(() => {
         setVisible(false)
-        setClosing(false)
+        setShape(null)
         setWindows([])
         setSelectedIndex(0)
-        setSize(null)
-      }, 300)
+      }, CLOSE_MS)
     })
     window.alttab.onSelectionChanged(setSelectedIndex)
   }, [])
 
+  function measureShape(): Shape | null {
+    const body = bodyRef.current
+    if (!body) return null
+    const rect = body.getBoundingClientRect()
+    return { bodyWidth: Math.round(rect.width), bodyHeight: Math.round(rect.height) }
+  }
+
   useLayoutEffect(() => {
-    if (!visible) {
-      onGapChange(null)
-      return
+    if (!visible) return
+    const next = measureShape()
+    if (next) setShape(next)
+  }, [visible, showId])
+
+  useLayoutEffect(() => {
+    if (!visible || !shape) return
+    const clip = clipRef.current
+    if (clip) {
+      clip.style.height = `${shape.bodyHeight}px`
+      clip.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`
     }
-    const panel = panelRef.current
-    if (!panel) return
-    const update = () => {
-      const rect = panel.getBoundingClientRect()
-      const w = Math.round(rect.width) + SHOULDER * 2
-      const h = Math.round(rect.height)
-      setSize((prev) => (prev && Math.abs(prev.w - w) < 1 && Math.abs(prev.h - h) < 1 ? prev : { w, h }))
-      const left = Math.round((window.innerWidth - w) / 2)
-      onGapChange({ left, right: left + w })
-    }
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(panel)
+    setChromeSurface({
+      id: idRef.current,
+      centerX: Math.round(window.innerWidth / 2),
+      bodyWidth: shape.bodyWidth,
+      fullHeight: shape.bodyHeight,
+      outline,
+      anchor: "center",
+      contentEl: clip,
+    })
+  }, [visible, shape, outline])
+
+  useEffect(() => {
+    if (!visible) return
+    const body = bodyRef.current
+    if (!body) return
+    const observer = new ResizeObserver(() => {
+      const next = measureShape()
+      if (!next) return
+      setShape((prev) =>
+        prev && Math.abs(prev.bodyWidth - next.bodyWidth) < 1 && Math.abs(prev.bodyHeight - next.bodyHeight) < 1
+          ? prev
+          : next
+      )
+    })
+    observer.observe(body)
     return () => observer.disconnect()
-  }, [visible])
+  }, [visible, showId])
+
+  useEffect(() => () => clearChromeSurface(idRef.current), [])
 
   if (!visible || windows.length === 0) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center" style={{ pointerEvents: "none" }}>
-      <div style={{ marginTop: 24, position: "relative", clipPath: "inset(0 -2000px -2000px -2000px)" }}>
-        <div ref={bodyRef} style={{ position: "relative", willChange: "transform" }}>
-          {size && (
-            <svg
-              width={size.w}
-              height={size.h}
-              viewBox={`0 0 ${size.w} ${size.h}`}
-              style={{ position: "absolute", top: 0, left: -SHOULDER, display: "block", overflow: "visible", filter: "drop-shadow(0 14px 30px rgba(0,0,0,0.32))" }}
-            >
-              <path d={fillPath(size.w, size.h)} fill={bg} />
-              {borderColor && (
-                <path d={borderPath(size.w, size.h)} fill="none" stroke={borderColor} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-              )}
-            </svg>
-          )}
-          <div
-            ref={panelRef}
-            className="relative overflow-hidden p-3"
-            style={{ borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`, maxWidth: "90vw" }}
-          >
-            <div className="flex flex-wrap justify-center gap-2">
-              {windows.map((w, i) => (
-                <WindowEntry key={w.hwnd} window={w} selected={i === selectedIndex} darkText={darkText} />
-              ))}
-            </div>
-          </div>
+    <div
+      ref={clipRef}
+      style={{
+        position: "fixed",
+        top: BAR_BOTTOM,
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "max-content",
+        maxWidth: "90vw",
+        zIndex: 5,
+        pointerEvents: "none",
+        willChange: "clip-path",
+      }}
+    >
+      <div ref={bodyRef} className="p-3">
+        <div className="flex flex-wrap justify-center gap-2">
+          {windows.map((w, i) => (
+            <WindowEntry key={w.hwnd} window={w} selected={i === selectedIndex} darkText={darkText} />
+          ))}
         </div>
       </div>
     </div>,

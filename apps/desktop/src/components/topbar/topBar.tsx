@@ -25,9 +25,8 @@ export default function TopBar() {
     const [hovered, setHovered] = useState(false);
     const [launcherOpen, setLauncherOpen] = useState(false);
     const [launcherGap, setLauncherGap] = useState<{ left: number; right: number } | null>(null);
-    const [altTabGap, setAltTabGap] = useState<{ left: number; right: number } | null>(null);
     const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
-    const panelGap = launcherGap || altTabGap;
+    const panelGap = launcherGap;
 
     useEffect(() => {
         window.launcher.onShow(() => setLauncherOpen(true));
@@ -64,7 +63,7 @@ export default function TopBar() {
                 </div>
             </div>
             {launcherOpen && <LauncherPanel onGapChange={setLauncherGap} />}
-            <AltTabPanel onGapChange={setAltTabGap} />
+            <AltTabPanel />
         </ThemeProvider>
     );
 }
