@@ -1,5 +1,6 @@
 import NavBar from "./components/NavBar";
 import StarField from "./components/StarField";
+import Footer from "./components/Footer";
 
 const noise =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
@@ -7,6 +8,7 @@ const noise =
 export default function Home() {
   return (
     <main className="relative bg-[#050a1a] text-white">
+      <NavBar theme="light" />
       <section className="relative flex min-h-screen flex-col overflow-hidden">
         <div
           className="absolute inset-0"
@@ -37,8 +39,7 @@ export default function Home() {
         />
 
         <div className="relative z-10 flex flex-1 flex-col">
-          <NavBar />
-          <div className="container mx-auto flex min-h-[50vh] flex-1 flex-col items-center justify-center px-8 pb-8 text-center">
+          <div className="container mx-auto flex min-h-[50vh] flex-1 flex-col items-center justify-center px-8 pb-8 pt-24 text-center">
             <h1 className="max-w-3xl font-averia text-5xl font-semibold tracking-tight sm:text-6xl">
               Not their slop. Your PC!
             </h1>
@@ -51,7 +52,7 @@ export default function Home() {
             </div>
           </div>
           <div className="container mx-auto shrink-0">
-            <div className="aspect-video w-full overflow-hidden rounded-t-3xl bg-white">
+            <div className="aspect-video w-full overflow-hidden rounded-3xl bg-white">
               <iframe
                 className="h-full w-full"
                 src="https://www.youtube.com/embed/jxnqmhGL2aA?start=317"
@@ -63,6 +64,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      <Footer />
     </main>
   );
 }
