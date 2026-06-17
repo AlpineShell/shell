@@ -138,7 +138,8 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
 
             if (contentEl) {
                 const naturalH = surface ? surface.fullHeight : fullH;
-                const topHidden = Math.max(0, naturalH - height);
+                const vHidden = Math.max(0, naturalH - height);
+                const slide = morphFrom ? 0 : vHidden;
                 const bgLeft = cx - halfBody;
                 const bgRight = cx + halfBody;
                 const contentLeft = surface ? surface.centerX - surface.bodyWidth / 2 : bgLeft;
@@ -147,8 +148,8 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                 const rightHidden = Math.max(0, contentRight - bgRight);
                 const r = Math.min(RADIUS, halfBody, height / 2);
                 contentEl.style.height = `${naturalH}px`;
-                contentEl.style.translate = `0px ${-topHidden}px`;
-                contentEl.style.clipPath = `inset(${topHidden}px ${rightHidden}px 0px ${leftHidden}px round 0 0 ${r}px ${r}px)`;
+                contentEl.style.translate = `0px ${-slide}px`;
+                contentEl.style.clipPath = `inset(${slide}px ${rightHidden}px ${vHidden - slide}px ${leftHidden}px round 0 0 ${r}px ${r}px)`;
             }
 
             return surfaceActive || morphFrom !== null || (oStart >= 0 && now() - oStart < oDur);
