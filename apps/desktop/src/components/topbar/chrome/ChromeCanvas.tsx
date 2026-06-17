@@ -14,14 +14,13 @@ interface ChromeCanvasProps {
     bg: string;
     barBorderColor: string;
     hovered: boolean;
-    suppressed: boolean;
 }
 
-export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, suppressed }: ChromeCanvasProps) {
+export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }: ChromeCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const kickRef = useRef<(() => void) | undefined>(undefined);
-    const propsRef = useRef({ barHeight, bg, barBorderColor, hovered, suppressed });
-    propsRef.current = { barHeight, bg, barBorderColor, hovered, suppressed };
+    const propsRef = useRef({ barHeight, bg, barBorderColor, hovered });
+    propsRef.current = { barHeight, bg, barBorderColor, hovered };
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -125,17 +124,15 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, s
             ctx.clearRect(0, 0, screenW, clearH);
             lastClearH = need;
 
-            if (!p.suppressed) {
-                const geom: ChromeGeometry = { centerX: cx, bodyWidth: halfBody * 2, height, barBottom, screenWidth: screenW, anchor };
-                if (surfaceActive) {
-                    ctx.fillStyle = p.bg;
-                    ctx.fill(new Path2D(surfaceFillPath(geom)));
-                }
-                if (p.hovered || surfaceActive) {
-                    ctx.strokeStyle = p.barBorderColor;
-                    ctx.lineWidth = 1;
-                    ctx.stroke(new Path2D(barBorderPath(geom, surfaceActive, outline)));
-                }
+            const geom: ChromeGeometry = { centerX: cx, bodyWidth: halfBody * 2, height, barBottom, screenWidth: screenW, anchor };
+            if (surfaceActive) {
+                ctx.fillStyle = p.bg;
+                ctx.fill(new Path2D(surfaceFillPath(geom)));
+            }
+            if (p.hovered || surfaceActive) {
+                ctx.strokeStyle = p.barBorderColor;
+                ctx.lineWidth = 1;
+                ctx.stroke(new Path2D(barBorderPath(geom, surfaceActive, outline)));
             }
 
             if (contentEl) {
@@ -178,7 +175,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, s
 
     useEffect(() => {
         kickRef.current?.();
-    }, [barHeight, bg, barBorderColor, hovered, suppressed]);
+    }, [barHeight, bg, barBorderColor, hovered]);
 
     return (
         <canvas

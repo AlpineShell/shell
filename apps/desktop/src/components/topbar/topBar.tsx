@@ -24,9 +24,7 @@ export default function TopBar() {
     const fullscreenWindow = fgColor !== null;
     const [hovered, setHovered] = useState(false);
     const [launcherOpen, setLauncherOpen] = useState(false);
-    const [launcherGap, setLauncherGap] = useState<{ left: number; right: number } | null>(null);
     const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
-    const panelGap = launcherGap;
 
     useEffect(() => {
         window.launcher.onShow(() => setLauncherOpen(true));
@@ -35,19 +33,13 @@ export default function TopBar() {
 
     return (
         <ThemeProvider value={{ darkText, bg, fullscreenWindow, onMenuOpenChange: noop }}>
-            <ChromeCanvas barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} suppressed={panelGap !== null} />
+            <ChromeCanvas barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} />
             <div
                 className="w-full flex justify-between items-center h-6 relative z-10 transition-colors duration-300"
                 style={{ backgroundColor: bg }}
                 onMouseEnter={() => setHovered(true)}
                 onMouseLeave={() => setHovered(false)}
             >
-                {panelGap && (
-                    <>
-                        <div style={{ position: "absolute", bottom: 0, left: 0, width: panelGap.left, height: 1, backgroundColor: borderColor }} />
-                        <div style={{ position: "absolute", bottom: 0, left: panelGap.right, right: 0, height: 1, backgroundColor: borderColor }} />
-                    </>
-                )}
                 <div className="flex items-center gap-1 relative z-1 self-stretch">
                     <SystemMenu />
                 </div>
@@ -62,7 +54,7 @@ export default function TopBar() {
                     <Clock />
                 </div>
             </div>
-            {launcherOpen && <LauncherPanel onGapChange={setLauncherGap} />}
+            {launcherOpen && <LauncherPanel />}
             <AltTabPanel />
         </ThemeProvider>
     );

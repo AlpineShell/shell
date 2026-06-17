@@ -1,18 +1,19 @@
 import { createPortal } from "react-dom"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play } from "lucide-react"
-import { useTopbarBg, useDarkText, useFullscreenWindow } from "../themeContext"
+import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
-import { useFlyUnderBar } from "../../hooks/useFlyUnderBar"
+import { RADIUS } from "./chrome/chromeShape"
+import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
 
-const CORNER = 12
+const BAR_BOTTOM = 24
 const MAX_RESULTS = 5
 const LAUNCHER_WIDTH_DEFAULT = 600
 const WALLPAPER_TILE_WIDTH = 200
 const WALLPAPER_TILE_GAP = 12
 const WALLPAPER_PANEL_PADDING_X = 16
 const WALLPAPER_MAX_VISIBLE = 5
-const WIDTH_TRANSITION = "width 240ms cubic-bezier(0.16, 1, 0.3, 1), left 240ms cubic-bezier(0.16, 1, 0.3, 1)"
+const SIZE_TRANSITION = "width 400ms cubic-bezier(0.16, 1, 0.3, 1)"
 
 function wallpaperPanelWidth(visibleCount: number): number {
   if (visibleCount <= 0) return LAUNCHER_WIDTH_DEFAULT
@@ -122,10 +123,6 @@ function staticMapUrl(lat: number, lon: number, width: number, height: number): 
   return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`
 }
 
-interface LauncherPanelProps {
-  onGapChange: (gap: { left: number; right: number } | null) => void
-}
-
 type SettingId = "wallpaper"
 
 interface SettingCommand {
@@ -207,11 +204,9 @@ function runActions(query: string, run: RunResult): ContextAction[] {
   return [{ label: "Run in terminal", icon: Terminal, action: () => { window.shell.run.execTerminal(query); window.launcher.hide() } }]
 }
 
-export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
-  const bg = useTopbarBg()
+export default function LauncherPanel() {
   const darkText = useDarkText()
-  const fullscreenWindow = useFullscreenWindow()
-  const borderColor = fullscreenWindow ? (darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)") : null
+  const outline = useFullscreenWindow()
   const textColor = darkText ? "text-black" : "text-white"
   const dimText = darkText ? "text-black/50" : "text-white/50"
   const hoverBg = darkText ? "hover:bg-black/5" : "hover:bg-white/5"
@@ -222,8 +217,6 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const [openApps, setOpenApps] = useState<OpenApp[]>([])
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
-  const [closing, setClosing] = useState(false)
-  const [resultsHeight, setResultsHeight] = useState(0)
   const [contextOpen, setContextOpen] = useState(false)
   const [contextSelected, setContextSelected] = useState(0)
   const [notice, setNotice] = useState<{ text: string; busy: boolean } | null>(null)
@@ -238,10 +231,9 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
   const resultsRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
-  const cornerLeftRef = useRef<HTMLDivElement>(null)
-  const cornerRightRef = useRef<HTMLDivElement>(null)
-
-  useFlyUnderBar(bodyRef, [cornerLeftRef, cornerRightRef], CORNER, true, closing)
+  const idRef = useRef(0)
+  if (!idRef.current) idRef.current = nextSurfaceId()
+  const firstRef = useRef(true)
 
   const sortedWallpapers = useMemo(() => {
     if (!query.trim()) return wallpapers
@@ -317,19 +309,55 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [])
 
-  useEffect(() => {
-    const left = Math.round((window.innerWidth - panelWidth) / 2) - CORNER
-    const right = left + panelWidth + CORNER * 2
-    onGapChange({ left, right })
-  }, [panelWidth])
+  function registerSurface() {
+    const body = bodyRef.current
+    const panel = panelRef.current
+    if (!body || !panel) return
+    const h = Math.round(body.getBoundingClientRect().height)
+    if (firstRef.current) {
+      panel.style.height = `${h}px`
+      panel.style.clipPath = `inset(0 0 ${h}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`
+      firstRef.current = false
+    }
+    setChromeSurface({
+      id: idRef.current,
+      centerX: Math.round(window.innerWidth / 2),
+      bodyWidth: panelWidth,
+      fullHeight: h,
+      outline,
+      anchor: "center",
+      contentEl: panel,
+    })
+  }
 
-  useEffect(() => () => onGapChange(null), [])
+  useLayoutEffect(() => {
+    registerSurface()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelWidth, outline])
 
   useEffect(() => {
-    const onStartClose = () => setClosing(true)
-    const onHide = () => { setClosing(false); setNotice(null) }
-    window.launcher.onStartClose(onStartClose)
-    window.launcher.onHide(onHide)
+    const body = bodyRef.current
+    if (!body) return
+    const sync = () => registerSurface()
+    const observer = new ResizeObserver(sync)
+    observer.observe(body)
+    window.addEventListener("resize", sync)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", sync)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelWidth, outline])
+
+  useEffect(() => () => clearChromeSurface(idRef.current), [])
+
+  useEffect(() => {
+    const offStartClose = window.launcher.onStartClose(() => clearChromeSurface(idRef.current))
+    const offHide = window.launcher.onHide(() => setNotice(null))
+    return () => {
+      offStartClose()
+      offHide()
+    }
   }, [])
 
   useEffect(() => {
@@ -444,27 +472,6 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     if (selected >= totalCount) setSelected(0)
     setContextOpen(false)
   }, [results, mathResult, runResult])
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      if (!query.trim() && !activeCommand && !notice) {
-        setResultsHeight(0)
-      } else if (resultsRef.current) {
-        setResultsHeight(resultsRef.current.offsetHeight)
-      }
-    })
-  }, [query, results, contextOpen, mapResult, activeCommand, notice])
-
-  useEffect(() => {
-    if (!resultsRef.current) return
-    const observer = new ResizeObserver(() => {
-      if (!resultsRef.current) return
-      if (!query.trim() && !activeCommand) return
-      setResultsHeight(resultsRef.current.offsetHeight)
-    })
-    observer.observe(resultsRef.current)
-    return () => observer.disconnect()
-  }, [query, activeCommand])
 
   useEffect(() => {
     if (activeCommand !== "wallpaper") return
@@ -593,15 +600,6 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
     if (el) el.scrollIntoView({ block: "nearest" })
   }, [selected, contextOpen])
 
-  const left = Math.round((window.innerWidth - panelWidth) / 2)
-
-  const cornerBg = borderColor
-    ? `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${bg} ${CORNER + 0.5}px)`
-    : `radial-gradient(circle at 0% 100%, transparent ${CORNER}px, ${bg} ${CORNER}px)`
-  const cornerBgRight = borderColor
-    ? `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${borderColor} ${CORNER}px, ${borderColor} ${CORNER + 0.5}px, ${bg} ${CORNER + 0.5}px)`
-    : `radial-gradient(circle at 100% 100%, transparent ${CORNER}px, ${bg} ${CORNER}px)`
-
   return createPortal(
     <div
       className="fixed inset-0 z-50"
@@ -610,16 +608,13 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
       <div
         ref={panelRef}
         className="absolute"
-        style={{ top: 24, left, width: panelWidth, outline: "none", transition: WIDTH_TRANSITION, clipPath: "inset(0 -2000px -2000px -2000px)" }}
+        style={{ top: BAR_BOTTOM, left: "50%", width: panelWidth, transform: "translateX(-50%)", outline: "none", overflow: "hidden", borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`, transition: SIZE_TRANSITION, willChange: "clip-path" }}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={contextOpen ? handleKey : undefined}
         tabIndex={-1}
       >
-        <div ref={cornerLeftRef} className="absolute top-0 right-full" style={{ width: CORNER, height: CORNER, background: cornerBg }} />
-        <div ref={cornerRightRef} className="absolute top-0 left-full" style={{ width: CORNER, height: CORNER, background: cornerBgRight }} />
-        <div ref={bodyRef} className="relative">
-          <div className="overflow-hidden rounded-b-xl shadow-2xl flex flex-col" style={{ backgroundColor: bg, transition: "background-color 300ms ease" }}>
-            <div className={`flex items-center gap-2 px-4 h-12 shrink-0 ${textColor}`}>
+        <div ref={bodyRef} className="flex flex-col">
+          <div className={`flex items-center gap-2 px-4 h-12 shrink-0 ${textColor}`}>
               {contextOpen ? (
                 <button
                   onMouseDown={(e) => { e.preventDefault(); setContextOpen(false); requestAnimationFrame(() => inputRef.current?.focus()) }}
@@ -650,11 +645,7 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                 />
               )}
             </div>
-            <div
-              className="overflow-hidden"
-              style={{ height: resultsHeight, transition: "height 200ms cubic-bezier(0.16, 1, 0.3, 1)" }}
-            >
-              <div ref={resultsRef}>
+            <div ref={resultsRef}>
                 {notice ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
@@ -867,24 +858,6 @@ export default function LauncherPanel({ onGapChange }: LauncherPanelProps) {
                   <div className={`px-4 py-4 text-[13px] ${dimText}`}>No results</div>
                 ) : null}
               </div>
-            </div>
-          </div>
-          {borderColor && (
-            <div
-              style={{
-                position: "absolute",
-                top: CORNER,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                borderLeft: `0.5px solid ${borderColor}`,
-                borderRight: `0.5px solid ${borderColor}`,
-                borderBottom: `0.5px solid ${borderColor}`,
-                borderRadius: "0 0 12px 12px",
-                pointerEvents: "none",
-              }}
-            />
-          )}
         </div>
       </div>
     </div>,

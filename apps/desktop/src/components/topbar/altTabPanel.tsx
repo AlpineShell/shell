@@ -63,6 +63,7 @@ export default function AltTabPanel() {
 
   const clipRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const cardsRef = useRef<HTMLDivElement>(null)
   const idRef = useRef(0)
   if (!idRef.current) idRef.current = nextSurfaceId()
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -89,9 +90,22 @@ export default function AltTabPanel() {
 
   function measureShape(): Shape | null {
     const body = bodyRef.current
+    const cards = cardsRef.current
     if (!body) return null
-    const rect = body.getBoundingClientRect()
-    return { bodyWidth: Math.round(rect.width), bodyHeight: Math.round(rect.height) }
+    const PAD = 12
+    const bodyHeight = Math.round(body.getBoundingClientRect().height)
+    let minLeft = Infinity
+    let maxRight = -Infinity
+    if (cards) {
+      for (const child of Array.from(cards.children) as HTMLElement[]) {
+        const r = child.getBoundingClientRect()
+        if (r.width === 0) continue
+        if (r.left < minLeft) minLeft = r.left
+        if (r.right > maxRight) maxRight = r.right
+      }
+    }
+    const contentWidth = isFinite(minLeft) ? maxRight - minLeft : body.getBoundingClientRect().width - PAD * 2
+    return { bodyWidth: Math.round(contentWidth + PAD * 2), bodyHeight }
   }
 
   useLayoutEffect(() => {
@@ -132,7 +146,15 @@ export default function AltTabPanel() {
       )
     })
     observer.observe(body)
-    return () => observer.disconnect()
+    const onResize = () => {
+      const next = measureShape()
+      if (next) setShape({ ...next })
+    }
+    window.addEventListener("resize", onResize)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", onResize)
+    }
   }, [visible, showId])
 
   useEffect(() => () => clearChromeSurface(idRef.current), [])
@@ -155,7 +177,7 @@ export default function AltTabPanel() {
       }}
     >
       <div ref={bodyRef} className="p-3">
-        <div className="flex flex-wrap justify-center gap-2">
+        <div ref={cardsRef} className="flex flex-wrap justify-center gap-2">
           {windows.map((w, i) => (
             <WindowEntry key={w.hwnd} window={w} selected={i === selectedIndex} darkText={darkText} />
           ))}

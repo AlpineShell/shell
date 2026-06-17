@@ -123,10 +123,14 @@ contextBridge.exposeInMainWorld('launcher', {
     ipcRenderer.on('launcher/show', (_, data) => callback(data))
   },
   onStartClose: (callback) => {
-    ipcRenderer.on('launcher/start-close', () => callback())
+    const handler = () => callback()
+    ipcRenderer.on('launcher/start-close', handler)
+    return () => ipcRenderer.removeListener('launcher/start-close', handler)
   },
   onHide: (callback) => {
-    ipcRenderer.on('launcher/hide', () => callback())
+    const handler = () => callback()
+    ipcRenderer.on('launcher/hide', handler)
+    return () => ipcRenderer.removeListener('launcher/hide', handler)
   },
 })
 

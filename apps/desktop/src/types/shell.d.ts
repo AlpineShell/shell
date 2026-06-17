@@ -328,8 +328,8 @@ declare global {
       onHotkeyChanged: (callback: (hotkey: string) => void) => void
       onIndexChanged: (callback: (data: LauncherItem[]) => void) => void
       onShow: (callback: (data: { displayId: number }) => void) => void
-      onStartClose: (callback: () => void) => void
-      onHide: (callback: () => void) => void
+      onStartClose: (callback: () => void) => () => void
+      onHide: (callback: () => void) => () => void
     }
     screenshot: {
       onShow: (callback: (data: ScreenshotShowPayload) => void) => void
