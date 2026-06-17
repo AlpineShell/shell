@@ -48,7 +48,7 @@ const {
 } = require('./modules/appbar')
 
 const isDev = !app.isPackaged
-const BASE_URL = isDev ? 'http://localhost:5173' : null
+const BASE_URL = isDev ? 'http://127.0.0.1:5173' : null
 const shouldTakeOverExplorer = !isDev || process.env.ALPINE_KILL_EXPLORER === '1'
 let killedExplorer = false
 
