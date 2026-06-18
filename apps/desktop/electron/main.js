@@ -83,38 +83,6 @@ const TOP_BAR_HEIGHT = 24
 
 const shells = new Map()
 
-let notificationCenterWin = null
-
-function showNotificationCenter(win) {
-  if (!win || win.isDestroyed()) return
-  const previous = notificationCenterWin
-  if (previous && previous !== win && !previous.isDestroyed()) hideNotificationCenter(previous)
-  win.webContents.send('topbar/close-menus')
-  notificationCenterWin = win
-  win.setFocusable(true)
-  win.setIgnoreMouseEvents(false)
-  win.setAlwaysOnTop(true, 'screen-saver')
-  win.webContents.send('notifications/center-show')
-  try { win.focus() } catch {}
-}
-
-function hideNotificationCenter(win) {
-  const target = win || notificationCenterWin
-  if (notificationCenterWin === target) notificationCenterWin = null
-  if (!target || target.isDestroyed()) return
-  target.webContents.send('notifications/center-hide')
-  target.setFocusable(false)
-  if (typeof target.restorePassiveTopBar === 'function') target.restorePassiveTopBar()
-  else target.setAlwaysOnTop(false)
-}
-
-ipcMain.handle('notifications/center-open', (event) => {
-  showNotificationCenter(BrowserWindow.fromWebContents(event.sender))
-})
-ipcMain.handle('notifications/center-close', (event) => {
-  hideNotificationCenter(BrowserWindow.fromWebContents(event.sender))
-})
-
 function createDesktopWindow(display) {
   const { x, y, width, height } = display.bounds
 
@@ -184,7 +152,6 @@ function createTopBarWindow(display) {
 
   function evaluateCursorInteraction() {
     if (win.isDestroyed()) return
-    if (notificationCenterWin === win) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
     const bounds = win.getBounds()
@@ -223,7 +190,6 @@ function createTopBarWindow(display) {
 
   win.restorePassiveTopBar = () => {
     if (win.isDestroyed()) return
-    if (notificationCenterWin === win) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
     activeRegion = null
@@ -238,7 +204,6 @@ function createTopBarWindow(display) {
 
   const onSetActiveRegion = (event, region) => {
     if (win.isDestroyed()) return
-    if (notificationCenterWin === win) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
     if (event.sender !== win.webContents) return
@@ -258,20 +223,16 @@ function createTopBarWindow(display) {
     if (event.sender !== win.webContents) return
     toastRegion = region || null
     if (toastRegion) win.setAlwaysOnTop(true, 'screen-saver')
-    else if (!activeRegion && notificationCenterWin !== win) win.setAlwaysOnTop(false)
+    else if (!activeRegion) win.setAlwaysOnTop(false)
     evaluateCursorInteraction()
   }
   ipcMain.on('topbar/set-toast-region', onSetToastRegion)
 
-  win.on('blur', () => {
-    launcher.handleBlur(win)
-    if (notificationCenterWin === win) hideNotificationCenter(win)
-  })
+  win.on('blur', () => launcher.handleBlur(win))
   win.on('closed', () => {
     clearInterval(cursorTracker)
     ipcMain.removeListener('topbar/set-active-region', onSetActiveRegion)
     ipcMain.removeListener('topbar/set-toast-region', onSetToastRegion)
-    if (notificationCenterWin === win) notificationCenterWin = null
   })
 
   win.webContents.once('did-finish-load', () => {

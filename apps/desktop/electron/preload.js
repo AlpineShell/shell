@@ -347,10 +347,6 @@ contextBridge.exposeInMainWorld('shell', {
     getConfig: () => ipcRenderer.invoke('notifications/config-get'),
     setConfig: (partial) => ipcRenderer.invoke('notifications/config-set', partial),
     setDnd: (value) => ipcRenderer.invoke('notifications/set-dnd', value),
-    osAccessStatus: () => ipcRenderer.invoke('notifications/os-access-status'),
-    openOsAccessSettings: () => ipcRenderer.invoke('notifications/open-os-access-settings'),
-    openCenter: () => ipcRenderer.invoke('notifications/center-open'),
-    closeCenter: () => ipcRenderer.invoke('notifications/center-close'),
     onPosted: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('notifications/posted', handler)
@@ -365,16 +361,6 @@ contextBridge.exposeInMainWorld('shell', {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('notifications/config-changed', handler)
       return () => ipcRenderer.removeListener('notifications/config-changed', handler)
-    },
-    onCenterShow: (callback) => {
-      const handler = () => callback()
-      ipcRenderer.on('notifications/center-show', handler)
-      return () => ipcRenderer.removeListener('notifications/center-show', handler)
-    },
-    onCenterHide: (callback) => {
-      const handler = () => callback()
-      ipcRenderer.on('notifications/center-hide', handler)
-      return () => ipcRenderer.removeListener('notifications/center-hide', handler)
     },
   },
 })

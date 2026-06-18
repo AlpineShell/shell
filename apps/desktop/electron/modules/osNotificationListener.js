@@ -16,21 +16,13 @@ let buf = ''
 let restartTimer = null
 let accessDenied = false
 
-function mapAccess(status) {
-  if (status === 'Allowed') return 'granted'
-  if (status === 'Denied') return 'denied'
-  return 'unavailable'
-}
-
 function handleLine(line) {
   const text = line.trim()
   if (!text) return
   let msg
   try { msg = JSON.parse(text) } catch { return }
   if (msg.type === 'access') {
-    const mapped = mapAccess(msg.status)
-    accessDenied = mapped !== 'granted'
-    notifications.setOsAccessStatus(mapped)
+    accessDenied = msg.status !== 'Allowed'
     return
   }
   if (msg.type === 'notification') {
@@ -56,7 +48,6 @@ function start() {
     })
   } catch (e) {
     console.error('[osNotifications] spawn error:', e.message)
-    notifications.setOsAccessStatus('unavailable')
     proc = null
     return
   }
@@ -93,8 +84,7 @@ function stop() {
 module.exports = {
   start() {
     try { app.setAppUserModelId(APP_USER_MODEL_ID) } catch (e) { console.error('[osNotifications] setAppUserModelId error:', e.message) }
-    notifications.setOsControl({ start, stop })
-    if (notifications.getConfig().captureOsToasts) start()
+    start()
     app.on('will-quit', stop)
   },
 }

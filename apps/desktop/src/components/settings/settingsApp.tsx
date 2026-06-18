@@ -18,9 +18,7 @@ import AppsRunningPage from './appsRunningPage'
 import AppsInstalledPage from './appsInstalledPage'
 import AppsStartupPage from './appsStartupPage'
 import UpdatesPage from './updatesPage'
-import NotificationsHub from './notificationsHub'
-import NotificationsGeneralPage from './notificationsGeneralPage'
-import NotificationsSourcesPage from './notificationsSourcesPage'
+import NotificationsPage from './notificationsPage'
 
 interface NavItem {
   path: string
@@ -215,9 +213,7 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'apps/running') return <AppsRunningPage />
   if (path === 'apps/installed') return <AppsInstalledPage />
   if (path === 'apps/startup') return <AppsStartupPage />
-  if (path === 'notifications') return <NotificationsHub onNavigate={navigate} />
-  if (path === 'notifications/general') return <NotificationsGeneralPage />
-  if (path === 'notifications/sources') return <NotificationsSourcesPage />
+  if (path === 'notifications') return <NotificationsPage />
   if (path === 'system') return <SystemPage onNavigate={navigate} />
   if (path === 'system/revert') return <SystemRevertPage />
   if (path === 'updates') return <UpdatesPage />
@@ -244,8 +240,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   revert: 'Revert back to Windows',
   updates: 'Updates',
   notifications: 'Notifications',
-  general: 'General',
-  sources: 'Per-app',
 }
 
 function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string) => void }) {

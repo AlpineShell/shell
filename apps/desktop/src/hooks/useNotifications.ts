@@ -7,15 +7,12 @@ const DEFAULT_CONFIG: NotificationsConfig = {
   defaultDuration: 5000,
   maxHistory: 50,
   groupBySource: true,
-  captureOsToasts: true,
-  bySource: {},
 }
 
 const DEFAULT_STATE: NotificationState = {
   items: [],
   unreadCount: 0,
   config: DEFAULT_CONFIG,
-  osAccessStatus: 'unknown',
 }
 
 export function useNotifications() {
@@ -36,14 +33,7 @@ export function useNotifications() {
   }, [])
 
   const setConfig = (partial: Partial<NotificationsConfig>) => {
-    setState((prev) => ({
-      ...prev,
-      config: {
-        ...prev.config,
-        ...partial,
-        bySource: partial.bySource ? { ...prev.config.bySource, ...partial.bySource } : prev.config.bySource,
-      },
-    }))
+    setState((prev) => ({ ...prev, config: { ...prev.config, ...partial } }))
     window.shell?.notifications?.setConfig?.(partial)
   }
 
@@ -72,7 +62,6 @@ export function useNotifications() {
     items: state.items,
     unreadCount: state.unreadCount,
     config: state.config,
-    osAccessStatus: state.osAccessStatus,
     setConfig,
     setDnd,
     dismiss,

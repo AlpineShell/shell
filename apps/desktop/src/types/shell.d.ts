@@ -301,7 +301,6 @@ declare global {
 
   type NotificationSource = 'alpine' | 'os' | 'user'
   type NotificationPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-right'
-  type NotificationOsAccess = 'unknown' | 'granted' | 'denied' | 'unavailable'
 
   interface NotificationAction {
     id: string
@@ -334,11 +333,6 @@ declare global {
     onAction?: (actionId: string) => void
   }
 
-  interface NotificationSourceConfig {
-    enabled: boolean
-    label: string
-  }
-
   interface NotificationsConfig {
     enabled: boolean
     doNotDisturb: boolean
@@ -346,15 +340,12 @@ declare global {
     defaultDuration: number
     maxHistory: number
     groupBySource: boolean
-    captureOsToasts: boolean
-    bySource: Record<string, NotificationSourceConfig>
   }
 
   interface NotificationState {
     items: AppNotification[]
     unreadCount: number
     config: NotificationsConfig
-    osAccessStatus: NotificationOsAccess
   }
 
   interface Window {
@@ -561,15 +552,9 @@ declare global {
         getConfig: () => Promise<NotificationsConfig>
         setConfig: (partial: Partial<NotificationsConfig>) => Promise<NotificationsConfig>
         setDnd: (value: boolean) => Promise<NotificationsConfig>
-        osAccessStatus: () => Promise<NotificationOsAccess>
-        openOsAccessSettings: () => Promise<void>
-        openCenter: () => Promise<void>
-        closeCenter: () => Promise<void>
         onPosted: (callback: (notif: AppNotification) => void) => () => void
         onChanged: (callback: (state: NotificationState) => void) => () => void
         onConfigChanged: (callback: (config: NotificationsConfig) => void) => () => void
-        onCenterShow: (callback: () => void) => () => void
-        onCenterHide: (callback: () => void) => () => void
       }
     }
   }
