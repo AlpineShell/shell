@@ -238,6 +238,7 @@ function createTopBarWindow(display) {
 
   const onSetActiveRegion = (event, region) => {
     if (win.isDestroyed()) return
+    if (notificationCenterWin === win) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
     if (event.sender !== win.webContents) return
