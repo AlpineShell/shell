@@ -212,7 +212,7 @@ function createTopBarWindow(display) {
       win.setAlwaysOnTop(true, 'screen-saver')
     } else {
       activeRegion = null
-      win.setAlwaysOnTop(false)
+      if (!toastRegion) win.setAlwaysOnTop(false)
     }
     evaluateCursorInteraction()
   }
