@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { surfaceFillPath, barBorderPath, RADIUS, type ChromeGeometry, type ChromeAnchor } from "./chromeShape";
-import { getChromeSurface, subscribeChromeSurface, type ChromeSurface } from "./chromeStore";
+import { getChromeSurface, getToastSurface, subscribeChromeSurface, type ChromeSurface } from "./chromeStore";
 
 const OPEN_MS = 460;
 const CLOSE_MS = 300;
@@ -45,6 +45,17 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
         let morphStart = -1;
         let contentEl: HTMLElement | null = null;
         let lastSurface: ChromeSurface | null = null;
+        let tFrom = 0;
+        let tTo = 0;
+        let tStart = -1;
+        let tDur = OPEN_MS;
+        let tEase: "out" | "in" = "out";
+        let tCx = 0;
+        let tHalf = 0;
+        let tFullH = 0;
+        let tAnchor: ChromeAnchor = "center";
+        let tContentEl: HTMLElement | null = null;
+        let lastToast: ChromeSurface | null = null;
         let running = false;
         let raf = 0;
 
@@ -63,29 +74,63 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
             oEase = ease;
         };
 
+        const sampleToast = () => {
+            if (tStart < 0) return tTo;
+            const t = Math.min(1, (now() - tStart) / tDur);
+            const eased = tEase === "out" ? easeOutExpo(t) : easeInCubic(t);
+            return tFrom + (tTo - tFrom) * eased;
+        };
+        const animateToast = (to: number, dur: number, ease: "out" | "in") => {
+            tFrom = sampleToast();
+            tTo = to;
+            tStart = now();
+            tDur = dur;
+            tEase = ease;
+        };
+
         const syncSurface = () => {
             const surface = getChromeSurface();
-            if (surface === lastSurface) return;
-            const previous = lastSurface;
-            lastSurface = surface;
-            if (surface && !previous) {
-                cx = surface.centerX;
-                halfBody = surface.bodyWidth / 2;
-                fullH = surface.fullHeight;
-                outline = surface.outline;
-                anchor = surface.anchor;
-                contentEl = surface.contentEl;
-                morphFrom = null;
-                animateOpen(1, OPEN_MS, "out");
-            } else if (surface && previous) {
-                outline = surface.outline;
-                anchor = surface.anchor;
-                contentEl = surface.contentEl;
-                morphFrom = { cx, halfBody, fullH };
-                morphStart = now();
-            } else if (!surface && previous) {
-                morphFrom = null;
-                animateOpen(0, CLOSE_MS, "in");
+            if (surface !== lastSurface) {
+                const previous = lastSurface;
+                lastSurface = surface;
+                if (surface && !previous) {
+                    cx = surface.centerX;
+                    halfBody = surface.bodyWidth / 2;
+                    fullH = surface.fullHeight;
+                    outline = surface.outline;
+                    anchor = surface.anchor;
+                    contentEl = surface.contentEl;
+                    morphFrom = null;
+                    animateOpen(1, OPEN_MS, "out");
+                } else if (surface && previous) {
+                    outline = surface.outline;
+                    anchor = surface.anchor;
+                    contentEl = surface.contentEl;
+                    morphFrom = { cx, halfBody, fullH };
+                    morphStart = now();
+                } else if (!surface && previous) {
+                    morphFrom = null;
+                    animateOpen(0, CLOSE_MS, "in");
+                }
+            }
+
+            const toast = getToastSurface();
+            if (toast !== lastToast) {
+                const prevToast = lastToast;
+                lastToast = toast;
+                if (toast && !prevToast) {
+                    tCx = toast.centerX;
+                    tHalf = toast.bodyWidth / 2;
+                    tFullH = toast.fullHeight;
+                    tAnchor = toast.anchor;
+                    tContentEl = toast.contentEl;
+                    animateToast(1, OPEN_MS, "out");
+                } else if (toast && prevToast) {
+                    tAnchor = toast.anchor;
+                    tContentEl = toast.contentEl;
+                } else if (!toast && prevToast) {
+                    animateToast(0, CLOSE_MS, "in");
+                }
             }
             kick();
         };
@@ -119,8 +164,22 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
             const height = fullH * openValue;
             const surfaceActive = openValue > 0.004;
 
+            const toast = getToastSurface();
+            if (toast) {
+                tCx = toast.centerX;
+                tHalf = toast.bodyWidth / 2;
+                tFullH = toast.fullHeight;
+                tAnchor = toast.anchor;
+                tContentEl = toast.contentEl;
+            }
+            const toastOpen = sampleToast();
+            const tHeight = tFullH * toastOpen;
+            const toastActive = toastOpen > 0.004 && tFullH > 0;
+
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            const need = surfaceActive ? barBottom + fullH + 60 : barBottom + 4;
+            const menuNeed = surfaceActive ? barBottom + fullH + 60 : barBottom + 4;
+            const toastNeed = toastActive ? barBottom + tFullH + 60 : 0;
+            const need = Math.max(menuNeed, toastNeed);
             const clearH = Math.max(need, lastClearH);
             ctx.clearRect(0, 0, screenW, clearH);
             lastClearH = need;
@@ -152,7 +211,26 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                 contentEl.style.clipPath = `inset(${slide}px ${rightHidden}px ${vHidden - slide}px ${leftHidden}px round 0 0 ${r}px ${r}px)`;
             }
 
-            return morphFrom !== null || (oStart >= 0 && now() - oStart < oDur);
+            if (toastActive) {
+                const tGeom: ChromeGeometry = { centerX: tCx, bodyWidth: tHalf * 2, height: tHeight, barBottom, screenWidth: screenW, anchor: tAnchor };
+                const tPath = new Path2D(surfaceFillPath(tGeom));
+                ctx.fillStyle = p.bg;
+                ctx.fill(tPath);
+                ctx.strokeStyle = p.barBorderColor;
+                ctx.lineWidth = 1;
+                ctx.stroke(tPath);
+                if (tContentEl) {
+                    const tvHidden = Math.max(0, tFullH - tHeight);
+                    const tr = Math.min(RADIUS, tHalf, tHeight / 2);
+                    tContentEl.style.height = `${tFullH}px`;
+                    tContentEl.style.translate = `0px ${-tvHidden}px`;
+                    tContentEl.style.clipPath = `inset(${tvHidden}px 0px 0px 0px round 0 0 ${tr}px ${tr}px)`;
+                }
+            } else if (tContentEl) {
+                tContentEl.style.clipPath = "inset(0 0 100% 0)";
+            }
+
+            return morphFrom !== null || (oStart >= 0 && now() - oStart < oDur) || (tStart >= 0 && now() - tStart < tDur);
         };
 
         const tick = () => {

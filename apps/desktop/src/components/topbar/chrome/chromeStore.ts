@@ -11,6 +11,7 @@ export interface ChromeSurface {
 }
 
 let current: ChromeSurface | null = null;
+let currentToast: ChromeSurface | null = null;
 let nextId = 1;
 const listeners = new Set<() => void>();
 
@@ -21,6 +22,15 @@ export function nextSurfaceId(): number {
 export function setChromeSurface(surface: ChromeSurface | null): void {
     current = surface;
     listeners.forEach((l) => l());
+}
+
+export function setToastSurface(surface: ChromeSurface | null): void {
+    currentToast = surface;
+    listeners.forEach((l) => l());
+}
+
+export function getToastSurface(): ChromeSurface | null {
+    return currentToast;
 }
 
 export function clearChromeSurface(id: number): void {

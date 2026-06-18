@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { useDarkText, useTopbarBg } from "../../themeContext";
+import { useDarkText } from "../../themeContext";
 import { useNotifications } from "../../../hooks/useNotifications";
-import ToastChrome, { type ToastSurface } from "../chrome/ToastChrome";
+import { setToastSurface } from "../chrome/chromeStore";
 
 const MAX_VISIBLE = 3;
 const BAR_BOTTOM = 24;
@@ -25,12 +25,11 @@ let toastKeySeq = 1;
 
 export default function ToastLayer() {
     const darkText = useDarkText();
-    const bg = useTopbarBg();
     const { config, runAction } = useNotifications();
     const [toasts, setToasts] = useState<ActiveToast[]>([]);
-    const [surface, setSurface] = useState<ToastSurface | null>(null);
     const clipRef = useRef<HTMLDivElement>(null);
     const bodyRef = useRef<HTMLDivElement>(null);
+    const lastReg = useRef<{ centerX: number; fullHeight: number; anchor: Anchor } | null>(null);
 
     const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
 
@@ -45,26 +44,28 @@ export default function ToastLayer() {
 
     const visible = toasts.slice(0, MAX_VISIBLE);
     const overflow = toasts.length - visible.length;
+    const geom = geometryFor(config.position);
 
     const measure = () => {
         const body = bodyRef.current;
         const clip = clipRef.current;
         if (!body || !clip || toasts.length === 0) {
-            setSurface(null);
+            if (lastReg.current) { lastReg.current = null; setToastSurface(null); }
             window.topbar?.setToastRegion?.(null);
             return;
         }
-        const geom = geometryFor(config.position);
+        const g = geometryFor(config.position);
         const fullHeight = body.offsetHeight;
-        setSurface((prev) => {
-            if (prev && prev.centerX === geom.centerX && prev.bodyWidth === TOAST_WIDTH && prev.fullHeight === fullHeight && prev.anchor === geom.anchor && prev.contentEl === clip) return prev;
-            return { centerX: geom.centerX, bodyWidth: TOAST_WIDTH, fullHeight, anchor: geom.anchor, contentEl: clip };
-        });
+        const prev = lastReg.current;
+        if (!prev || prev.centerX !== g.centerX || prev.fullHeight !== fullHeight || prev.anchor !== g.anchor) {
+            lastReg.current = { centerX: g.centerX, fullHeight, anchor: g.anchor };
+            setToastSurface({ id: 0, centerX: g.centerX, bodyWidth: TOAST_WIDTH, fullHeight, outline: false, anchor: g.anchor, contentEl: clip });
+        }
         window.topbar?.setToastRegion?.({
             top: BAR_BOTTOM,
             bottom: BAR_BOTTOM + fullHeight,
-            left: geom.left,
-            right: geom.left + TOAST_WIDTH,
+            left: g.left,
+            right: g.left + TOAST_WIDTH,
         });
     };
 
@@ -82,50 +83,49 @@ export default function ToastLayer() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [toasts.length === 0, config.position]);
 
-    useEffect(() => () => { window.topbar?.setToastRegion?.(null); }, []);
+    useEffect(() => () => {
+        setToastSurface(null);
+        window.topbar?.setToastRegion?.(null);
+    }, []);
 
     const text = darkText ? "black" : "white";
     const dim = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)";
-    const geom = geometryFor(config.position);
 
     return (
-        <>
-            <ToastChrome barHeight={BAR_BOTTOM} bg={bg} borderColor={borderColor} surface={surface} />
-            <div
-                ref={clipRef}
-                style={{
-                    position: "fixed",
-                    top: BAR_BOTTOM,
-                    left: geom.left,
-                    width: TOAST_WIDTH,
-                    zIndex: 3,
-                    pointerEvents: toasts.length ? "auto" : "none",
-                    willChange: "clip-path",
-                    color: text,
-                }}
-            >
-                <div ref={bodyRef} className="flex flex-col py-1">
-                    {visible.map((t, i) => (
-                        <ToastCard
-                            key={t.key}
-                            toast={t}
-                            darkText={darkText}
-                            dim={dim}
-                            text={text}
-                            divider={i > 0 ? borderColor : null}
-                            duration={config.defaultDuration}
-                            onDismiss={() => remove(t.key)}
-                            onAction={(actionId) => { runAction(t.id, actionId); remove(t.key); }}
-                        />
-                    ))}
-                    {overflow > 0 && (
-                        <div className="px-3 py-1 text-[11px]" style={{ color: dim, borderTop: `1px solid ${borderColor}` }}>
-                            +{overflow} more
-                        </div>
-                    )}
-                </div>
+        <div
+            ref={clipRef}
+            style={{
+                position: "fixed",
+                top: BAR_BOTTOM,
+                left: geom.left,
+                width: TOAST_WIDTH,
+                zIndex: 3,
+                pointerEvents: toasts.length ? "auto" : "none",
+                willChange: "clip-path",
+                color: text,
+            }}
+        >
+            <div ref={bodyRef} className="flex flex-col py-1">
+                {visible.map((t, i) => (
+                    <ToastCard
+                        key={t.key}
+                        toast={t}
+                        darkText={darkText}
+                        dim={dim}
+                        text={text}
+                        divider={i > 0 ? borderColor : null}
+                        duration={config.defaultDuration}
+                        onDismiss={() => remove(t.key)}
+                        onAction={(actionId) => { runAction(t.id, actionId); remove(t.key); }}
+                    />
+                ))}
+                {overflow > 0 && (
+                    <div className="px-3 py-1 text-[11px]" style={{ color: dim, borderTop: `1px solid ${borderColor}` }}>
+                        +{overflow} more
+                    </div>
+                )}
             </div>
-        </>
+        </div>
     );
 }
 
