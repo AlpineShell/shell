@@ -689,16 +689,21 @@ export default function LauncherPanel() {
               )}
             </div>
             <div>
-                {activeCommand === "wifi" ? (
-                  <LauncherWifi darkText={darkText} onBack={exitCommand} />
-                ) : activeCommand === "bluetooth" ? (
-                  <LauncherBluetooth darkText={darkText} onBack={exitCommand} />
-                ) : activeCommand === "tiling" ? (
-                  <LauncherTiling darkText={darkText} onBack={exitCommand} />
-                ) : activeCommand === "startup" ? (
-                  <LauncherStartup darkText={darkText} onBack={exitCommand} />
-                ) : activeCommand === "power" ? (
-                  <LauncherPower darkText={darkText} onBack={exitCommand} />
+                {inSubmenu ? (
+                  <>
+                    <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+                    {activeCommand === "wifi" ? (
+                      <LauncherWifi darkText={darkText} onBack={exitCommand} />
+                    ) : activeCommand === "bluetooth" ? (
+                      <LauncherBluetooth darkText={darkText} onBack={exitCommand} />
+                    ) : activeCommand === "tiling" ? (
+                      <LauncherTiling darkText={darkText} onBack={exitCommand} />
+                    ) : activeCommand === "startup" ? (
+                      <LauncherStartup darkText={darkText} onBack={exitCommand} />
+                    ) : (
+                      <LauncherPower darkText={darkText} onBack={exitCommand} />
+                    )}
+                  </>
                 ) : notice ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
