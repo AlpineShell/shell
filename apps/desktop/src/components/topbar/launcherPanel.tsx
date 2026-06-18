@@ -1,10 +1,11 @@
 import { createPortal } from "react-dom"
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Wallpaper, Settings2, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play } from "lucide-react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
+import { SETTING_COMMANDS, type SettingCommand } from "./launcherSettings"
 
 const BAR_BOTTOM = 24
 const MAX_RESULTS = 5
@@ -122,26 +123,6 @@ function staticMapUrl(lat: number, lon: number): string {
   return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`
 }
 
-type SettingId = "wallpaper"
-
-interface SettingCommand {
-  id: SettingId
-  label: string
-  hint: string
-  icon: typeof Wallpaper
-  keywords: string[]
-}
-
-const SETTINGS: SettingCommand[] = [
-  {
-    id: "wallpaper",
-    label: "Wallpaper",
-    hint: "Change your desktop wallpaper",
-    icon: Wallpaper,
-    keywords: ["wallpaper", "background", "desktop", "image", "theme"],
-  },
-]
-
 type WindowAction = "minimize" | "maximize" | "close"
 
 interface WindowCommand {
@@ -219,12 +200,15 @@ export default function LauncherPanel() {
   const [contextOpen, setContextOpen] = useState(false)
   const [contextSelected, setContextSelected] = useState(0)
   const [notice, setNotice] = useState<{ text: string; busy: boolean } | null>(null)
-  const [activeCommand, setActiveCommand] = useState<SettingId | null>(null)
+  const [activeCommand, setActiveCommand] = useState<string | null>(null)
+  const [settingValues, setSettingValues] = useState<Record<string, boolean | number>>({})
   const [wallpapers, setWallpapers] = useState<WallpaperItem[]>([])
   const [previewIndex, setPreviewIndex] = useState(0)
   const currentWallpaper = useWallpaper()
   const originalPath = useRef<string | null>(null)
   const committed = useRef(false)
+  const queryBeforeCommand = useRef("")
+  const selectedBeforeCommand = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -242,15 +226,17 @@ export default function LauncherPanel() {
   }, [wallpapers, query])
 
   const panelWidth = activeCommand === "wallpaper"
-    ? (wallpapers.length === 0 ? LAUNCHER_WIDTH_DEFAULT : wallpaperPanelWidth(wallpapers.length))
+    ? Math.max(LAUNCHER_WIDTH_DEFAULT, wallpaperPanelWidth(wallpapers.length))
     : LAUNCHER_WIDTH_DEFAULT
 
-  function enterCommand(id: SettingId) {
+  function enterCommand(id: string) {
+    queryBeforeCommand.current = query
+    selectedBeforeCommand.current = selected
     setActiveCommand(id)
-    setQuery("")
     setSelected(0)
     setContextOpen(false)
     if (id === "wallpaper") {
+      setQuery("")
       committed.current = false
       const cur = wallpapers.find((w) => w.url === currentWallpaper)
       if (cur) {
@@ -276,7 +262,8 @@ export default function LauncherPanel() {
     originalPath.current = null
     committed.current = false
     setActiveCommand(null)
-    setQuery("")
+    setQuery(queryBeforeCommand.current)
+    setSelected(selectedBeforeCommand.current)
     setPreviewIndex(0)
     requestAnimationFrame(() => inputRef.current?.focus())
   }
@@ -292,6 +279,49 @@ export default function LauncherPanel() {
     window.launcher.hide()
   }
 
+  const loadSettingValues = useCallback(() => {
+    for (const cmd of SETTING_COMMANDS) {
+      const c = cmd.control
+      if (c.kind === "toggle" || c.kind === "slider") {
+        c.get().then((v) => setSettingValues((prev) => ({ ...prev, [cmd.id]: v }))).catch(() => {})
+      }
+    }
+  }, [])
+
+  function toggleSetting(cmd: SettingCommand) {
+    if (cmd.control.kind !== "toggle") return
+    const current = settingValues[cmd.id] === true
+    const next = !current
+    setSettingValues((prev) => ({ ...prev, [cmd.id]: next }))
+    Promise.resolve(cmd.control.set(next)).catch(() => setSettingValues((prev) => ({ ...prev, [cmd.id]: current })))
+  }
+
+  function adjustSetting(cmd: SettingCommand, direction: number) {
+    if (cmd.control.kind !== "slider") return
+    const c = cmd.control
+    const current = typeof settingValues[cmd.id] === "number" ? (settingValues[cmd.id] as number) : c.min
+    const next = Math.max(c.min, Math.min(c.max, current + direction * c.step))
+    if (next === current) return
+    setSettingValues((prev) => ({ ...prev, [cmd.id]: next }))
+    Promise.resolve(c.set(next)).catch(() => {})
+  }
+
+  function setSliderValue(cmd: SettingCommand, value: number) {
+    if (cmd.control.kind !== "slider") return
+    setSettingValues((prev) => ({ ...prev, [cmd.id]: value }))
+    Promise.resolve(cmd.control.set(value)).catch(() => {})
+  }
+
+  function activateSetting(cmd: SettingCommand) {
+    const c = cmd.control
+    if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power") enterCommand(cmd.id)
+    else if (c.kind === "toggle") toggleSetting(cmd)
+    else if (c.kind === "navigate") {
+      window.shell.windows.openSettings(c.path)
+      window.launcher.hide()
+    }
+  }
+
   useEffect(() => {
     window.shell.apps.catalog().then(setItems)
     const offCatalog = window.shell.apps.onCatalogChanged(setItems)
@@ -304,12 +334,13 @@ export default function LauncherPanel() {
       const list: WallpaperItem[] = [...mine, ...presets].map(({ name, path, thumbnail, url }) => ({ name, path, thumbnail, url }))
       setWallpapers(list)
     })
+    loadSettingValues()
     requestAnimationFrame(() => inputRef.current?.focus())
     return () => {
       offCatalog()
       offOpenApps()
     }
-  }, [])
+  }, [loadSettingValues])
 
   function registerSurface() {
     const body = bodyRef.current
@@ -388,13 +419,13 @@ export default function LauncherPanel() {
   const matchedSettings = useMemo(() => {
     if (!query.trim()) return []
     const out: { setting: SettingCommand; s: number }[] = []
-    for (const setting of SETTINGS) {
+    for (const setting of SETTING_COMMANDS) {
       let best = score(query, setting.label)
       for (const k of setting.keywords) best = Math.max(best, score(query, k))
       if (best >= 0) out.push({ setting, s: best })
     }
     out.sort((a, b) => b.s - a.s)
-    return out.map((r) => r.setting)
+    return out.slice(0, 5).map((r) => r.setting)
   }, [query])
 
   const matchedWindowCommands = useMemo(() => {
@@ -549,6 +580,12 @@ export default function LauncherPanel() {
         e.preventDefault()
         commitWallpaper()
       }
+    } else if (selectedEntry && selectedEntry.type === "setting" && selectedEntry.setting.control.kind === "slider" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault()
+      adjustSetting(selectedEntry.setting, e.key === "ArrowRight" ? 1 : -1)
+    } else if (e.key === "ArrowRight" && selectedEntry && selectedEntry.type === "setting" && selectedEntry.setting.control.kind !== "toggle") {
+      e.preventDefault()
+      activateSetting(selectedEntry.setting)
     } else if (e.key === "ArrowDown") {
       e.preventDefault()
       setSelected((s) => Math.min(s + 1, totalCount - 1))
@@ -577,7 +614,7 @@ export default function LauncherPanel() {
         window.alttab.activate(selectedEntry.app.hwnd)
         window.launcher.hide()
       } else if (selectedEntry.type === "setting" && selectedEntry.setting) {
-        enterCommand(selectedEntry.setting.id)
+        activateSetting(selectedEntry.setting)
       } else if (selectedEntry.type === "wincmd" && selectedEntry.cmd) {
         window.shell.apps.windowCommand(selectedEntry.cmd.action)
         window.launcher.hide()
@@ -616,6 +653,7 @@ export default function LauncherPanel() {
         tabIndex={-1}
       >
         <div ref={bodyRef} className="flex flex-col">
+          {(!activeCommand || activeCommand === "wallpaper") && (
           <div className={`flex items-center gap-2 px-4 h-12 shrink-0 ${textColor}`}>
               {contextOpen ? (
                 <button
@@ -647,8 +685,19 @@ export default function LauncherPanel() {
                 />
               )}
             </div>
+          )}
             <div>
-                {notice ? (
+                {activeCommand === "wifi" ? (
+                  <LauncherWifi darkText={darkText} onBack={exitCommand} />
+                ) : activeCommand === "bluetooth" ? (
+                  <LauncherBluetooth darkText={darkText} onBack={exitCommand} />
+                ) : activeCommand === "tiling" ? (
+                  <LauncherTiling darkText={darkText} onBack={exitCommand} />
+                ) : activeCommand === "startup" ? (
+                  <LauncherStartup darkText={darkText} onBack={exitCommand} />
+                ) : activeCommand === "power" ? (
+                  <LauncherPower darkText={darkText} onBack={exitCommand} />
+                ) : notice ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
                     <div className="flex items-center gap-3 px-4 h-12">
@@ -759,21 +808,56 @@ export default function LauncherPanel() {
                       {matchedSettings.map((s, i) => {
                         const idx = openOffset + i
                         const Icon = s.icon
+                        const isSel = idx === selected
+                        const control = s.control
+                        if (control.kind === "slider") {
+                          const value = typeof settingValues[s.id] === "number" ? (settingValues[s.id] as number) : control.min
+                          return (
+                            <div
+                              key={`setting-${s.id}`}
+                              onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
+                              className={`flex items-center gap-3 px-2.5 h-12 rounded-md transition-colors ${isSel ? selectedBg : hoverBg}`}
+                            >
+                              <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+                              <input
+                                type="range"
+                                tabIndex={-1}
+                                min={control.min}
+                                max={control.max}
+                                step={control.step}
+                                value={value}
+                                onChange={(e) => setSliderValue(s, parseInt(e.target.value, 10))}
+                                onMouseUp={() => requestAnimationFrame(() => inputRef.current?.focus())}
+                                className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
+                                style={{ "--slider-progress": `${((value - control.min) / (control.max - control.min)) * 100}%` } as React.CSSProperties}
+                              />
+                              <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{value}{control.unit ?? ""}</span>
+                            </div>
+                          )
+                        }
+                        const on = settingValues[s.id] === true
                         return (
                           <button
                             key={`setting-${s.id}`}
                             onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
-                            onClick={() => enterCommand(s.id)}
-                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
-                              idx === selected ? selectedBg : hoverBg
-                            }`}
+                            onClick={() => activateSetting(s)}
+                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${isSel ? selectedBg : hoverBg}`}
                           >
                             <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
                             <div className="flex flex-col min-w-0 flex-1">
                               <span className={`text-[13px] truncate ${textColor}`}>{s.label}</span>
                               <span className={`text-[11px] truncate ${dimText}`}>{s.hint}</span>
                             </div>
-                            <Settings2 size={12} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
+                            {control.kind === "toggle" ? (
+                              <span
+                                className="relative shrink-0 rounded-full transition-colors"
+                                style={{ width: 32, height: 18, backgroundColor: on ? (darkText ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.9)") : (darkText ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.18)") }}
+                              >
+                                <span className="absolute top-0.5 rounded-full transition-all" style={{ width: 14, height: 14, left: on ? 16 : 2, backgroundColor: on ? (darkText ? "rgb(255,255,255)" : "rgb(20,20,20)") : (darkText ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.7)") }} />
+                              </span>
+                            ) : (
+                              <ChevronRight size={14} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
+                            )}
                           </button>
                         )
                       })}
@@ -937,4 +1021,486 @@ function WallpaperCarousel({ wallpapers, loading, selectedIndex, onPick }: Wallp
       </div>
     </div>
   )
+}
+
+function WifiSignalIcon({ signal, color, size }: { signal: number; color: string; size: number }) {
+  if (signal >= 70) return <Wifi color={color} size={size} />
+  if (signal >= 40) return <WifiHigh color={color} size={size} />
+  if (signal >= 10) return <WifiLow color={color} size={size} />
+  return <WifiZero color={color} size={size} />
+}
+
+function SubToggle({ on, darkText }: { on: boolean; darkText: boolean }) {
+  return (
+    <span className="relative shrink-0 rounded-full transition-colors" style={{ width: 32, height: 18, backgroundColor: on ? (darkText ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.9)") : (darkText ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.18)") }}>
+      <span className="absolute top-0.5 rounded-full transition-all" style={{ width: 14, height: 14, left: on ? 16 : 2, backgroundColor: on ? (darkText ? "rgb(255,255,255)" : "rgb(20,20,20)") : (darkText ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.7)") }} />
+    </span>
+  )
+}
+
+function LauncherWifi({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
+  const textColor = darkText ? "text-black" : "text-white"
+  const dimText = darkText ? "text-black/50" : "text-white/50"
+  const selectedBg = darkText ? "bg-black/10" : "bg-white/10"
+  const iconColor = darkText ? "black" : "white"
+  const iconDim = darkText ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)"
+
+  const [networks, setNetworks] = useState<WifiNetwork[]>([])
+  const [enabled, setEnabled] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [selected, setSelected] = useState(0)
+  const [connecting, setConnecting] = useState<string | null>(null)
+  const [passwordFor, setPasswordFor] = useState<string | null>(null)
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState(false)
+  const pwRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  const itemCount = 1 + (enabled ? networks.length : 0)
+
+  const scan = useCallback(async () => {
+    setScanning(true)
+    try { const r = await window.shell.network.wifiScan(); if (r) setNetworks(r) } finally { setScanning(false) }
+  }, [])
+
+  useEffect(() => {
+    window.shell.network.wifiRadioGet().then((r) => setEnabled(typeof r?.state === "string" && r.state.toLowerCase() === "on")).catch(() => {})
+    window.shell.network.wifiNetworks().then(setNetworks).catch(() => {})
+    const off = window.shell.network.onWifiScanUpdated((data) => { setNetworks(data); setScanning(false) })
+    scan()
+    return () => off()
+  }, [scan])
+
+  useEffect(() => {
+    if (selected > itemCount - 1) setSelected(Math.max(0, itemCount - 1))
+  }, [itemCount, selected])
+
+  useEffect(() => {
+    const el = listRef.current?.querySelector(`[data-idx="${selected}"]`) as HTMLElement | null
+    el?.scrollIntoView({ block: "nearest" })
+  }, [selected])
+
+  function toggleRadio() {
+    const next = !enabled
+    setEnabled(next)
+    setSelected(0)
+    window.shell.network.wifiRadioSet(next).then(() => { if (next) scan() }).catch(() => {})
+  }
+
+  async function connect(network: WifiNetwork, pwd?: string) {
+    setConnecting(network.ssid)
+    setError(false)
+    const result = await window.shell.network.wifiConnect(network.ssid, pwd)
+    if (result.needsPassword && !pwd) {
+      setConnecting(null)
+      setPasswordFor(network.ssid)
+      setPassword("")
+      requestAnimationFrame(() => pwRef.current?.focus())
+      return
+    }
+    setConnecting(null)
+    if (!result.success) { setError(true); return }
+    setPasswordFor(null)
+    setPassword("")
+    setTimeout(scan, 1200)
+  }
+
+  function activateNetwork(network: WifiNetwork) {
+    if (connecting) return
+    if (network.connected) { window.shell.network.wifiDisconnect().then(() => setTimeout(scan, 800)); return }
+    if (passwordFor === network.ssid) { setPasswordFor(null); setPassword(""); return }
+    connect(network)
+  }
+
+  function activate(idx: number) {
+    if (idx === 0) { toggleRadio(); return }
+    const network = networks[idx - 1]
+    if (network) activateNetwork(network)
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (passwordFor) return
+      if (e.key === "Escape" || e.key === "Backspace" || e.key === "ArrowLeft") { e.preventDefault(); onBack() }
+      else if (e.key === "ArrowDown") { e.preventDefault(); setSelected((s) => Math.min(s + 1, itemCount - 1)) }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setSelected((s) => Math.max(s - 1, 0)) }
+      else if (e.key === "Enter") { e.preventDefault(); activate(selected) }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  })
+
+  return (
+    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto">
+      <button
+        data-idx={0}
+        onMouseMove={() => setSelected(0)}
+        onClick={toggleRadio}
+        className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${selected === 0 ? selectedBg : ""}`}
+      >
+        <Wifi size={18} className={`w-7 shrink-0 ${dimText}`} />
+        <span className={`flex-1 text-[13px] ${textColor}`}>Wi-Fi</span>
+        <SubToggle on={enabled} darkText={darkText} />
+      </button>
+
+      {!enabled ? null : scanning && networks.length === 0 ? (
+        <div className={`flex items-center justify-center py-4 ${dimText}`}><Loader2 size={18} className="animate-spin" /></div>
+      ) : networks.length === 0 ? (
+        <div className={`flex items-center gap-2 justify-center py-4 text-[13px] ${dimText}`}><WifiOff size={15} /><span>No networks</span></div>
+      ) : (
+        networks.map((network, i) => {
+          const idx = i + 1
+          return (
+            <div key={network.ssid}>
+              <button
+                data-idx={idx}
+                onMouseMove={() => setSelected(idx)}
+                onClick={() => activateNetwork(network)}
+                className={`w-full flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${idx === selected ? selectedBg : ""}`}
+              >
+                <span className="w-7 shrink-0 flex justify-center">
+                  <WifiSignalIcon signal={network.signal} color={network.connected ? iconColor : iconDim} size={16} />
+                </span>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className={`text-[13px] truncate ${textColor}`}>{network.ssid}</span>
+                  {network.connected && <span className={`text-[11px] ${dimText}`}>Connected</span>}
+                </div>
+                {connecting === network.ssid && <Loader2 size={13} className={`shrink-0 animate-spin ${dimText}`} />}
+                {network.security !== "Open" && <Lock size={12} className={`shrink-0 ${dimText}`} />}
+              </button>
+              {passwordFor === network.ssid && (
+                <div className="flex gap-2 px-2.5 py-1.5 items-center">
+                  <input
+                    ref={pwRef}
+                    type="password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setError(false) }}
+                    onKeyDown={(e) => {
+                      e.stopPropagation()
+                      if (e.key === "Enter") { if (password.trim()) connect(network, password) }
+                      else if (e.key === "Escape") { setPasswordFor(null); setPassword("") }
+                    }}
+                    placeholder="Password"
+                    autoFocus
+                    className={`flex-1 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${error ? "ring-1 ring-red-400" : ""}`}
+                  />
+                  <button onClick={() => { if (password.trim()) connect(network, password) }} className={`text-[12px] px-2 py-1 rounded-md cursor-pointer ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}>Join</button>
+                </div>
+              )}
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
+  const textColor = darkText ? "text-black" : "text-white"
+  const dimText = darkText ? "text-black/50" : "text-white/50"
+  const selectedBg = darkText ? "bg-black/10" : "bg-white/10"
+  const iconColor = darkText ? "black" : "white"
+  const iconDim = darkText ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)"
+
+  const [devices, setDevices] = useState<BluetoothDevice[]>([])
+  const [enabled, setEnabled] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [selected, setSelected] = useState(0)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  const itemCount = 1 + (enabled ? devices.length : 0)
+
+  const scan = useCallback(async () => {
+    setScanning(true)
+    try { const r = await window.shell.system.bluetoothScan(); if (r) setDevices(r) } finally { setScanning(false) }
+  }, [])
+
+  useEffect(() => {
+    window.shell.system.bluetooth().then((b) => setEnabled(!!b?.enabled)).catch(() => {})
+    window.shell.system.bluetoothDevices().then(setDevices).catch(() => {})
+    const offDevices = window.shell.system.onBluetoothDevicesChanged((d) => { setDevices(d); setTogglingId(null) })
+    const offState = window.shell.system.onBluetoothChanged((b) => setEnabled(!!b?.enabled))
+    scan()
+    return () => { offDevices(); offState() }
+  }, [scan])
+
+  useEffect(() => {
+    if (selected > itemCount - 1) setSelected(Math.max(0, itemCount - 1))
+  }, [itemCount, selected])
+
+  useEffect(() => {
+    const el = listRef.current?.querySelector(`[data-idx="${selected}"]`) as HTMLElement | null
+    el?.scrollIntoView({ block: "nearest" })
+  }, [selected])
+
+  function toggleRadio() {
+    const next = !enabled
+    setEnabled(next)
+    setSelected(0)
+    window.shell.system.bluetoothSetRadio(next).then(() => { if (next) scan() }).catch(() => {})
+  }
+
+  function toggleDevice(device: BluetoothDevice) {
+    if (togglingId) return
+    setTogglingId(device.instanceId)
+    window.shell.system.bluetoothToggle(device.instanceId, device.connected ? "disconnect" : "connect")
+  }
+
+  function activate(idx: number) {
+    if (idx === 0) { toggleRadio(); return }
+    const device = devices[idx - 1]
+    if (device) toggleDevice(device)
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" || e.key === "Backspace" || e.key === "ArrowLeft") { e.preventDefault(); onBack() }
+      else if (e.key === "ArrowDown") { e.preventDefault(); setSelected((s) => Math.min(s + 1, itemCount - 1)) }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setSelected((s) => Math.max(s - 1, 0)) }
+      else if (e.key === "Enter") { e.preventDefault(); activate(selected) }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  })
+
+  return (
+    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto">
+      <button
+        data-idx={0}
+        onMouseMove={() => setSelected(0)}
+        onClick={toggleRadio}
+        className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${selected === 0 ? selectedBg : ""}`}
+      >
+        <Bluetooth size={18} className={`w-7 shrink-0 ${dimText}`} />
+        <span className={`flex-1 text-[13px] ${textColor}`}>Bluetooth</span>
+        <SubToggle on={enabled} darkText={darkText} />
+      </button>
+
+      {!enabled ? null : scanning && devices.length === 0 ? (
+        <div className={`flex items-center justify-center py-4 ${dimText}`}><Loader2 size={18} className="animate-spin" /></div>
+      ) : devices.length === 0 ? (
+        <div className={`flex items-center gap-2 justify-center py-4 text-[13px] ${dimText}`}><Bluetooth size={15} /><span>No devices</span></div>
+      ) : (
+        devices.map((device, i) => {
+          const idx = i + 1
+          const busy = togglingId === device.instanceId
+          return (
+            <button
+              key={device.instanceId}
+              data-idx={idx}
+              onMouseMove={() => setSelected(idx)}
+              onClick={() => toggleDevice(device)}
+              className={`w-full flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${idx === selected ? selectedBg : ""}`}
+            >
+              <span className="w-7 shrink-0 flex justify-center">
+                {busy ? <Loader2 size={15} className={`animate-spin ${dimText}`} /> : device.connected ? <BluetoothConnected color={iconColor} size={15} /> : <Bluetooth color={iconDim} size={15} />}
+              </span>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className={`text-[13px] truncate ${textColor}`}>{device.name}</span>
+                <span className={`text-[11px] ${dimText}`}>{busy ? (device.connected ? "Disconnecting…" : "Connecting…") : device.connected ? "Connected" : "Paired"}</span>
+              </div>
+            </button>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+type LauncherMenuItem =
+  | { id: string; kind: "toggle"; label: string; icon?: LucideIcon; iconSrc?: string | null; value: boolean; onToggle: () => void }
+  | { id: string; kind: "slider"; label: string; icon?: LucideIcon; iconSrc?: string | null; value: number; min: number; max: number; step: number; unit?: string; onChange: (v: number) => void }
+  | { id: string; kind: "select"; label: string; icon?: LucideIcon; iconSrc?: string | null; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }
+  | { id: string; kind: "action"; label: string; icon?: LucideIcon; iconSrc?: string | null; onRun: () => void }
+
+function LauncherMenu({ items, darkText, onBack, onSelectionChange }: { items: LauncherMenuItem[]; darkText: boolean; onBack: () => void; onSelectionChange?: (item: LauncherMenuItem | undefined) => void }) {
+  const textColor = darkText ? "text-black" : "text-white"
+  const dimText = darkText ? "text-black/50" : "text-white/50"
+  const selectedBg = darkText ? "bg-black/10" : "bg-white/10"
+  const [selected, setSelected] = useState(0)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (selected > items.length - 1) setSelected(Math.max(0, items.length - 1))
+  }, [items.length, selected])
+
+  useEffect(() => {
+    const el = listRef.current?.querySelector(`[data-idx="${selected}"]`) as HTMLElement | null
+    el?.scrollIntoView({ block: "nearest" })
+  }, [selected])
+
+  useEffect(() => {
+    onSelectionChange?.(items[selected])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected])
+
+  function cycleSelect(item: Extract<LauncherMenuItem, { kind: "select" }>, dir: number) {
+    const i = item.options.findIndex((o) => o.value === item.value)
+    const next = item.options[(i + dir + item.options.length) % item.options.length]
+    if (next) item.onChange(next.value)
+  }
+
+  function adjust(item: LauncherMenuItem, dir: number) {
+    if (item.kind === "slider") {
+      const next = Math.max(item.min, Math.min(item.max, item.value + dir * item.step))
+      if (next !== item.value) item.onChange(next)
+    } else if (item.kind === "select") {
+      cycleSelect(item, dir)
+    }
+  }
+
+  function activate(item: LauncherMenuItem) {
+    if (item.kind === "toggle") item.onToggle()
+    else if (item.kind === "action") item.onRun()
+    else if (item.kind === "select") cycleSelect(item, 1)
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const it = items[selected]
+      if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); onBack() }
+      else if (e.key === "ArrowDown") { e.preventDefault(); setSelected((s) => Math.min(s + 1, items.length - 1)) }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setSelected((s) => Math.max(s - 1, 0)) }
+      else if (e.key === "ArrowRight") { if (it && (it.kind === "slider" || it.kind === "select")) { e.preventDefault(); adjust(it, 1) } }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); if (it && it.kind === "slider") adjust(it, -1); else onBack() }
+      else if (e.key === "Enter") { e.preventDefault(); if (it) activate(it) }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  })
+
+  return (
+    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto">
+      {items.map((item, idx) => {
+        const Icon = item.icon
+        const isSel = idx === selected
+        const rowClass = `flex items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${isSel ? selectedBg : ""}`
+        const iconEl = (
+          <span className="w-7 shrink-0 flex justify-center">
+            {item.iconSrc ? <img src={item.iconSrc} alt="" className="w-[18px] h-[18px] object-contain" draggable={false} /> : Icon ? <Icon size={18} className={dimText} /> : null}
+          </span>
+        )
+        if (item.kind === "slider") {
+          return (
+            <div key={item.id} data-idx={idx} onMouseMove={() => setSelected(idx)} className={rowClass}>
+              {iconEl}
+              <span className={`shrink-0 text-[13px] ${textColor}`} style={{ width: 110 }}>{item.label}</span>
+              <input
+                type="range"
+                tabIndex={-1}
+                min={item.min}
+                max={item.max}
+                step={item.step}
+                value={item.value}
+                onChange={(e) => item.onChange(parseInt(e.target.value, 10))}
+                onMouseUp={(e) => e.currentTarget.blur()}
+                className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
+                style={{ "--slider-progress": `${((item.value - item.min) / (item.max - item.min)) * 100}%` } as React.CSSProperties}
+              />
+              <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{item.value}{item.unit ?? ""}</span>
+            </div>
+          )
+        }
+        return (
+          <button key={item.id} data-idx={idx} onMouseMove={() => setSelected(idx)} onClick={() => activate(item)} className={`${rowClass} cursor-pointer`}>
+            {iconEl}
+            <span className={`flex-1 text-[13px] ${textColor}`}>{item.label}</span>
+            {item.kind === "toggle" ? (
+              <SubToggle on={item.value} darkText={darkText} />
+            ) : item.kind === "select" ? (
+              <span className={`shrink-0 text-[12px] ${dimText}`}>{item.options.find((o) => o.value === item.value)?.label ?? item.value}</span>
+            ) : null}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function LauncherTiling({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
+  const [config, setConfig] = useState<TilingConfig | null>(null)
+
+  useEffect(() => {
+    window.shell.tiling.config().then(setConfig).catch(() => {})
+    return window.shell.tiling.onConfigChanged(setConfig)
+  }, [])
+
+  function patch(p: Partial<TilingConfig>) {
+    setConfig((c) => (c ? { ...c, ...p } : c))
+    window.shell.tiling.setConfig(p).catch(() => {})
+  }
+
+  const items: LauncherMenuItem[] = []
+  if (config) {
+    items.push({ id: "enabled", kind: "toggle", label: "Window tiling", icon: LayoutDashboard, value: config.enabled, onToggle: () => patch({ enabled: !config.enabled }) })
+    if (config.enabled) {
+      items.push({ id: "mode", kind: "select", label: "Mode", icon: LayoutDashboard, value: config.mode, options: [{ value: "snap", label: "Snap zones" }, { value: "dynamic", label: "Auto-tile" }], onChange: (v) => patch({ mode: v as TilingMode }) })
+      items.push({ id: "hotkeys", kind: "toggle", label: "Win + Arrow snapping", icon: LayoutDashboard, value: config.hotkeys, onToggle: () => patch({ hotkeys: !config.hotkeys }) })
+      items.push({ id: "drag", kind: "toggle", label: "Drag to zone", icon: LayoutDashboard, value: config.dragToZone, onToggle: () => patch({ dragToZone: !config.dragToZone }) })
+      if (config.mode === "dynamic") {
+        items.push({ id: "layout", kind: "select", label: "Layout", icon: LayoutDashboard, value: config.dynamicLayout, options: [{ value: "bsp", label: "Spiral" }, { value: "columns", label: "Columns" }, { value: "master-stack", label: "Master + stack" }], onChange: (v) => patch({ dynamicLayout: v as TilingDynamicLayout }) })
+      }
+      items.push({ id: "gap", kind: "slider", label: "Gap", icon: LayoutDashboard, value: config.gap, min: 0, max: 40, step: 2, unit: "px", onChange: (v) => patch({ gap: v }) })
+      items.push({ id: "margin", kind: "slider", label: "Outer margin", icon: LayoutDashboard, value: config.margin, min: 0, max: 60, step: 2, unit: "px", onChange: (v) => patch({ margin: v }) })
+      items.push({ id: "oversized", kind: "toggle", label: "Keep oversized on screen", icon: LayoutDashboard, value: config.handleOversized, onToggle: () => patch({ handleOversized: !config.handleOversized }) })
+      if (config.handleOversized) {
+        items.push({ id: "placement", kind: "select", label: "Placement", icon: LayoutDashboard, value: config.centerOversized ? "center" : "edge", options: [{ value: "edge", label: "Edge" }, { value: "center", label: "Center" }], onChange: (v) => patch({ centerOversized: v === "center" }) })
+      }
+      items.push({ id: "reset", kind: "action", label: "Reset split sizes", icon: RotateCcw, onRun: () => patch({ ratios: {} }) })
+    }
+  }
+
+  return <LauncherMenu items={items} darkText={darkText} onBack={onBack} />
+}
+
+function LauncherStartup({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
+  const [entries, setEntries] = useState<StartupEntry[]>([])
+
+  useEffect(() => {
+    window.shell.apps.startup().then(setEntries).catch(() => {})
+    return window.shell.apps.onStartupChanged(setEntries)
+  }, [])
+
+  function toggle(entry: StartupEntry) {
+    if (entry.locked) return
+    const current = entry.pending !== null ? entry.pending === "enable" : entry.enabled
+    window.shell.apps.setStartup(entry.id, !current).then(setEntries).catch(() => {})
+  }
+
+  const items: LauncherMenuItem[] = entries.map((e): LauncherMenuItem => ({
+    id: e.id,
+    kind: "toggle",
+    label: e.friendlyName || e.name,
+    iconSrc: e.icon,
+    value: e.pending !== null ? e.pending === "enable" : e.enabled,
+    onToggle: () => toggle(e),
+  }))
+
+  return <LauncherMenu items={items} darkText={darkText} onBack={onBack} />
+}
+
+function LauncherPower({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
+  const [confirming, setConfirming] = useState<string | null>(null)
+
+  function run(action: "shutdown" | "restart" | "logout") {
+    window.shell.system.powerAction(action)
+    window.launcher.hide()
+  }
+
+  const defs: { id: string; label: string; icon: LucideIcon; action: "shutdown" | "restart" | "logout" }[] = [
+    { id: "shutdown", label: "Shut down", icon: Power, action: "shutdown" },
+    { id: "restart", label: "Restart", icon: RotateCcw, action: "restart" },
+    { id: "logout", label: "Log out", icon: LogOut, action: "logout" },
+  ]
+
+  const items: LauncherMenuItem[] = defs.map((d): LauncherMenuItem => ({
+    id: d.id,
+    kind: "action",
+    label: confirming === d.id ? `Confirm ${d.label.toLowerCase()}?` : d.label,
+    icon: d.icon,
+    onRun: () => { if (confirming === d.id) run(d.action); else setConfirming(d.id) },
+  }))
+
+  return <LauncherMenu items={items} darkText={darkText} onBack={onBack} onSelectionChange={(it) => { if (!it || it.id !== confirming) setConfirming(null) }} />
 }

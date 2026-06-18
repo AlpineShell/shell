@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { Bluetooth, Image as ImageIcon, Wifi } from 'lucide-react'
 import { useWallpaper } from '../../hooks/useWallpaper'
+import { NavRow } from './appsShared'
 
 const CACHE_KEY = 'alpine.systemInfo.v2'
 
@@ -45,7 +47,7 @@ function formatUptime(seconds: number): string {
   return `${minutes}m`
 }
 
-export default function AboutPage() {
+export default function AboutPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   const wallpaper = useWallpaper()
   const [info, setInfo] = useState<SystemInfo | null>(() => readCache())
 
@@ -113,6 +115,12 @@ export default function AboutPage() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-2 mt-6">
+        <NavRow icon={Bluetooth} label="Bluetooth" description="Pair and manage Bluetooth devices" onClick={() => onNavigate('devices/bluetooth')} />
+        <NavRow icon={ImageIcon} label="Wallpaper" description="Change background image" onClick={() => onNavigate('personalization/wallpaper')} />
+        <NavRow icon={Wifi} label="Wi-Fi" description="Connect to networks" onClick={() => onNavigate('devices/wifi')} />
       </div>
     </div>
   )

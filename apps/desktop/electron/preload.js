@@ -4,10 +4,12 @@ let bootWallpaper = null
 let bootBluetooth = null
 let bootWifi = null
 let bootSettingsIcon = null
+let bootSettingsPage = null
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
 try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
 try { bootSettingsIcon = ipcRenderer.sendSync('windows/settings-icon') } catch {}
+try { bootSettingsPage = ipcRenderer.sendSync('windows/settings-init') } catch {}
 
 ipcRenderer.on('windows/wallpaper-changed', (_, data) => { bootWallpaper = data })
 ipcRenderer.on('system/bluetooth-changed', (_, data) => { bootBluetooth = data })
@@ -167,9 +169,15 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('windows/open-apps-changed', handler)
       return () => ipcRenderer.removeListener('windows/open-apps-changed', handler)
     },
-    openSettings: () => ipcRenderer.invoke('windows/open-settings'),
+    openSettings: (page) => ipcRenderer.invoke('windows/open-settings', page),
     closeSettings: () => ipcRenderer.invoke('windows/close-settings'),
     setSettingsPage: (name) => ipcRenderer.invoke('windows/set-settings-page', name),
+    initialPage: bootSettingsPage,
+    onSettingsNavigate: (callback) => {
+      const handler = (_, page) => callback(page)
+      ipcRenderer.on('windows/settings-navigate', handler)
+      return () => ipcRenderer.removeListener('windows/settings-navigate', handler)
+    },
   },
   network: {
     wifiSignal: () => ipcRenderer.invoke('network/wifi-signal'),
@@ -179,7 +187,9 @@ contextBridge.exposeInMainWorld('shell', {
     wifiScan: () => ipcRenderer.invoke('network/wifi-scan'),
     wifiNetworks: () => ipcRenderer.invoke('network/wifi-networks'),
     onWifiScanUpdated: (callback) => {
-      ipcRenderer.on('network/wifi-scan-updated', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('network/wifi-scan-updated', handler)
+      return () => ipcRenderer.removeListener('network/wifi-scan-updated', handler)
     },
     wifiConnect: (ssid, password) => ipcRenderer.invoke('network/wifi-connect', { ssid, password }),
     wifiDisconnect: () => ipcRenderer.invoke('network/wifi-disconnect'),
@@ -189,10 +199,14 @@ contextBridge.exposeInMainWorld('shell', {
   system: {
     bluetooth: () => ipcRenderer.invoke('system/bluetooth'),
     onBluetoothChanged: (callback) => {
-      ipcRenderer.on('system/bluetooth-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/bluetooth-changed', handler)
+      return () => ipcRenderer.removeListener('system/bluetooth-changed', handler)
     },
     onBluetoothDevicesChanged: (callback) => {
-      ipcRenderer.on('system/bluetooth-devices-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/bluetooth-devices-changed', handler)
+      return () => ipcRenderer.removeListener('system/bluetooth-devices-changed', handler)
     },
     bluetoothScan: () => ipcRenderer.invoke('system/bluetooth-scan'),
     bluetoothDevices: () => ipcRenderer.invoke('system/bluetooth-devices'),
@@ -273,7 +287,9 @@ contextBridge.exposeInMainWorld('shell', {
   apps: {
     startup: () => ipcRenderer.invoke('apps/startup-list'),
     onStartupChanged: (callback) => {
-      ipcRenderer.on('apps/startup-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('apps/startup-changed', handler)
+      return () => ipcRenderer.removeListener('apps/startup-changed', handler)
     },
     setStartup: (id, enabled) => ipcRenderer.invoke('apps/startup-set', { id, enabled }),
     clearPending: (id) => ipcRenderer.invoke('apps/startup-clear-pending', { id }),
@@ -332,7 +348,9 @@ contextBridge.exposeInMainWorld('shell', {
     config: () => ipcRenderer.invoke('tiling/config-get'),
     setConfig: (partial) => ipcRenderer.invoke('tiling/config-set', partial),
     onConfigChanged: (callback) => {
-      ipcRenderer.on('tiling/config-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('tiling/config-changed', handler)
+      return () => ipcRenderer.removeListener('tiling/config-changed', handler)
     },
     snap: (direction) => ipcRenderer.invoke('tiling/snap', direction),
   },

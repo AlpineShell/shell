@@ -1,4 +1,4 @@
-import { AppWindow, Loader2, Search } from 'lucide-react'
+import { AppWindow, ChevronRight, Loader2, Search, type LucideIcon } from 'lucide-react'
 
 export function Spinner({ size = 14 }: { size?: number }) {
   return <Loader2 size={size} className="animate-spin" />
@@ -36,6 +36,22 @@ export function Toggle({ checked, pending, onChange }: { checked: boolean; pendi
       style={{ width: 36, height: 20 }}
     >
       <span className="absolute top-0.5 rounded-full transition-all" style={{ width: 16, height: 16, left: checked ? 18 : 2, backgroundColor: checked ? 'rgb(20,20,20)' : 'rgba(255,255,255,0.7)' }} />
+    </button>
+  )
+}
+
+export function NavRow({ icon: Icon, label, description, onClick }: { icon: LucideIcon; label: string; description: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 px-4 h-16 rounded-lg bg-neutral-900 border border-white/5 hover:bg-neutral-800/80 cursor-pointer transition-colors text-left"
+    >
+      <Icon size={18} className="text-white/60 shrink-0" />
+      <div className="flex flex-col flex-1 min-w-0">
+        <span className="text-[13px] text-white/90">{label}</span>
+        <span className="text-xs text-white/50">{description}</span>
+      </div>
+      <ChevronRight size={16} className="text-white/40 shrink-0" />
     </button>
   )
 }

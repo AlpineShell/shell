@@ -373,9 +373,11 @@ declare global {
         wallpaperMineDelete: (filePath: string) => Promise<boolean>
         openApps: () => Promise<OpenApp[]>
         onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => () => void
-        openSettings: () => Promise<void>
+        openSettings: (page?: string) => Promise<void>
         closeSettings: () => Promise<void>
         setSettingsPage: (name: string) => Promise<void>
+        initialPage: string | null
+        onSettingsNavigate: (callback: (page: string) => void) => () => void
       }
       run: {
         resolve: (query: string) => Promise<RunResult | null>
@@ -384,7 +386,7 @@ declare global {
       }
       apps: {
         startup: () => Promise<StartupEntry[]>
-        onStartupChanged: (callback: (data: StartupEntry[]) => void) => void
+        onStartupChanged: (callback: (data: StartupEntry[]) => void) => () => void
         setStartup: (id: string, enabled: boolean) => Promise<StartupEntry[]>
         clearPending: (id: string) => Promise<StartupEntry[]>
         removeStartup: (id: string) => Promise<{ ok: boolean; error?: string }>
@@ -413,7 +415,7 @@ declare global {
         onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => void
         wifiScan: () => Promise<WifiNetwork[] | null>
         wifiNetworks: () => Promise<WifiNetwork[]>
-        onWifiScanUpdated: (callback: (data: WifiNetwork[]) => void) => void
+        onWifiScanUpdated: (callback: (data: WifiNetwork[]) => void) => () => void
         wifiConnect: (ssid: string, password?: string) => Promise<{ success: boolean; needsPassword?: boolean }>
         wifiDisconnect: () => Promise<{ success: boolean }>
         wifiRadioGet: () => Promise<{ success: boolean; state: string }>
@@ -421,8 +423,8 @@ declare global {
       }
       system: {
         bluetooth: () => Promise<BluetoothState>
-        onBluetoothChanged: (callback: (data: BluetoothState) => void) => void
-        onBluetoothDevicesChanged: (callback: (data: BluetoothDevice[]) => void) => void
+        onBluetoothChanged: (callback: (data: BluetoothState) => void) => () => void
+        onBluetoothDevicesChanged: (callback: (data: BluetoothDevice[]) => void) => () => void
         bluetoothScan: () => Promise<BluetoothDevice[]>
         bluetoothDevices: () => Promise<BluetoothDevice[]>
         bluetoothToggle: (instanceId: string, action: 'connect' | 'disconnect') => Promise<{ success: boolean }>
@@ -489,7 +491,7 @@ declare global {
       tiling: {
         config: () => Promise<TilingConfig>
         setConfig: (partial: Partial<TilingConfig>) => Promise<TilingConfig>
-        onConfigChanged: (callback: (config: TilingConfig) => void) => void
+        onConfigChanged: (callback: (config: TilingConfig) => void) => () => void
         snap: (direction: 'left' | 'right' | 'up' | 'down') => Promise<boolean>
       }
     }
