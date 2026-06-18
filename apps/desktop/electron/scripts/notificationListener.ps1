@@ -8,6 +8,7 @@ function Emit($obj) {
 }
 
 try {
+  Add-Type -AssemblyName System.Runtime.WindowsRuntime
   [Windows.UI.Notifications.Management.UserNotificationListener, Windows.UI.Notifications.Management, ContentType = WindowsRuntime] | Out-Null
   [Windows.UI.Notifications.NotificationKinds, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
   [Windows.UI.Notifications.KnownNotificationBindings, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
@@ -36,6 +37,7 @@ Emit @{ type = 'access'; status = "$status" }
 if ("$status" -ne 'Allowed') { exit 0 }
 
 $seen = New-Object 'System.Collections.Generic.HashSet[uint32]'
+$firstPoll = $true
 $listType = [System.Collections.Generic.IReadOnlyList[Windows.UI.Notifications.UserNotification]]
 
 while ($true) {
@@ -46,6 +48,7 @@ while ($true) {
       [void]$current.Add($n.Id)
       if ($seen.Contains($n.Id)) { continue }
       [void]$seen.Add($n.Id)
+      if ($firstPoll) { continue }
       $appName = ''
       try { $appName = $n.AppInfo.DisplayInfo.DisplayName } catch {}
       $title = ''
@@ -67,6 +70,7 @@ while ($true) {
     $stale = @()
     foreach ($id in $seen) { if (-not $current.Contains($id)) { $stale += $id } }
     foreach ($id in $stale) { [void]$seen.Remove($id) }
+    $firstPoll = $false
   } catch {}
   Start-Sleep -Seconds 2
 }
