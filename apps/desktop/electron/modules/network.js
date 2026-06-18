@@ -1,10 +1,12 @@
 const { exec } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
+const notifications = require('./notifications')
 
 let lastSignal = undefined
 let lastType = undefined
 let lastSsid = undefined
+let lastNotifiedSsid = undefined
 let cachedStatus = { signal: null, connected: false, type: 'wifi', ssid: null }
 let cachedNetworks = []
 let cachedRadio = true
@@ -180,6 +182,12 @@ module.exports = {
         lastSsid = current.ssid
         broadcast('network/wifi-signal-changed', current)
       }
+      const currentSsid = current.connected ? (current.ssid || (current.type === 'ethernet' ? 'Ethernet' : 'Wi-Fi')) : null
+      if (lastNotifiedSsid !== undefined && currentSsid !== lastNotifiedSsid) {
+        if (currentSsid) notifications.post({ source: 'alpine', appName: 'Network', title: 'Connected', body: currentSsid })
+        else notifications.post({ source: 'alpine', appName: 'Network', title: 'Disconnected', body: 'No network connection' })
+      }
+      lastNotifiedSsid = currentSsid
     }
     poll()
     setInterval(poll, 10000)

@@ -2,6 +2,7 @@ const { app } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
+const notifications = require('./notifications')
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const INITIAL_CHECK_DELAY_MS = 10000
@@ -56,6 +57,16 @@ function toMessage(e) {
   return e == null ? 'unknown' : e.message || String(e)
 }
 
+function triggerDownload() {
+  if (!app.isPackaged) return
+  pushLog('info', `Downloading version ${state.availableVersion ?? ''}…`)
+  setState({ status: 'downloading', progressPercent: 0 })
+  autoUpdater.downloadUpdate().catch((e) => {
+    pushLog('error', `Download failed: ${toMessage(e)}`)
+    setState({ status: 'error', error: toMessage(e) })
+  })
+}
+
 function runCheck(announce) {
   if (state.status === 'downloading' || state.status === 'downloaded') return
   if (!app.isPackaged) {
@@ -86,6 +97,14 @@ autoUpdater.on('update-available', (info) => {
   pushLog('info', `Update available — version ${info.version}`)
   announceResult = false
   setState({ status: 'available', availableVersion: info.version })
+  notifications.post({
+    source: 'alpine',
+    appName: 'Alpine Shell',
+    title: 'Update available',
+    body: `Version ${info.version} is ready to download.`,
+    actions: [{ id: 'download', label: 'Download' }],
+    onAction: (actionId) => { if (actionId === 'download') triggerDownload() },
+  })
 })
 
 autoUpdater.on('update-not-available', () => {
@@ -101,6 +120,19 @@ autoUpdater.on('download-progress', (progress) => {
 autoUpdater.on('update-downloaded', (info) => {
   pushLog('info', `Downloaded version ${info.version} — ready to install`)
   setState({ status: 'downloaded', availableVersion: info.version, progressPercent: 100 })
+  notifications.post({
+    source: 'alpine',
+    appName: 'Alpine Shell',
+    title: 'Update ready to install',
+    body: `Version ${info.version} will be installed when Alpine Shell restarts.`,
+    actions: [{ id: 'install', label: 'Restart & install' }],
+    onAction: (actionId) => {
+      if (actionId !== 'install' || !app.isPackaged) return
+      pendingVersion = state.availableVersion
+      pushLog('info', `Installing version ${state.availableVersion ?? ''} — Alpine Shell will restart…`)
+      autoUpdater.quitAndInstall(true, true)
+    },
+  })
 })
 
 autoUpdater.on('error', (err) => {
@@ -121,14 +153,7 @@ module.exports = {
     },
 
     'updates/download': () => {
-      if (app.isPackaged) {
-        pushLog('info', `Downloading version ${state.availableVersion ?? ''}…`)
-        setState({ status: 'downloading', progressPercent: 0 })
-        autoUpdater.downloadUpdate().catch((e) => {
-          pushLog('error', `Download failed: ${toMessage(e)}`)
-          setState({ status: 'error', error: toMessage(e) })
-        })
-      }
+      triggerDownload()
       return undefined
     },
 

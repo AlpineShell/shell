@@ -2,6 +2,7 @@ const { app, shell } = require('electron')
 const { execFile, spawn, execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
+const notifications = require('./notifications')
 
 let cachedBuild = null
 function getCurrentBuild() {
@@ -361,6 +362,15 @@ module.exports = {
           lastCheckedAt: Date.now(),
           error: null,
         })
+        if (items.length) {
+          notifications.post({
+            source: 'alpine',
+            appName: 'Windows Update',
+            title: `${items.length} update${items.length > 1 ? 's' : ''} available`,
+            body: items[0].title,
+            actions: [{ id: 'open', label: 'Open Windows Update', url: 'ms-settings:windowsupdate' }],
+          })
+        }
       } catch (e) {
         setState({ status: 'error', error: e.message, lastCheckedAt: Date.now() })
       }

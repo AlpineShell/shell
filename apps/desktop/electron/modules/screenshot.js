@@ -1,6 +1,7 @@
 const { app, screen, desktopCapturer, clipboard } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const notifications = require('./notifications')
 
 let overlayWindow = null
 let capturedImage = null
@@ -75,6 +76,16 @@ function cropAndSave(region) {
   clipboard.writeImage(cropped)
 
   console.log(`[screenshot] Saved: ${filepath}`)
+  notifications.post({
+    source: 'alpine',
+    appName: 'Screenshot',
+    title: 'Screenshot saved',
+    body: filename,
+    actions: [
+      { id: 'open', label: 'Open', openPath: filepath },
+      { id: 'folder', label: 'Show folder', openPath: getScreenshotsFolder() },
+    ],
+  })
   hideOverlay()
 }
 

@@ -1,4 +1,5 @@
 const koffi = require('koffi')
+const notifications = require('./notifications')
 
 let GetSystemPowerStatus = null
 try {
@@ -19,9 +20,11 @@ try {
 const CHARGING_FLAG = 0x08
 const NO_SYSTEM_BATTERY_FLAG = 0x80
 const MAX_VALID_PERCENT = 100
+const LOW_BATTERY_THRESHOLD = 20
 
 let lastPercent = undefined
 let lastCharging = undefined
+let lowNotified = false
 
 const UNAVAILABLE = { percent: null, charging: false, hasBattery: false }
 
@@ -47,6 +50,14 @@ module.exports = {
         lastPercent = current.percent
         lastCharging = current.charging
         broadcast('system/battery-changed', current)
+      }
+      if (current.hasBattery && current.percent !== null) {
+        if (!current.charging && current.percent <= LOW_BATTERY_THRESHOLD && !lowNotified) {
+          lowNotified = true
+          notifications.post({ source: 'alpine', appName: 'Battery', title: 'Low battery', body: `${current.percent}% remaining — plug in your charger.` })
+        } else if (current.charging || current.percent > LOW_BATTERY_THRESHOLD) {
+          lowNotified = false
+        }
       }
     }, 10000)
   },

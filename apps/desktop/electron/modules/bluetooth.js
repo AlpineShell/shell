@@ -2,6 +2,7 @@ const { runPowerShell } = require('../powershell')
 const { exec } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
+const notifications = require('./notifications')
 
 const scriptsDir = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts')
@@ -14,6 +15,7 @@ const unpairScriptPath = path.join(scriptsDir, 'bluetoothUnpair.ps1')
 let lastState = undefined
 let cachedState = { enabled: false, connected: false, devices: [] }
 let cachedDevices = []
+let lastDeviceNames = null
 let broadcastRef = null
 
 function isRadioEnabled() {
@@ -176,6 +178,16 @@ module.exports = {
         lastState = key
         broadcast('system/bluetooth-changed', current)
       }
+      const names = new Set(current.devices)
+      if (lastDeviceNames) {
+        for (const name of names) {
+          if (!lastDeviceNames.has(name)) notifications.post({ source: 'alpine', appName: 'Bluetooth', title: 'Device connected', body: name })
+        }
+        for (const name of lastDeviceNames) {
+          if (!names.has(name)) notifications.post({ source: 'alpine', appName: 'Bluetooth', title: 'Device disconnected', body: name })
+        }
+      }
+      lastDeviceNames = names
     }
     poll()
     setInterval(poll, 5000)
