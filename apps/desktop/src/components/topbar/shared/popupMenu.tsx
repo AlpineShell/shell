@@ -8,6 +8,7 @@ const SCREEN_PAD = 6;
 const EDGE_PAD = 0;
 const BAR_BOTTOM = 24;
 const CLOSE_MS = 300;
+const REGION_SHRINK_DELAY_MS = 260;
 
 type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number; anchor: ChromeAnchor };
 
@@ -35,6 +36,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const suppressReset = useRef(false);
+    const regionBottomRef = useRef(0);
+    const shrinkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
@@ -45,6 +48,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             close: () => {
                 clearTimeout(closeTimer.current);
                 clearTimeout(leaveTimer.current);
+                clearTimeout(shrinkTimer.current);
+                regionBottomRef.current = 0;
                 suppressReset.current = true;
                 setOpen(false);
                 setShape(null);
@@ -104,12 +109,19 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         });
         const sideL = shape.anchor === "left" ? 0 : SHOULDER;
         const sideR = shape.anchor === "right" ? 0 : SHOULDER;
-        window.topbar.setActiveRegion({
-            top: BAR_BOTTOM,
-            bottom: BAR_BOTTOM + shape.bodyHeight,
-            left: shape.left - sideL,
-            right: shape.left + shape.bodyWidth + sideR,
-        });
+        const left = shape.left - sideL;
+        const right = shape.left + shape.bodyWidth + sideR;
+        const targetBottom = BAR_BOTTOM + shape.bodyHeight;
+        clearTimeout(shrinkTimer.current);
+        const reportedBottom = Math.max(targetBottom, regionBottomRef.current);
+        regionBottomRef.current = reportedBottom;
+        window.topbar.setActiveRegion({ top: BAR_BOTTOM, bottom: reportedBottom, left, right });
+        if (targetBottom < reportedBottom) {
+            shrinkTimer.current = setTimeout(() => {
+                regionBottomRef.current = targetBottom;
+                window.topbar.setActiveRegion({ top: BAR_BOTTOM, bottom: targetBottom, left, right });
+            }, REGION_SHRINK_DELAY_MS);
+        }
     }, [open, shape, outline]);
 
     useEffect(() => {
@@ -137,6 +149,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     useEffect(() => () => {
         clearTimeout(closeTimer.current);
         clearTimeout(leaveTimer.current);
+        clearTimeout(shrinkTimer.current);
         if (activeMenu === selfRef.current) activeMenu = null;
         clearChromeSurface(idRef.current);
     }, []);
@@ -144,6 +157,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     function triggerClose() {
         if (activeMenu === selfRef.current) activeMenu = null;
         clearChromeSurface(idRef.current);
+        clearTimeout(shrinkTimer.current);
+        regionBottomRef.current = 0;
         window.topbar.setActiveRegion(null);
         clearTimeout(closeTimer.current);
         closeTimer.current = setTimeout(() => {
