@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { RADIUS } from "./chrome/chromeShape"
@@ -202,6 +202,7 @@ export default function LauncherPanel() {
   const [notice, setNotice] = useState<{ text: string; busy: boolean } | null>(null)
   const [activeCommand, setActiveCommand] = useState<string | null>(null)
   const [settingValues, setSettingValues] = useState<Record<string, boolean | number>>({})
+  const [subView, setSubView] = useState<{ title: string; back: () => void } | null>(null)
   const [wallpapers, setWallpapers] = useState<WallpaperItem[]>([])
   const [previewIndex, setPreviewIndex] = useState(0)
   const currentWallpaper = useWallpaper()
@@ -237,6 +238,7 @@ export default function LauncherPanel() {
     setActiveCommand(id)
     setSelected(0)
     setContextOpen(false)
+    setSubView(null)
     if (id === "wallpaper") {
       setQuery("")
       committed.current = false
@@ -264,6 +266,7 @@ export default function LauncherPanel() {
     originalPath.current = null
     committed.current = false
     setActiveCommand(null)
+    setSubView(null)
     setQuery(queryBeforeCommand.current)
     setSelected(selectedBeforeCommand.current)
     setPreviewIndex(0)
@@ -316,7 +319,7 @@ export default function LauncherPanel() {
 
   function activateSetting(cmd: SettingCommand) {
     const c = cmd.control
-    if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power") enterCommand(cmd.id)
+    if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power" || c.kind === "tray") enterCommand(cmd.id)
     else if (c.kind === "toggle") toggleSetting(cmd)
     else if (c.kind === "navigate") {
       window.shell.windows.openSettings(c.path)
@@ -658,7 +661,7 @@ export default function LauncherPanel() {
           <div className={`flex items-center gap-2 px-4 h-12 shrink-0 ${textColor}`}>
               {activeCommand || contextOpen ? (
                 <button
-                  onMouseDown={(e) => { e.preventDefault(); if (activeCommand) exitCommand(); else { setContextOpen(false); requestAnimationFrame(() => inputRef.current?.focus()) } }}
+                  onMouseDown={(e) => { e.preventDefault(); if (subView) subView.back(); else if (activeCommand) exitCommand(); else { setContextOpen(false); requestAnimationFrame(() => inputRef.current?.focus()) } }}
                   className="shrink-0 opacity-60 hover:opacity-100 cursor-pointer"
                 >
                   <ChevronLeft size={16} />
@@ -667,7 +670,7 @@ export default function LauncherPanel() {
                 <Search size={16} className="shrink-0 opacity-60" />
               )}
               {inSubmenu ? (
-                <span className={`flex-1 text-[15px] truncate ${textColor}`}>{activeLabel}</span>
+                <span className={`flex-1 text-[15px] truncate ${textColor}`}>{subView ? subView.title : activeLabel}</span>
               ) : contextOpen && selectedEntry ? (
                 <span className={`flex-1 text-[15px] truncate ${textColor}`}>
                   {selectedEntry.type === "app" ? selectedEntry.item?.name : selectedEntry.type === "open" ? selectedEntry.app.name : selectedEntry.type === "run" ? selectedEntry.run.display : ""}
@@ -700,6 +703,8 @@ export default function LauncherPanel() {
                       <LauncherTiling darkText={darkText} onBack={exitCommand} />
                     ) : activeCommand === "startup" ? (
                       <LauncherStartup darkText={darkText} onBack={exitCommand} />
+                    ) : activeCommand === "tray" ? (
+                      <LauncherTray darkText={darkText} onBack={exitCommand} onSubView={setSubView} />
                     ) : (
                       <LauncherPower darkText={darkText} onBack={exitCommand} />
                     )}
@@ -1150,6 +1155,8 @@ function LauncherWifi({ darkText, onBack }: { darkText: boolean; onBack: () => v
         <SubToggle on={enabled} darkText={darkText} />
       </button>
 
+      {enabled && <div className={`h-px my-1 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
+
       {!enabled ? null : scanning && networks.length === 0 ? (
         <div className={`flex items-center justify-center py-4 ${dimText}`}><Loader2 size={18} className="animate-spin" /></div>
       ) : networks.length === 0 ? (
@@ -1284,6 +1291,8 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
         <SubToggle on={enabled} darkText={darkText} />
       </button>
 
+      {enabled && <div className={`h-px my-1 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
+
       {!enabled ? null : scanning && devices.length === 0 ? (
         <div className={`flex items-center justify-center py-4 ${dimText}`}><Loader2 size={18} className="animate-spin" /></div>
       ) : devices.length === 0 ? (
@@ -1316,10 +1325,11 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
 }
 
 type LauncherMenuItem =
-  | { id: string; kind: "toggle"; label: string; icon?: LucideIcon; iconSrc?: string | null; value: boolean; onToggle: () => void }
-  | { id: string; kind: "slider"; label: string; icon?: LucideIcon; iconSrc?: string | null; value: number; min: number; max: number; step: number; unit?: string; onChange: (v: number) => void }
-  | { id: string; kind: "select"; label: string; icon?: LucideIcon; iconSrc?: string | null; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }
-  | { id: string; kind: "action"; label: string; icon?: LucideIcon; iconSrc?: string | null; onRun: () => void }
+  | { id: string; kind: "toggle"; label: string; icon?: LucideIcon; iconSrc?: string | null; dividerAfter?: boolean; value: boolean; onToggle: () => void }
+  | { id: string; kind: "slider"; label: string; icon?: LucideIcon; iconSrc?: string | null; dividerAfter?: boolean; value: number; min: number; max: number; step: number; unit?: string; onChange: (v: number) => void }
+  | { id: string; kind: "select"; label: string; icon?: LucideIcon; iconSrc?: string | null; dividerAfter?: boolean; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }
+  | { id: string; kind: "action"; label: string; icon?: LucideIcon; iconSrc?: string | null; dividerAfter?: boolean; onRun: () => void }
+  | { id: string; kind: "submenu"; label: string; icon?: LucideIcon; iconSrc?: string | null; dividerAfter?: boolean; onOpen: () => void }
 
 function LauncherMenu({ items, darkText, onBack, onSelectionChange }: { items: LauncherMenuItem[]; darkText: boolean; onBack: () => void; onSelectionChange?: (item: LauncherMenuItem | undefined) => void }) {
   const textColor = darkText ? "text-black" : "text-white"
@@ -1360,6 +1370,7 @@ function LauncherMenu({ items, darkText, onBack, onSelectionChange }: { items: L
   function activate(item: LauncherMenuItem) {
     if (item.kind === "toggle") item.onToggle()
     else if (item.kind === "action") item.onRun()
+    else if (item.kind === "submenu") item.onOpen()
     else if (item.kind === "select") cycleSelect(item, 1)
   }
 
@@ -1369,7 +1380,7 @@ function LauncherMenu({ items, darkText, onBack, onSelectionChange }: { items: L
       if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); onBack() }
       else if (e.key === "ArrowDown") { e.preventDefault(); setSelected((s) => Math.min(s + 1, items.length - 1)) }
       else if (e.key === "ArrowUp") { e.preventDefault(); setSelected((s) => Math.max(s - 1, 0)) }
-      else if (e.key === "ArrowRight") { if (it && (it.kind === "slider" || it.kind === "select")) { e.preventDefault(); adjust(it, 1) } }
+      else if (e.key === "ArrowRight") { if (it && (it.kind === "slider" || it.kind === "select")) { e.preventDefault(); adjust(it, 1) } else if (it && it.kind === "submenu") { e.preventDefault(); it.onOpen() } }
       else if (e.key === "ArrowLeft") { e.preventDefault(); if (it && it.kind === "slider") adjust(it, -1); else onBack() }
       else if (e.key === "Enter") { e.preventDefault(); if (it) activate(it) }
     }
@@ -1388,37 +1399,42 @@ function LauncherMenu({ items, darkText, onBack, onSelectionChange }: { items: L
             {item.iconSrc ? <img src={item.iconSrc} alt="" className="w-[18px] h-[18px] object-contain" draggable={false} /> : Icon ? <Icon size={18} className={dimText} /> : null}
           </span>
         )
-        if (item.kind === "slider") {
-          return (
-            <div key={item.id} data-idx={idx} onMouseMove={() => setSelected(idx)} className={rowClass}>
-              {iconEl}
-              <span className={`shrink-0 text-[13px] ${textColor}`} style={{ width: 110 }}>{item.label}</span>
-              <input
-                type="range"
-                tabIndex={-1}
-                min={item.min}
-                max={item.max}
-                step={item.step}
-                value={item.value}
-                onChange={(e) => item.onChange(parseInt(e.target.value, 10))}
-                onMouseUp={(e) => e.currentTarget.blur()}
-                className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
-                style={{ "--slider-progress": `${((item.value - item.min) / (item.max - item.min)) * 100}%` } as React.CSSProperties}
-              />
-              <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{item.value}{item.unit ?? ""}</span>
-            </div>
-          )
-        }
-        return (
-          <button key={item.id} data-idx={idx} onMouseMove={() => setSelected(idx)} onClick={() => activate(item)} className={`${rowClass} cursor-pointer`}>
+        const row = item.kind === "slider" ? (
+          <div data-idx={idx} onMouseMove={() => setSelected(idx)} className={rowClass}>
+            {iconEl}
+            <span className={`shrink-0 text-[13px] ${textColor}`} style={{ width: 110 }}>{item.label}</span>
+            <input
+              type="range"
+              tabIndex={-1}
+              min={item.min}
+              max={item.max}
+              step={item.step}
+              value={item.value}
+              onChange={(e) => item.onChange(parseInt(e.target.value, 10))}
+              onMouseUp={(e) => e.currentTarget.blur()}
+              className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
+              style={{ "--slider-progress": `${((item.value - item.min) / (item.max - item.min)) * 100}%` } as React.CSSProperties}
+            />
+            <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{item.value}{item.unit ?? ""}</span>
+          </div>
+        ) : (
+          <button data-idx={idx} onMouseMove={() => setSelected(idx)} onClick={() => activate(item)} className={`${rowClass} cursor-pointer`}>
             {iconEl}
             <span className={`flex-1 text-[13px] ${textColor}`}>{item.label}</span>
             {item.kind === "toggle" ? (
               <SubToggle on={item.value} darkText={darkText} />
             ) : item.kind === "select" ? (
               <span className={`shrink-0 text-[12px] ${dimText}`}>{item.options.find((o) => o.value === item.value)?.label ?? item.value}</span>
+            ) : item.kind === "submenu" ? (
+              <ChevronRight size={14} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
             ) : null}
           </button>
+        )
+        return (
+          <Fragment key={item.id}>
+            {row}
+            {item.dividerAfter && <div className={`h-px my-1 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
+          </Fragment>
         )
       })}
     </div>
@@ -1440,7 +1456,7 @@ function LauncherTiling({ darkText, onBack }: { darkText: boolean; onBack: () =>
 
   const items: LauncherMenuItem[] = []
   if (config) {
-    items.push({ id: "enabled", kind: "toggle", label: "Window tiling", icon: LayoutDashboard, value: config.enabled, onToggle: () => patch({ enabled: !config.enabled }) })
+    items.push({ id: "enabled", kind: "toggle", label: "Window tiling", icon: LayoutDashboard, value: config.enabled, onToggle: () => patch({ enabled: !config.enabled }), dividerAfter: config.enabled })
     if (config.enabled) {
       items.push({ id: "mode", kind: "select", label: "Mode", icon: LayoutDashboard, value: config.mode, options: [{ value: "snap", label: "Snap zones" }, { value: "dynamic", label: "Auto-tile" }], onChange: (v) => patch({ mode: v as TilingMode }) })
       items.push({ id: "hotkeys", kind: "toggle", label: "Win + Arrow snapping", icon: LayoutDashboard, value: config.hotkeys, onToggle: () => patch({ hotkeys: !config.hotkeys }) })
@@ -1510,4 +1526,66 @@ function LauncherPower({ darkText, onBack }: { darkText: boolean; onBack: () => 
   }))
 
   return <LauncherMenu items={items} darkText={darkText} onBack={onBack} onSelectionChange={(it) => { if (!it || it.id !== confirming) setConfirming(null) }} />
+}
+
+function LauncherTray({ darkText, onBack, onSubView }: { darkText: boolean; onBack: () => void; onSubView?: (v: { title: string; back: () => void } | null) => void }) {
+  const [settings, setSettings] = useState<TraySettings | null>(null)
+  const [display, setDisplay] = useState<TrayDisplaySetting | null>(null)
+  const [icons, setIcons] = useState<TrayIcon[]>([])
+  const [layout, setLayout] = useState<TrayLayout | null>(null)
+  const [view, setView] = useState<"main" | "icons">("main")
+
+  useEffect(() => {
+    window.shell.tray.settings().then(setSettings).catch(() => {})
+    window.shell.tray.display().then(setDisplay).catch(() => {})
+    window.shell.tray.icons().then(setIcons).catch(() => {})
+    window.shell.tray.layout().then(setLayout).catch(() => {})
+  }, [])
+
+  useEffect(() => () => onSubView?.(null), [onSubView])
+
+  function patchSettings(p: Partial<TraySettings>) {
+    setSettings((s) => (s ? { ...s, ...p } : s))
+    window.shell.tray.setSettings(p).then(setSettings).catch(() => {})
+  }
+
+  function toggleAllMonitors() {
+    const next = !display?.showOnAllMonitors
+    setDisplay((d) => (d ? { ...d, showOnAllMonitors: next } : d))
+    window.shell.tray.setDisplay(next).then(setDisplay).catch(() => {})
+  }
+
+  function toggleIcon(icon: TrayIcon) {
+    if (!layout) return
+    const hidden = layout.hidden.includes(icon.id)
+    const next = { ...layout, hidden: hidden ? layout.hidden.filter((id) => id !== icon.id) : [...layout.hidden, icon.id] }
+    setLayout(next)
+    window.shell.tray.setLayout(next).then(setLayout).catch(() => {})
+  }
+
+  function backToMain() { setView("main"); onSubView?.(null) }
+  function openIcons() { setView("icons"); onSubView?.({ title: "Tray icons", back: backToMain }) }
+
+  if (view === "icons") {
+    const items: LauncherMenuItem[] = icons.map((ic): LauncherMenuItem => ({
+      id: ic.id,
+      kind: "toggle",
+      label: ic.tooltip || "Tray icon",
+      iconSrc: ic.icon,
+      value: !(layout?.hidden ?? []).includes(ic.id),
+      onToggle: () => toggleIcon(ic),
+    }))
+    return <LauncherMenu key="icons" items={items} darkText={darkText} onBack={backToMain} />
+  }
+
+  const items: LauncherMenuItem[] = []
+  if (settings) {
+    items.push({ id: "enabled", kind: "toggle", label: "System tray", icon: LayoutGrid, value: settings.enabled, onToggle: () => patchSettings({ enabled: !settings.enabled }), dividerAfter: settings.enabled })
+    if (settings.enabled) {
+      items.push({ id: "overflow", kind: "toggle", label: "Show overflow arrow", icon: ChevronUp, value: settings.showOverflow, onToggle: () => patchSettings({ showOverflow: !settings.showOverflow }) })
+      items.push({ id: "monitors", kind: "toggle", label: "Show on all monitors", icon: Monitor, value: !!display?.showOnAllMonitors, onToggle: toggleAllMonitors })
+      items.push({ id: "icons", kind: "submenu", label: "Tray icons", icon: LayoutGrid, onOpen: openIcons })
+    }
+  }
+  return <LauncherMenu key="main" items={items} darkText={darkText} onBack={onBack} />
 }

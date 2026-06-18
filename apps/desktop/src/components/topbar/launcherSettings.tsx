@@ -5,7 +5,6 @@ import {
   Keyboard,
   LayoutDashboard,
   LayoutGrid,
-  Monitor,
   MonitorCog,
   Package,
   PanelTop,
@@ -31,6 +30,7 @@ export type SettingControl =
   | { kind: "tiling" }
   | { kind: "startup" }
   | { kind: "power" }
+  | { kind: "tray" }
 
 export interface SettingCommand {
   id: string
@@ -83,28 +83,12 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     control: { kind: "toggle", get: () => window.topbar.mediaVisualizer(), set: (v) => window.topbar.setMediaVisualizer(v) },
   },
   {
-    id: "tray-enabled",
+    id: "tray",
     label: "System tray",
-    hint: "Show the system tray",
+    hint: "Show the tray, manage icons and options",
     icon: LayoutGrid,
-    keywords: ["tray", "system tray", "notification area"],
-    control: { kind: "toggle", get: () => window.shell.tray.settings().then((s) => !!s?.enabled), set: (v) => window.shell.tray.setSettings({ enabled: v }) },
-  },
-  {
-    id: "tray-overflow",
-    label: "Tray overflow arrow",
-    hint: "Show the tray overflow arrow",
-    icon: LayoutGrid,
-    keywords: ["tray overflow", "arrow", "hidden icons"],
-    control: { kind: "toggle", get: () => window.shell.tray.settings().then((s) => !!s?.showOverflow), set: (v) => window.shell.tray.setSettings({ showOverflow: v }) },
-  },
-  {
-    id: "tray-all-monitors",
-    label: "Tray on all monitors",
-    hint: "Show the tray on every display",
-    icon: Monitor,
-    keywords: ["tray monitors", "all displays", "multi monitor"],
-    control: { kind: "toggle", get: () => window.shell.tray.display().then((d) => !!d?.showOnAllMonitors), set: (v) => window.shell.tray.setDisplay(v) },
+    keywords: ["tray", "system tray", "notification area", "icons", "overflow"],
+    control: { kind: "tray" },
   },
   {
     id: "tiling",
@@ -145,14 +129,6 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     icon: PanelTop,
     keywords: ["top bar", "topbar", "color", "appearance"],
     control: { kind: "navigate", path: "personalization/topbar" },
-  },
-  {
-    id: "tray-icons",
-    label: "Manage tray icons",
-    hint: "Reorder, show and hide tray icons",
-    icon: LayoutGrid,
-    keywords: ["manage tray", "reorder icons", "hide icons"],
-    control: { kind: "navigate", path: "personalization/tray" },
   },
   {
     id: "hotkeys",
