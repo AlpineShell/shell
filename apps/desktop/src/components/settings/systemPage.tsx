@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, ChevronRight, MonitorCog, RefreshCw, RotateCcw } from 'lucide-react'
+import { Check, ChevronRight, MonitorCog, RotateCcw } from 'lucide-react'
 
 interface SystemPageProps {
   onNavigate: (path: string) => void
@@ -86,20 +86,6 @@ export default function SystemPage({ onNavigate }: SystemPageProps) {
           )}
         </div>
       )}
-
-      <div className="rounded-lg bg-neutral-900 border border-white/5 px-4 py-4 flex items-center gap-3">
-        <RefreshCw size={18} className="text-white/60 shrink-0" />
-        <div className="flex flex-col flex-1 min-w-0 gap-0.5">
-          <span className="text-[13px] text-white/90">Restart Alpine Shell</span>
-          <span className="text-xs text-white/50">Reload the shell to apply changes — no sign-out needed.</span>
-        </div>
-        <button
-          onClick={() => window.setup.relaunch()}
-          className="shrink-0 h-8 px-3 rounded-md bg-white hover:bg-neutral-200 text-neutral-950 text-[12px] font-medium transition-colors cursor-pointer"
-        >
-          Restart
-        </button>
-      </div>
 
       <div className="flex flex-col gap-2">
         {ROWS.map((row) => {
