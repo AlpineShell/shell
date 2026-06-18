@@ -36,7 +36,14 @@ export function useNotifications() {
   }, [])
 
   const setConfig = (partial: Partial<NotificationsConfig>) => {
-    setState((prev) => ({ ...prev, config: { ...prev.config, ...partial } }))
+    setState((prev) => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        ...partial,
+        bySource: partial.bySource ? { ...prev.config.bySource, ...partial.bySource } : prev.config.bySource,
+      },
+    }))
     window.shell?.notifications?.setConfig?.(partial)
   }
 
