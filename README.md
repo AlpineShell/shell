@@ -12,10 +12,11 @@ A Windows desktop shell.
 
 ```bash
 bun install
-bun start
+bun start app   # Windows desktop shell (Vite + Electron)
+bun start web   # marketing & license site (Next.js)
 ```
 
-This starts both the Vite dev server and Electron. The shell will appear on all connected displays.
+`bun start app` launches both the Vite dev server and Electron; the shell appears on all connected displays. `bun start web` runs the Next.js site in `apps/web`. Running `bun start` with no target opens an interactive picker.
 
 ## Code Standards
 

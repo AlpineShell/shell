@@ -7,10 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "start": "bun --filter alpine-shell start",
+    "start": "bun scripts/start.js",
     "build": "bun --filter alpine-shell build",
     "release": "bun --filter alpine-shell release",
-    "web": "bun --filter @alpine/web dev",
     "web:build": "bun --filter @alpine/web build"
   }
 }
