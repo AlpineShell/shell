@@ -228,6 +228,8 @@ export default function LauncherPanel() {
   const panelWidth = activeCommand === "wallpaper"
     ? Math.max(LAUNCHER_WIDTH_DEFAULT, wallpaperPanelWidth(wallpapers.length))
     : LAUNCHER_WIDTH_DEFAULT
+  const inSubmenu = !!activeCommand && activeCommand !== "wallpaper"
+  const activeLabel = activeCommand ? (SETTING_COMMANDS.find((c) => c.id === activeCommand)?.label ?? "") : ""
 
   function enterCommand(id: string) {
     queryBeforeCommand.current = query
@@ -653,11 +655,10 @@ export default function LauncherPanel() {
         tabIndex={-1}
       >
         <div ref={bodyRef} className="flex flex-col">
-          {(!activeCommand || activeCommand === "wallpaper") && (
           <div className={`flex items-center gap-2 px-4 h-12 shrink-0 ${textColor}`}>
-              {contextOpen ? (
+              {activeCommand || contextOpen ? (
                 <button
-                  onMouseDown={(e) => { e.preventDefault(); setContextOpen(false); requestAnimationFrame(() => inputRef.current?.focus()) }}
+                  onMouseDown={(e) => { e.preventDefault(); if (activeCommand) exitCommand(); else { setContextOpen(false); requestAnimationFrame(() => inputRef.current?.focus()) } }}
                   className="shrink-0 opacity-60 hover:opacity-100 cursor-pointer"
                 >
                   <ChevronLeft size={16} />
@@ -665,7 +666,9 @@ export default function LauncherPanel() {
               ) : (
                 <Search size={16} className="shrink-0 opacity-60" />
               )}
-              {contextOpen && selectedEntry ? (
+              {inSubmenu ? (
+                <span className={`flex-1 text-[15px] truncate ${textColor}`}>{activeLabel}</span>
+              ) : contextOpen && selectedEntry ? (
                 <span className={`flex-1 text-[15px] truncate ${textColor}`}>
                   {selectedEntry.type === "app" ? selectedEntry.item?.name : selectedEntry.type === "open" ? selectedEntry.app.name : selectedEntry.type === "run" ? selectedEntry.run.display : ""}
                 </span>
@@ -685,7 +688,6 @@ export default function LauncherPanel() {
                 />
               )}
             </div>
-          )}
             <div>
                 {activeCommand === "wifi" ? (
                   <LauncherWifi darkText={darkText} onBack={exitCommand} />
