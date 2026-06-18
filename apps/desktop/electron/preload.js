@@ -48,6 +48,7 @@ try { paintDesktopBackgroundEarly() } catch {}
 contextBridge.exposeInMainWorld('topbar', {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
   setActiveRegion: (region) => ipcRenderer.send('topbar/set-active-region', region),
+  setToastRegion: (region) => ipcRenderer.send('topbar/set-toast-region', region),
   color: () => ipcRenderer.invoke('topbar/color'),
   onColorChanged: (callback) => {
     ipcRenderer.on('topbar/color-changed', (_, data) => callback(data))
@@ -335,5 +336,45 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('tiling/config-changed', (_, data) => callback(data))
     },
     snap: (direction) => ipcRenderer.invoke('tiling/snap', direction),
+  },
+  notifications: {
+    getState: () => ipcRenderer.invoke('notifications/get-state'),
+    emit: (notif) => ipcRenderer.invoke('notifications/emit', notif),
+    dismiss: (id) => ipcRenderer.invoke('notifications/dismiss', id),
+    clearAll: () => ipcRenderer.invoke('notifications/clear-all'),
+    markAllRead: () => ipcRenderer.invoke('notifications/mark-all-read'),
+    runAction: (id, actionId) => ipcRenderer.invoke('notifications/run-action', { id, actionId }),
+    getConfig: () => ipcRenderer.invoke('notifications/config-get'),
+    setConfig: (partial) => ipcRenderer.invoke('notifications/config-set', partial),
+    setDnd: (value) => ipcRenderer.invoke('notifications/set-dnd', value),
+    osAccessStatus: () => ipcRenderer.invoke('notifications/os-access-status'),
+    openOsAccessSettings: () => ipcRenderer.invoke('notifications/open-os-access-settings'),
+    openCenter: () => ipcRenderer.invoke('notifications/center-open'),
+    closeCenter: () => ipcRenderer.invoke('notifications/center-close'),
+    onPosted: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('notifications/posted', handler)
+      return () => ipcRenderer.removeListener('notifications/posted', handler)
+    },
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('notifications/changed', handler)
+      return () => ipcRenderer.removeListener('notifications/changed', handler)
+    },
+    onConfigChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('notifications/config-changed', handler)
+      return () => ipcRenderer.removeListener('notifications/config-changed', handler)
+    },
+    onCenterShow: (callback) => {
+      const handler = () => callback()
+      ipcRenderer.on('notifications/center-show', handler)
+      return () => ipcRenderer.removeListener('notifications/center-show', handler)
+    },
+    onCenterHide: (callback) => {
+      const handler = () => callback()
+      ipcRenderer.on('notifications/center-hide', handler)
+      return () => ipcRenderer.removeListener('notifications/center-hide', handler)
+    },
   },
 })

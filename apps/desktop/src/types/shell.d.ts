@@ -299,6 +299,64 @@ declare global {
     centerOversized: boolean
   }
 
+  type NotificationSource = 'alpine' | 'os' | 'user'
+  type NotificationPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-right'
+  type NotificationOsAccess = 'unknown' | 'granted' | 'denied' | 'unavailable'
+
+  interface NotificationAction {
+    id: string
+    label: string
+    openPath?: string
+    url?: string
+  }
+
+  interface AppNotification {
+    id: number
+    source: NotificationSource
+    appName: string
+    title: string
+    body: string
+    icon: string | null
+    timestamp: number
+    read: boolean
+    actions: NotificationAction[]
+    osId?: number
+  }
+
+  interface NotificationInput {
+    source?: NotificationSource
+    appName?: string
+    title?: string
+    body?: string
+    icon?: string | null
+    actions?: NotificationAction[]
+    osId?: number
+    onAction?: (actionId: string) => void
+  }
+
+  interface NotificationSourceConfig {
+    enabled: boolean
+    label: string
+  }
+
+  interface NotificationsConfig {
+    enabled: boolean
+    doNotDisturb: boolean
+    position: NotificationPosition
+    defaultDuration: number
+    maxHistory: number
+    groupBySource: boolean
+    captureOsToasts: boolean
+    bySource: Record<string, NotificationSourceConfig>
+  }
+
+  interface NotificationState {
+    items: AppNotification[]
+    unreadCount: number
+    config: NotificationsConfig
+    osAccessStatus: NotificationOsAccess
+  }
+
   interface Window {
     setup: {
       status: () => Promise<SetupStatus>
@@ -346,6 +404,7 @@ declare global {
     topbar: {
       setIgnoreMouseEvents: (ignore: boolean) => void
       setActiveRegion: (region: { top: number; bottom: number; left: number; right: number } | null) => void
+      setToastRegion: (region: { top: number; bottom: number; left: number; right: number } | null) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => void
       colorOverride: () => Promise<TopBarColor | null>
@@ -491,6 +550,26 @@ declare global {
         setConfig: (partial: Partial<TilingConfig>) => Promise<TilingConfig>
         onConfigChanged: (callback: (config: TilingConfig) => void) => void
         snap: (direction: 'left' | 'right' | 'up' | 'down') => Promise<boolean>
+      }
+      notifications: {
+        getState: () => Promise<NotificationState>
+        emit: (notif: NotificationInput) => Promise<AppNotification | null>
+        dismiss: (id: number) => Promise<NotificationState>
+        clearAll: () => Promise<NotificationState>
+        markAllRead: () => Promise<NotificationState>
+        runAction: (id: number, actionId: string) => Promise<NotificationState>
+        getConfig: () => Promise<NotificationsConfig>
+        setConfig: (partial: Partial<NotificationsConfig>) => Promise<NotificationsConfig>
+        setDnd: (value: boolean) => Promise<NotificationsConfig>
+        osAccessStatus: () => Promise<NotificationOsAccess>
+        openOsAccessSettings: () => Promise<void>
+        openCenter: () => Promise<void>
+        closeCenter: () => Promise<void>
+        onPosted: (callback: (notif: AppNotification) => void) => () => void
+        onChanged: (callback: (state: NotificationState) => void) => () => void
+        onConfigChanged: (callback: (config: NotificationsConfig) => void) => () => void
+        onCenterShow: (callback: () => void) => () => void
+        onCenterHide: (callback: () => void) => () => void
       }
     }
   }
