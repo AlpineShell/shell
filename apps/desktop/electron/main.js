@@ -27,6 +27,8 @@ const trayLayout = require('./modules/trayLayout')
 const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
 const notifications = require('./modules/notifications')
+let osNotificationListener = null
+try { osNotificationListener = require('./modules/osNotificationListener') } catch (e) { console.error('[main] osNotificationListener load error:', e.message) }
 let trayHost = null
 try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[main] trayHost load error:', e.message) }
 let altTab = null
@@ -496,7 +498,7 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(notifications, wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, runCommand, launcherHotkey, trayLayout, trayHost, appManager, tiling, updater, windowsUpdate)
+  ipc.register(notifications, wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, runCommand, launcherHotkey, trayLayout, trayHost, appManager, tiling, updater, windowsUpdate, osNotificationListener)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
