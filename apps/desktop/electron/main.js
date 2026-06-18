@@ -81,6 +81,38 @@ const TOP_BAR_HEIGHT = 24
 
 const shells = new Map()
 
+let notificationCenterWin = null
+
+function showNotificationCenter(win) {
+  if (!win || win.isDestroyed()) return
+  const previous = notificationCenterWin
+  if (previous && previous !== win && !previous.isDestroyed()) hideNotificationCenter(previous)
+  win.webContents.send('topbar/close-menus')
+  notificationCenterWin = win
+  win.setFocusable(true)
+  win.setIgnoreMouseEvents(false)
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.webContents.send('notifications/center-show')
+  try { win.focus() } catch {}
+}
+
+function hideNotificationCenter(win) {
+  const target = win || notificationCenterWin
+  if (notificationCenterWin === target) notificationCenterWin = null
+  if (!target || target.isDestroyed()) return
+  target.webContents.send('notifications/center-hide')
+  target.setFocusable(false)
+  if (typeof target.restorePassiveTopBar === 'function') target.restorePassiveTopBar()
+  else target.setAlwaysOnTop(false)
+}
+
+ipcMain.handle('notifications/center-open', (event) => {
+  showNotificationCenter(BrowserWindow.fromWebContents(event.sender))
+})
+ipcMain.handle('notifications/center-close', (event) => {
+  hideNotificationCenter(BrowserWindow.fromWebContents(event.sender))
+})
+
 function createDesktopWindow(display) {
   const { x, y, width, height } = display.bounds
 
@@ -146,9 +178,11 @@ function createTopBarWindow(display) {
   const INTERACTIVE_CENTER = 120
   let ignoring = true
   let activeRegion = null
+  let toastRegion = null
 
   function evaluateCursorInteraction() {
     if (win.isDestroyed()) return
+    if (notificationCenterWin === win) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
     const bounds = win.getBounds()
@@ -161,13 +195,16 @@ function createTopBarWindow(display) {
     const centerX = bounds.x + bounds.width / 2
     const inCenterZone = cursor.x >= centerX - INTERACTIVE_CENTER / 2 && cursor.x < centerX + INTERACTIVE_CENTER / 2
 
+    const inToast = !!toastRegion && cursor.y >= bounds.y + toastRegion.top && cursor.y < bounds.y + toastRegion.bottom &&
+                    cursor.x >= bounds.x + toastRegion.left && cursor.x < bounds.x + toastRegion.right
+
     let inInteractive
     if (activeRegion) {
       const inMenu = cursor.y >= bounds.y + activeRegion.top && cursor.y < bounds.y + activeRegion.bottom &&
                      cursor.x >= bounds.x + activeRegion.left && cursor.x < bounds.x + activeRegion.right
-      inInteractive = inBarRow || inMenu
+      inInteractive = inBarRow || inMenu || inToast
     } else {
-      inInteractive = inBarRow && (inLeftZone || inRightZone || inCenterZone)
+      inInteractive = (inBarRow && (inLeftZone || inRightZone || inCenterZone)) || inToast
     }
 
     if (inInteractive && ignoring) {
@@ -184,10 +221,12 @@ function createTopBarWindow(display) {
 
   win.restorePassiveTopBar = () => {
     if (win.isDestroyed()) return
+    if (notificationCenterWin === win) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
     activeRegion = null
-    win.setAlwaysOnTop(false)
+    if (toastRegion) win.setAlwaysOnTop(true, 'screen-saver')
+    else win.setAlwaysOnTop(false)
     ignoring = true
     win.setIgnoreMouseEvents(true)
     evaluateCursorInteraction()
@@ -211,10 +250,25 @@ function createTopBarWindow(display) {
   }
   ipcMain.on('topbar/set-active-region', onSetActiveRegion)
 
-  win.on('blur', () => launcher.handleBlur(win))
+  const onSetToastRegion = (event, region) => {
+    if (win.isDestroyed()) return
+    if (event.sender !== win.webContents) return
+    toastRegion = region || null
+    if (toastRegion) win.setAlwaysOnTop(true, 'screen-saver')
+    else if (!activeRegion && notificationCenterWin !== win) win.setAlwaysOnTop(false)
+    evaluateCursorInteraction()
+  }
+  ipcMain.on('topbar/set-toast-region', onSetToastRegion)
+
+  win.on('blur', () => {
+    launcher.handleBlur(win)
+    if (notificationCenterWin === win) hideNotificationCenter(win)
+  })
   win.on('closed', () => {
     clearInterval(cursorTracker)
     ipcMain.removeListener('topbar/set-active-region', onSetActiveRegion)
+    ipcMain.removeListener('topbar/set-toast-region', onSetToastRegion)
+    if (notificationCenterWin === win) notificationCenterWin = null
   })
 
   win.webContents.once('did-finish-load', () => {
