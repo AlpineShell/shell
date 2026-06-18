@@ -54,6 +54,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
         let tHalf = 0;
         let tFullH = 0;
         let tAnchor: ChromeAnchor = "center";
+        let tOutline = false;
         let tContentEl: HTMLElement | null = null;
         let lastToast: ChromeSurface | null = null;
         let running = false;
@@ -123,10 +124,12 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                     tHalf = toast.bodyWidth / 2;
                     tFullH = toast.fullHeight;
                     tAnchor = toast.anchor;
+                    tOutline = toast.outline;
                     tContentEl = toast.contentEl;
                     animateToast(1, OPEN_MS, "out");
                 } else if (toast && prevToast) {
                     tAnchor = toast.anchor;
+                    tOutline = toast.outline;
                     tContentEl = toast.contentEl;
                 } else if (!toast && prevToast) {
                     animateToast(0, CLOSE_MS, "in");
@@ -170,6 +173,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                 tHalf = toast.bodyWidth / 2;
                 tFullH = toast.fullHeight;
                 tAnchor = toast.anchor;
+                tOutline = toast.outline;
                 tContentEl = toast.contentEl;
             }
             const toastOpen = sampleToast();
@@ -213,12 +217,11 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
 
             if (toastActive) {
                 const tGeom: ChromeGeometry = { centerX: tCx, bodyWidth: tHalf * 2, height: tHeight, barBottom, screenWidth: screenW, anchor: tAnchor };
-                const tPath = new Path2D(surfaceFillPath(tGeom));
                 ctx.fillStyle = p.bg;
-                ctx.fill(tPath);
+                ctx.fill(new Path2D(surfaceFillPath(tGeom)));
                 ctx.strokeStyle = p.barBorderColor;
                 ctx.lineWidth = 1;
-                ctx.stroke(tPath);
+                ctx.stroke(new Path2D(barBorderPath(tGeom, true, tOutline)));
                 if (tContentEl) {
                     const tvHidden = Math.max(0, tFullH - tHeight);
                     const tr = Math.min(RADIUS, tHalf, tHeight / 2);

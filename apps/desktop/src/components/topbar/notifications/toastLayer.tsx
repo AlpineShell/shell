@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { useDarkText } from "../../themeContext";
+import { useDarkText, useFullscreenWindow } from "../../themeContext";
 import { useNotifications } from "../../../hooks/useNotifications";
 import { setToastSurface } from "../chrome/chromeStore";
 
@@ -25,11 +25,12 @@ let toastKeySeq = 1;
 
 export default function ToastLayer() {
     const darkText = useDarkText();
+    const outline = useFullscreenWindow();
     const { config, runAction } = useNotifications();
     const [toasts, setToasts] = useState<ActiveToast[]>([]);
     const clipRef = useRef<HTMLDivElement>(null);
     const bodyRef = useRef<HTMLDivElement>(null);
-    const lastReg = useRef<{ centerX: number; fullHeight: number; anchor: Anchor } | null>(null);
+    const lastReg = useRef<{ centerX: number; fullHeight: number; anchor: Anchor; outline: boolean } | null>(null);
 
     const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
 
@@ -57,9 +58,9 @@ export default function ToastLayer() {
         const g = geometryFor(config.position);
         const fullHeight = body.offsetHeight;
         const prev = lastReg.current;
-        if (!prev || prev.centerX !== g.centerX || prev.fullHeight !== fullHeight || prev.anchor !== g.anchor) {
-            lastReg.current = { centerX: g.centerX, fullHeight, anchor: g.anchor };
-            setToastSurface({ id: 0, centerX: g.centerX, bodyWidth: TOAST_WIDTH, fullHeight, outline: false, anchor: g.anchor, contentEl: clip });
+        if (!prev || prev.centerX !== g.centerX || prev.fullHeight !== fullHeight || prev.anchor !== g.anchor || prev.outline !== outline) {
+            lastReg.current = { centerX: g.centerX, fullHeight, anchor: g.anchor, outline };
+            setToastSurface({ id: 0, centerX: g.centerX, bodyWidth: TOAST_WIDTH, fullHeight, outline, anchor: g.anchor, contentEl: clip });
         }
         window.topbar?.setToastRegion?.({
             top: BAR_BOTTOM,
@@ -72,7 +73,7 @@ export default function ToastLayer() {
     useLayoutEffect(() => {
         measure();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [toasts, config.position]);
+    }, [toasts, config.position, outline]);
 
     useEffect(() => {
         const body = bodyRef.current;
