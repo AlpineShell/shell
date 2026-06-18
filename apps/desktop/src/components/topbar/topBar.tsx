@@ -9,6 +9,9 @@ import SystemTray from "./systemTray";
 import LauncherTrigger from "./launcherTrigger";
 import LauncherPanel from "./launcherPanel";
 import AltTabPanel from "./altTabPanel";
+import NotificationBell from "./notificationBell";
+import ToastLayer from "./notifications/toastLayer";
+import NotificationCenterPanel from "./notifications/notificationCenterPanel";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
 import ChromeCanvas from "./chrome/ChromeCanvas";
@@ -51,11 +54,14 @@ export default function TopBar() {
                     <MediaStatus />
                     <MicrophoneStatus />
                     <StatusIndicator />
+                    <NotificationBell />
                     <Clock />
                 </div>
             </div>
             {launcherOpen && <LauncherPanel />}
             <AltTabPanel />
+            <ToastLayer />
+            <NotificationCenterPanel />
         </ThemeProvider>
     );
 }
