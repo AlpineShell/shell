@@ -64,8 +64,8 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
   }, [])
 
   return (
-    <div className="max-w-4xl">
-      <div className="flex gap-6 items-stretch">
+    <div className="flex flex-col gap-6">
+      <div className="flex gap-6 items-stretch max-w-4xl">
         <div className="w-72 shrink-0 flex flex-col gap-2">
           <div
             className="w-full aspect-video rounded-lg bg-neutral-900 bg-cover bg-center border border-white/5"
@@ -117,7 +117,7 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 mt-6">
+      <div className="flex flex-col gap-2">
         <NavRow icon={Bluetooth} label="Bluetooth" description="Pair and manage Bluetooth devices" onClick={() => onNavigate('devices/bluetooth')} />
         <NavRow icon={ImageIcon} label="Wallpaper" description="Change background image" onClick={() => onNavigate('personalization/wallpaper')} />
         <NavRow icon={Wifi} label="Wi-Fi" description="Connect to networks" onClick={() => onNavigate('devices/wifi')} />

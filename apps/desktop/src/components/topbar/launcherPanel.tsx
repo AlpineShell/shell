@@ -1331,7 +1331,7 @@ type LauncherMenuItem =
   | { id: string; kind: "action"; label: string; icon?: LucideIcon; iconSrc?: string | null; dividerAfter?: boolean; onRun: () => void }
   | { id: string; kind: "submenu"; label: string; icon?: LucideIcon; iconSrc?: string | null; dividerAfter?: boolean; onOpen: () => void }
 
-function LauncherMenu({ items, darkText, onBack, onSelectionChange }: { items: LauncherMenuItem[]; darkText: boolean; onBack: () => void; onSelectionChange?: (item: LauncherMenuItem | undefined) => void }) {
+function LauncherMenu({ items, darkText, onBack, onSelectionChange, emptyText }: { items: LauncherMenuItem[]; darkText: boolean; onBack: () => void; onSelectionChange?: (item: LauncherMenuItem | undefined) => void; emptyText?: string }) {
   const textColor = darkText ? "text-black" : "text-white"
   const dimText = darkText ? "text-black/50" : "text-white/50"
   const selectedBg = darkText ? "bg-black/10" : "bg-white/10"
@@ -1390,7 +1390,9 @@ function LauncherMenu({ items, darkText, onBack, onSelectionChange }: { items: L
 
   return (
     <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto">
-      {items.map((item, idx) => {
+      {items.length === 0 && emptyText ? (
+        <div className={`px-2.5 py-4 text-[13px] ${dimText}`}>{emptyText}</div>
+      ) : items.map((item, idx) => {
         const Icon = item.icon
         const isSel = idx === selected
         const rowClass = `flex items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${isSel ? selectedBg : ""}`
@@ -1575,7 +1577,7 @@ function LauncherTray({ darkText, onBack, onSubView }: { darkText: boolean; onBa
       value: !(layout?.hidden ?? []).includes(ic.id),
       onToggle: () => toggleIcon(ic),
     }))
-    return <LauncherMenu key="icons" items={items} darkText={darkText} onBack={backToMain} />
+    return <LauncherMenu key="icons" items={items} emptyText="No system tray icons at the moment" darkText={darkText} onBack={backToMain} />
   }
 
   const items: LauncherMenuItem[] = []
