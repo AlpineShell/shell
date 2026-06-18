@@ -3,7 +3,7 @@ const fs = require('fs')
 const path = require('path')
 
 const STORE_FILE = 'notifications.json'
-const POSITIONS = new Set(['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-right'])
+const POSITIONS = new Set(['top-left', 'top-center', 'top-right'])
 
 const DEFAULT_CONFIG = {
   enabled: true,

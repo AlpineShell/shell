@@ -300,7 +300,7 @@ declare global {
   }
 
   type NotificationSource = 'alpine' | 'os' | 'user'
-  type NotificationPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-right'
+  type NotificationPosition = 'top-left' | 'top-center' | 'top-right'
 
   interface NotificationAction {
     id: string

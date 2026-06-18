@@ -4,8 +4,6 @@ const POSITION_OPTIONS: { value: NotificationPosition; label: string }[] = [
   { value: 'top-left', label: 'Top left' },
   { value: 'top-center', label: 'Top center' },
   { value: 'top-right', label: 'Top right' },
-  { value: 'bottom-left', label: 'Bottom left' },
-  { value: 'bottom-right', label: 'Bottom right' },
 ]
 
 export default function NotificationsPage() {
