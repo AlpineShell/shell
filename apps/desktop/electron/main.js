@@ -485,6 +485,12 @@ function startShellMode() {
   if (shellWindow && actingAsShell) shellWindow.register()
 
   if (altTab) altTab.setShells(shells)
+  if (altTab && altTab.setExposedOwnWindows) {
+    altTab.setExposedOwnWindows(() => {
+      if (!settingsWin || settingsWin.isDestroyed()) return []
+      try { return [settingsWin.getNativeWindowHandle().readUInt32LE(0)] } catch { return [] }
+    })
+  }
 
   tiling.setShells(shells)
   if (altTab && altTab.onTilingKey) {

@@ -28,6 +28,7 @@ const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProces
 
 const SetForegroundWindow = user32.func('__stdcall', 'SetForegroundWindow', 'int', ['uintptr_t'])
 const GetForegroundWindow = user32.func('__stdcall', 'GetForegroundWindow', 'uintptr_t', [])
+const GetShellWindow = user32.func('__stdcall', 'GetShellWindow', 'uintptr_t', [])
 const ShowWindow = user32.func('__stdcall', 'ShowWindow', 'int', ['uintptr_t', 'int'])
 const IsIconic = user32.func('__stdcall', 'IsIconic', 'int', ['uintptr_t'])
 const keybd_event = user32.func('__stdcall', 'keybd_event', 'void', ['uint8', 'uint8', 'uint32', 'uintptr_t'])
@@ -81,6 +82,7 @@ const THUMBNAIL_MAX_HEIGHT = 200
 let overlayWindow = null
 let activeTopBar = null
 let shellsRef = null
+let exposedOwnWindowsProvider = null
 let hookHandle = null
 let hookCallbackPointer = null
 let screenshotCallback = null
@@ -120,6 +122,28 @@ function isOwnWindow(hwnd) {
     if (!shell.desktop.isDestroyed() && getHwnd(shell.desktop) === hwnd) return true
   }
   return false
+}
+
+function getWindowProcessId(hwnd) {
+  const pidBuf = Buffer.alloc(4)
+  GetWindowThreadProcessId(hwnd, pidBuf)
+  return pidBuf.readUInt32LE(0)
+}
+
+function isShellWindow(hwnd) {
+  const shellRaw = GetShellWindow()
+  const shellHwnd = typeof shellRaw === 'bigint' ? Number(shellRaw) : shellRaw
+  return shellHwnd !== 0 && shellHwnd === hwnd
+}
+
+function isExposedOwnWindow(hwnd) {
+  if (!exposedOwnWindowsProvider) return false
+  try {
+    const allowed = exposedOwnWindowsProvider()
+    return Array.isArray(allowed) && allowed.includes(hwnd)
+  } catch {
+    return false
+  }
 }
 
 function readWideString(buf, maxChars) {
@@ -168,6 +192,8 @@ function isAltTabWindow(hwnd) {
   const titleLen = GetWindowTextLengthW(hwnd)
   if (titleLen <= 0) return false
   if (isOwnWindow(hwnd)) return false
+  if (isShellWindow(hwnd)) return false
+  if (getWindowProcessId(hwnd) === process.pid && !isExposedOwnWindow(hwnd)) return false
   return true
 }
 
@@ -615,6 +641,10 @@ module.exports = {
 
   setShells(shells) {
     shellsRef = shells
+  },
+
+  setExposedOwnWindows(provider) {
+    exposedOwnWindowsProvider = typeof provider === 'function' ? provider : null
   },
 
   onScreenshot(callback, cancelCallback) {
