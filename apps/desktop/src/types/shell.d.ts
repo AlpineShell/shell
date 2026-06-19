@@ -1,5 +1,6 @@
 export {}
 
+declare global {
 interface OpenApp {
   id: number
   hwnd: number
@@ -91,6 +92,7 @@ interface ForegroundColorData extends TopBarColor {
 }
 
 type ForegroundColorBroadcast = ForegroundColorData | { displayId: number }
+}
 
 declare global {
   type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'

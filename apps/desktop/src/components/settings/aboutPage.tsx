@@ -36,15 +36,6 @@ function formatSize(bytes: number): string {
 const DISK_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#ec4899']
 const RAM_COLOR = '#8b5cf6'
 
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
-}
-
 export default function AboutPage() {
   const wallpaper = useWallpaper()
   const [info, setInfo] = useState<SystemInfo | null>(() => readCache())
@@ -132,16 +123,6 @@ function UsageRow({ label, used, total, color }: { label: string; used: number; 
           {formatSize(used)} / {formatSize(total)}
         </span>
       </div>
-    </div>
-  )
-}
-
-function SpecRow({ label, value, detail }: { label: string; value: string; detail?: string }) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-wider text-white/40">{label}</span>
-      <span className="text-sm text-white/90">{value}</span>
-      {detail && <span className="text-xs text-white/50">{detail}</span>}
     </div>
   )
 }
