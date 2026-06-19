@@ -22,6 +22,8 @@ const TYPE_DEFINITION = [
   '\'@',
 ].join('\n')
 
+const FILE_EXPLORER_AUMID = 'Microsoft.Windows.Explorer'
+
 let ps = null
 let lineBuffer = ''
 
@@ -73,8 +75,12 @@ function activate(appId) {
   else activateViaAppsFolder(appId)
 }
 
+function openFileExplorer() {
+  activate(FILE_EXPLORER_AUMID)
+}
+
 function warm() {
   ensureProcess()
 }
 
-module.exports = { activate, warm }
+module.exports = { activate, openFileExplorer, warm }

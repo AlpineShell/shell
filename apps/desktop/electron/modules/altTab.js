@@ -62,6 +62,7 @@ const VK_LMENU = 0xA4
 const VK_RMENU = 0xA5
 const VK_SHIFT = 0x10
 const VK_S = 0x53
+const VK_E = 0x45
 const VK_LWIN = 0x5B
 const VK_RWIN = 0x5C
 const VK_LEFT = 0x25
@@ -102,6 +103,7 @@ let winDown = false
 let winTapped = false
 
 let tilingKeyCallback = null
+let explorerKeyCallback = null
 
 const iconCache = new Map()
 const thumbnailCache = new Map()
@@ -529,6 +531,15 @@ function hookCallback(nCode, wParam, lParam) {
       }
     }
 
+    if (isKeyDown && vkCode === VK_E && explorerKeyCallback) {
+      const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      if (winHeld) {
+        winTapped = false
+        try { explorerKeyCallback() } catch (e) { console.error('[altTab] explorer key error:', e.message) }
+        return 1
+      }
+    }
+
     if (winLauncherEnabled) {
       if (vkCode === VK_LWIN || vkCode === VK_RWIN) {
         if (isKeyDown && !winDown) {
@@ -666,6 +677,10 @@ module.exports = {
 
   onTilingKey(callback) {
     tilingKeyCallback = callback
+  },
+
+  onExplorerKey(callback) {
+    explorerKeyCallback = callback
   },
 
   start(_broadcast) {
