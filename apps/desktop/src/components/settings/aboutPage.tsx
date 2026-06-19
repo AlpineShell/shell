@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { Bluetooth, Image as ImageIcon, Wifi } from 'lucide-react'
 import { useWallpaper } from '../../hooks/useWallpaper'
+import { NavRow } from './appsShared'
 
 const CACHE_KEY = 'alpine.systemInfo.v2'
 
@@ -36,7 +38,16 @@ function formatSize(bytes: number): string {
 const DISK_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#ec4899']
 const RAM_COLOR = '#8b5cf6'
 
-export default function AboutPage() {
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
+}
+
+export default function AboutPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   const wallpaper = useWallpaper()
   const [info, setInfo] = useState<SystemInfo | null>(() => readCache())
 
@@ -53,8 +64,8 @@ export default function AboutPage() {
   }, [])
 
   return (
-    <div className="max-w-4xl">
-      <div className="flex gap-6 items-stretch">
+    <div className="flex flex-col gap-6">
+      <div className="flex gap-6 items-stretch max-w-4xl">
         <div className="w-72 shrink-0 flex flex-col gap-2">
           <div
             className="w-full aspect-video rounded-lg bg-neutral-900 bg-cover bg-center border border-white/5"
@@ -104,6 +115,12 @@ export default function AboutPage() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <NavRow icon={Bluetooth} label="Bluetooth" description="Pair and manage Bluetooth devices" onClick={() => onNavigate('devices/bluetooth')} />
+        <NavRow icon={ImageIcon} label="Wallpaper" description="Change background image" onClick={() => onNavigate('personalization/wallpaper')} />
+        <NavRow icon={Wifi} label="Wi-Fi" description="Connect to networks" onClick={() => onNavigate('devices/wifi')} />
       </div>
     </div>
   )

@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, AppWindow, Command, House, MonitorCog, Paintbrush, Plug, RefreshCw, Search, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, AppWindow, House, MonitorCog, Paintbrush, Plug, RefreshCw, X } from 'lucide-react'
 import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
 import WallpaperPage from './wallpaperPage'
@@ -38,10 +38,11 @@ const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
 
 export default function SettingsApp() {
-  const [history, setHistory] = useState<string[]>(['home'])
-  const [historyIndex, setHistoryIndex] = useState(0)
-  const [search, setSearch] = useState('')
-  const searchRef = useRef<HTMLInputElement>(null)
+  const [history, setHistory] = useState<string[]>(() => {
+    const page = window.shell.windows.initialPage
+    return page && page !== 'home' ? ['home', page] : ['home']
+  })
+  const [historyIndex, setHistoryIndex] = useState(() => history.length - 1)
 
   const currentPath = history[historyIndex]
   const segments = currentPath.split('/')
@@ -65,11 +66,18 @@ export default function SettingsApp() {
     if (canForward) setHistoryIndex(historyIndex + 1)
   }
 
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
+
+  useEffect(() => {
+    return window.shell.windows.onSettingsNavigate((page) => navigateRef.current(page))
+  }, [])
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        searchRef.current?.focus()
+        window.launcher.show()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -139,25 +147,6 @@ export default function SettingsApp() {
 
             <div className="flex-1" />
 
-            <div
-              className="flex items-center gap-2 hover:bg-white/4 focus-within:bg-white/6 transition-colors rounded-lg h-8 px-3"
-              style={noDragRegion}
-            >
-              <Search size={13} className="text-white/60 shrink-0" />
-              <input
-                ref={searchRef}
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search"
-                className="bg-transparent outline-none text-[13px] placeholder:text-white/60 w-20 focus:w-40 transition-[width]"
-              />
-              <kbd className="font-sans text-white/50 bg-white/6 rounded h-5 px-1.5 inline-flex items-center justify-center gap-0.5 shrink-0 text-[11px] leading-none">
-                <Command size={11} strokeWidth={2.25} />
-                <span>K</span>
-              </kbd>
-            </div>
-
             <button
               onClick={() => window.shell.windows.closeSettings()}
               className="w-7 h-7 flex items-center justify-center cursor-pointer text-white/60 hover:text-white transition-colors"
@@ -196,7 +185,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boo
 }
 
 function PageRouter({ path, navigate }: { path: string; navigate: (p: string) => void }) {
-  if (path === 'home') return <AboutPage />
+  if (path === 'home') return <AboutPage onNavigate={navigate} />
   if (path === 'personalization') return <PersonalizationHub onNavigate={navigate} />
   if (path === 'personalization/wallpaper') return <WallpaperPage />
   if (path === 'personalization/topbar') return <TopBarPage />

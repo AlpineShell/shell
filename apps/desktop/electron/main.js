@@ -343,6 +343,7 @@ function createSetupWindow() {
 
 let settingsWin = null
 let currentSettingsPage = null
+let pendingSettingsPage = null
 function createSettingsWindow() {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.focus()
@@ -375,6 +376,7 @@ function createSettingsWindow() {
   settingsWin.on('closed', () => {
     settingsWin = null
     currentSettingsPage = null
+    pendingSettingsPage = null
     openApps.refresh()
     for (const shell of shells.values()) {
       const tb = shell.topBar
@@ -387,8 +389,21 @@ function createSettingsWindow() {
   return settingsWin
 }
 
-ipcMain.handle('windows/open-settings', () => {
+ipcMain.handle('windows/open-settings', (_event, page) => {
+  const target = typeof page === 'string' && page ? page : null
+  const wasOpen = settingsWin && !settingsWin.isDestroyed()
+  pendingSettingsPage = target
   createSettingsWindow()
+  if (wasOpen && target && settingsWin && !settingsWin.isDestroyed()) {
+    const wc = settingsWin.webContents
+    if (wc.isLoading()) {
+      wc.once('did-finish-load', () => {
+        if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('windows/settings-navigate', target)
+      })
+    } else {
+      wc.send('windows/settings-navigate', target)
+    }
+  }
 })
 
 ipcMain.handle('windows/close-settings', () => {
@@ -404,6 +419,9 @@ ipcMain.handle('windows/set-settings-page', (_event, name) => {
 
 const { SETTINGS_ICON_DATA_URL } = require('./settingsIcon')
 ipcMain.on('windows/settings-icon', (e) => { e.returnValue = SETTINGS_ICON_DATA_URL })
+ipcMain.on('windows/settings-init', (e) => {
+  e.returnValue = pendingSettingsPage
+})
 const SETTINGS_APP_PATH = 'alpine:settings'
 openApps.setShellAppsProvider(() => {
   if (!settingsWin || settingsWin.isDestroyed()) return []
