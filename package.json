@@ -10,6 +10,9 @@
     "start": "bun scripts/start.js",
     "build": "bun --filter alpine-shell build",
     "release": "bun --filter alpine-shell release",
-    "web:build": "bun --filter @alpine/web build"
+    "web:build": "bun --filter @alpine/web build",
+    "test": "bun --filter alpine-shell --filter @alpine/license test",
+    "typecheck": "bun --filter alpine-shell --filter @alpine/license typecheck",
+    "lint": "bun --filter alpine-shell lint"
   }
 }

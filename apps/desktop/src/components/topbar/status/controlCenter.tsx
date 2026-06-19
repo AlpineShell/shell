@@ -6,7 +6,7 @@ import BluetoothMenu from "./bluetoothMenu";
 
 interface ControlCenterProps {
     battery: BatteryStatus;
-    network: { connected: boolean; ssid: string | null };
+    network: NetworkStatus;
     bluetooth: { enabled: boolean; connected: boolean; devices: string[] };
     volume: number;
     setVolume: (value: number) => void;
