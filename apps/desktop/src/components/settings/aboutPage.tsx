@@ -143,13 +143,3 @@ function UsageRow({ label, used, total, color }: { label: string; used: number; 
     </div>
   )
 }
-
-function SpecRow({ label, value, detail }: { label: string; value: string; detail?: string }) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-wider text-white/40">{label}</span>
-      <span className="text-sm text-white/90">{value}</span>
-      {detail && <span className="text-xs text-white/50">{detail}</span>}
-    </div>
-  )
-}
