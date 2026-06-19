@@ -26,6 +26,7 @@ const launcherHotkey = require('./modules/launcherHotkey')
 const trayLayout = require('./modules/trayLayout')
 const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
+const appActivator = require('./appActivator')
 let trayHost = null
 try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[main] trayHost load error:', e.message) }
 let altTab = null
@@ -495,6 +496,9 @@ function startShellMode() {
   tiling.setShells(shells)
   if (altTab && altTab.onTilingKey) {
     altTab.onTilingKey((direction, shift) => tiling.handleHotkey(direction, shift))
+  }
+  if (altTab && altTab.onExplorerKey) {
+    altTab.onExplorerKey(() => appActivator.openFileExplorer())
   }
 
   const screenshotWindow = createScreenshotWindow()
