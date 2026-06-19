@@ -28,6 +28,9 @@ module.exports = {
   'altserver.exe': { name: 'AltServer', blurb: 'Installs apps on iPhone/iPad.', category: 'app' },
   'duetdisplay.exe': { name: 'Duet Display', blurb: 'Use a tablet as a second screen.', category: 'app' },
   'duet display.exe': { name: 'Duet Display', blurb: 'Use a tablet as a second screen.', category: 'app' },
+  // Creative and streaming tools
+  'obs64.exe': { name: 'OBS Studio', blurb: 'Screen recording and live streaming.', category: 'app' },
+  'vlc.exe': { name: 'VLC', blurb: 'Media player for almost any file.', category: 'app' },
 
   'explorer.exe': { name: 'Windows desktop', blurb: 'The Windows desktop, taskbar and file browser.', category: 'system' },
   'msedgewebview2.exe': { name: 'Edge WebView', blurb: 'Lets other apps show web content. Used by many apps.', category: 'system' },
