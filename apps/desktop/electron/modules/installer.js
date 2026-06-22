@@ -160,6 +160,56 @@ function relaunchFromInstalled() {
   app.exit()
 }
 
+const UPDATER_CSC_PATH = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'
+
+function getUpdaterDir() {
+  return path.join(app.getPath('userData'), 'updater')
+}
+
+function getUpdaterExePath() {
+  return path.join(getUpdaterDir(), 'AlpineUpdater.exe')
+}
+
+function getUpdaterSourcePath() {
+  if (app.isPackaged) return path.join(process.resourcesPath, 'scripts', 'updaterScreen.cs')
+  return path.join(__dirname, '..', 'scripts', 'updaterScreen.cs')
+}
+
+function ensureUpdaterExe() {
+  const exePath = getUpdaterExePath()
+  if (fs.existsSync(exePath)) return exePath
+  if (!fs.existsSync(UPDATER_CSC_PATH)) return null
+  const sourcePath = getUpdaterSourcePath()
+  if (!fs.existsSync(sourcePath)) return null
+  try {
+    fs.mkdirSync(getUpdaterDir(), { recursive: true })
+    execFileSync(UPDATER_CSC_PATH, [
+      '/nologo', '/optimize', '/target:winexe',
+      '/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll',
+      `/out:${exePath}`, sourcePath,
+    ], { windowsHide: true })
+    return exePath
+  } catch (e) {
+    console.error('[installer] Failed to compile updater screen:', e.message)
+    return null
+  }
+}
+
+function startBrandedUpdate(installerPath) {
+  if (!app.isPackaged) return false
+  if (!installerPath || !fs.existsSync(installerPath)) return false
+  const updaterExe = ensureUpdaterExe()
+  if (!updaterExe) return false
+  try {
+    regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', 'explorer.exe')
+    spawn(updaterExe, [installerPath, getInstalledExePath()], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    return true
+  } catch (e) {
+    console.error('[installer] Failed to start branded update:', e.message)
+    return false
+  }
+}
+
 module.exports = {
   getInstallDir,
   getInstalledExePath,
@@ -173,4 +223,5 @@ module.exports = {
   revertSystemChanges,
   revertShell,
   relaunchFromInstalled,
+  startBrandedUpdate,
 }
