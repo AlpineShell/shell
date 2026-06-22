@@ -134,6 +134,12 @@ contextBridge.exposeInMainWorld('launcher', {
     ipcRenderer.on('launcher/hide', handler)
     return () => ipcRenderer.removeListener('launcher/hide', handler)
   },
+  scores: () => ipcRenderer.invoke('frecency/scores'),
+  onScoresChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('frecency/changed', handler)
+    return () => ipcRenderer.removeListener('frecency/changed', handler)
+  },
 })
 
 contextBridge.exposeInMainWorld('setup', {

@@ -7,42 +7,23 @@ import { useMonitors } from "../../hooks/useMonitors"
 import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
 import { SETTING_COMMANDS, type SettingCommand } from "./launcherSettings"
+import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type SearchFields } from "../../lib/launcherSearch"
 
 const BAR_BOTTOM = 24
 const MAX_RESULTS = 5
+const EMPTY_RESULTS = 6
 const LAUNCHER_WIDTH_DEFAULT = 600
 const WALLPAPER_TILE_WIDTH = 200
 const WALLPAPER_TILE_GAP = 12
 const WALLPAPER_PANEL_PADDING_X = 16
 const WALLPAPER_MAX_VISIBLE = 5
 
+let scoresCache: Record<string, number> = {}
+
 function wallpaperPanelWidth(visibleCount: number): number {
   if (visibleCount <= 0) return LAUNCHER_WIDTH_DEFAULT
   const tiles = Math.min(visibleCount, WALLPAPER_MAX_VISIBLE)
   return tiles * WALLPAPER_TILE_WIDTH + (tiles - 1) * WALLPAPER_TILE_GAP + WALLPAPER_PANEL_PADDING_X * 2
-}
-
-function score(query: string, name: string): number {
-  const q = query.toLowerCase()
-  const n = name.toLowerCase()
-  if (n === q) return 1000
-  if (n.startsWith(q)) return 500
-  let qi = 0
-  let consecutive = 0
-  let maxConsecutive = 0
-  let firstMatch = -1
-  for (let ni = 0; ni < n.length && qi < q.length; ni++) {
-    if (n[ni] === q[qi]) {
-      if (firstMatch < 0) firstMatch = ni
-      consecutive++
-      maxConsecutive = Math.max(maxConsecutive, consecutive)
-      qi++
-    } else {
-      consecutive = 0
-    }
-  }
-  if (qi < q.length) return -1
-  return maxConsecutive * 10 - firstMatch
 }
 
 function tryMath(expr: string): string | null {
@@ -196,6 +177,7 @@ export default function LauncherPanel() {
 
   const [items, setItems] = useState<LauncherItem[]>([])
   const [openApps, setOpenApps] = useState<OpenApp[]>([])
+  const [scores, setScores] = useState<Record<string, number>>(scoresCache)
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
   const [contextOpen, setContextOpen] = useState(false)
@@ -222,12 +204,19 @@ export default function LauncherPanel() {
   const firstRef = useRef(true)
 
   const sortedWallpapers = useMemo(() => {
-    if (!query.trim()) return wallpapers
+    const q = query.trim()
+    if (!q) return wallpapers
     return wallpapers
-      .map((w) => ({ w, s: score(query, w.name) }))
+      .map((w) => ({ w, s: scoreField(q, w.name) }))
       .sort((a, b) => b.s - a.s)
       .map((r) => r.w)
   }, [wallpapers, query])
+
+  const fieldsById = useMemo(() => {
+    const map = new Map<number, SearchFields>()
+    for (const item of items) map.set(item.id, deriveFields(item))
+    return map
+  }, [items])
 
   const panelWidth = activeCommand === "wallpaper"
     ? Math.max(LAUNCHER_WIDTH_DEFAULT, wallpaperPanelWidth(wallpapers.length))
@@ -345,6 +334,9 @@ export default function LauncherPanel() {
     const offCatalog = window.shell.apps.onCatalogChanged(setItems)
     window.shell.windows.openApps().then(setOpenApps)
     const offOpenApps = window.shell.windows.onOpenAppsChanged(setOpenApps)
+    const applyScores = (data: Record<string, number>) => { scoresCache = data; setScores(data) }
+    window.launcher.scores().then(applyScores).catch(() => {})
+    const offScores = window.launcher.onScoresChanged(applyScores)
     Promise.all([
       window.shell.windows.wallpaperMine(),
       window.shell.windows.wallpaperPresets(),
@@ -357,6 +349,7 @@ export default function LauncherPanel() {
     return () => {
       offCatalog()
       offOpenApps()
+      offScores()
     }
   }, [loadSettingValues])
 
@@ -422,11 +415,12 @@ export default function LauncherPanel() {
   const runResult = useRunCommand(activeCommand ? "" : query)
 
   const matchedOpenApps = useMemo(() => {
-    if (!query.trim()) return []
+    const q = query.trim()
+    if (!q) return []
     const matched: { app: OpenApp; s: number }[] = []
     for (const app of openApps) {
-      const nameScore = score(query, app.name)
-      const titleScore = app.path.toLowerCase() === ALPINE_SETTINGS_PATH ? -1 : score(query, app.title)
+      const nameScore = scoreField(q, app.name)
+      const titleScore = app.path.toLowerCase() === ALPINE_SETTINGS_PATH ? -1 : scoreField(q, app.title)
       const best = Math.max(nameScore, titleScore)
       if (best >= 0) matched.push({ app, s: best })
     }
@@ -435,11 +429,12 @@ export default function LauncherPanel() {
   }, [query, openApps])
 
   const matchedSettings = useMemo(() => {
-    if (!query.trim()) return []
+    const q = query.trim()
+    if (!q) return []
     const out: { setting: SettingCommand; s: number }[] = []
     for (const setting of SETTING_COMMANDS) {
-      let best = score(query, setting.label)
-      for (const k of setting.keywords) best = Math.max(best, score(query, k))
+      let best = scoreField(q, setting.label)
+      for (const k of setting.keywords) best = Math.max(best, scoreField(q, k))
       if (best >= 0) out.push({ setting, s: best })
     }
     out.sort((a, b) => b.s - a.s)
@@ -447,11 +442,12 @@ export default function LauncherPanel() {
   }, [query])
 
   const matchedWindowCommands = useMemo(() => {
-    if (!query.trim()) return []
+    const q = query.trim()
+    if (!q) return []
     const out: { cmd: WindowCommand; s: number }[] = []
     for (const cmd of WINDOW_COMMANDS) {
-      let best = score(query, cmd.label)
-      for (const k of cmd.keywords) best = Math.max(best, score(query, k))
+      let best = scoreField(q, cmd.label)
+      for (const k of cmd.keywords) best = Math.max(best, scoreField(q, k))
       if (best >= 0) out.push({ cmd, s: best })
     }
     out.sort((a, b) => b.s - a.s)
@@ -459,18 +455,29 @@ export default function LauncherPanel() {
   }, [query])
 
   const results = useMemo(() => {
-    if (!query.trim()) return []
+    const q = query.trim()
+    if (!q) {
+      return items
+        .map((item) => ({ item, f: scores[frecencyKey(item.target)] ?? 0 }))
+        .filter((entry) => entry.f > 0)
+        .sort((a, b) => b.f - a.f)
+        .slice(0, EMPTY_RESULTS)
+        .map((entry) => entry.item)
+    }
     const openPaths = new Set(matchedOpenApps.map((a) => a.path.toLowerCase()))
     const openNames = new Set(matchedOpenApps.map((a) => a.name.toLowerCase()))
     const scored: { item: LauncherItem; s: number }[] = []
     for (const item of items) {
       if (openPaths.has(item.target.toLowerCase())) continue
       if (openNames.has(item.name.toLowerCase())) continue
-      const s = score(query, item.name)
-      if (s >= 0) scored.push({ item, s })
+      const fields = fieldsById.get(item.id)
+      if (!fields) continue
+      const base = scoreItem(q, fields)
+      if (base < 0) continue
+      scored.push({ item, s: base + frecencyBoost(scores[frecencyKey(item.target)] ?? 0) })
     }
     scored.sort((a, b) => b.s - a.s)
-    const settingsScore = ALPINE_SETTINGS_KEYWORDS.reduce((m, k) => Math.max(m, score(query, k)), -1)
+    const settingsScore = ALPINE_SETTINGS_KEYWORDS.reduce((m, k) => Math.max(m, scoreField(q, k)), -1)
     const settingsAlreadyOpen = matchedOpenApps.some((a) => a.path.toLowerCase() === ALPINE_SETTINGS_PATH)
     const showSettings = settingsScore >= 0 && !settingsAlreadyOpen
     const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + (runResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length + matchedWindowCommands.length + (showSettings ? 1 : 0)
@@ -478,7 +485,7 @@ export default function LauncherPanel() {
     const list = scored.slice(0, limit).map((r) => r.item)
     if (showSettings) list.push(ALPINE_SETTINGS_ITEM)
     return list
-  }, [query, items, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
+  }, [query, items, fieldsById, scores, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
 
   const mathOffset = mathResult ? 1 : 0
   const mapOffset = mathOffset + (mapResult ? 1 : 0)
@@ -764,7 +771,7 @@ export default function LauncherPanel() {
                       })}
                     </div>
                   </>
-                ) : query.trim() && totalCount > 0 ? (
+                ) : totalCount > 0 ? (
                   <>
                     <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
                     <div ref={listRef} className="flex flex-col p-1.5 gap-0.5">

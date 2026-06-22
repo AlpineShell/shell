@@ -332,6 +332,8 @@ declare global {
       onShow: (callback: (data: { displayId: number }) => void) => void
       onStartClose: (callback: () => void) => () => void
       onHide: (callback: () => void) => () => void
+      scores: () => Promise<Record<string, number>>
+      onScoresChanged: (callback: (data: Record<string, number>) => void) => () => void
     }
     screenshot: {
       onShow: (callback: (data: ScreenshotShowPayload) => void) => void

@@ -6,6 +6,7 @@ const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, cl
 const appIcons = require('./appIcons')
 const appManager = require('./appManager')
 const appActivator = require('../appActivator')
+const frecency = require('./frecency')
 
 const SCAN_DIRS = [
   path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -318,6 +319,7 @@ function launchItem(item) {
   } else if (item.appId) {
     appActivator.activate(item.appId)
   }
+  frecency.record(item.target)
   return { success: true }
 }
 
@@ -328,6 +330,7 @@ function launchAdminItem(item) {
   } else if (item.appId) {
     appActivator.activate(item.appId)
   }
+  frecency.record(item.target)
   return { success: true }
 }
 

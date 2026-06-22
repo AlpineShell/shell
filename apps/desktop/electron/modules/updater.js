@@ -3,6 +3,7 @@ const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
 const installer = require('./installer')
+const frecency = require('./frecency')
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const INITIAL_CHECK_DELAY_MS = 10000
@@ -140,6 +141,7 @@ module.exports = {
         pendingVersion = state.availableVersion
         pushLog('info', `Installing version ${state.availableVersion ?? ''} — Alpine Shell will restart…`)
         if (downloadedFile && installer.startBrandedUpdate(downloadedFile, state.availableVersion)) {
+          try { frecency.flush() } catch {}
           app.exit(0)
         } else {
           autoUpdater.quitAndInstall(true, true)
