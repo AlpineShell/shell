@@ -3,6 +3,7 @@ const path = require('path')
 const { execSync, execFileSync, spawn } = require('child_process')
 const fs = require('fs')
 const originalFs = require('original-fs')
+const crypto = require('crypto')
 
 const PRODUCT_NAME = 'Alpine Shell'
 
@@ -166,21 +167,47 @@ function getUpdaterDir() {
   return path.join(app.getPath('userData'), 'updater')
 }
 
-function getUpdaterExePath() {
-  return path.join(getUpdaterDir(), 'AlpineUpdater.exe')
-}
-
 function getUpdaterSourcePath() {
   if (app.isPackaged) return path.join(process.resourcesPath, 'scripts', 'updaterScreen.cs')
   return path.join(__dirname, '..', 'scripts', 'updaterScreen.cs')
 }
 
+function getUpdaterSourceHash(sourcePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(sourcePath)).digest('hex').slice(0, 12)
+}
+
+function getUpdaterExePathForHash(hash) {
+  return path.join(getUpdaterDir(), `AlpineUpdater-${hash}.exe`)
+}
+
+function pruneStaleUpdaterExes(keepExePath) {
+  try {
+    for (const name of fs.readdirSync(getUpdaterDir())) {
+      const full = path.join(getUpdaterDir(), name)
+      if (/^AlpineUpdater.*\.exe$/i.test(name) && full !== keepExePath) {
+        try { fs.unlinkSync(full) } catch {}
+      }
+    }
+  } catch {}
+}
+
 function ensureUpdaterExe() {
-  const exePath = getUpdaterExePath()
-  if (fs.existsSync(exePath)) return exePath
-  if (!fs.existsSync(UPDATER_CSC_PATH)) return null
   const sourcePath = getUpdaterSourcePath()
   if (!fs.existsSync(sourcePath)) return null
+
+  let exePath
+  try {
+    exePath = getUpdaterExePathForHash(getUpdaterSourceHash(sourcePath))
+  } catch {
+    return null
+  }
+
+  if (fs.existsSync(exePath)) {
+    pruneStaleUpdaterExes(exePath)
+    return exePath
+  }
+  if (!fs.existsSync(UPDATER_CSC_PATH)) return null
+
   try {
     fs.mkdirSync(getUpdaterDir(), { recursive: true })
     execFileSync(UPDATER_CSC_PATH, [
@@ -188,21 +215,22 @@ function ensureUpdaterExe() {
       '/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll',
       `/out:${exePath}`, sourcePath,
     ], { windowsHide: true })
+    pruneStaleUpdaterExes(exePath)
     return exePath
   } catch (e) {
     console.error('[installer] Failed to compile updater screen:', e.message)
-    return null
+    return fs.existsSync(exePath) ? exePath : null
   }
 }
 
-function startBrandedUpdate(installerPath) {
+function startBrandedUpdate(installerPath, version) {
   if (!app.isPackaged) return false
   if (!installerPath || !fs.existsSync(installerPath)) return false
   const updaterExe = ensureUpdaterExe()
   if (!updaterExe) return false
   try {
     regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', 'explorer.exe')
-    spawn(updaterExe, [installerPath, getInstalledExePath()], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    spawn(updaterExe, [installerPath, getInstalledExePath(), version || ''], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
     return true
   } catch (e) {
     console.error('[installer] Failed to start branded update:', e.message)

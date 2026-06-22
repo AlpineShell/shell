@@ -139,7 +139,7 @@ module.exports = {
       if (app.isPackaged) {
         pendingVersion = state.availableVersion
         pushLog('info', `Installing version ${state.availableVersion ?? ''} — Alpine Shell will restart…`)
-        if (downloadedFile && installer.startBrandedUpdate(downloadedFile)) {
+        if (downloadedFile && installer.startBrandedUpdate(downloadedFile, state.availableVersion)) {
           app.exit(0)
         } else {
           autoUpdater.quitAndInstall(true, true)
