@@ -2,6 +2,7 @@ const { app } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
+const installer = require('./installer')
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const INITIAL_CHECK_DELAY_MS = 10000
@@ -19,6 +20,7 @@ const log = []
 let pendingVersion = null
 let announceResult = false
 let broadcastChanged = null
+let downloadedFile = null
 
 function setState(partial) {
   Object.assign(state, partial)
@@ -99,6 +101,7 @@ autoUpdater.on('download-progress', (progress) => {
 })
 
 autoUpdater.on('update-downloaded', (info) => {
+  downloadedFile = info.downloadedFile ?? null
   pushLog('info', `Downloaded version ${info.version} — ready to install`)
   setState({ status: 'downloaded', availableVersion: info.version, progressPercent: 100 })
 })
@@ -136,7 +139,11 @@ module.exports = {
       if (app.isPackaged) {
         pendingVersion = state.availableVersion
         pushLog('info', `Installing version ${state.availableVersion ?? ''} — Alpine Shell will restart…`)
-        autoUpdater.quitAndInstall(true, true)
+        if (downloadedFile && installer.startBrandedUpdate(downloadedFile, state.availableVersion)) {
+          app.exit(0)
+        } else {
+          autoUpdater.quitAndInstall(true, true)
+        }
       }
       return undefined
     },

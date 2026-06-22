@@ -237,7 +237,9 @@ contextBridge.exposeInMainWorld('shell', {
     getMonitors: () => ipcRenderer.invoke('system/monitors-get'),
     setMonitorBrightness: (id, value) => ipcRenderer.invoke('system/monitor-brightness-set', { id, value }),
     onMonitorsChanged: (callback) => {
-      ipcRenderer.on('system/monitors-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/monitors-changed', handler)
+      return () => ipcRenderer.removeListener('system/monitors-changed', handler)
     },
     powerAction: (action) => ipcRenderer.invoke('system/power-action', action),
     info: () => ipcRenderer.invoke('system/info'),

@@ -5,7 +5,7 @@ export function useMonitors() {
 
   useEffect(() => {
     window.shell.system.getMonitors().then(setMonitors)
-    window.shell.system.onMonitorsChanged(setMonitors)
+    return window.shell.system.onMonitorsChanged(setMonitors)
   }, [])
 
   const setBrightness = (id: string, value: number) => {
