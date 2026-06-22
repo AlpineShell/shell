@@ -23,6 +23,7 @@ import type { LucideIcon } from "lucide-react"
 export type SettingControl =
   | { kind: "toggle"; get: () => Promise<boolean>; set: (value: boolean) => Promise<unknown> }
   | { kind: "slider"; min: number; max: number; step: number; unit?: string; get: () => Promise<number>; set: (value: number) => Promise<unknown> }
+  | { kind: "brightness" }
   | { kind: "navigate"; path: string }
   | { kind: "wallpaper" }
   | { kind: "wifi" }
@@ -111,8 +112,8 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     label: "Brightness",
     hint: "Adjust screen brightness",
     icon: Sun,
-    keywords: ["brightness", "screen", "display", "backlight"],
-    control: { kind: "slider", min: 0, max: 100, step: 5, unit: "%", get: () => window.shell.system.brightness(), set: (v) => window.shell.system.setBrightness(v) },
+    keywords: ["brightness", "screen", "display", "backlight", "monitor", "displays"],
+    control: { kind: "brightness" },
   },
   {
     id: "wallpaper",

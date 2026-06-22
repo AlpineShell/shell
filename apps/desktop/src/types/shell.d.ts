@@ -447,7 +447,7 @@ declare global {
         onBrightnessChanged: (callback: (data: number) => void) => void
         getMonitors: () => Promise<MonitorInfo[]>
         setMonitorBrightness: (id: string, value: number) => Promise<number>
-        onMonitorsChanged: (callback: (data: MonitorInfo[]) => void) => void
+        onMonitorsChanged: (callback: (data: MonitorInfo[]) => void) => () => void
         powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>
