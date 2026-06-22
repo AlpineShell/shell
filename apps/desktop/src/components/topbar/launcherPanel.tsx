@@ -3,6 +3,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
+import { useMonitors } from "../../hooks/useMonitors"
 import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
 import { SETTING_COMMANDS, type SettingCommand } from "./launcherSettings"
@@ -206,6 +207,8 @@ export default function LauncherPanel() {
   const [wallpapers, setWallpapers] = useState<WallpaperItem[]>([])
   const [previewIndex, setPreviewIndex] = useState(0)
   const currentWallpaper = useWallpaper()
+  const { monitors, setBrightness } = useMonitors()
+  const brightnessIsSubmenu = monitors.length > 1
   const originalPath = useRef<string | null>(null)
   const committed = useRef(false)
   const queryBeforeCommand = useRef("")
@@ -302,6 +305,15 @@ export default function LauncherPanel() {
   }
 
   function adjustSetting(cmd: SettingCommand, direction: number) {
+    if (cmd.control.kind === "brightness") {
+      const m = monitors[0]
+      const current = m ? m.brightness : 50
+      const next = Math.max(0, Math.min(100, current + direction * 5))
+      if (next === current) return
+      if (m) setBrightness(m.id, next)
+      else window.shell.system.setBrightness(next)
+      return
+    }
     if (cmd.control.kind !== "slider") return
     const c = cmd.control
     const current = typeof settingValues[cmd.id] === "number" ? (settingValues[cmd.id] as number) : c.min
@@ -319,7 +331,8 @@ export default function LauncherPanel() {
 
   function activateSetting(cmd: SettingCommand) {
     const c = cmd.control
-    if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power" || c.kind === "tray") enterCommand(cmd.id)
+    if (c.kind === "brightness") { if (brightnessIsSubmenu) enterCommand(cmd.id) }
+    else if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power" || c.kind === "tray") enterCommand(cmd.id)
     else if (c.kind === "toggle") toggleSetting(cmd)
     else if (c.kind === "navigate") {
       window.shell.windows.openSettings(c.path)
@@ -585,7 +598,7 @@ export default function LauncherPanel() {
         e.preventDefault()
         commitWallpaper()
       }
-    } else if (selectedEntry && selectedEntry.type === "setting" && selectedEntry.setting.control.kind === "slider" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    } else if (selectedEntry && selectedEntry.type === "setting" && (selectedEntry.setting.control.kind === "slider" || (selectedEntry.setting.control.kind === "brightness" && !brightnessIsSubmenu)) && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       e.preventDefault()
       adjustSetting(selectedEntry.setting, e.key === "ArrowRight" ? 1 : -1)
     } else if (e.key === "ArrowRight" && selectedEntry && selectedEntry.type === "setting" && selectedEntry.setting.control.kind !== "toggle") {
@@ -705,6 +718,8 @@ export default function LauncherPanel() {
                       <LauncherStartup darkText={darkText} onBack={exitCommand} />
                     ) : activeCommand === "tray" ? (
                       <LauncherTray darkText={darkText} onBack={exitCommand} onSubView={setSubView} />
+                    ) : activeCommand === "brightness" ? (
+                      <LauncherBrightness darkText={darkText} onBack={exitCommand} monitors={monitors} setBrightness={setBrightness} />
                     ) : (
                       <LauncherPower darkText={darkText} onBack={exitCommand} />
                     )}
@@ -822,6 +837,32 @@ export default function LauncherPanel() {
                         const Icon = s.icon
                         const isSel = idx === selected
                         const control = s.control
+                        if (control.kind === "brightness" && !brightnessIsSubmenu) {
+                          const m = monitors[0]
+                          const value = m ? m.brightness : 50
+                          return (
+                            <div
+                              key={`setting-${s.id}`}
+                              onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
+                              className={`flex items-center gap-3 px-2.5 h-12 rounded-md transition-colors ${isSel ? selectedBg : hoverBg}`}
+                            >
+                              <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+                              <input
+                                type="range"
+                                tabIndex={-1}
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={value}
+                                onChange={(e) => { const v = parseInt(e.target.value, 10); if (m) setBrightness(m.id, v); else window.shell.system.setBrightness(v) }}
+                                onMouseUp={() => requestAnimationFrame(() => inputRef.current?.focus())}
+                                className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
+                                style={{ "--slider-progress": `${value}%` } as React.CSSProperties}
+                              />
+                              <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{value}%</span>
+                            </div>
+                          )
+                        }
                         if (control.kind === "slider") {
                           const value = typeof settingValues[s.id] === "number" ? (settingValues[s.id] as number) : control.min
                           return (
@@ -1441,6 +1482,22 @@ function LauncherMenu({ items, darkText, onBack, onSelectionChange, emptyText }:
       })}
     </div>
   )
+}
+
+function LauncherBrightness({ darkText, onBack, monitors, setBrightness }: { darkText: boolean; onBack: () => void; monitors: MonitorInfo[]; setBrightness: (id: string, value: number) => void }) {
+  const items: LauncherMenuItem[] = monitors.map((m): LauncherMenuItem => ({
+    id: m.id,
+    kind: "slider",
+    label: m.name,
+    icon: Monitor,
+    value: m.brightness,
+    min: 0,
+    max: 100,
+    step: 5,
+    unit: "%",
+    onChange: (v) => setBrightness(m.id, v),
+  }))
+  return <LauncherMenu items={items} darkText={darkText} onBack={onBack} emptyText="No displays with brightness control" />
 }
 
 function LauncherTiling({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
