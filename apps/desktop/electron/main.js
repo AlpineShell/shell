@@ -21,6 +21,7 @@ const microphone = require('./modules/microphone')
 const battery = require('./modules/battery')
 const systemInfo = require('./modules/systemInfo')
 const launcher = require('./modules/launcher')
+const frecency = require('./modules/frecency')
 const runCommand = require('./modules/runCommand')
 const launcherHotkey = require('./modules/launcherHotkey')
 const trayLayout = require('./modules/trayLayout')
@@ -460,7 +461,7 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, runCommand, launcherHotkey, trayLayout, trayHost, appManager, tiling, updater, windowsUpdate)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, trayLayout, trayHost, appManager, tiling, updater, windowsUpdate)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
@@ -596,6 +597,7 @@ function restoreExplorerIfKilled() {
 function gracefulShutdown() {
   try { unregisterAll() } catch {}
   try { if (shellWindow) shellWindow.destroy() } catch {}
+  try { frecency.flush() } catch {}
   restoreExplorerIfKilled()
   app.exit(0)
 }
