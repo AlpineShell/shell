@@ -85,22 +85,22 @@ describe("frecency boost reorders within a tier but never crosses one", () => {
     expect(frecencyBoost(50)).toBeGreaterThan(0)
   })
 
-  it("a maximally-frecent weak match cannot cross into a higher tier", () => {
-    const scattered = scoreField("od", "Notepad") // mid-word subsequence, lowest tier
-    const prefix = scoreField("note", "Notepad") // prefix match, much higher tier
-    expect(scattered + frecencyBoost(10_000_000)).toBeLessThan(prefix)
+  it("a maximally-frecent mid-word subsequence match cannot cross into the prefix tier", () => {
+    const midWordSubsequenceScore = scoreField("od", "Notepad")
+    const prefixMatchScore = scoreField("note", "Notepad")
+    expect(midWordSubsequenceScore + frecencyBoost(10_000_000)).toBeLessThan(prefixMatchScore)
   })
 
   it("the acronym field lets a frecent acronym match rank strongly without crossing tiers", () => {
     const vsc = deriveFields({ name: "Visual Studio Code", target: "C:\\x\\Code.exe" })
-    expect(scoreItem("vsc", vsc)).toBeGreaterThan(scoreField("od", "Notepad") + frecencyBoost(10_000_000))
+    const midWordSubsequenceAtMaxFrecency = scoreField("od", "Notepad") + frecencyBoost(10_000_000)
+    expect(scoreItem("vsc", vsc)).toBeGreaterThan(midWordSubsequenceAtMaxFrecency)
   })
 
-  it("reorders two equally-relevant matches by frecency", () => {
-    const a = scoreField("te", "Terminal")
-    const b = scoreField("te", "Telegram")
-    // both are prefix matches; frecency should be able to flip a close call
-    expect(Math.abs(a - b)).toBeLessThan(frecencyBoost(5000))
+  it("reorders two equally-relevant prefix matches by frecency", () => {
+    const terminalPrefixScore = scoreField("te", "Terminal")
+    const telegramPrefixScore = scoreField("te", "Telegram")
+    expect(Math.abs(terminalPrefixScore - telegramPrefixScore)).toBeLessThan(frecencyBoost(5000))
   })
 })
 

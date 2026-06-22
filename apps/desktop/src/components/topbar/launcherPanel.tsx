@@ -8,6 +8,7 @@ import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
 import { SETTING_COMMANDS, type SettingCommand } from "./launcherSettings"
 import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type SearchFields } from "../../lib/launcherSearch"
+import { useFrecencyScores } from "../../hooks/useFrecencyScores"
 
 const BAR_BOTTOM = 24
 const MAX_RESULTS = 5
@@ -17,8 +18,6 @@ const WALLPAPER_TILE_WIDTH = 200
 const WALLPAPER_TILE_GAP = 12
 const WALLPAPER_PANEL_PADDING_X = 16
 const WALLPAPER_MAX_VISIBLE = 5
-
-let scoresCache: Record<string, number> = {}
 
 function wallpaperPanelWidth(visibleCount: number): number {
   if (visibleCount <= 0) return LAUNCHER_WIDTH_DEFAULT
@@ -177,7 +176,7 @@ export default function LauncherPanel() {
 
   const [items, setItems] = useState<LauncherItem[]>([])
   const [openApps, setOpenApps] = useState<OpenApp[]>([])
-  const [scores, setScores] = useState<Record<string, number>>(scoresCache)
+  const scores = useFrecencyScores()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
   const [contextOpen, setContextOpen] = useState(false)
@@ -334,9 +333,6 @@ export default function LauncherPanel() {
     const offCatalog = window.shell.apps.onCatalogChanged(setItems)
     window.shell.windows.openApps().then(setOpenApps)
     const offOpenApps = window.shell.windows.onOpenAppsChanged(setOpenApps)
-    const applyScores = (data: Record<string, number>) => { scoresCache = data; setScores(data) }
-    window.launcher.scores().then(applyScores).catch(() => {})
-    const offScores = window.launcher.onScoresChanged(applyScores)
     Promise.all([
       window.shell.windows.wallpaperMine(),
       window.shell.windows.wallpaperPresets(),
@@ -349,7 +345,6 @@ export default function LauncherPanel() {
     return () => {
       offCatalog()
       offOpenApps()
-      offScores()
     }
   }, [loadSettingValues])
 
