@@ -259,8 +259,7 @@ function hideForOverlay() {
   activeTopBar = null
   activeDisplayId = null
   flushPendingHide()
-  topBar.webContents.send('launcher/hide')
-  topBar.setFocusable(false)
+  finishHide(topBar)
 }
 
 function setSwitcherCloser(fn) {

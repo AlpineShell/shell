@@ -482,12 +482,7 @@ function hideSwitcher() {
 
 function hideForLauncher() {
   if (!switcherActive && !activeTopBar) return
-  switcherActive = false
-  windowList = []
-  const topBar = activeTopBar
-  activeTopBar = null
-  flushPendingRestore(topBar)
-  if (topBar && !topBar.isDestroyed()) topBar.webContents.send('alttab/hide')
+  hideSwitcher()
 }
 
 function cycleSelection(forward) {
