@@ -467,6 +467,9 @@ app.whenReady().then(async () => {
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
 
+  if (altTab && altTab.setLauncherCloser) altTab.setLauncherCloser(() => launcher.hideForOverlay())
+  if (launcher.setSwitcherCloser) launcher.setSwitcherCloser(() => { if (altTab && altTab.hideForLauncher) altTab.hideForLauncher() })
+
   ipcMain.handle('setup/test-out', () => {
     if (setupWin && !setupWin.isDestroyed()) {
       setupWin.removeAllListeners('closed')

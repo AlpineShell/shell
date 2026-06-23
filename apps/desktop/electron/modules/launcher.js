@@ -22,6 +22,7 @@ let activeTopBar = null
 let hideTimeout = null
 let hideTimeoutTopBar = null
 let lastUserForeground = 0
+let switcherCloser = null
 
 const LAUNCHER_WIDTH = 600
 
@@ -248,6 +249,23 @@ function animatedHide() {
   }, 300)
 }
 
+function hideForOverlay() {
+  if (!activeTopBar || activeTopBar.isDestroyed()) {
+    activeTopBar = null
+    activeDisplayId = null
+    return
+  }
+  const topBar = activeTopBar
+  activeTopBar = null
+  activeDisplayId = null
+  flushPendingHide()
+  finishHide(topBar)
+}
+
+function setSwitcherCloser(fn) {
+  switcherCloser = typeof fn === 'function' ? fn : null
+}
+
 function showLauncher(displayId) {
   if (!shells) return
   const shell = shells.get(displayId)
@@ -265,6 +283,10 @@ function showLauncher(displayId) {
     const previousTopBar = activeTopBar
     activeTopBar = null
     finishHide(previousTopBar)
+  }
+
+  if (switcherCloser) {
+    try { switcherCloser() } catch (e) { console.error('[launcher] switcher close error:', e.message) }
   }
 
   topBar.webContents.send('topbar/close-menus')
@@ -403,6 +425,8 @@ module.exports = {
   },
   setShells,
   showFromHotkey,
+  hideForOverlay,
+  setSwitcherCloser,
   isLauncherActive,
   handleBlur,
   start(b) {

@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
+import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
 import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
 
@@ -159,6 +160,8 @@ export default function AltTabPanel() {
 
   useEffect(() => () => clearChromeSurface(idRef.current), [])
 
+  const superseded = useSurfaceSuperseded(idRef.current)
+
   if (!visible || windows.length === 0) return null
 
   return createPortal(
@@ -173,6 +176,7 @@ export default function AltTabPanel() {
         maxWidth: "90vw",
         zIndex: 5,
         pointerEvents: "none",
+        visibility: superseded ? "hidden" : undefined,
         willChange: "clip-path",
       }}
     >
