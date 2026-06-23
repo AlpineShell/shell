@@ -105,6 +105,7 @@ let winTapped = false
 let tilingKeyCallback = null
 let explorerKeyCallback = null
 let launcherCloser = null
+let overlayDisplayProvider = null
 
 const iconCache = new Map()
 const thumbnailCache = new Map()
@@ -387,6 +388,14 @@ function moveOffscreen() {
 }
 
 function getActiveDisplay() {
+  if (overlayDisplayProvider) {
+    const id = overlayDisplayProvider()
+    if (id != null) {
+      const display = screen.getAllDisplays().find((d) => d.id === id)
+      if (display) return display
+    }
+  }
+
   const fgRaw = GetForegroundWindow()
   const fgHwnd = typeof fgRaw === 'bigint' ? Number(fgRaw) : fgRaw
 
@@ -696,6 +705,10 @@ module.exports = {
 
   setLauncherCloser(fn) {
     launcherCloser = typeof fn === 'function' ? fn : null
+  },
+
+  setOverlayDisplayProvider(fn) {
+    overlayDisplayProvider = typeof fn === 'function' ? fn : null
   },
 
   hideForLauncher,

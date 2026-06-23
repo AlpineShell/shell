@@ -469,6 +469,7 @@ app.whenReady().then(async () => {
 
   if (altTab && altTab.setLauncherCloser) altTab.setLauncherCloser(() => launcher.hideForOverlay())
   if (launcher.setSwitcherCloser) launcher.setSwitcherCloser(() => { if (altTab && altTab.hideForLauncher) altTab.hideForLauncher() })
+  if (altTab && altTab.setOverlayDisplayProvider) altTab.setOverlayDisplayProvider(() => launcher.getActiveDisplayId())
 
   ipcMain.handle('setup/test-out', () => {
     if (setupWin && !setupWin.isDestroyed()) {

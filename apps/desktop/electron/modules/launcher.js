@@ -205,6 +205,10 @@ function isLauncherActive(win) {
   return activeTopBar === win
 }
 
+function getActiveDisplayId() {
+  return activeTopBar ? activeDisplayId : null
+}
+
 function isOwnShellWindow(hwnd) {
   if (!shells) return false
   for (const shell of shells.values()) {
@@ -427,6 +431,7 @@ module.exports = {
   showFromHotkey,
   hideForOverlay,
   setSwitcherCloser,
+  getActiveDisplayId,
   isLauncherActive,
   handleBlur,
   start(b) {
