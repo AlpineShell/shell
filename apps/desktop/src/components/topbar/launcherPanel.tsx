@@ -10,10 +10,9 @@ import { SETTING_COMMANDS, type SettingCommand } from "./launcherSettings"
 import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type SearchFields } from "../../lib/launcherSearch"
 import { useFrecencyScores } from "../../hooks/useFrecencyScores"
 import { useLauncherRecentApps } from "../../hooks/useLauncherRecentApps"
+import { useLauncherMaxResults } from "../../hooks/useLauncherMaxResults"
 
 const BAR_BOTTOM = 24
-const MAX_RESULTS = 5
-const EMPTY_RESULTS = 6
 const LAUNCHER_WIDTH_DEFAULT = 600
 const WALLPAPER_TILE_WIDTH = 200
 const WALLPAPER_TILE_GAP = 12
@@ -179,6 +178,7 @@ export default function LauncherPanel() {
   const [openApps, setOpenApps] = useState<OpenApp[]>([])
   const scores = useFrecencyScores()
   const showRecentApps = useLauncherRecentApps()
+  const maxResults = useLauncherMaxResults()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
   const [contextOpen, setContextOpen] = useState(false)
@@ -459,7 +459,7 @@ export default function LauncherPanel() {
         .map((item) => ({ item, f: scores[frecencyKey(item.target)] ?? 0 }))
         .filter((entry) => entry.f > 0)
         .sort((a, b) => b.f - a.f)
-        .slice(0, EMPTY_RESULTS)
+        .slice(0, maxResults)
         .map((entry) => entry.item)
     }
     const openPaths = new Set(matchedOpenApps.map((a) => a.path.toLowerCase()))
@@ -479,11 +479,11 @@ export default function LauncherPanel() {
     const settingsAlreadyOpen = matchedOpenApps.some((a) => a.path.toLowerCase() === ALPINE_SETTINGS_PATH)
     const showSettings = settingsScore >= 0 && !settingsAlreadyOpen
     const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + (runResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length + matchedWindowCommands.length + (showSettings ? 1 : 0)
-    const limit = Math.max(1, MAX_RESULTS - taken)
+    const limit = Math.max(1, maxResults - taken)
     const list = scored.slice(0, limit).map((r) => r.item)
     if (showSettings) list.push(ALPINE_SETTINGS_ITEM)
     return list
-  }, [query, items, fieldsById, scores, showRecentApps, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
+  }, [query, items, fieldsById, scores, showRecentApps, maxResults, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
 
   const mathOffset = mathResult ? 1 : 0
   const mapOffset = mathOffset + (mapResult ? 1 : 0)

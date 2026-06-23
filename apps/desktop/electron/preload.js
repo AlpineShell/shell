@@ -147,6 +147,13 @@ contextBridge.exposeInMainWorld('launcher', {
     ipcRenderer.on('launcher/recent-apps-changed', handler)
     return () => ipcRenderer.removeListener('launcher/recent-apps-changed', handler)
   },
+  maxResults: () => ipcRenderer.invoke('launcher/max-results-get'),
+  setMaxResults: (value) => ipcRenderer.invoke('launcher/max-results-set', value),
+  onMaxResultsChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('launcher/max-results-changed', handler)
+    return () => ipcRenderer.removeListener('launcher/max-results-changed', handler)
+  },
 })
 
 contextBridge.exposeInMainWorld('setup', {
