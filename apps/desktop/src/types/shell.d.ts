@@ -334,6 +334,9 @@ declare global {
       onHide: (callback: () => void) => () => void
       scores: () => Promise<Record<string, number>>
       onScoresChanged: (callback: (data: Record<string, number>) => void) => () => void
+      recentApps: () => Promise<boolean>
+      setRecentApps: (value: boolean) => Promise<boolean>
+      onRecentAppsChanged: (callback: (value: boolean) => void) => () => void
     }
     screenshot: {
       onShow: (callback: (data: ScreenshotShowPayload) => void) => void

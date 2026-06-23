@@ -2,6 +2,7 @@ import {
   Activity,
   AudioLines,
   Bluetooth,
+  History,
   Keyboard,
   LayoutDashboard,
   LayoutGrid,
@@ -74,6 +75,14 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     icon: Search,
     keywords: ["search icon", "top bar", "launcher button"],
     control: { kind: "toggle", get: () => window.topbar.searchIcon(), set: (v) => window.topbar.setSearchIcon(v) },
+  },
+  {
+    id: "recent-apps",
+    label: "Recent apps",
+    hint: "Show recent apps before you type",
+    icon: History,
+    keywords: ["recent apps", "recents", "suggestions", "frequent apps", "empty search", "show apps"],
+    control: { kind: "toggle", get: () => window.launcher.recentApps(), set: (v) => window.launcher.setRecentApps(v) },
   },
   {
     id: "media-visualizer",
