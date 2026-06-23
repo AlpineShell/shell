@@ -9,6 +9,7 @@ import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/ch
 import { SETTING_COMMANDS, type SettingCommand } from "./launcherSettings"
 import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type SearchFields } from "../../lib/launcherSearch"
 import { useFrecencyScores } from "../../hooks/useFrecencyScores"
+import { useLauncherRecentApps } from "../../hooks/useLauncherRecentApps"
 
 const BAR_BOTTOM = 24
 const MAX_RESULTS = 5
@@ -177,6 +178,7 @@ export default function LauncherPanel() {
   const [items, setItems] = useState<LauncherItem[]>([])
   const [openApps, setOpenApps] = useState<OpenApp[]>([])
   const scores = useFrecencyScores()
+  const showRecentApps = useLauncherRecentApps()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
   const [contextOpen, setContextOpen] = useState(false)
@@ -452,6 +454,7 @@ export default function LauncherPanel() {
   const results = useMemo(() => {
     const q = query.trim()
     if (!q) {
+      if (!showRecentApps) return []
       return items
         .map((item) => ({ item, f: scores[frecencyKey(item.target)] ?? 0 }))
         .filter((entry) => entry.f > 0)
@@ -480,7 +483,7 @@ export default function LauncherPanel() {
     const list = scored.slice(0, limit).map((r) => r.item)
     if (showSettings) list.push(ALPINE_SETTINGS_ITEM)
     return list
-  }, [query, items, fieldsById, scores, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
+  }, [query, items, fieldsById, scores, showRecentApps, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
 
   const mathOffset = mathResult ? 1 : 0
   const mapOffset = mathOffset + (mapResult ? 1 : 0)

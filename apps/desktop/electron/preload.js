@@ -140,6 +140,13 @@ contextBridge.exposeInMainWorld('launcher', {
     ipcRenderer.on('frecency/changed', handler)
     return () => ipcRenderer.removeListener('frecency/changed', handler)
   },
+  recentApps: () => ipcRenderer.invoke('launcher/recent-apps-get'),
+  setRecentApps: (value) => ipcRenderer.invoke('launcher/recent-apps-set', value),
+  onRecentAppsChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('launcher/recent-apps-changed', handler)
+    return () => ipcRenderer.removeListener('launcher/recent-apps-changed', handler)
+  },
 })
 
 contextBridge.exposeInMainWorld('setup', {

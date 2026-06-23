@@ -24,6 +24,7 @@ const launcher = require('./modules/launcher')
 const frecency = require('./modules/frecency')
 const runCommand = require('./modules/runCommand')
 const launcherHotkey = require('./modules/launcherHotkey')
+const launcherPrefs = require('./modules/launcherPrefs')
 const trayLayout = require('./modules/trayLayout')
 const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
@@ -461,7 +462,7 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, trayLayout, trayHost, appManager, tiling, updater, windowsUpdate)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, updater, windowsUpdate)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())

@@ -48,10 +48,13 @@ function buildAccelerator(e: React.KeyboardEvent): string | null {
 
 export default function HotkeysPage() {
   const [searchKey, setSearchKey] = useState('Win')
+  const [recentApps, setRecentApps] = useState(false)
 
   useEffect(() => {
     window.launcher.getHotkey().then(setSearchKey)
     window.launcher.onHotkeyChanged(setSearchKey)
+    window.launcher.recentApps().then(setRecentApps)
+    return window.launcher.onRecentAppsChanged(setRecentApps)
   }, [])
 
   async function setSearch(hk: string) {
@@ -59,8 +62,13 @@ export default function HotkeysPage() {
     setSearchKey(result)
   }
 
+  function toggleRecentApps(value: boolean) {
+    setRecentApps(value)
+    window.launcher.setRecentApps(value)
+  }
+
   return (
-    <div className="flex flex-col gap-6 w-full">
+    <div className="flex flex-col gap-8 w-full">
       <h1 className="text-2xl font-semibold tracking-tight">Hotkeys</h1>
 
       <div className="flex flex-col">
@@ -80,6 +88,16 @@ export default function HotkeysPage() {
           disabled
         />
       </div>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-base font-semibold">Search results</h2>
+        <ToggleRow
+          label="Show recent apps"
+          description="When you open Search, list your most-used apps before you type. Turn this off to start with an empty search."
+          checked={recentApps}
+          onChange={toggleRecentApps}
+        />
+      </section>
     </div>
   )
 }
@@ -166,6 +184,42 @@ function HotkeyRow({
           {display}
         </button>
       </div>
+    </div>
+  )
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string
+  description?: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <div className="text-sm">{label}</div>
+        {description && <div className="text-xs text-white/50 mt-0.5">{description}</div>}
+      </div>
+      <button
+        onClick={() => onChange(!checked)}
+        className={`shrink-0 relative rounded-full transition-colors cursor-pointer ${checked ? 'bg-white' : 'bg-white/15'}`}
+        style={{ width: 36, height: 20 }}
+      >
+        <span
+          className="absolute top-0.5 rounded-full transition-all"
+          style={{
+            width: 16,
+            height: 16,
+            left: checked ? 18 : 2,
+            backgroundColor: checked ? 'rgb(20,20,20)' : 'rgba(255,255,255,0.7)',
+          }}
+        />
+      </button>
     </div>
   )
 }
