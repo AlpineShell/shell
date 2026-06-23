@@ -104,6 +104,7 @@ let winTapped = false
 
 let tilingKeyCallback = null
 let explorerKeyCallback = null
+let launcherCloser = null
 
 const iconCache = new Map()
 const thumbnailCache = new Map()
@@ -435,6 +436,11 @@ async function showSwitcher() {
   activeTopBar = topBar
   flushPendingRestore(topBar)
 
+  if (launcherCloser) {
+    try { launcherCloser() } catch (e) { console.error('[altTab] launcher close error:', e.message) }
+  }
+  topBar.webContents.send('topbar/close-menus')
+
   topBar.setAlwaysOnTop(true, 'screen-saver')
   topBar.setIgnoreMouseEvents(false)
 
@@ -472,6 +478,16 @@ function hideSwitcher() {
     restorePassiveState(topBar)
   }, HIDE_ANIMATION_MS)
   pendingRestore = { topBar, timer }
+}
+
+function hideForLauncher() {
+  if (!switcherActive && !activeTopBar) return
+  switcherActive = false
+  windowList = []
+  const topBar = activeTopBar
+  activeTopBar = null
+  flushPendingRestore(topBar)
+  if (topBar && !topBar.isDestroyed()) topBar.webContents.send('alttab/hide')
 }
 
 function cycleSelection(forward) {
@@ -682,6 +698,12 @@ module.exports = {
   onExplorerKey(callback) {
     explorerKeyCallback = callback
   },
+
+  setLauncherCloser(fn) {
+    launcherCloser = typeof fn === 'function' ? fn : null
+  },
+
+  hideForLauncher,
 
   start(_broadcast) {
     installHook()
