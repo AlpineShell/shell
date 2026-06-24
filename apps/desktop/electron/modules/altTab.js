@@ -69,6 +69,7 @@ const VK_LEFT = 0x25
 const VK_UP = 0x26
 const VK_RIGHT = 0x27
 const VK_DOWN = 0x28
+const VK_OEM_PERIOD = 0xBE
 const SW_RESTORE = 9
 const SRCCOPY = 0x00CC0020
 const PW_RENDERFULLCONTENT = 2
@@ -104,6 +105,7 @@ let winTapped = false
 
 let tilingKeyCallback = null
 let explorerKeyCallback = null
+let emojiKeyCallback = null
 let launcherCloser = null
 let overlayDisplayProvider = null
 
@@ -560,6 +562,19 @@ function hookCallback(nCode, wParam, lParam) {
       }
     }
 
+    if (isKeyDown && vkCode === VK_OEM_PERIOD && emojiKeyCallback) {
+      const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      if (winHeld) {
+        winTapped = false
+        setImmediate(() => {
+          keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
+          keybd_event(VK_RWIN, 0, KEYEVENTF_KEYUP, 0)
+          try { emojiKeyCallback() } catch (e) { console.error('[altTab] emoji key error:', e.message) }
+        })
+        return 1
+      }
+    }
+
     if (winLauncherEnabled) {
       if (vkCode === VK_LWIN || vkCode === VK_RWIN) {
         if (isKeyDown && !winDown) {
@@ -701,6 +716,10 @@ module.exports = {
 
   onExplorerKey(callback) {
     explorerKeyCallback = callback
+  },
+
+  onEmojiKey(callback) {
+    emojiKeyCallback = callback
   },
 
   setLauncherCloser(fn) {

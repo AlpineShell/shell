@@ -524,6 +524,9 @@ function startShellMode() {
   if (altTab && altTab.onExplorerKey) {
     altTab.onExplorerKey(() => appActivator.openFileExplorer())
   }
+  if (altTab && altTab.onEmojiKey) {
+    altTab.onEmojiKey(() => launcher.showEmoji())
+  }
 
   const screenshotWindow = createScreenshotWindow()
   if (screenshot) {

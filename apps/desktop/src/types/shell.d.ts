@@ -324,12 +324,15 @@ declare global {
       openLocation: (id: number) => Promise<{ success: boolean }>
       closeWindow: (hwnd: number) => Promise<{ success: boolean }>
       endTask: (pid: number) => Promise<{ success: boolean }>
+      insertText: (text: string) => Promise<{ ok: boolean }>
+      recentEmoji: () => Promise<string[]>
+      addRecentEmoji: (char: string) => Promise<string[]>
       getHotkey: () => Promise<string>
       setHotkey: (hotkey: string) => Promise<string>
       defaultHotkey: () => Promise<string>
       onHotkeyChanged: (callback: (hotkey: string) => void) => void
       onIndexChanged: (callback: (data: LauncherItem[]) => void) => void
-      onShow: (callback: (data: { displayId: number }) => void) => void
+      onShow: (callback: (data: { displayId: number; mode?: string }) => void) => void
       onStartClose: (callback: () => void) => () => void
       onHide: (callback: () => void) => () => void
       scores: () => Promise<Record<string, number>>

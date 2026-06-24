@@ -2,7 +2,7 @@ const { app, shell: electronShell, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { execFile, exec } = require('child_process')
-const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow } = require('./winFocus')
+const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow, insertText } = require('./winFocus')
 const appIcons = require('./appIcons')
 const appManager = require('./appManager')
 const appActivator = require('../appActivator')
@@ -270,7 +270,7 @@ function setSwitcherCloser(fn) {
   switcherCloser = typeof fn === 'function' ? fn : null
 }
 
-function showLauncher(displayId) {
+function showLauncher(displayId, mode) {
   if (!shells) return
   const shell = shells.get(displayId)
   if (!shell || shell.topBar.isDestroyed()) return
@@ -298,7 +298,7 @@ function showLauncher(displayId) {
   topBar.setIgnoreMouseEvents(false)
   topBar.setAlwaysOnTop(true, 'screen-saver')
 
-  topBar.webContents.send('launcher/show', { displayId })
+  topBar.webContents.send('launcher/show', { displayId, mode: mode || 'apps' })
   try {
     const hwnd = topBar.getNativeWindowHandle().readUInt32LE(0)
     forceForeground(hwnd)
@@ -320,6 +320,17 @@ function showFromHotkey() {
   const cursor = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursor)
   showLauncher(display.id)
+}
+
+function showEmoji() {
+  if (activeTopBar) {
+    animatedHide()
+    return
+  }
+  const { screen } = require('electron')
+  const cursor = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursor)
+  showLauncher(display.id, 'emoji')
 }
 
 function handleBlur(topBar) {
@@ -411,6 +422,12 @@ module.exports = {
       return { success: true }
     },
     'launcher/open-location': (_event, id) => openItemLocation(findItem(id)),
+    'launcher/insert-text': async (_event, text) => {
+      const hwnd = lastUserForeground
+      animatedHide()
+      if (typeof text !== 'string' || !text) return { ok: false }
+      return { ok: await insertText(hwnd, text) }
+    },
     'apps/catalog': () => index,
     'apps/window-command': (_event, action) => {
       const hwnd = lastUserForeground
@@ -429,6 +446,7 @@ module.exports = {
   },
   setShells,
   showFromHotkey,
+  showEmoji,
   hideForOverlay,
   setSwitcherCloser,
   getActiveDisplayId,

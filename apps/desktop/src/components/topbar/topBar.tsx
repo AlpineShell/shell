@@ -24,10 +24,11 @@ export default function TopBar() {
     const fullscreenWindow = fgColor !== null;
     const [hovered, setHovered] = useState(false);
     const [launcherOpen, setLauncherOpen] = useState(false);
+    const [launcherMode, setLauncherMode] = useState<string | undefined>(undefined);
     const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
 
     useEffect(() => {
-        window.launcher.onShow(() => setLauncherOpen(true));
+        window.launcher.onShow((data) => { setLauncherMode(data?.mode); setLauncherOpen(true); });
         window.launcher.onHide(() => setLauncherOpen(false));
     }, []);
 
@@ -54,7 +55,7 @@ export default function TopBar() {
                     <Clock />
                 </div>
             </div>
-            {launcherOpen && <LauncherPanel />}
+            {launcherOpen && <LauncherPanel mode={launcherMode} />}
             <AltTabPanel />
         </ThemeProvider>
     );
