@@ -104,6 +104,8 @@ let winTapped = false
 
 let tilingKeyCallback = null
 let explorerKeyCallback = null
+let launcherCloser = null
+let overlayDisplayProvider = null
 
 const iconCache = new Map()
 const thumbnailCache = new Map()
@@ -386,6 +388,14 @@ function moveOffscreen() {
 }
 
 function getActiveDisplay() {
+  if (overlayDisplayProvider) {
+    const id = overlayDisplayProvider()
+    if (id != null) {
+      const display = screen.getAllDisplays().find((d) => d.id === id)
+      if (display) return display
+    }
+  }
+
   const fgRaw = GetForegroundWindow()
   const fgHwnd = typeof fgRaw === 'bigint' ? Number(fgRaw) : fgRaw
 
@@ -435,6 +445,11 @@ async function showSwitcher() {
   activeTopBar = topBar
   flushPendingRestore(topBar)
 
+  if (launcherCloser) {
+    try { launcherCloser() } catch (e) { console.error('[altTab] launcher close error:', e.message) }
+  }
+  topBar.webContents.send('topbar/close-menus')
+
   topBar.setAlwaysOnTop(true, 'screen-saver')
   topBar.setIgnoreMouseEvents(false)
 
@@ -472,6 +487,11 @@ function hideSwitcher() {
     restorePassiveState(topBar)
   }, HIDE_ANIMATION_MS)
   pendingRestore = { topBar, timer }
+}
+
+function hideForLauncher() {
+  if (!switcherActive && !activeTopBar) return
+  hideSwitcher()
 }
 
 function cycleSelection(forward) {
@@ -682,6 +702,16 @@ module.exports = {
   onExplorerKey(callback) {
     explorerKeyCallback = callback
   },
+
+  setLauncherCloser(fn) {
+    launcherCloser = typeof fn === 'function' ? fn : null
+  },
+
+  setOverlayDisplayProvider(fn) {
+    overlayDisplayProvider = typeof fn === 'function' ? fn : null
+  },
+
+  hideForLauncher,
 
   start(_broadcast) {
     installHook()

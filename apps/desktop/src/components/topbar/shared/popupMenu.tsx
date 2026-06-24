@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTopbarBg, useFullscreenWindow } from "../../themeContext";
+import { useSurfaceSuperseded } from "../../../hooks/useSurfaceSuperseded";
 import { SHOULDER, RADIUS, type ChromeAnchor } from "../chrome/chromeShape";
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "../chrome/chromeStore";
 
@@ -38,6 +39,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     const suppressReset = useRef(false);
     const regionBottomRef = useRef(0);
     const shrinkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+    const superseded = useSurfaceSuperseded(idRef.current);
 
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
@@ -209,7 +212,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                         top: BAR_BOTTOM,
                         width: shape ? shape.bodyWidth : undefined,
                         zIndex: 5,
-                        pointerEvents: shape ? "auto" : "none",
+                        pointerEvents: superseded ? "none" : (shape ? "auto" : "none"),
+                        visibility: superseded ? "hidden" : undefined,
                         willChange: "clip-path",
                     }}
                 >

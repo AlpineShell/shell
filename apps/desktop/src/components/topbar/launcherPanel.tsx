@@ -3,6 +3,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
+import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
 import { useMonitors } from "../../hooks/useMonitors"
 import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
@@ -203,6 +204,7 @@ export default function LauncherPanel() {
   const idRef = useRef(0)
   if (!idRef.current) idRef.current = nextSurfaceId()
   const firstRef = useRef(true)
+  const superseded = useSurfaceSuperseded(idRef.current)
 
   const sortedWallpapers = useMemo(() => {
     const q = query.trim()
@@ -665,6 +667,7 @@ export default function LauncherPanel() {
   return createPortal(
     <div
       className="fixed inset-0 z-50"
+      style={superseded ? { visibility: "hidden", pointerEvents: "none" } : undefined}
       onMouseDown={() => window.launcher.hide()}
     >
       <div
