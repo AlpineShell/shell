@@ -30,3 +30,76 @@ jobs:
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
           prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          classify_inline_comments: false
+
+      - name: Triage review threads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          threads_json="$(gh api graphql -F o="$OWNER" -F r="$REPO" -F n="$PR" -f query='
+            query($o:String!, $r:String!, $n:Int!) {
+              repository(owner:$o, name:$r) {
+                pullRequest(number:$n) {
+                  reviewThreads(first:100) {
+                    nodes { id isResolved isOutdated comments(first:1) { nodes { author { login } } } }
+                    pageInfo { hasNextPage }
+                  }
+                }
+              }
+            }')"
+
+          if [ "$(echo "$threads_json" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')" = "true" ]; then
+            echo "::warning::More than 100 review threads on this PR; only the first 100 were triaged."
+          fi
+
+          bot_threads() {
+            echo "$threads_json" | jq -c '
+              .data.repository.pullRequest.reviewThreads.nodes[]
+              | select((.comments.nodes[0].author.login // "") | test("claude"; "i"))'
+          }
+
+          resolved=0
+          while IFS= read -r tid; do
+            [ -z "$tid" ] && continue
+            if gh api graphql -f id="$tid" -f query='
+              mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread { isResolved } } }' >/dev/null; then
+              resolved=$((resolved + 1))
+            else
+              echo "::warning::Could not resolve thread $tid"
+            fi
+          done < <(bot_threads | jq -r 'select(.isOutdated and (.isResolved | not)) | .id')
+          echo "Resolved $resolved fixed (outdated) finding thread(s)."
+
+          open=$(bot_threads | jq -s '[.[] | select((.isOutdated | not) and (.isResolved | not))] | length')
+          echo "Open findings on the current commit: $open"
+
+          reviews=$(gh api "repos/$OWNER/$REPO/pulls/$PR/reviews?per_page=100")
+          outstanding=$(echo "$reviews" | jq '[.[] | select(.user.login == "github-actions[bot]" and .state == "CHANGES_REQUESTED")] | length')
+
+          if [ "$open" -gt 0 ]; then
+            if [ "$outstanding" -eq 0 ]; then
+              gh api "repos/$OWNER/$REPO/pulls/$PR/reviews" \
+                -f event=REQUEST_CHANGES \
+                -f body="Claude review found $open unresolved issue(s) - see the inline comments. This review clears automatically once they are addressed on the next push." >/dev/null \
+                && echo "Requested changes." \
+                || echo "::warning::Could not submit REQUEST_CHANGES review."
+            else
+              echo "Changes already requested; leaving the existing review in place."
+            fi
+          else
+            echo "$reviews" \
+              | jq -r '.[] | select(.user.login == "github-actions[bot]" and .state == "CHANGES_REQUESTED") | .id' \
+              | while IFS= read -r id; do
+                  [ -z "$id" ] && continue
+                  gh api -X PUT "repos/$OWNER/$REPO/pulls/$PR/reviews/$id/dismissals" \
+                    -f message="Resolved - no outstanding findings on the latest commit." >/dev/null \
+                    && echo "Dismissed prior change-request $id." \
+                    || echo "::warning::Could not dismiss review $id."
+                done
+            echo "No open findings; did not approve."
+          fi
