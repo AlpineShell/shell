@@ -238,6 +238,10 @@ declare global {
     isFirstRun: boolean
   }
 
+  type EmojiKeyMessage =
+    | { kind: 'char'; value: string }
+    | { kind: 'backspace' | 'enter' | 'escape' | 'left' | 'right' | 'up' | 'down' }
+
   interface LauncherItem {
     id: number
     name: string
@@ -327,6 +331,7 @@ declare global {
       insertText: (text: string) => Promise<{ ok: boolean }>
       recentEmoji: () => Promise<string[]>
       addRecentEmoji: (char: string) => Promise<string[]>
+      onEmojiKey: (callback: (message: EmojiKeyMessage) => void) => () => void
       getHotkey: () => Promise<string>
       setHotkey: (hotkey: string) => Promise<string>
       defaultHotkey: () => Promise<string>

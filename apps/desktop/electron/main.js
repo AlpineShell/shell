@@ -527,6 +527,11 @@ function startShellMode() {
   if (altTab && altTab.onEmojiKey) {
     altTab.onEmojiKey(() => launcher.showEmoji())
   }
+  if (altTab && altTab.setEmojiCapture) {
+    launcher.setEmojiCaptureControl((active, hwnd) => altTab.setEmojiCapture(active, hwnd))
+    altTab.onEmojiCaptureKey((message) => launcher.forwardEmojiKey(message))
+    altTab.onEmojiCaptureClose(() => launcher.closeEmoji())
+  }
 
   const screenshotWindow = createScreenshotWindow()
   if (screenshot) {

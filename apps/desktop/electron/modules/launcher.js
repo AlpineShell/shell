@@ -23,6 +23,13 @@ let hideTimeout = null
 let hideTimeoutTopBar = null
 let lastUserForeground = 0
 let switcherCloser = null
+let emojiCaptureControl = null
+
+function setEmojiCapture(active, hwnd) {
+  if (emojiCaptureControl) {
+    try { emojiCaptureControl(active, hwnd) } catch (e) { console.error('[launcher] emoji capture error:', e.message) }
+  }
+}
 
 const LAUNCHER_WIDTH = 600
 
@@ -229,6 +236,10 @@ function finishHide(topBar) {
   else topBar.setAlwaysOnTop(false)
 }
 
+function endEmojiCapture() {
+  setEmojiCapture(false)
+}
+
 function flushPendingHide(keepTopBar) {
   if (!hideTimeout) return
   clearTimeout(hideTimeout)
@@ -240,6 +251,7 @@ function flushPendingHide(keepTopBar) {
 
 function animatedHide() {
   if (!activeTopBar || activeTopBar.isDestroyed()) return
+  endEmojiCapture()
   activeTopBar.webContents.send('launcher/start-close')
   const topBar = activeTopBar
   activeTopBar = null
@@ -254,6 +266,7 @@ function animatedHide() {
 }
 
 function hideForOverlay() {
+  endEmojiCapture()
   if (!activeTopBar || activeTopBar.isDestroyed()) {
     activeTopBar = null
     activeDisplayId = null
@@ -275,6 +288,8 @@ function showLauncher(displayId, mode) {
   const shell = shells.get(displayId)
   if (!shell || shell.topBar.isDestroyed()) return
   const topBar = shell.topBar
+
+  endEmojiCapture()
 
   try {
     const fg = getForegroundWindow()
@@ -327,10 +342,43 @@ function showEmoji() {
     animatedHide()
     return
   }
+  if (!shells) return
   const { screen } = require('electron')
   const cursor = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursor)
-  showLauncher(display.id, 'emoji')
+  const shell = shells.get(display.id)
+  if (!shell || shell.topBar.isDestroyed()) return
+  const topBar = shell.topBar
+
+  let target = 0
+  try {
+    const fg = getForegroundWindow()
+    if (fg && !isOwnShellWindow(fg)) { lastUserForeground = fg; target = fg }
+  } catch {}
+
+  flushPendingHide(topBar)
+
+  if (switcherCloser) {
+    try { switcherCloser() } catch (e) { console.error('[launcher] switcher close error:', e.message) }
+  }
+
+  topBar.webContents.send('topbar/close-menus')
+  topBar.setIgnoreMouseEvents(false)
+  topBar.setAlwaysOnTop(true, 'screen-saver')
+  topBar.webContents.send('launcher/show', { displayId: display.id, mode: 'emoji', capture: true })
+
+  activeDisplayId = display.id
+  activeTopBar = topBar
+  setEmojiCapture(true, target)
+}
+
+function forwardEmojiKey(message) {
+  if (!activeTopBar || activeTopBar.isDestroyed()) return
+  activeTopBar.webContents.send('emoji/key', message)
+}
+
+function setEmojiCaptureControl(fn) {
+  emojiCaptureControl = typeof fn === 'function' ? fn : null
 }
 
 function handleBlur(topBar) {
@@ -447,6 +495,9 @@ module.exports = {
   setShells,
   showFromHotkey,
   showEmoji,
+  forwardEmojiKey,
+  setEmojiCaptureControl,
+  closeEmoji: animatedHide,
   hideForOverlay,
   setSwitcherCloser,
   getActiveDisplayId,

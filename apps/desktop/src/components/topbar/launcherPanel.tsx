@@ -253,6 +253,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const filteredEmojisRef = useRef<EmojiEntry[]>(filteredEmojis)
   filteredEmojisRef.current = filteredEmojis
   const emojiInsertRef = useRef(false)
+  const emojiIndexRef = useRef(0)
+  emojiIndexRef.current = emojiIndex
 
   const handleEmojiHover = useCallback((idx: number) => setEmojiIndex(idx), [])
 
@@ -459,10 +461,11 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   }, [])
 
   useEffect(() => {
+    if (mode === "emoji") return
     const onBlur = () => { if (!notice) window.launcher.hide() }
     window.addEventListener("blur", onBlur)
     return () => window.removeEventListener("blur", onBlur)
-  }, [notice])
+  }, [notice, mode])
 
   const mathResult = useMemo(() => tryMath(query.trim()), [query])
   const mapResult = useAddressLookup(query)
@@ -597,6 +600,23 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (mode !== "emoji") return
+    return window.launcher.onEmojiKey((message) => {
+      if (message.kind === "escape") { window.launcher.hide(); return }
+      if (message.kind === "enter") { handleEmojiPick(emojiIndexRef.current); return }
+      if (message.kind === "char") { setQuery((q) => q + message.value); setEmojiIndex(0); return }
+      if (message.kind === "backspace") { setQuery((q) => q.slice(0, -1)); setEmojiIndex(0); return }
+      const count = filteredEmojisRef.current.length
+      if (count === 0) return
+      if (message.kind === "right") setEmojiIndex((i) => Math.min(i + 1, count - 1))
+      else if (message.kind === "left") setEmojiIndex((i) => Math.max(i - 1, 0))
+      else if (message.kind === "down") setEmojiIndex((i) => Math.min(i + EMOJI_COLS, count - 1))
+      else if (message.kind === "up") setEmojiIndex((i) => Math.max(i - EMOJI_COLS, 0))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
 
   useEffect(() => {
     if (activeCommand !== "wallpaper") return
