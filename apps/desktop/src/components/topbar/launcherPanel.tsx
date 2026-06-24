@@ -519,7 +519,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
         .map((item) => ({ item, f: scores[frecencyKey(item.target)] ?? 0 }))
         .filter((entry) => entry.f > 0)
         .sort((a, b) => b.f - a.f)
-        .slice(0, maxResults)
         .map((entry) => entry.item)
     }
     const openPaths = new Set(matchedOpenApps.map((a) => a.path.toLowerCase()))
@@ -538,31 +537,44 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     const settingsScore = ALPINE_SETTINGS_KEYWORDS.reduce((m, k) => Math.max(m, scoreField(q, k)), -1)
     const settingsAlreadyOpen = matchedOpenApps.some((a) => a.path.toLowerCase() === ALPINE_SETTINGS_PATH)
     const showSettings = settingsScore >= 0 && !settingsAlreadyOpen
-    const taken = (mathResult ? 1 : 0) + (mapResult ? 1 : 0) + (runResult ? 1 : 0) + matchedOpenApps.length + matchedSettings.length + matchedWindowCommands.length + (showSettings ? 1 : 0)
-    const limit = Math.max(1, maxResults - taken)
-    const list = scored.slice(0, limit).map((r) => r.item)
+    const list = scored.map((r) => r.item)
     if (showSettings) list.push(ALPINE_SETTINGS_ITEM)
     return list
-  }, [query, items, fieldsById, scores, showRecentApps, maxResults, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands])
+  }, [query, items, fieldsById, scores, showRecentApps, matchedOpenApps])
+
+  const display = useMemo(() => {
+    let budget = Math.max(1, maxResults) - (mathResult ? 1 : 0) - (mapResult ? 1 : 0)
+    const take = (count: number) => {
+      const taken = Math.max(0, Math.min(budget, count))
+      budget -= taken
+      return taken
+    }
+    const openApps = matchedOpenApps.slice(0, take(matchedOpenApps.length))
+    const settings = matchedSettings.slice(0, take(matchedSettings.length))
+    const winCmds = matchedWindowCommands.slice(0, take(matchedWindowCommands.length))
+    const apps = results.slice(0, take(results.length))
+    const showRun = !!runResult && take(1) > 0
+    return { openApps, settings, winCmds, apps, showRun }
+  }, [maxResults, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands, results])
 
   const mathOffset = mathResult ? 1 : 0
   const mapOffset = mathOffset + (mapResult ? 1 : 0)
-  const openOffset = mapOffset + matchedOpenApps.length
-  const settingsOffset = openOffset + matchedSettings.length
-  const winOffset = settingsOffset + matchedWindowCommands.length
-  const runOffset = winOffset + results.length
-  const totalCount = runOffset + (runResult ? 1 : 0)
+  const openOffset = mapOffset + display.openApps.length
+  const settingsOffset = openOffset + display.settings.length
+  const winOffset = settingsOffset + display.winCmds.length
+  const runOffset = winOffset + display.apps.length
+  const totalCount = runOffset + (display.showRun ? 1 : 0)
 
   const selectedEntry = useMemo(() => {
     if (mathResult && selected === 0) return { type: "math" as const }
     if (mapResult && selected === mathOffset) return { type: "map" as const, result: mapResult }
-    if (selected >= mapOffset && selected < openOffset) return { type: "open" as const, app: matchedOpenApps[selected - mapOffset] }
-    if (selected >= openOffset && selected < settingsOffset) return { type: "setting" as const, setting: matchedSettings[selected - openOffset] }
-    if (selected >= settingsOffset && selected < winOffset) return { type: "wincmd" as const, cmd: matchedWindowCommands[selected - settingsOffset] }
-    if (selected >= winOffset && selected < runOffset) return { type: "app" as const, item: results[selected - winOffset] }
-    if (runResult && selected === runOffset) return { type: "run" as const, run: runResult }
+    if (selected >= mapOffset && selected < openOffset) return { type: "open" as const, app: display.openApps[selected - mapOffset] }
+    if (selected >= openOffset && selected < settingsOffset) return { type: "setting" as const, setting: display.settings[selected - openOffset] }
+    if (selected >= settingsOffset && selected < winOffset) return { type: "wincmd" as const, cmd: display.winCmds[selected - settingsOffset] }
+    if (selected >= winOffset && selected < runOffset) return { type: "app" as const, item: display.apps[selected - winOffset] }
+    if (display.showRun && runResult && selected === runOffset) return { type: "run" as const, run: runResult }
     return null
-  }, [selected, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands, results, mathOffset, mapOffset, openOffset, settingsOffset, winOffset, runOffset])
+  }, [selected, mathResult, mapResult, runResult, display, mathOffset, mapOffset, openOffset, settingsOffset, winOffset, runOffset])
 
   async function runUninstall(item: LauncherItem) {
     setNotice({ text: `Removing ${item.name}…`, busy: true })
@@ -587,7 +599,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   useEffect(() => {
     if (selected >= totalCount) setSelected(0)
     setContextOpen(false)
-  }, [results, mathResult, runResult])
+  }, [display, mathResult, runResult])
 
   useEffect(() => {
     if (emojiIndex > filteredEmojis.length - 1) setEmojiIndex(Math.max(0, filteredEmojis.length - 1))
@@ -932,7 +944,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           </div>
                         </button>
                       )}
-                      {matchedOpenApps.map((app, i) => {
+                      {display.openApps.map((app, i) => {
                         const idx = mapOffset + i
                         return (
                           <button
@@ -955,10 +967,10 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           </button>
                         )
                       })}
-                      {matchedOpenApps.length > 0 && matchedSettings.length > 0 && (
+                      {display.openApps.length > 0 && display.settings.length > 0 && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
-                      {matchedSettings.map((s, i) => {
+                      {display.settings.map((s, i) => {
                         const idx = openOffset + i
                         const Icon = s.icon
                         const isSel = idx === selected
@@ -1040,10 +1052,10 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           </button>
                         )
                       })}
-                      {matchedWindowCommands.length > 0 && (matchedOpenApps.length > 0 || matchedSettings.length > 0) && (
+                      {display.winCmds.length > 0 && (display.openApps.length > 0 || display.settings.length > 0) && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
-                      {matchedWindowCommands.map((cmd, i) => {
+                      {display.winCmds.map((cmd, i) => {
                         const idx = settingsOffset + i
                         const Icon = cmd.icon
                         return (
@@ -1063,10 +1075,10 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           </button>
                         )
                       })}
-                      {(matchedOpenApps.length > 0 || matchedSettings.length > 0 || matchedWindowCommands.length > 0) && results.length > 0 && (
+                      {(display.openApps.length > 0 || display.settings.length > 0 || display.winCmds.length > 0) && display.apps.length > 0 && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
-                      {results.map((item, i) => {
+                      {display.apps.map((item, i) => {
                         const idx = winOffset + i
                         const isAlpineSettings = item.id === ALPINE_SETTINGS_ID
                         return (
@@ -1096,10 +1108,10 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           </button>
                         )
                       })}
-                      {runResult && (winOffset > 0 || results.length > 0) && (
+                      {display.showRun && (winOffset > 0 || display.apps.length > 0) && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
-                      {runResult && (() => {
+                      {display.showRun && runResult && (() => {
                         const RunIcon = runResult.kind === "command" ? (runResult.runInTerminal ? Terminal : Play) : RUN_ICONS[runResult.kind]
                         return (
                           <button
