@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom"
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
@@ -12,9 +12,14 @@ import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type S
 import { useFrecencyScores } from "../../hooks/useFrecencyScores"
 import { useLauncherRecentApps } from "../../hooks/useLauncherRecentApps"
 import { useLauncherMaxResults } from "../../hooks/useLauncherMaxResults"
+import { EMOJIS, type EmojiEntry } from "../../lib/emojiData"
+import { getRenderableEmojis } from "../../lib/emojiRenderable"
 
 const BAR_BOTTOM = 24
 const LAUNCHER_WIDTH_DEFAULT = 600
+const EMOJI_COLS = 9
+const EMOJI_SEARCH_LIMIT = 180
+const EMOJI_BY_CHAR = new Map(EMOJIS.map((e) => [e.c, e]))
 const WALLPAPER_TILE_WIDTH = 200
 const WALLPAPER_TILE_GAP = 12
 const WALLPAPER_PANEL_PADDING_X = 16
@@ -166,7 +171,7 @@ function runActions(query: string, run: RunResult): ContextAction[] {
   return [{ label: "Run in terminal", icon: Terminal, action: () => { window.shell.run.execTerminal(query); window.launcher.hide() } }]
 }
 
-export default function LauncherPanel() {
+export default function LauncherPanel({ mode }: { mode?: string }) {
   const darkText = useDarkText()
   const outline = useFullscreenWindow()
   const textColor = darkText ? "text-black" : "text-white"
@@ -190,6 +195,8 @@ export default function LauncherPanel() {
   const [subView, setSubView] = useState<{ title: string; back: () => void } | null>(null)
   const [wallpapers, setWallpapers] = useState<WallpaperItem[]>([])
   const [previewIndex, setPreviewIndex] = useState(0)
+  const [emojiIndex, setEmojiIndex] = useState(0)
+  const [recentEmoji, setRecentEmoji] = useState<string[]>([])
   const currentWallpaper = useWallpaper()
   const { monitors, setBrightness } = useMonitors()
   const brightnessIsSubmenu = monitors.length > 1
@@ -221,10 +228,55 @@ export default function LauncherPanel() {
     return map
   }, [items])
 
+  const recentEmojiEntries = useMemo(
+    () => recentEmoji.map((c) => EMOJI_BY_CHAR.get(c)).filter((e): e is EmojiEntry => !!e),
+    [recentEmoji]
+  )
+
+  const filteredEmojis = useMemo(() => {
+    if (activeCommand !== "emoji") return []
+    const all = getRenderableEmojis()
+    const q = query.trim()
+    if (!q) {
+      const recentChars = new Set(recentEmojiEntries.map((e) => e.c))
+      return [...recentEmojiEntries, ...all.filter((e) => !recentChars.has(e.c))]
+    }
+    const scored: { e: EmojiEntry; s: number }[] = []
+    for (const e of all) {
+      const s = Math.max(scoreField(q, e.n), scoreField(q, e.s))
+      if (s >= 0) scored.push({ e, s })
+    }
+    scored.sort((a, b) => b.s - a.s)
+    return scored.slice(0, EMOJI_SEARCH_LIMIT).map((r) => r.e)
+  }, [activeCommand, query, recentEmojiEntries])
+
+  const filteredEmojisRef = useRef<EmojiEntry[]>(filteredEmojis)
+  filteredEmojisRef.current = filteredEmojis
+  const emojiInsertRef = useRef(false)
+  const emojiIndexRef = useRef(0)
+  emojiIndexRef.current = emojiIndex
+
+  const handleEmojiHover = useCallback((idx: number) => setEmojiIndex(idx), [])
+
+  const handleEmojiPick = useCallback((idx: number) => {
+    const entry = filteredEmojisRef.current[idx]
+    if (!entry) return
+    window.launcher.addRecentEmoji(entry.c).catch(() => {})
+    if (emojiInsertRef.current) {
+      window.launcher
+        .insertText(entry.c)
+        .then((r) => { if (!r?.ok) navigator.clipboard.writeText(entry.c).catch(() => {}) })
+        .catch(() => { navigator.clipboard.writeText(entry.c).catch(() => {}) })
+    } else {
+      navigator.clipboard.writeText(entry.c).catch(() => {})
+      window.launcher.hide()
+    }
+  }, [])
+
   const panelWidth = activeCommand === "wallpaper"
     ? Math.max(LAUNCHER_WIDTH_DEFAULT, wallpaperPanelWidth(wallpapers.length))
     : LAUNCHER_WIDTH_DEFAULT
-  const inSubmenu = !!activeCommand && activeCommand !== "wallpaper"
+  const inSubmenu = !!activeCommand && activeCommand !== "wallpaper" && activeCommand !== "emoji"
   const activeLabel = activeCommand ? (SETTING_COMMANDS.find((c) => c.id === activeCommand)?.label ?? "") : ""
 
   function enterCommand(id: string) {
@@ -245,6 +297,10 @@ export default function LauncherPanel() {
         originalPath.current = null
         setPreviewIndex(0)
       }
+    } else if (id === "emoji") {
+      setQuery("")
+      setEmojiIndex(0)
+      window.launcher.recentEmoji().then(setRecentEmoji).catch(() => {})
     }
     requestAnimationFrame(() => inputRef.current?.focus())
   }
@@ -324,6 +380,7 @@ export default function LauncherPanel() {
   function activateSetting(cmd: SettingCommand) {
     const c = cmd.control
     if (c.kind === "brightness") { if (brightnessIsSubmenu) enterCommand(cmd.id) }
+    else if (c.kind === "emoji") { emojiInsertRef.current = false; enterCommand(cmd.id) }
     else if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power" || c.kind === "tray") enterCommand(cmd.id)
     else if (c.kind === "toggle") toggleSetting(cmd)
     else if (c.kind === "navigate") {
@@ -404,10 +461,11 @@ export default function LauncherPanel() {
   }, [])
 
   useEffect(() => {
+    if (mode === "emoji") return
     const onBlur = () => { if (!notice) window.launcher.hide() }
     window.addEventListener("blur", onBlur)
     return () => window.removeEventListener("blur", onBlur)
-  }, [notice])
+  }, [notice, mode])
 
   const mathResult = useMemo(() => tryMath(query.trim()), [query])
   const mapResult = useAddressLookup(query)
@@ -532,6 +590,35 @@ export default function LauncherPanel() {
   }, [results, mathResult, runResult])
 
   useEffect(() => {
+    if (emojiIndex > filteredEmojis.length - 1) setEmojiIndex(Math.max(0, filteredEmojis.length - 1))
+  }, [filteredEmojis.length, emojiIndex])
+
+  useEffect(() => {
+    if (mode === "emoji") {
+      emojiInsertRef.current = true
+      enterCommand("emoji")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (mode !== "emoji") return
+    return window.launcher.onEmojiKey((message) => {
+      if (message.kind === "escape") { window.launcher.hide(); return }
+      if (message.kind === "enter") { handleEmojiPick(emojiIndexRef.current); return }
+      if (message.kind === "char") { setQuery((q) => q + message.value); setEmojiIndex(0); return }
+      if (message.kind === "backspace") { setQuery((q) => q.slice(0, -1)); setEmojiIndex(0); return }
+      const count = filteredEmojisRef.current.length
+      if (count === 0) return
+      if (message.kind === "right") setEmojiIndex((i) => Math.min(i + 1, count - 1))
+      else if (message.kind === "left") setEmojiIndex((i) => Math.max(i - 1, 0))
+      else if (message.kind === "down") setEmojiIndex((i) => Math.min(i + EMOJI_COLS, count - 1))
+      else if (message.kind === "up") setEmojiIndex((i) => Math.max(i - EMOJI_COLS, 0))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
+  useEffect(() => {
     if (activeCommand !== "wallpaper") return
     if (sortedWallpapers.length === 0) return
     const idx = Math.min(previewIndex, sortedWallpapers.length - 1)
@@ -604,6 +691,25 @@ export default function LauncherPanel() {
       } else if (e.key === "Enter") {
         e.preventDefault()
         commitWallpaper()
+      }
+    } else if (activeCommand === "emoji") {
+      const count = filteredEmojis.length
+      if (count === 0) return
+      if (e.key === "ArrowRight") {
+        e.preventDefault()
+        setEmojiIndex((i) => Math.min(i + 1, count - 1))
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault()
+        setEmojiIndex((i) => Math.max(i - 1, 0))
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setEmojiIndex((i) => Math.min(i + EMOJI_COLS, count - 1))
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setEmojiIndex((i) => Math.max(i - EMOJI_COLS, 0))
+      } else if (e.key === "Enter") {
+        e.preventDefault()
+        handleEmojiPick(emojiIndex)
       }
     } else if (selectedEntry && selectedEntry.type === "setting" && (selectedEntry.setting.control.kind === "slider" || (selectedEntry.setting.control.kind === "brightness" && !brightnessIsSubmenu)) && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       e.preventDefault()
@@ -704,9 +810,10 @@ export default function LauncherPanel() {
                   onChange={(e) => {
                     setQuery(e.target.value)
                     if (activeCommand === "wallpaper") setPreviewIndex(0)
+                    if (activeCommand === "emoji") setEmojiIndex(0)
                   }}
                   onKeyDown={handleKey}
-                  placeholder={activeCommand === "wallpaper" ? "Filter wallpapers" : "Search apps"}
+                  placeholder={activeCommand === "emoji" ? "Search emoji" : activeCommand === "wallpaper" ? "Filter wallpapers" : "Search apps"}
                   autoFocus
                   className={`flex-1 bg-transparent outline-none text-[15px] ${placeholderColor}`}
                 />
@@ -748,6 +855,17 @@ export default function LauncherPanel() {
                       loading={wallpapers.length === 0}
                       selectedIndex={previewIndex}
                       onPick={pickWallpaper}
+                    />
+                  </>
+                ) : activeCommand === "emoji" ? (
+                  <>
+                    <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+                    <EmojiGrid
+                      emojis={filteredEmojis}
+                      selectedIndex={emojiIndex}
+                      darkText={darkText}
+                      onHover={handleEmojiHover}
+                      onPick={handleEmojiPick}
                     />
                   </>
                 ) : contextOpen && contextActions.length > 0 ? (
@@ -1080,6 +1198,87 @@ function WallpaperCarousel({ wallpapers, loading, selectedIndex, onPick }: Wallp
           )
         })}
       </div>
+    </div>
+  )
+}
+
+interface EmojiGridProps {
+  emojis: EmojiEntry[]
+  selectedIndex: number
+  darkText: boolean
+  onHover: (idx: number) => void
+  onPick: (idx: number) => void
+}
+
+interface EmojiCellProps {
+  entry: EmojiEntry
+  index: number
+  selected: boolean
+  darkText: boolean
+  onHover: (idx: number) => void
+  onPick: (idx: number) => void
+}
+
+const EmojiCell = memo(function EmojiCell({ entry, index, selected, darkText, onHover, onPick }: EmojiCellProps) {
+  const selectedBg = darkText ? "bg-black/10" : "bg-white/10"
+  const hoverBg = darkText ? "hover:bg-black/5" : "hover:bg-white/5"
+  return (
+    <button
+      data-eidx={index}
+      onMouseEnter={() => onHover(index)}
+      onClick={() => onPick(index)}
+      title={entry.n}
+      className={`flex items-center justify-center h-10 rounded-md cursor-pointer transition-colors text-[22px] leading-none ${
+        selected ? selectedBg : hoverBg
+      }`}
+    >
+      <span>{entry.c}</span>
+    </button>
+  )
+})
+
+function EmojiGrid({ emojis, selectedIndex, darkText, onHover, onPick }: EmojiGridProps) {
+  const dimText = darkText ? "text-black/50" : "text-white/50"
+  const gridRef = useRef<HTMLDivElement>(null)
+  const selected = emojis[selectedIndex]
+
+  useEffect(() => {
+    const el = gridRef.current?.querySelector(`[data-eidx="${selectedIndex}"]`) as HTMLElement | null
+    el?.scrollIntoView({ block: "nearest" })
+  }, [selectedIndex])
+
+  if (emojis.length === 0) {
+    return <div className={`px-4 py-6 text-[13px] ${dimText}`}>No emoji found</div>
+  }
+
+  return (
+    <div className="flex flex-col">
+      <div
+        ref={gridRef}
+        className={`grid gap-0.5 p-2 max-h-[264px] overflow-y-auto cc-scroll ${darkText ? "cc-scroll-light" : ""}`}
+        style={{ gridTemplateColumns: `repeat(${EMOJI_COLS}, minmax(0, 1fr))` }}
+      >
+        {emojis.map((e, i) => (
+          <EmojiCell
+            key={e.c}
+            entry={e}
+            index={i}
+            selected={i === selectedIndex}
+            darkText={darkText}
+            onHover={onHover}
+            onPick={onPick}
+          />
+        ))}
+      </div>
+      {selected && (
+        <>
+          <div className={`h-px w-full ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+          <div className={`px-4 h-9 flex items-center gap-2 text-[12px] ${dimText}`}>
+            <span className="text-[16px] leading-none">{selected.c}</span>
+            <span className="truncate capitalize">{selected.n}</span>
+          </div>
+        </>
+      )}
     </div>
   )
 }

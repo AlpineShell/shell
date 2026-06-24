@@ -32,6 +32,8 @@ const GetShellWindow = user32.func('__stdcall', 'GetShellWindow', 'uintptr_t', [
 const ShowWindow = user32.func('__stdcall', 'ShowWindow', 'int', ['uintptr_t', 'int'])
 const IsIconic = user32.func('__stdcall', 'IsIconic', 'int', ['uintptr_t'])
 const keybd_event = user32.func('__stdcall', 'keybd_event', 'void', ['uint8', 'uint8', 'uint32', 'uintptr_t'])
+const GetKeyboardLayout = user32.func('__stdcall', 'GetKeyboardLayout', 'uintptr_t', ['uint32'])
+const ToUnicodeEx = user32.func('__stdcall', 'ToUnicodeEx', 'int', ['uint32', 'uint32', 'void *', 'void *', 'int', 'uint32', 'uintptr_t'])
 
 const PrintWindow = user32.func('__stdcall', 'PrintWindow', 'int', ['uintptr_t', 'uintptr_t', 'uint32'])
 const GetWindowRect = user32.func('__stdcall', 'GetWindowRect', 'int', ['uintptr_t', 'void *'])
@@ -69,6 +71,12 @@ const VK_LEFT = 0x25
 const VK_UP = 0x26
 const VK_RIGHT = 0x27
 const VK_DOWN = 0x28
+const VK_OEM_PERIOD = 0xBE
+const VK_BACK = 0x08
+const VK_RETURN = 0x0D
+const VK_CONTROL = 0x11
+const VK_MENU = 0x12
+const VK_CAPITAL = 0x14
 const SW_RESTORE = 9
 const SRCCOPY = 0x00CC0020
 const PW_RENDERFULLCONTENT = 2
@@ -104,8 +112,15 @@ let winTapped = false
 
 let tilingKeyCallback = null
 let explorerKeyCallback = null
+let emojiKeyCallback = null
 let launcherCloser = null
 let overlayDisplayProvider = null
+
+let emojiCaptureActive = false
+let emojiCaptureKeyCallback = null
+let emojiCaptureCloseCallback = null
+let emojiCaptureForeground = 0
+const emojiConsumedKeys = new Set()
 
 const iconCache = new Map()
 const thumbnailCache = new Map()
@@ -332,6 +347,15 @@ function warmCapture(hwnd) {
 }
 
 function pollForeground() {
+  if (emojiCaptureActive) {
+    if (emojiCaptureForeground) {
+      const current = toHwndNum(GetForegroundWindow())
+      if (current && current !== emojiCaptureForeground && !isOwnWindow(current)) {
+        try { if (emojiCaptureCloseCallback) emojiCaptureCloseCallback() } catch (e) { console.error('[altTab] emoji capture close error:', e.message) }
+      }
+    }
+    return
+  }
   if (switcherActive) return
   const fg = toHwndNum(GetForegroundWindow())
   if (!fg || fg === lastForegroundHwnd) return
@@ -520,6 +544,71 @@ function readKeyFlags(lParam) {
   return buf.readUInt32LE(0)
 }
 
+function readScanCode(lParam) {
+  const lp = typeof lParam === 'bigint' ? Number(lParam) : lParam
+  const buf = Buffer.alloc(4)
+  RtlMoveMemory(buf, lp + 4, 4)
+  return buf.readUInt32LE(0)
+}
+
+function foregroundKeyboardLayout() {
+  const fg = GetForegroundWindow()
+  const threadId = GetWindowThreadProcessId(fg, null)
+  return GetKeyboardLayout(threadId)
+}
+
+function buildKeyState() {
+  const state = Buffer.alloc(256)
+  if (GetKeyState(VK_SHIFT) & 0x8000) state[VK_SHIFT] = 0x80
+  if (GetKeyState(VK_CONTROL) & 0x8000) state[VK_CONTROL] = 0x80
+  if (GetKeyState(VK_MENU) & 0x8000) state[VK_MENU] = 0x80
+  if (GetKeyState(VK_CAPITAL) & 0x0001) state[VK_CAPITAL] = 0x01
+  return state
+}
+
+function translateChar(vkCode, scanCode) {
+  const state = buildKeyState()
+  const out = Buffer.alloc(16)
+  const count = ToUnicodeEx(vkCode, scanCode, state, out, 8, 4, foregroundKeyboardLayout())
+  if (count === 1) {
+    const code = out.readUInt16LE(0)
+    if (code >= 0x20 && code !== 0x7F) return String.fromCharCode(code)
+  }
+  return null
+}
+
+function emojiCaptureMessage(vkCode, scanCode) {
+  if (vkCode === VK_ESCAPE) return { kind: 'escape' }
+  if (vkCode === VK_RETURN) return { kind: 'enter' }
+  if (vkCode === VK_BACK) return { kind: 'backspace' }
+  if (vkCode === VK_LEFT) return { kind: 'left' }
+  if (vkCode === VK_RIGHT) return { kind: 'right' }
+  if (vkCode === VK_UP) return { kind: 'up' }
+  if (vkCode === VK_DOWN) return { kind: 'down' }
+  if (vkCode === VK_TAB || vkCode === VK_LWIN || vkCode === VK_RWIN) return null
+  const char = translateChar(vkCode, scanCode)
+  if (char) return { kind: 'char', value: char }
+  return null
+}
+
+function handleEmojiCaptureKey(vkCode, scanCode, isKeyDown, isKeyUp) {
+  if (isKeyUp) {
+    if (emojiConsumedKeys.has(vkCode)) {
+      emojiConsumedKeys.delete(vkCode)
+      return true
+    }
+    return false
+  }
+  if (!isKeyDown) return false
+  const message = emojiCaptureMessage(vkCode, scanCode)
+  if (!message) return false
+  emojiConsumedKeys.add(vkCode)
+  setImmediate(() => {
+    try { if (emojiCaptureKeyCallback) emojiCaptureKeyCallback(message) } catch (e) { console.error('[altTab] emoji capture key error:', e.message) }
+  })
+  return true
+}
+
 const LLKHF_INJECTED = 0x10
 const KEYEVENTF_KEYUP = 0x0002
 
@@ -536,6 +625,10 @@ function hookCallback(nCode, wParam, lParam) {
     const wp = Number(wParam)
     const isKeyDown = (wp === WM_KEYDOWN || wp === WM_SYSKEYDOWN)
     const isKeyUp = (wp === WM_KEYUP || wp === WM_SYSKEYUP)
+
+    if (emojiCaptureActive) {
+      if (handleEmojiCaptureKey(vkCode, readScanCode(lParam), isKeyDown, isKeyUp)) return 1
+    }
 
     if (isKeyDown && tilingKeyCallback && (vkCode === VK_LEFT || vkCode === VK_RIGHT || vkCode === VK_UP || vkCode === VK_DOWN)) {
       const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
@@ -556,6 +649,19 @@ function hookCallback(nCode, wParam, lParam) {
       if (winHeld) {
         winTapped = false
         try { explorerKeyCallback() } catch (e) { console.error('[altTab] explorer key error:', e.message) }
+        return 1
+      }
+    }
+
+    if (isKeyDown && vkCode === VK_OEM_PERIOD && emojiKeyCallback) {
+      const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      if (winHeld) {
+        winTapped = false
+        setImmediate(() => {
+          keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
+          keybd_event(VK_RWIN, 0, KEYEVENTF_KEYUP, 0)
+          try { emojiKeyCallback() } catch (e) { console.error('[altTab] emoji key error:', e.message) }
+        })
         return 1
       }
     }
@@ -701,6 +807,24 @@ module.exports = {
 
   onExplorerKey(callback) {
     explorerKeyCallback = callback
+  },
+
+  onEmojiKey(callback) {
+    emojiKeyCallback = callback
+  },
+
+  setEmojiCapture(active, foregroundHwnd) {
+    emojiCaptureActive = !!active
+    emojiCaptureForeground = active ? (foregroundHwnd || 0) : 0
+    emojiConsumedKeys.clear()
+  },
+
+  onEmojiCaptureKey(callback) {
+    emojiCaptureKeyCallback = callback
+  },
+
+  onEmojiCaptureClose(callback) {
+    emojiCaptureCloseCallback = callback
   },
 
   setLauncherCloser(fn) {

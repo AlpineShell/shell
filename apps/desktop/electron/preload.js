@@ -112,6 +112,14 @@ contextBridge.exposeInMainWorld('launcher', {
   openLocation: (id) => ipcRenderer.invoke('launcher/open-location', id),
   closeWindow: (hwnd) => ipcRenderer.invoke('launcher/close-window', hwnd),
   endTask: (pid) => ipcRenderer.invoke('launcher/end-task', pid),
+  insertText: (text) => ipcRenderer.invoke('launcher/insert-text', text),
+  recentEmoji: () => ipcRenderer.invoke('emoji/recents-get'),
+  addRecentEmoji: (char) => ipcRenderer.invoke('emoji/recents-add', char),
+  onEmojiKey: (callback) => {
+    const handler = (_, message) => callback(message)
+    ipcRenderer.on('emoji/key', handler)
+    return () => ipcRenderer.removeListener('emoji/key', handler)
+  },
   getHotkey: () => ipcRenderer.invoke('launcher/hotkey-get'),
   setHotkey: (hotkey) => ipcRenderer.invoke('launcher/hotkey-set', hotkey),
   defaultHotkey: () => ipcRenderer.invoke('launcher/hotkey-default'),

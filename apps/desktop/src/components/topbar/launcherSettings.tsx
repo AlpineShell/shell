@@ -13,6 +13,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Smile,
   Sun,
   Volume2,
   VolumeX,
@@ -33,6 +34,7 @@ export type SettingControl =
   | { kind: "startup" }
   | { kind: "power" }
   | { kind: "tray" }
+  | { kind: "emoji" }
 
 export interface SettingCommand {
   id: string
@@ -131,6 +133,14 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     icon: Wallpaper,
     keywords: ["wallpaper", "background", "desktop", "image", "theme"],
     control: { kind: "wallpaper" },
+  },
+  {
+    id: "emoji",
+    label: "Emoji",
+    hint: "Search and insert an emoji",
+    icon: Smile,
+    keywords: ["emoji", "emojis", "emoticon", "smiley", "smileys", "symbols", "face", "reaction", "emote", "sticker"],
+    control: { kind: "emoji" },
   },
   {
     id: "topbar",
