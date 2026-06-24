@@ -252,6 +252,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
 
   const filteredEmojisRef = useRef<EmojiEntry[]>(filteredEmojis)
   filteredEmojisRef.current = filteredEmojis
+  const emojiInsertRef = useRef(false)
 
   const handleEmojiHover = useCallback((idx: number) => setEmojiIndex(idx), [])
 
@@ -259,10 +260,15 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     const entry = filteredEmojisRef.current[idx]
     if (!entry) return
     window.launcher.addRecentEmoji(entry.c).catch(() => {})
-    window.launcher
-      .insertText(entry.c)
-      .then((r) => { if (!r?.ok) navigator.clipboard.writeText(entry.c).catch(() => {}) })
-      .catch(() => { navigator.clipboard.writeText(entry.c).catch(() => {}) })
+    if (emojiInsertRef.current) {
+      window.launcher
+        .insertText(entry.c)
+        .then((r) => { if (!r?.ok) navigator.clipboard.writeText(entry.c).catch(() => {}) })
+        .catch(() => { navigator.clipboard.writeText(entry.c).catch(() => {}) })
+    } else {
+      navigator.clipboard.writeText(entry.c).catch(() => {})
+      window.launcher.hide()
+    }
   }, [])
 
   const panelWidth = activeCommand === "wallpaper"
@@ -372,7 +378,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   function activateSetting(cmd: SettingCommand) {
     const c = cmd.control
     if (c.kind === "brightness") { if (brightnessIsSubmenu) enterCommand(cmd.id) }
-    else if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power" || c.kind === "tray" || c.kind === "emoji") enterCommand(cmd.id)
+    else if (c.kind === "emoji") { emojiInsertRef.current = false; enterCommand(cmd.id) }
+    else if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power" || c.kind === "tray") enterCommand(cmd.id)
     else if (c.kind === "toggle") toggleSetting(cmd)
     else if (c.kind === "navigate") {
       window.shell.windows.openSettings(c.path)
@@ -584,7 +591,10 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   }, [filteredEmojis.length, emojiIndex])
 
   useEffect(() => {
-    if (mode === "emoji") enterCommand("emoji")
+    if (mode === "emoji") {
+      emojiInsertRef.current = true
+      enterCommand("emoji")
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

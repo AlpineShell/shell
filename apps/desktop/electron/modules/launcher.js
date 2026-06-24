@@ -424,7 +424,7 @@ module.exports = {
     'launcher/open-location': (_event, id) => openItemLocation(findItem(id)),
     'launcher/insert-text': async (_event, text) => {
       const hwnd = lastUserForeground
-      animatedHide()
+      hideForOverlay()
       if (typeof text !== 'string' || !text) return { ok: false }
       return { ok: await insertText(hwnd, text) }
     },
