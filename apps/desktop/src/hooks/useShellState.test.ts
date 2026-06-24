@@ -26,4 +26,28 @@ describe('useShellState', () => {
     act(() => pushed?.('pushed'))
     expect(result.current).toBe('pushed')
   })
+
+  it('calls the cleanup returned by subscribe on unmount', async () => {
+    const unsubscribe = vi.fn()
+    const subscribe = vi.fn(() => unsubscribe)
+    const { unmount } = renderHook(() => useShellState('initial', vi.fn().mockResolvedValue('first'), subscribe))
+
+    await waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1))
+    unmount()
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a pushed update after unmount', async () => {
+    let pushed: ((value: string) => void) | undefined
+    const subscribe = vi.fn((callback: (value: string) => void) => {
+      pushed = callback
+      return () => {}
+    })
+    const { result, unmount } = renderHook(() => useShellState('initial', vi.fn().mockResolvedValue('first'), subscribe))
+
+    await waitFor(() => expect(result.current).toBe('first'))
+    unmount()
+    act(() => pushed?.('pushed'))
+    expect(result.current).toBe('first')
+  })
 })

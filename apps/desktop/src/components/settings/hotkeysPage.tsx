@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Minus, Plus } from 'lucide-react'
 
 const SPECIAL_KEY_MAP: Record<string, string> = {
   ' ': 'Space',
@@ -49,12 +50,16 @@ function buildAccelerator(e: React.KeyboardEvent): string | null {
 export default function HotkeysPage() {
   const [searchKey, setSearchKey] = useState('Win')
   const [recentApps, setRecentApps] = useState(false)
+  const [maxResults, setMaxResults] = useState(8)
 
   useEffect(() => {
     window.launcher.getHotkey().then(setSearchKey)
     window.launcher.onHotkeyChanged(setSearchKey)
     window.launcher.recentApps().then(setRecentApps)
-    return window.launcher.onRecentAppsChanged(setRecentApps)
+    window.launcher.maxResults().then(setMaxResults)
+    const offRecentApps = window.launcher.onRecentAppsChanged(setRecentApps)
+    const offMaxResults = window.launcher.onMaxResultsChanged(setMaxResults)
+    return () => { offRecentApps(); offMaxResults() }
   }, [])
 
   async function setSearch(hk: string) {
@@ -65,6 +70,11 @@ export default function HotkeysPage() {
   function toggleRecentApps(value: boolean) {
     setRecentApps(value)
     window.launcher.setRecentApps(value)
+  }
+
+  function changeMaxResults(value: number) {
+    setMaxResults(value)
+    window.launcher.setMaxResults(value)
   }
 
   return (
@@ -96,6 +106,14 @@ export default function HotkeysPage() {
           description="When you open Search, list your most-used apps before you type. Turn this off to start with an empty search."
           checked={recentApps}
           onChange={toggleRecentApps}
+        />
+        <StepperRow
+          label="Maximum results"
+          description="The most apps and options Search will show at once, before and after you type."
+          value={maxResults}
+          min={3}
+          max={8}
+          onChange={changeMaxResults}
         />
       </section>
     </div>
@@ -221,5 +239,66 @@ function ToggleRow({
         />
       </button>
     </div>
+  )
+}
+
+function StepperRow({
+  label,
+  description,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string
+  description?: string
+  value: number
+  min: number
+  max: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <div className="text-sm">{label}</div>
+        {description && <div className="text-xs text-white/50 mt-0.5">{description}</div>}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <StepperButton ariaLabel="Fewer results" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}>
+          <Minus size={14} />
+        </StepperButton>
+        <span className="w-6 text-center text-sm tabular-nums">{value}</span>
+        <StepperButton ariaLabel="More results" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}>
+          <Plus size={14} />
+        </StepperButton>
+      </div>
+    </div>
+  )
+}
+
+function StepperButton({
+  ariaLabel,
+  onClick,
+  disabled,
+  children,
+}: {
+  ariaLabel: string
+  onClick: () => void
+  disabled: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className={`w-8 h-8 flex items-center justify-center rounded-md border transition-colors ${
+        disabled
+          ? 'border-white/5 bg-white/5 text-white/30 cursor-not-allowed'
+          : 'border-white/10 bg-white/5 text-white/90 hover:bg-white/10 cursor-pointer'
+      }`}
+    >
+      {children}
+    </button>
   )
 }

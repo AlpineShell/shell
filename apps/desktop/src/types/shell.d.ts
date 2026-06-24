@@ -337,6 +337,9 @@ declare global {
       recentApps: () => Promise<boolean>
       setRecentApps: (value: boolean) => Promise<boolean>
       onRecentAppsChanged: (callback: (value: boolean) => void) => () => void
+      maxResults: () => Promise<number>
+      setMaxResults: (value: number) => Promise<number>
+      onMaxResultsChanged: (callback: (value: number) => void) => () => void
     }
     screenshot: {
       onShow: (callback: (data: ScreenshotShowPayload) => void) => void
