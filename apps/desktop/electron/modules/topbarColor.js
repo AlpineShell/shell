@@ -1,7 +1,7 @@
 const { app, nativeImage } = require('electron')
-const { exec } = require('child_process')
 const fs = require('fs')
 const path = require('path')
+const { resolveWallpaperPath } = require('./wallpaper')
 
 const STORE_FILE = 'topbar-color.json'
 
@@ -47,18 +47,6 @@ function saveOverride() {
   } catch (e) {
     console.error('[topbarColor] save error:', e.message)
   }
-}
-
-function getWallpaperPath() {
-  return new Promise((resolve) => {
-    exec(
-      'reg query "HKCU\\Control Panel\\Desktop" /v Wallpaper',
-      (err, stdout) => {
-        const match = stdout?.match(/Wallpaper\s+REG_SZ\s+(.+)/)
-        resolve(match ? match[1].trim() : null)
-      }
-    )
-  })
 }
 
 function rgbToOklab(r, g, b) {
@@ -197,7 +185,7 @@ function getEffectiveColor() {
 }
 
 function updateColor(broadcast) {
-  getWallpaperPath().then((wallpaperPath) => {
+  resolveWallpaperPath().then((wallpaperPath) => {
     if (wallpaperPath === lastWallpaperPath && lastColor) return
     lastWallpaperPath = wallpaperPath
     const result = extractColor(wallpaperPath)
@@ -218,7 +206,7 @@ module.exports = {
     'topbar/color': () => {
       if (userOverride) return userOverride
       if (lastColor) return lastColor
-      return getWallpaperPath().then((p) => {
+      return resolveWallpaperPath().then((p) => {
         const result = extractColor(p)
         if (result) {
           lastColor = result.color

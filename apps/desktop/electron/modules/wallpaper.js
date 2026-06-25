@@ -90,6 +90,11 @@ function getPath() {
   })
 }
 
+function resolveWallpaperPath() {
+  if (lastPath) return Promise.resolve(lastPath)
+  return getPath()
+}
+
 function encode(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null
   const mtime = fs.statSync(filePath).mtimeMs
@@ -114,6 +119,7 @@ function setWallpaper(filePath) {
 }
 
 module.exports = {
+  resolveWallpaperPath,
   handlers: {
     'windows/wallpaper': () => encode(lastPath),
     'windows/wallpaper-set': async (_event, filePath) => {
