@@ -1,7 +1,7 @@
 const { app, nativeImage } = require('electron')
 const fs = require('fs')
 const path = require('path')
-const { resolveWallpaperPath } = require('./wallpaper')
+const { resolveWallpaperPath, onWallpaperPathChange } = require('./wallpaper')
 
 const STORE_FILE = 'topbar-color.json'
 
@@ -184,21 +184,23 @@ function getEffectiveColor() {
   return lastColor
 }
 
-function updateColor(broadcast) {
-  resolveWallpaperPath().then((wallpaperPath) => {
-    if (wallpaperPath === lastWallpaperPath && lastColor) return
-    lastWallpaperPath = wallpaperPath
-    const result = extractColor(wallpaperPath)
-    if (!result) return
-    lastPalette = buildPalette(result.clusters)
-    const color = result.color
-    if (!lastColor || color.r !== lastColor.r || color.g !== lastColor.g || color.b !== lastColor.b) {
-      lastColor = color
-      if (!userOverride) {
-        broadcast('topbar/color-changed', color)
-      }
+function applyColorForPath(wallpaperPath, broadcast) {
+  if (wallpaperPath === lastWallpaperPath && lastColor) return
+  lastWallpaperPath = wallpaperPath
+  const result = extractColor(wallpaperPath)
+  if (!result) return
+  lastPalette = buildPalette(result.clusters)
+  const color = result.color
+  if (!lastColor || color.r !== lastColor.r || color.g !== lastColor.g || color.b !== lastColor.b) {
+    lastColor = color
+    if (!userOverride) {
+      broadcast('topbar/color-changed', color)
     }
-  })
+  }
+}
+
+function updateColor(broadcast) {
+  resolveWallpaperPath().then((wallpaperPath) => applyColorForPath(wallpaperPath, broadcast))
 }
 
 module.exports = {
@@ -249,6 +251,6 @@ module.exports = {
     broadcastRef = broadcast
     loadOverride()
     updateColor(broadcast)
-    setInterval(() => updateColor(broadcast), 5000)
+    onWallpaperPathChange((wallpaperPath) => applyColorForPath(wallpaperPath, broadcast))
   },
 }
