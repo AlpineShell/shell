@@ -9,8 +9,8 @@ export function useApps() {
     let alive = true
     const apply = (data: LauncherItem[]) => { cache = data; if (alive) setApps(data) }
     window.shell.apps.catalog().then(apply)
-    window.shell.apps.onCatalogChanged(apply)
-    return () => { alive = false }
+    const offCatalog = window.shell.apps.onCatalogChanged(apply)
+    return () => { alive = false; offCatalog() }
   }, [])
 
   return apps

@@ -405,9 +405,11 @@ module.exports = {
   },
 
   start(broadcast) {
-    enumerate().then(state => {
-      lastStateJson = JSON.stringify(state)
-      broadcast('system/monitors-changed', state)
+    setImmediate(() => {
+      enumerate().then(state => {
+        lastStateJson = JSON.stringify(state)
+        broadcast('system/monitors-changed', state)
+      })
     })
 
     setInterval(async () => {
