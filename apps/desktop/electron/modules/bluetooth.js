@@ -1,4 +1,3 @@
-const { runPowerShell } = require('../powershell')
 const { exec } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
@@ -16,25 +15,19 @@ let cachedState = { enabled: false, connected: false, devices: [] }
 let cachedDevices = []
 let broadcastRef = null
 
-function isRadioEnabled() {
-  return runPowerShell(
-    "((Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' }).Count -gt 0)"
-  ).then((output) => output === 'True')
-}
-
-function getConnectedDevices() {
+function getRadioAndDevices() {
   return new Promise((resolve) => {
     exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}"`,
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}" -WithRadio`,
       (err, stdout) => {
-        if (err || !stdout) return resolve([])
+        if (err || !stdout) return resolve({ enabled: false, devices: [] })
         try {
           const parsed = JSON.parse(stdout.trim())
-          const list = Array.isArray(parsed) ? parsed : [parsed]
-          const names = list.filter((d) => d.connected).map((d) => d.name)
-          resolve([...new Set(names)])
+          const raw = parsed.devices
+          const devices = Array.isArray(raw) ? raw : raw ? [raw] : []
+          resolve({ enabled: parsed.enabled === true, devices })
         } catch {
-          resolve([])
+          resolve({ enabled: false, devices: [] })
         }
       }
     )
@@ -42,11 +35,12 @@ function getConnectedDevices() {
 }
 
 async function getBluetoothState() {
-  const enabled = await isRadioEnabled()
+  const { enabled, devices } = await getRadioAndDevices()
   if (!enabled) return { enabled: false, connected: false, devices: [] }
 
-  const devices = await getConnectedDevices()
-  return { enabled: true, connected: devices.length > 0, devices }
+  const names = devices.filter((d) => d.connected).map((d) => d.name)
+  const connectedNames = [...new Set(names)]
+  return { enabled: true, connected: connectedNames.length > 0, devices: connectedNames }
 }
 
 function scanBluetoothDevices() {
