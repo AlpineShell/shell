@@ -19,6 +19,7 @@ function ensureOverlayWindow() {
   overlayWindow.on('closed', () => {
     overlayWindow = null
     overlayReady = null
+    active = false
   })
 }
 
