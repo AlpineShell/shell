@@ -255,7 +255,9 @@ contextBridge.exposeInMainWorld('shell', {
     subscribePeak: () => ipcRenderer.invoke('system/peak-subscribe'),
     unsubscribePeak: () => ipcRenderer.invoke('system/peak-unsubscribe'),
     onAudioPeak: (callback) => {
-      ipcRenderer.on('system/audio-peak', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/audio-peak', handler)
+      return () => ipcRenderer.removeListener('system/audio-peak', handler)
     },
     brightness: () => ipcRenderer.invoke('system/brightness-get'),
     setBrightness: (value) => ipcRenderer.invoke('system/brightness-set', value),
