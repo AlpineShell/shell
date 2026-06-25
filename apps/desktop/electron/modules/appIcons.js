@@ -34,6 +34,101 @@ function expandEnv(p) {
   return String(p || '').replace(/%([^%]+)%/g, (_, key) => process.env[key] || `%${key}%`)
 }
 
+const CACHE_FILE = 'icon-cache.json'
+const CACHE_MAX_ENTRIES = 4000
+const CACHE_MAX_ENTRY_LENGTH = 512 * 1024
+const CACHE_WRITE_DEBOUNCE = 1500
+
+let diskCache = null
+let diskCacheLoaded = false
+let diskCachePath = null
+let diskCacheWriteTimer = null
+let diskCacheDirty = false
+let quitFlushRegistered = false
+
+function getDiskCachePath() {
+  if (!diskCachePath) diskCachePath = path.join(app.getPath('userData'), CACHE_FILE)
+  return diskCachePath
+}
+
+function registerQuitFlush() {
+  if (quitFlushRegistered) return
+  quitFlushRegistered = true
+  app.on('before-quit', flushDiskCache)
+  app.on('will-quit', flushDiskCache)
+  app.on('quit', flushDiskCache)
+}
+
+function loadDiskCache() {
+  if (diskCacheLoaded) return diskCache
+  diskCacheLoaded = true
+  diskCache = new Map()
+  registerQuitFlush()
+  let raw
+  try {
+    raw = fs.readFileSync(getDiskCachePath(), 'utf8')
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error('[appIcons] cache read error:', e.message)
+    return diskCache
+  }
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed.entries === 'object' && parsed.entries) {
+      for (const [key, value] of Object.entries(parsed.entries)) {
+        if (typeof value === 'string' && value) diskCache.set(key, value)
+      }
+    }
+  } catch (e) {
+    console.error('[appIcons] corrupt cache, rebuilding:', e.message)
+    try { fs.renameSync(getDiskCachePath(), getDiskCachePath() + '.bak') } catch {}
+  }
+  return diskCache
+}
+
+function flushDiskCache() {
+  if (diskCacheWriteTimer) { clearTimeout(diskCacheWriteTimer); diskCacheWriteTimer = null }
+  if (!diskCacheLoaded || !diskCacheDirty) return
+  diskCacheDirty = false
+  const entries = {}
+  for (const [key, value] of diskCache) entries[key] = value
+  const tmp = getDiskCachePath() + '.tmp'
+  try {
+    fs.writeFileSync(tmp, JSON.stringify({ version: 1, entries }))
+    fs.renameSync(tmp, getDiskCachePath())
+  } catch (e) {
+    console.error('[appIcons] cache write error:', e.message)
+  }
+}
+
+function scheduleDiskCacheWrite() {
+  diskCacheDirty = true
+  if (diskCacheWriteTimer) clearTimeout(diskCacheWriteTimer)
+  diskCacheWriteTimer = setTimeout(flushDiskCache, CACHE_WRITE_DEBOUNCE)
+}
+
+function rememberIcon(key, value) {
+  if (!key || !value || value.length > CACHE_MAX_ENTRY_LENGTH) return
+  const cache = loadDiskCache()
+  if (cache.has(key)) cache.delete(key)
+  cache.set(key, value)
+  while (cache.size > CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value
+    cache.delete(oldest)
+  }
+  scheduleDiskCacheWrite()
+}
+
+function fileIconKey(rawPath, index) {
+  const expanded = expandEnv(rawPath)
+  if (!expanded) return null
+  try {
+    const stat = fs.statSync(expanded)
+    return `file|${expanded.toLowerCase()}|${index | 0}|${Math.round(stat.mtimeMs)}|${stat.size}`
+  } catch {
+    return null
+  }
+}
+
 const IMAGE_EXTS = new Set(['.png', '.ico', '.jpg', '.jpeg', '.gif', '.bmp'])
 
 function squirrelRedirect(target) {
@@ -163,7 +258,16 @@ function buildShortcutIndex() {
 
 async function resolveIcons(specs) {
   if (!specs.length) return []
-  const entries = specs.map((s) => `@{ p='${String(s.path).replace(/'/g, "''")}'; i=${s.index | 0} }`).join(',')
+  const cache = loadDiskCache()
+  const results = new Array(specs.length).fill(null)
+  const misses = []
+  specs.forEach((spec, i) => {
+    const key = fileIconKey(spec.path, spec.index | 0)
+    if (key && cache.has(key)) { results[i] = cache.get(key); return }
+    misses.push({ resultIndex: i, spec, key })
+  })
+  if (!misses.length) return results
+  const entries = misses.map((m) => `@{ p='${String(m.spec.path).replace(/'/g, "''")}'; i=${m.spec.index | 0} }`).join(',')
   const script = `Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
 using System;
@@ -208,7 +312,13 @@ foreach ($e in $entries) {
 }
 $results -join '|'`
   const out = await runPsScript(script)
-  return out.trim().split('|').map((b64) => (b64 && b64.length > 10 ? `data:image/png;base64,${b64}` : null))
+  const extracted = out.trim().split('|').map((b64) => (b64 && b64.length > 10 ? `data:image/png;base64,${b64}` : null))
+  misses.forEach((m, k) => {
+    const url = extracted[k] || null
+    results[m.resultIndex] = url
+    if (url && m.key) rememberIcon(m.key, url)
+  })
+  return results
 }
 
 async function resolveAppIcons(appIds) {
