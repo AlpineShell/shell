@@ -106,7 +106,9 @@ async function compileDll() {
     `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n` +
     `Add-Type -Path '${DLL_PATH}'\n` +
     `$wins = [TaskbarFilter]::GetTaskbarWindows()\n` +
-    `$pids = @{}; Get-Process | ForEach-Object { $pids[$_.Id] = $_ }\n` +
+    `$ids = @($wins | ForEach-Object { [int]$_[1] } | Select-Object -Unique)\n` +
+    `$pids = @{}\n` +
+    `if ($ids.Count -gt 0) { Get-Process -Id $ids -ErrorAction SilentlyContinue | ForEach-Object { $pids[$_.Id] = $_ } }\n` +
     `$r = @(foreach ($w in $wins) {\n` +
     `  $proc = $pids[[int]$w[1]]\n` +
     `  if ($proc) {\n` +
