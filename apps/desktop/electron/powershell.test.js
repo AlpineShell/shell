@@ -8,8 +8,10 @@ function makeFakeWorker() {
   const worker = new EventEmitter()
   worker.writes = []
   worker.killed = false
+  worker.exitCode = null
   worker.stdout = new EventEmitter()
-  worker.stdin = { write: (text) => { worker.writes.push(text); return true } }
+  worker.stdin = new EventEmitter()
+  worker.stdin.write = (text) => { worker.writes.push(text); return true }
   worker.kill = () => { worker.killed = true }
   worker.complete = (result) => worker.stdout.emit('data', Buffer.from(`${result}\n${DELIM}\n`))
   return worker
@@ -83,6 +85,27 @@ describe('createPersistentRunner', () => {
     expect(spawnWorker).toHaveBeenCalledTimes(2)
     workers[1].complete('alive')
     await expect(revived).resolves.toBe('alive')
+  })
+
+  it('dispatches to a fresh worker when the previous exited before the next write (data-before-exit race)', async () => {
+    const workers = [makeFakeWorker(), makeFakeWorker()]
+    let spawnCount = 0
+    const spawnWorker = vi.fn(() => workers[spawnCount++])
+    const runner = createPersistentRunner(spawnWorker)
+
+    const a = runner.run('A')
+    const b = runner.run('B')
+
+    workers[0].exitCode = 0
+    workers[0].complete('ra')
+    await expect(a).resolves.toBe('ra')
+
+    expect(spawnWorker).toHaveBeenCalledTimes(2)
+    expect(commandWrites(workers[0]).some((w) => w.includes('B'))).toBe(false)
+    expect(commandWrites(workers[1]).some((w) => w.includes('B'))).toBe(true)
+
+    workers[1].complete('rb')
+    await expect(b).resolves.toBe('rb')
   })
 
   it('keeps a slow command from blocking later commands head-of-line', async () => {

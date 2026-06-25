@@ -48,6 +48,8 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
   function teardownWorker() {
     if (worker) {
       worker.removeAllListeners()
+      worker.stdout.removeAllListeners()
+      worker.stdin.removeAllListeners()
       try { worker.kill() } catch { void 0 }
       worker = null
     }
@@ -78,6 +80,7 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
     worker = spawnWorker()
     outputBuffer = ''
     worker.stdout.on('data', onWorkerData)
+    worker.stdin.on('error', () => {})
     worker.on('exit', onWorkerExit)
     worker.stdin.write('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n')
   }
@@ -90,7 +93,10 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
 
   function processNext() {
     if (active || queue.length === 0) return
-    if (!worker) startWorker()
+    if (!worker || worker.exitCode !== null) {
+      teardownWorker()
+      startWorker()
+    }
     active = queue.shift()
     watchdog = setTimeout(onWatchdogExpire, commandTimeoutMs)
     worker.stdin.write(`${active.command}\nWrite-Output '${PERSISTENT_DELIM}'\n`)
