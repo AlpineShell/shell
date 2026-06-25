@@ -336,7 +336,6 @@ declare global {
       setHotkey: (hotkey: string) => Promise<string>
       defaultHotkey: () => Promise<string>
       onHotkeyChanged: (callback: (hotkey: string) => void) => void
-      onIndexChanged: (callback: (data: LauncherItem[]) => void) => void
       onShow: (callback: (data: { displayId: number; mode?: string }) => void) => void
       onStartClose: (callback: () => void) => () => void
       onHide: (callback: () => void) => () => void
@@ -362,7 +361,6 @@ declare global {
       activate: (hwnd: number) => Promise<void>
     }
     topbar: {
-      setIgnoreMouseEvents: (ignore: boolean) => void
       setActiveRegion: (region: { top: number; bottom: number; left: number; right: number } | null) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => void
