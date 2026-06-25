@@ -45,9 +45,12 @@ function initPS() {
       ps = null
       psReady = null
       busy = false
-      if (pendingResolve) { pendingResolve(''); pendingResolve = null }
-      for (const { resolve } of commandQueue) resolve('')
+      const queued = commandQueue
       commandQueue = []
+      const pending = pendingResolve
+      pendingResolve = null
+      if (pending) pending('')
+      for (const { resolve } of queued) resolve('')
     })
 
     const script = fs.readFileSync(SCRIPT_PATH, 'utf8')
