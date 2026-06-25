@@ -365,25 +365,25 @@ declare global {
       setIgnoreMouseEvents: (ignore: boolean) => void
       setActiveRegion: (region: { top: number; bottom: number; left: number; right: number } | null) => void
       color: () => Promise<TopBarColor | null>
-      onColorChanged: (callback: (color: TopBarColor) => void) => void
+      onColorChanged: (callback: (color: TopBarColor) => void) => () => void
       colorOverride: () => Promise<TopBarColor | null>
       setColorOverride: (color: { r: number; g: number; b: number } | null) => Promise<TopBarColor | null>
       colorPalette: () => Promise<TopBarColor[]>
       searchIcon: () => Promise<boolean>
       setSearchIcon: (value: boolean) => Promise<boolean>
-      onSearchIconChanged: (callback: (visible: boolean) => void) => void
+      onSearchIconChanged: (callback: (visible: boolean) => void) => () => void
       mediaVisualizer: () => Promise<boolean>
       setMediaVisualizer: (value: boolean) => Promise<boolean>
-      onMediaVisualizerChanged: (callback: (value: boolean) => void) => void
+      onMediaVisualizerChanged: (callback: (value: boolean) => void) => () => void
       foregroundColor: () => Promise<ForegroundColorData[]>
-      onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => void
+      onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => () => void
       onCloseMenus: (callback: () => void) => () => void
     }
     shell: {
       settingsIcon: string
       windows: {
         wallpaper: () => Promise<string | null>
-        onWallpaperChanged: (callback: (data: string | null) => void) => void
+        onWallpaperChanged: (callback: (data: string | null) => void) => () => void
         setWallpaper: (filePath: string) => Promise<boolean>
         pickWallpaper: () => Promise<string | null>
         wallpaperPresets: () => Promise<{ name: string; path: string; thumbnail: string; url: string }[]>
@@ -451,10 +451,10 @@ declare global {
         bluetoothSetRadio: (enabled: boolean) => Promise<{ success: boolean; state: string }>
         volume: () => Promise<number>
         setVolume: (value: number) => Promise<number>
-        onVolumeChanged: (callback: (data: number) => void) => void
+        onVolumeChanged: (callback: (data: number) => void) => () => void
         mute: () => Promise<boolean>
         setMute: (muted: boolean) => Promise<boolean>
-        onMuteChanged: (callback: (data: boolean) => void) => void
+        onMuteChanged: (callback: (data: boolean) => void) => () => void
         subscribePeak: () => Promise<boolean>
         unsubscribePeak: () => Promise<boolean>
         onAudioPeak: (callback: (peak: number) => void) => void
@@ -467,14 +467,14 @@ declare global {
         powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>
-        onBatteryChanged: (callback: (data: BatteryStatus) => void) => void
+        onBatteryChanged: (callback: (data: BatteryStatus) => void) => () => void
       }
       media: {
         session: () => Promise<MediaPlayback>
-        onSessionChanged: (callback: (data: MediaPlayback) => void) => void
+        onSessionChanged: (callback: (data: MediaPlayback) => void) => () => void
         control: (action: 'play' | 'pause' | 'toggle' | 'next' | 'previous') => Promise<{ success: boolean }>
         microphone: () => Promise<MicrophoneStatus>
-        onMicrophoneChanged: (callback: (data: MicrophoneStatus) => void) => void
+        onMicrophoneChanged: (callback: (data: MicrophoneStatus) => void) => () => void
       }
       tray: {
         icons: () => Promise<TrayIcon[]>

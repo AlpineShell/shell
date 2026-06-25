@@ -52,11 +52,15 @@ contextBridge.exposeInMainWorld('topbar', {
   setActiveRegion: (region) => ipcRenderer.send('topbar/set-active-region', region),
   color: () => ipcRenderer.invoke('topbar/color'),
   onColorChanged: (callback) => {
-    ipcRenderer.on('topbar/color-changed', (_, data) => callback(data))
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('topbar/color-changed', handler)
+    return () => ipcRenderer.removeListener('topbar/color-changed', handler)
   },
   foregroundColor: () => ipcRenderer.invoke('topbar/fg-color'),
   onForegroundColorChanged: (callback) => {
-    ipcRenderer.on('topbar/fg-color-changed', (_, data) => callback(data))
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('topbar/fg-color-changed', handler)
+    return () => ipcRenderer.removeListener('topbar/fg-color-changed', handler)
   },
   colorOverride: () => ipcRenderer.invoke('topbar/color-override-get'),
   setColorOverride: (color) => ipcRenderer.invoke('topbar/color-override-set', color),
@@ -64,12 +68,16 @@ contextBridge.exposeInMainWorld('topbar', {
   searchIcon: () => ipcRenderer.invoke('topbar/search-icon-get'),
   setSearchIcon: (value) => ipcRenderer.invoke('topbar/search-icon-set', value),
   onSearchIconChanged: (callback) => {
-    ipcRenderer.on('topbar/search-icon-changed', (_, data) => callback(data))
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('topbar/search-icon-changed', handler)
+    return () => ipcRenderer.removeListener('topbar/search-icon-changed', handler)
   },
   mediaVisualizer: () => ipcRenderer.invoke('topbar/media-visualizer-get'),
   setMediaVisualizer: (value) => ipcRenderer.invoke('topbar/media-visualizer-set', value),
   onMediaVisualizerChanged: (callback) => {
-    ipcRenderer.on('topbar/media-visualizer-changed', (_, data) => callback(data))
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('topbar/media-visualizer-changed', handler)
+    return () => ipcRenderer.removeListener('topbar/media-visualizer-changed', handler)
   },
   onCloseMenus: (callback) => {
     const handler = () => callback()
@@ -184,7 +192,9 @@ contextBridge.exposeInMainWorld('shell', {
   windows: {
     wallpaper: () => ipcRenderer.invoke('windows/wallpaper'),
     onWallpaperChanged: (callback) => {
-      ipcRenderer.on('windows/wallpaper-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('windows/wallpaper-changed', handler)
+      return () => ipcRenderer.removeListener('windows/wallpaper-changed', handler)
     },
     setWallpaper: (filePath) => ipcRenderer.invoke('windows/wallpaper-set', filePath),
     pickWallpaper: () => ipcRenderer.invoke('windows/wallpaper-pick'),
@@ -245,12 +255,16 @@ contextBridge.exposeInMainWorld('shell', {
     volume: () => ipcRenderer.invoke('system/volume-get'),
     setVolume: (value) => ipcRenderer.invoke('system/volume-set', value),
     onVolumeChanged: (callback) => {
-      ipcRenderer.on('system/volume-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/volume-changed', handler)
+      return () => ipcRenderer.removeListener('system/volume-changed', handler)
     },
     mute: () => ipcRenderer.invoke('system/mute-get'),
     setMute: (muted) => ipcRenderer.invoke('system/mute-set', muted),
     onMuteChanged: (callback) => {
-      ipcRenderer.on('system/mute-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/mute-changed', handler)
+      return () => ipcRenderer.removeListener('system/mute-changed', handler)
     },
     subscribePeak: () => ipcRenderer.invoke('system/peak-subscribe'),
     unsubscribePeak: () => ipcRenderer.invoke('system/peak-unsubscribe'),
@@ -273,18 +287,24 @@ contextBridge.exposeInMainWorld('shell', {
     info: () => ipcRenderer.invoke('system/info'),
     battery: () => ipcRenderer.invoke('system/battery'),
     onBatteryChanged: (callback) => {
-      ipcRenderer.on('system/battery-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/battery-changed', handler)
+      return () => ipcRenderer.removeListener('system/battery-changed', handler)
     },
   },
   media: {
     session: () => ipcRenderer.invoke('media/session'),
     onSessionChanged: (callback) => {
-      ipcRenderer.on('media/session-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('media/session-changed', handler)
+      return () => ipcRenderer.removeListener('media/session-changed', handler)
     },
     control: (action) => ipcRenderer.invoke('media/control', action),
     microphone: () => ipcRenderer.invoke('media/microphone'),
     onMicrophoneChanged: (callback) => {
-      ipcRenderer.on('media/microphone-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('media/microphone-changed', handler)
+      return () => ipcRenderer.removeListener('media/microphone-changed', handler)
     },
   },
   tray: {
