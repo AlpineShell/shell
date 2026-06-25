@@ -16,9 +16,10 @@ export function useAudioPeak(enabled: boolean) {
 
     window.shell.system.subscribePeak()
     subscribed.current = true
-    window.shell.system.onAudioPeak(setPeak)
+    const removeAudioPeakListener = window.shell.system.onAudioPeak(setPeak)
 
     return () => {
+      removeAudioPeakListener()
       if (subscribed.current) {
         window.shell.system.unsubscribePeak()
         subscribed.current = false

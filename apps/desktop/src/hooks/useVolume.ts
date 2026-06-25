@@ -5,10 +5,18 @@ export function useVolume() {
   const [muted, setMuted] = useState(false)
 
   useEffect(() => {
-    window.shell.system.volume().then(setVolume)
-    window.shell.system.mute().then(setMuted)
-    window.shell.system.onVolumeChanged(setVolume)
-    window.shell.system.onMuteChanged(setMuted)
+    let alive = true
+    const applyVolume = (value: number) => { if (alive) setVolume(value) }
+    const applyMuted = (value: boolean) => { if (alive) setMuted(value) }
+    window.shell.system.volume().then(applyVolume)
+    window.shell.system.mute().then(applyMuted)
+    const unsubscribeVolume = window.shell.system.onVolumeChanged(applyVolume)
+    const unsubscribeMuted = window.shell.system.onMuteChanged(applyMuted)
+    return () => {
+      alive = false
+      unsubscribeVolume()
+      unsubscribeMuted()
+    }
   }, [])
 
   const set = (value: number) => {
