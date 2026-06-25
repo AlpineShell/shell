@@ -81,7 +81,64 @@ function loadAppURL(win, url) {
 
 const TOP_BAR_HEIGHT = 24
 
+const INTERACTIVE_RIGHT = 600
+const INTERACTIVE_LEFT = 40
+const INTERACTIVE_CENTER = 120
+
 const shells = new Map()
+
+let cursorTracker = null
+
+function evaluateTopBarInteraction(win, state) {
+  if (win.isDestroyed()) return
+  if (launcher.isLauncherActive(win)) return
+  if (altTab && altTab.isAltTabActive(win)) return
+  const bounds = state.bounds
+  const cursor = screen.getCursorScreenPoint()
+
+  const inBarRow = cursor.y >= bounds.y && cursor.y < bounds.y + TOP_BAR_HEIGHT &&
+                   cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width
+  const inLeftZone = cursor.x < bounds.x + INTERACTIVE_LEFT
+  const inRightZone = cursor.x >= bounds.x + bounds.width - INTERACTIVE_RIGHT
+  const centerX = bounds.x + bounds.width / 2
+  const inCenterZone = cursor.x >= centerX - INTERACTIVE_CENTER / 2 && cursor.x < centerX + INTERACTIVE_CENTER / 2
+
+  let inInteractive
+  if (state.activeRegion) {
+    const inMenu = cursor.y >= bounds.y + state.activeRegion.top && cursor.y < bounds.y + state.activeRegion.bottom &&
+                   cursor.x >= bounds.x + state.activeRegion.left && cursor.x < bounds.x + state.activeRegion.right
+    inInteractive = inBarRow || inMenu
+  } else {
+    inInteractive = inBarRow && (inLeftZone || inRightZone || inCenterZone)
+  }
+
+  if (inInteractive && state.ignoring) {
+    state.ignoring = false
+    win.setIgnoreMouseEvents(false)
+  } else if (!inInteractive && !state.ignoring) {
+    state.ignoring = true
+    win.setIgnoreMouseEvents(true)
+    if (state.activeRegion) {
+      win.webContents.send('topbar/close-menus')
+    }
+  }
+}
+
+function trackCursorInteraction() {
+  if (shells.size === 0) return
+  const nearest = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  for (const shell of shells.values()) {
+    const state = shell.topBarState
+    if (shell.display.id === nearest.id || !state.ignoring || state.activeRegion) {
+      evaluateTopBarInteraction(shell.topBar, state)
+    }
+  }
+}
+
+function startCursorTracking() {
+  if (cursorTracker) return
+  cursorTracker = setInterval(trackCursorInteraction, 50)
+}
 
 function createDesktopWindow(display) {
   const { x, y, width, height } = display.bounds
@@ -146,68 +203,27 @@ function createTopBarWindow(display) {
   win.setIgnoreMouseEvents(true)
   loadAppURL(win, getURL('topbar', display.id))
 
-  const INTERACTIVE_RIGHT = 600
-  const INTERACTIVE_LEFT = 40
-  const INTERACTIVE_CENTER = 120
-  let ignoring = true
-  let activeRegion = null
-  let barBounds = win.getBounds()
+  const state = { ignoring: true, activeRegion: null, bounds: win.getBounds() }
+  win.topBarState = state
 
   win.refreshBarBounds = () => {
     if (win.isDestroyed()) return
-    barBounds = win.getBounds()
-  }
-
-  function evaluateCursorInteraction() {
-    if (win.isDestroyed()) return
-    if (launcher.isLauncherActive(win)) return
-    if (altTab && altTab.isAltTabActive(win)) return
-    const bounds = barBounds
-    const cursor = screen.getCursorScreenPoint()
-
-    const inBarRow = cursor.y >= bounds.y && cursor.y < bounds.y + TOP_BAR_HEIGHT &&
-                     cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width
-    const inLeftZone = cursor.x < bounds.x + INTERACTIVE_LEFT
-    const inRightZone = cursor.x >= bounds.x + bounds.width - INTERACTIVE_RIGHT
-    const centerX = bounds.x + bounds.width / 2
-    const inCenterZone = cursor.x >= centerX - INTERACTIVE_CENTER / 2 && cursor.x < centerX + INTERACTIVE_CENTER / 2
-
-    let inInteractive
-    if (activeRegion) {
-      const inMenu = cursor.y >= bounds.y + activeRegion.top && cursor.y < bounds.y + activeRegion.bottom &&
-                     cursor.x >= bounds.x + activeRegion.left && cursor.x < bounds.x + activeRegion.right
-      inInteractive = inBarRow || inMenu
-    } else {
-      inInteractive = inBarRow && (inLeftZone || inRightZone || inCenterZone)
-    }
-
-    if (inInteractive && ignoring) {
-      ignoring = false
-      win.setIgnoreMouseEvents(false)
-    } else if (!inInteractive && !ignoring) {
-      ignoring = true
-      win.setIgnoreMouseEvents(true)
-      if (activeRegion) {
-        win.webContents.send('topbar/close-menus')
-      }
-    }
+    state.bounds = win.getBounds()
   }
 
   win.restorePassiveTopBar = () => {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
-    activeRegion = null
+    state.activeRegion = null
     win.setAlwaysOnTop(false)
-    ignoring = true
+    state.ignoring = true
     win.setIgnoreMouseEvents(true)
-    evaluateCursorInteraction()
+    evaluateTopBarInteraction(win, state)
   }
 
   win.on('move', win.refreshBarBounds)
   win.on('resize', win.refreshBarBounds)
-
-  const cursorTracker = setInterval(evaluateCursorInteraction, 50)
 
   const onSetActiveRegion = (event, region) => {
     if (win.isDestroyed()) return
@@ -215,19 +231,18 @@ function createTopBarWindow(display) {
     if (altTab && altTab.isAltTabActive(win)) return
     if (event.sender !== win.webContents) return
     if (region) {
-      activeRegion = region
+      state.activeRegion = region
       win.setAlwaysOnTop(true, 'screen-saver')
     } else {
-      activeRegion = null
+      state.activeRegion = null
       win.setAlwaysOnTop(false)
     }
-    evaluateCursorInteraction()
+    evaluateTopBarInteraction(win, state)
   }
   ipcMain.on('topbar/set-active-region', onSetActiveRegion)
 
   win.on('blur', () => launcher.handleBlur(win))
   win.on('closed', () => {
-    clearInterval(cursorTracker)
     ipcMain.removeListener('topbar/set-active-region', onSetActiveRegion)
   })
 
@@ -253,7 +268,7 @@ function createShellForDisplay(display) {
   const desktop = createDesktopWindow(display)
   const topBar = createTopBarWindow(display)
 
-  shells.set(display.id, { desktop, topBar, display })
+  shells.set(display.id, { desktop, topBar, display, topBarState: topBar.topBarState })
   return { desktop, topBar }
 }
 
@@ -559,6 +574,8 @@ function startShellMode() {
   for (const display of screen.getAllDisplays()) {
     createShellForDisplay(display)
   }
+
+  startCursorTracking()
 
   if (powerThrottling) {
     powerThrottling.disableEcoQosForAllProcesses()
