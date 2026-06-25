@@ -216,19 +216,17 @@ function isAltTabWindow(hwnd) {
   return true
 }
 
+const taskEnumResults = []
+const taskEnumProc = koffi.register((hwnd, _lParam) => {
+  const h = typeof hwnd === 'bigint' ? Number(hwnd) : hwnd
+  if (isAltTabWindow(h)) taskEnumResults.push(h)
+  return 1
+}, koffi.pointer(WNDENUMPROC))
+
 function enumTaskWindows() {
-  const windows = []
-  const cb = koffi.register((hwnd, _lParam) => {
-    const h = typeof hwnd === 'bigint' ? Number(hwnd) : hwnd
-    if (isAltTabWindow(h)) windows.push(h)
-    return 1
-  }, koffi.pointer(WNDENUMPROC))
-  try {
-    EnumWindows(cb, 0)
-  } finally {
-    koffi.unregister(cb)
-  }
-  return windows
+  taskEnumResults.length = 0
+  EnumWindows(taskEnumProc, 0)
+  return taskEnumResults.slice()
 }
 
 function captureWindowThumbnail(hwnd) {
