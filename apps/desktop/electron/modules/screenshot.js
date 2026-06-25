@@ -3,9 +3,25 @@ const path = require('path')
 const fs = require('fs')
 
 let overlayWindow = null
+let overlayWindowFactory = null
+let overlayReady = null
 let capturedImage = null
 let capturedDisplay = null
 let active = false
+
+function ensureOverlayWindow() {
+  if (overlayWindow && !overlayWindow.isDestroyed()) return
+  if (!overlayWindowFactory) return
+  overlayWindow = overlayWindowFactory()
+  overlayReady = new Promise((resolve) => {
+    overlayWindow.webContents.once('did-finish-load', () => resolve())
+  })
+  overlayWindow.on('closed', () => {
+    overlayWindow = null
+    overlayReady = null
+    active = false
+  })
+}
 
 function getScreenshotsFolder() {
   const pictures = app.getPath('pictures')
@@ -15,7 +31,9 @@ function getScreenshotsFolder() {
 }
 
 async function showOverlay() {
-  if (active || !overlayWindow || overlayWindow.isDestroyed()) return
+  if (active) return
+  ensureOverlayWindow()
+  if (!overlayWindow || overlayWindow.isDestroyed()) return
 
   const cursor = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursor)
@@ -31,6 +49,9 @@ async function showOverlay() {
 
   const source = sources.find(s => s.display_id === String(display.id)) || sources[0]
   if (!source) return
+
+  await overlayReady
+  if (!overlayWindow || overlayWindow.isDestroyed()) return
 
   active = true
   capturedDisplay = display
@@ -88,8 +109,8 @@ module.exports = {
     },
   },
 
-  setOverlayWindow(win) {
-    overlayWindow = win
+  setOverlayWindowFactory(factory) {
+    overlayWindowFactory = factory
   },
 
   showOverlay,
