@@ -27,6 +27,7 @@ function DesktopApp() {
 }
 
 async function resolveView(mode: Mode): Promise<ReactNode> {
+  await import('./heroui.css')
   if (mode === 'topbar') {
     const { default: TopBar } = await import('./components/topbar/topBar')
     return (
