@@ -42,6 +42,8 @@ function initWmiPs() {
       wmiCommandQueue = []
     })
 
+    wmiPs.stdin.on('error', () => {})
+
     wmiPendingResolve = () => { resolveInit(); processNextWmi() }
     wmiPs.stdin.write(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\nWrite-Output '${WMI_DELIM}'\n`)
   })
@@ -49,7 +51,7 @@ function initWmiPs() {
 }
 
 function processNextWmi() {
-  if (wmiCommandQueue.length === 0) { wmiBusy = false; return }
+  if (!wmiPs || wmiCommandQueue.length === 0) { wmiBusy = false; return }
   wmiBusy = true
   const { cmd, resolve } = wmiCommandQueue.shift()
   wmiPendingResolve = (result) => {
