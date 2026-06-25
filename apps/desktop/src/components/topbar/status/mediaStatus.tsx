@@ -11,7 +11,8 @@ const MIN_H = 2;
 const MAX_H = 13;
 const NOISE_FLOOR = 0.05;
 
-function MusicBars({ peak, color }: { peak: number; color: string }) {
+function MusicBars({ enabled, color }: { enabled: boolean; color: string }) {
+    const peak = useAudioPeak(enabled);
     const gated = peak < NOISE_FLOOR ? 0 : (peak - NOISE_FLOOR) / (1 - NOISE_FLOOR);
     const boosted = Math.min(1, Math.pow(gated, 0.7) * 1.4);
     return (
@@ -42,7 +43,6 @@ export default function MediaStatus() {
     const media = useMediaSession();
     const showVisualizer = useMediaVisualizer();
     const useIcon = !showVisualizer && !!media.appIcon;
-    const peak = useAudioPeak(media.playing && !useIcon);
 
     if (!media.title) return null;
 
@@ -54,7 +54,7 @@ export default function MediaStatus() {
                     {useIcon ? (
                         <img src={`data:image/png;base64,${media.appIcon}`} alt="" className="w-3.5 h-3.5 shrink-0 rounded-[3px]" draggable={false} />
                     ) : (
-                        <MusicBars peak={peak} color={darkText ? "black" : "white"} />
+                        <MusicBars enabled={media.playing && !useIcon} color={darkText ? "black" : "white"} />
                     )}
                     <span className={`text-[12px] leading-none max-w-24 truncate ${darkText ? "text-black" : "text-white"}`}>
                         {media.title}

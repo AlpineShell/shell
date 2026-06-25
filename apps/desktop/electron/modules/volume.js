@@ -123,12 +123,12 @@ async function getPeak() {
   }
 }
 
-function startPeakMeter(broadcast) {
+function startPeakMeter(broadcastToTopbars) {
   if (peakInterval) return
   peakInterval = setInterval(async () => {
     if (peakListeners <= 0) return
     const peak = await getPeak()
-    broadcast('system/audio-peak', peak)
+    broadcastToTopbars('system/audio-peak', peak)
   }, 66)
 }
 
@@ -149,21 +149,21 @@ module.exports = {
     'system/peak-unsubscribe': () => { peakListeners = Math.max(0, peakListeners - 1); return true },
   },
 
-  start(broadcast) {
+  start(_broadcast, broadcastToTopbars) {
     initPS()
-    startPeakMeter(broadcast)
+    startPeakMeter(broadcastToTopbars)
 
     setInterval(async () => {
       if (Date.now() - lastSetTime < 1500) return
       const current = await getVolume()
       if (current !== lastVolume) {
         lastVolume = current
-        broadcast('system/volume-changed', current)
+        broadcastToTopbars('system/volume-changed', current)
       }
       const currentMute = await getMute()
       if (currentMute !== lastMute) {
         lastMute = currentMute
-        broadcast('system/mute-changed', currentMute)
+        broadcastToTopbars('system/mute-changed', currentMute)
       }
     }, 1000)
   },
