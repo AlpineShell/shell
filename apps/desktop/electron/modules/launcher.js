@@ -15,6 +15,11 @@ const SCAN_DIRS = [
 ]
 
 let index = []
+let startApps = []
+let startAppsRefreshDebounce = null
+const shortcutInfoCache = new Map()
+const lnkIconCache = new Map()
+const startAppIconCache = new Map()
 let broadcast = null
 let shells = null
 let activeDisplayId = null
@@ -32,6 +37,7 @@ function setEmojiCapture(active, hwnd) {
 }
 
 const LAUNCHER_WIDTH = 600
+const START_APPS_REFRESH_INTERVAL = 300000
 
 function publishIndex() {
   if (!broadcast) return
@@ -100,7 +106,20 @@ function isDocumentAppId(appId) {
   return DOCUMENT_APPID_EXTS.has(path.extname(appId).toLowerCase())
 }
 
-async function buildIndex() {
+function readShortcutInfoCached(scPath, isUrl) {
+  const key = scPath.toLowerCase()
+  let mtimeMs
+  try { mtimeMs = fs.statSync(scPath).mtimeMs } catch { shortcutInfoCache.delete(key); return null }
+  const cached = shortcutInfoCache.get(key)
+  if (cached && cached.mtimeMs === mtimeMs) return cached.info
+  let info
+  if (isUrl) info = readUrlShortcut(scPath)
+  else { try { info = electronShell.readShortcutLink(scPath) } catch { info = null } }
+  shortcutInfoCache.set(key, { mtimeMs, info })
+  return info
+}
+
+function collectLnkItems() {
   const shortcutPaths = []
   for (const dir of SCAN_DIRS) walkShortcuts(dir, shortcutPaths)
 
@@ -109,12 +128,7 @@ async function buildIndex() {
 
   for (const scPath of shortcutPaths) {
     const isUrl = scPath.toLowerCase().endsWith('.url')
-    let info
-    if (isUrl) {
-      info = readUrlShortcut(scPath)
-    } else {
-      try { info = electronShell.readShortcutLink(scPath) } catch { continue }
-    }
+    const info = readShortcutInfoCached(scPath, isUrl)
     if (!info?.target) continue
     if (info.target.toLowerCase().startsWith('ms-settings:')) continue
 
@@ -136,6 +150,70 @@ async function buildIndex() {
     })
   }
 
+  return { items, seenNames }
+}
+
+function mergeStartAppsInto(items, seenNames, generic) {
+  const newItems = []
+  for (const startApp of startApps) {
+    const dedupeKey = startApp.name.toLowerCase()
+    if (BLOCKED_NAMES.has(dedupeKey)) continue
+    if (startApp.appId.toLowerCase().startsWith('windows.immersivecontrolpanel')) continue
+    if (isDocumentAppId(startApp.appId)) continue
+    if (seenNames.has(dedupeKey)) continue
+    seenNames.add(dedupeKey)
+    const cachedIcon = startAppIconCache.get(startApp.appId.toLowerCase())
+    const item = {
+      id: 0,
+      name: startApp.name,
+      lnkPath: null,
+      appId: startApp.appId,
+      target: startApp.appId,
+      icon: cachedIcon || generic,
+    }
+    items.push(item)
+    newItems.push(item)
+  }
+  return newItems
+}
+
+async function resolveStartAppIcons(newItems) {
+  const missing = newItems.filter((i) => !startAppIconCache.has(i.appId.toLowerCase()))
+  if (missing.length === 0) return false
+  const icons = await appIcons.resolveAppIcons(missing.map((i) => i.appId))
+  for (let k = 0; k < missing.length; k++) {
+    const url = icons[k] || null
+    startAppIconCache.set(missing[k].appId.toLowerCase(), url)
+    if (url) missing[k].icon = url
+  }
+  return true
+}
+
+function lnkIconCacheKey(source, index) {
+  let mtimeMs = 0
+  try { mtimeMs = fs.statSync(appIcons.expandEnv(source)).mtimeMs } catch {}
+  return `${source.toLowerCase()}|${index}|${mtimeMs}`
+}
+
+async function resolveLnkIcons(iconItems, generic) {
+  const uncached = []
+  for (const item of iconItems) {
+    const key = lnkIconCacheKey(item.iconSource, item.iconIndex || 0)
+    if (lnkIconCache.has(key)) item.icon = lnkIconCache.get(key) || generic
+    else uncached.push({ item, key })
+  }
+  if (uncached.length === 0) return
+  const icons = await appIcons.resolveIcons(uncached.map((u) => ({ path: u.item.iconSource, index: u.item.iconIndex || 0 })))
+  for (let k = 0; k < uncached.length; k++) {
+    const url = icons[k] || null
+    lnkIconCache.set(uncached[k].key, url)
+    uncached[k].item.icon = url || generic
+  }
+}
+
+async function buildIndex() {
+  const { items, seenNames } = collectLnkItems()
+
   items.sort((a, b) => a.name.localeCompare(b.name))
   for (let i = 0; i < items.length; i++) items[i].id = i
   index = items
@@ -143,44 +221,28 @@ async function buildIndex() {
 
   const generic = await appIcons.ensureGenericIcon()
 
-  getStartApps().then(async (startApps) => {
-    const newItems = []
-    for (const startApp of startApps) {
-      const dedupeKey = startApp.name.toLowerCase()
-      if (BLOCKED_NAMES.has(dedupeKey)) continue
-      if (startApp.appId.toLowerCase().startsWith('windows.immersivecontrolpanel')) continue
-      if (isDocumentAppId(startApp.appId)) continue
-      if (seenNames.has(dedupeKey)) continue
-      seenNames.add(dedupeKey)
-      const item = {
-        id: 0,
-        name: startApp.name,
-        lnkPath: null,
-        appId: startApp.appId,
-        target: startApp.appId,
-        icon: generic,
-      }
-      items.push(item)
-      newItems.push(item)
-    }
-    if (newItems.length === 0) return
+  const newStartAppItems = mergeStartAppsInto(items, seenNames, generic)
+  if (newStartAppItems.length > 0) {
     items.sort((a, b) => a.name.localeCompare(b.name))
     for (let i = 0; i < items.length; i++) items[i].id = i
     index = items
     publishIndex()
-
-    const icons = await appIcons.resolveAppIcons(newItems.map((i) => i.appId))
-    for (let k = 0; k < newItems.length; k++) if (icons[k]) newItems[k].icon = icons[k]
-    publishIndex()
-  }).catch((e) => console.error('[launcher] start apps error:', e.message))
+    resolveStartAppIcons(newStartAppItems)
+      .then((changed) => { if (changed) publishIndex() })
+      .catch((e) => console.error('[launcher] start apps icon error:', e.message))
+  }
 
   const iconItems = items.filter((i) => i.iconSource && i.iconSource.includes('\\'))
-  if (iconItems.length > 0) {
-    const icons = await appIcons.resolveIcons(iconItems.map((i) => ({ path: i.iconSource, index: i.iconIndex || 0 })))
-    for (let k = 0; k < iconItems.length; k++) iconItems[k].icon = icons[k] || generic
-  }
+  await resolveLnkIcons(iconItems, generic)
   for (const item of items) if (!item.icon) item.icon = generic
   publishIndex()
+}
+
+async function refreshStartApps() {
+  const apps = await getStartApps()
+  if (apps.length > 0) startApps = apps
+  startAppIconCache.clear()
+  await buildIndex()
 }
 
 let rebuildTimer = null
@@ -189,6 +251,14 @@ function scheduleRebuild() {
   rebuildTimer = setTimeout(() => {
     rebuildTimer = null
     buildIndex().catch((e) => console.error('[launcher] rebuild error:', e.message))
+  }, 1000)
+}
+
+function scheduleStartAppsRefresh() {
+  if (startAppsRefreshDebounce) clearTimeout(startAppsRefreshDebounce)
+  startAppsRefreshDebounce = setTimeout(() => {
+    startAppsRefreshDebounce = null
+    refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
   }, 1000)
 }
 
@@ -421,7 +491,7 @@ function launchAdminItem(item) {
 async function uninstallItem(item) {
   if (!item) return { ok: false, mode: 'none' }
   const result = await appManager.uninstallByLaunch({ appId: item.appId, target: item.target, name: item.name })
-  scheduleRebuild()
+  scheduleStartAppsRefresh()
   return result
 }
 
@@ -505,7 +575,10 @@ module.exports = {
   start(b) {
     broadcast = b
     appActivator.warm()
-    buildIndex().catch((e) => console.error('[launcher] initial index error:', e.message))
+    refreshStartApps().catch((e) => console.error('[launcher] start apps error:', e.message))
     watchScanDirs()
+    setInterval(() => {
+      refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
+    }, START_APPS_REFRESH_INTERVAL)
   },
 }

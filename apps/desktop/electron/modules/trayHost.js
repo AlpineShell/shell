@@ -397,20 +397,22 @@ module.exports = {
 
   start(broadcast) {
     broadcastRef = broadcast
-    try {
-      if (!createHost()) return
-      broadcastTaskbarCreated()
-      reaper = setInterval(reapDeadOwners, 2000)
-    } catch (e) {
-      console.error('[trayHost] start error:', e.message)
-      return
-    }
-    app.on('will-quit', () => {
+    setImmediate(() => {
       try {
-        if (reaper) clearInterval(reaper)
-        if (notifyHwnd) DestroyWindow(notifyHwnd)
-        if (trayHwnd) DestroyWindow(trayHwnd)
-      } catch {}
+        if (!createHost()) return
+        broadcastTaskbarCreated()
+        reaper = setInterval(reapDeadOwners, 2000)
+      } catch (e) {
+        console.error('[trayHost] start error:', e.message)
+        return
+      }
+      app.on('will-quit', () => {
+        try {
+          if (reaper) clearInterval(reaper)
+          if (notifyHwnd) DestroyWindow(notifyHwnd)
+          if (trayHwnd) DestroyWindow(trayHwnd)
+        } catch {}
+      })
     })
   },
 }
