@@ -1,73 +1,9 @@
 const koffi = require('koffi')
-const { exec, spawn } = require('child_process')
+const { exec } = require('child_process')
 const { screen } = require('electron')
+const { createPersistentRunner } = require('../powershell')
 
-
-const WMI_DELIM = '__BRIGHTNESS_DONE__'
-
-let wmiPs = null
-let wmiPsReady = null
-let wmiPendingResolve = null
-let wmiOutputBuf = ''
-let wmiCommandQueue = []
-let wmiBusy = false
-
-function initWmiPs() {
-  if (wmiPsReady) return wmiPsReady
-  wmiPsReady = new Promise((resolveInit) => {
-    wmiPs = spawn('powershell', [
-      '-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', '-'
-    ], { stdio: ['pipe', 'pipe', 'ignore'] })
-
-    wmiPs.stdout.on('data', (chunk) => {
-      wmiOutputBuf += chunk.toString()
-      const idx = wmiOutputBuf.indexOf(WMI_DELIM)
-      if (idx !== -1) {
-        const result = wmiOutputBuf.substring(0, idx).trim()
-        wmiOutputBuf = wmiOutputBuf.substring(idx + WMI_DELIM.length).replace(/^\r?\n/, '')
-        if (wmiPendingResolve) {
-          const r = wmiPendingResolve
-          wmiPendingResolve = null
-          r(result)
-        }
-      }
-    })
-
-    wmiPs.on('exit', () => {
-      wmiPs = null
-      wmiPsReady = null
-      wmiBusy = false
-      if (wmiPendingResolve) { wmiPendingResolve(''); wmiPendingResolve = null }
-      for (const { resolve } of wmiCommandQueue) resolve('')
-      wmiCommandQueue = []
-    })
-
-    wmiPs.stdin.on('error', () => {})
-
-    wmiPendingResolve = () => { resolveInit(); processNextWmi() }
-    wmiPs.stdin.write(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\nWrite-Output '${WMI_DELIM}'\n`)
-  })
-  return wmiPsReady
-}
-
-function processNextWmi() {
-  if (!wmiPs || wmiCommandQueue.length === 0) { wmiBusy = false; return }
-  wmiBusy = true
-  const { cmd, resolve } = wmiCommandQueue.shift()
-  wmiPendingResolve = (result) => {
-    resolve(result)
-    processNextWmi()
-  }
-  wmiPs.stdin.write(`${cmd}\nWrite-Output '${WMI_DELIM}'\n`)
-}
-
-async function runWmiCmd(cmd) {
-  await initWmiPs()
-  return new Promise((resolve) => {
-    wmiCommandQueue.push({ cmd, resolve })
-    if (!wmiBusy) processNextWmi()
-  })
-}
+const wmiRunner = createPersistentRunner()
 
 
 const user32 = koffi.load('user32.dll')
@@ -255,7 +191,7 @@ function ddcSetBrightness(hPhysical, rawValue) {
 
 
 async function wmiGetBrightness() {
-  const result = await runWmiCmd('(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness')
+  const result = await wmiRunner.run('(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness')
   const val = parseInt(result.trim(), 10)
   return isNaN(val) ? null : val
 }

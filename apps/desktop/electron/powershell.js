@@ -24,12 +24,17 @@ function spawnPersistentPowerShell() {
   ], { stdio: ['pipe', 'pipe', 'ignore'] })
 }
 
-function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, commandTimeoutMs = DEFAULT_COMMAND_TIMEOUT_MS) {
+function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, commandTimeoutMs = DEFAULT_COMMAND_TIMEOUT_MS, initScript = '') {
   let worker = null
   let outputBuffer = ''
   let active = null
   let watchdog = null
   const queue = []
+
+  function resolveInitScript() {
+    const value = typeof initScript === 'function' ? initScript() : initScript
+    return value || ''
+  }
 
   function clearWatchdog() {
     if (watchdog) {
@@ -83,6 +88,8 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
     worker.stdin.on('error', () => {})
     worker.on('exit', onWorkerExit)
     worker.stdin.write('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n')
+    const init = resolveInitScript()
+    if (init) worker.stdin.write(`${init}\n`)
   }
 
   function onWatchdogExpire() {
@@ -109,6 +116,10 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
     })
   }
 
+  function warm() {
+    if (!worker) startWorker()
+  }
+
   function dispose() {
     clearWatchdog()
     teardownWorker()
@@ -116,14 +127,7 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
     for (const item of queue.splice(0)) item.resolve('')
   }
 
-  return { run, dispose }
+  return { run, warm, dispose }
 }
 
-let persistentRunner = null
-
-function runPersistent(command) {
-  if (!persistentRunner) persistentRunner = createPersistentRunner()
-  return persistentRunner.run(command)
-}
-
-module.exports = { runPowerShell, runPersistent, createPersistentRunner }
+module.exports = { runPowerShell, createPersistentRunner }

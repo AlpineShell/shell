@@ -122,4 +122,37 @@ describe('createPersistentRunner', () => {
 
     await expect(Promise.all([a, b, c])).resolves.toEqual(['ra', 'rb', 'rc'])
   })
+
+  it('writes the init script before commands and re-runs it after a restart', async () => {
+    const workers = [makeFakeWorker(), makeFakeWorker()]
+    let spawnCount = 0
+    const spawnWorker = vi.fn(() => workers[spawnCount++])
+    const runner = createPersistentRunner(spawnWorker, undefined, 'LOAD_TYPES')
+
+    const first = runner.run('Cmd')
+    const initIdx = workers[0].writes.findIndex((w) => w.includes('LOAD_TYPES'))
+    const cmdIdx = workers[0].writes.findIndex((w) => w.includes('Cmd'))
+    expect(initIdx).toBeGreaterThanOrEqual(0)
+    expect(initIdx).toBeLessThan(cmdIdx)
+    expect(commandWrites(workers[0]).some((w) => w.includes('LOAD_TYPES'))).toBe(false)
+    workers[0].complete('ok')
+    await expect(first).resolves.toBe('ok')
+
+    workers[0].emit('exit')
+    const second = runner.run('Cmd2')
+    expect(workers[1].writes.some((w) => w.includes('LOAD_TYPES'))).toBe(true)
+    workers[1].complete('ok2')
+    await expect(second).resolves.toBe('ok2')
+  })
+
+  it('warm() spawns and initializes the worker before any command is queued', () => {
+    const worker = makeFakeWorker()
+    const spawnWorker = vi.fn(() => worker)
+    const runner = createPersistentRunner(spawnWorker, undefined, () => 'LAZY_INIT')
+
+    runner.warm()
+    expect(spawnWorker).toHaveBeenCalledTimes(1)
+    expect(worker.writes.some((w) => w.includes('LAZY_INIT'))).toBe(true)
+    expect(commandWrites(worker)).toHaveLength(0)
+  })
 })

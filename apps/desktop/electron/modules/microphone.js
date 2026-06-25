@@ -1,7 +1,7 @@
-const { spawn } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { createPersistentRunner } = require('../powershell')
 
 let lastActive = false
 let lastApps = ''
@@ -9,81 +9,19 @@ let lastApps = ''
 const SCRIPT_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts', 'microphoneStatus.ps1')
   : path.join(__dirname, '..', 'scripts', 'microphoneStatus.ps1')
-const DELIM = '__MIC_DONE__'
 const QUERY = `$r=[MicDetect]::GetActiveCapturers(); if($r.Count -eq 0){'{}'}else{@{active=$true;apps=$r}|ConvertTo-Json -Compress}`
 
-let ps = null
-let psReady = null
-let pendingResolve = null
-let outputBuf = ''
-let commandQueue = []
-let busy = false
-
-function initPS() {
-  if (psReady) return psReady
-  psReady = new Promise((resolveInit) => {
-    ps = spawn('powershell', [
-      '-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', '-'
-    ], { stdio: ['pipe', 'pipe', 'ignore'] })
-
-    ps.stdout.on('data', (chunk) => {
-      outputBuf += chunk.toString()
-      const idx = outputBuf.indexOf(DELIM)
-      if (idx !== -1) {
-        const result = outputBuf.substring(0, idx).trim()
-        outputBuf = outputBuf.substring(idx + DELIM.length).replace(/^\r?\n/, '')
-        if (pendingResolve) {
-          const r = pendingResolve
-          pendingResolve = null
-          r(result)
-        }
-      }
-    })
-
-    ps.on('exit', () => {
-      console.error('[microphone] PowerShell process exited unexpectedly')
-      ps = null
-      psReady = null
-      busy = false
-      const queued = commandQueue
-      commandQueue = []
-      const pending = pendingResolve
-      pendingResolve = null
-      if (pending) pending('')
-      for (const { resolve } of queued) resolve('')
-    })
-
-    const script = fs.readFileSync(SCRIPT_PATH, 'utf8')
-    const queryIdx = script.indexOf('\n$results')
-    const typeDef = queryIdx > 0 ? script.substring(0, queryIdx) : script
-    pendingResolve = () => { resolveInit(); processNext() }
-    ps.stdin.write(`$OutputEncoding = [System.Text.Encoding]::UTF8\n${typeDef}\nWrite-Output '${DELIM}'\n`)
-  })
-  return psReady
+function loadTypeDefinition() {
+  const script = fs.readFileSync(SCRIPT_PATH, 'utf8')
+  const queryIdx = script.indexOf('\n$results')
+  return queryIdx > 0 ? script.substring(0, queryIdx) : script
 }
 
-function processNext() {
-  if (commandQueue.length === 0) { busy = false; return }
-  busy = true
-  const { cmd, resolve } = commandQueue.shift()
-  pendingResolve = (result) => {
-    resolve(result)
-    processNext()
-  }
-  ps.stdin.write(`${cmd}\nWrite-Output '${DELIM}'\n`)
-}
-
-async function runCmd(cmd) {
-  await initPS()
-  return new Promise((resolve) => {
-    commandQueue.push({ cmd, resolve })
-    if (!busy) processNext()
-  })
-}
+const runner = createPersistentRunner(undefined, undefined, loadTypeDefinition)
 
 async function getMicrophoneStatus() {
   try {
-    const result = await runCmd(QUERY)
+    const result = await runner.run(QUERY)
     if (!result) return { active: false, apps: [] }
     const parsed = JSON.parse(result)
     return {
@@ -101,7 +39,7 @@ module.exports = {
   },
 
   start(broadcast) {
-    initPS()
+    runner.warm()
 
     setInterval(async () => {
       const current = await getMicrophoneStatus()
