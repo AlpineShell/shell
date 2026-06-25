@@ -115,7 +115,10 @@ function forceShellBounds(shell) {
   if (!shell) return
   const { x, y, width, height } = shell.display.bounds
   if (!shell.desktop.isDestroyed()) shell.desktop.setBounds({ x, y, width, height })
-  if (!shell.topBar.isDestroyed()) shell.topBar.setBounds({ x, y, width, height })
+  if (!shell.topBar.isDestroyed()) {
+    shell.topBar.setBounds({ x, y, width, height })
+    if (shell.topBar.refreshBarBounds) shell.topBar.refreshBarBounds()
+  }
 }
 
 function createTopBarWindow(display) {
@@ -148,12 +151,18 @@ function createTopBarWindow(display) {
   const INTERACTIVE_CENTER = 120
   let ignoring = true
   let activeRegion = null
+  let barBounds = win.getBounds()
+
+  win.refreshBarBounds = () => {
+    if (win.isDestroyed()) return
+    barBounds = win.getBounds()
+  }
 
   function evaluateCursorInteraction() {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
-    const bounds = win.getBounds()
+    const bounds = barBounds
     const cursor = screen.getCursorScreenPoint()
 
     const inBarRow = cursor.y >= bounds.y && cursor.y < bounds.y + TOP_BAR_HEIGHT &&
@@ -194,6 +203,9 @@ function createTopBarWindow(display) {
     win.setIgnoreMouseEvents(true)
     evaluateCursorInteraction()
   }
+
+  win.on('move', win.refreshBarBounds)
+  win.on('resize', win.refreshBarBounds)
 
   const cursorTracker = setInterval(evaluateCursorInteraction, 50)
 
@@ -268,6 +280,7 @@ function repositionShell(display) {
 
   shell.desktop.setBounds({ x, y, width, height })
   shell.topBar.setBounds({ x, y, width, height })
+  if (shell.topBar.refreshBarBounds) shell.topBar.refreshBarBounds()
 
   try {
     unregisterAppBar(shell.topBar)

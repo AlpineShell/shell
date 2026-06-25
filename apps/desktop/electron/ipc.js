@@ -1,10 +1,28 @@
 const { ipcMain, BrowserWindow } = require('electron')
 
+function sendToWindow(win, channel, data) {
+  if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+    win.webContents.send(channel, data)
+  }
+}
+
 function broadcast(channel, data) {
   for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
-      win.webContents.send(channel, data)
-    }
+    sendToWindow(win, channel, data)
+  }
+}
+
+function isTopbarWindow(win) {
+  try {
+    return new URL(win.webContents.getURL()).searchParams.get('mode') === 'topbar'
+  } catch {
+    return false
+  }
+}
+
+function broadcastToTopbars(channel, data) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (isTopbarWindow(win)) sendToWindow(win, channel, data)
   }
 }
 
@@ -30,7 +48,7 @@ function registerHandlers(label, handlers) {
 
 function startModule(label, mod) {
   try {
-    const result = mod.start?.(broadcast)
+    const result = mod.start?.(broadcast, broadcastToTopbars)
     if (result && typeof result.catch === 'function') {
       result.catch((e) => {
         console.error(`[ipc] ${label} start rejected:`, e?.message ?? e)
@@ -54,4 +72,4 @@ function register(...modules) {
   }
 }
 
-module.exports = { register, broadcast }
+module.exports = { register, broadcast, broadcastToTopbars }

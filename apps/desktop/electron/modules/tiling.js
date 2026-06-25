@@ -284,19 +284,17 @@ function isManageable(hwnd) {
   return true
 }
 
+const manageableEnumResults = []
+const manageableEnumProc = koffi.register((hwnd) => {
+  const h = toNum(hwnd)
+  if (isManageable(h)) manageableEnumResults.push(h)
+  return 1
+}, koffi.pointer(WNDENUMPROC))
+
 function enumManageableWindows() {
-  const windows = []
-  const cb = koffi.register((hwnd) => {
-    const h = toNum(hwnd)
-    if (isManageable(h)) windows.push(h)
-    return 1
-  }, koffi.pointer(WNDENUMPROC))
-  try {
-    EnumWindows(cb, 0)
-  } finally {
-    koffi.unregister(cb)
-  }
-  return windows
+  manageableEnumResults.length = 0
+  EnumWindows(manageableEnumProc, 0)
+  return manageableEnumResults.slice()
 }
 
 function rectCenterDip(hwnd) {
@@ -718,10 +716,10 @@ function swapInOrder(a, b) {
   windowOrder[ib] = a
 }
 
-function groupByDisplay(windows) {
+function groupByDisplay(windows, displayByHwnd) {
   const byDisplay = new Map()
   for (const hwnd of windows) {
-    const display = displayForWindow(hwnd)
+    const display = displayByHwnd.get(hwnd)
     if (!byDisplay.has(display.id)) byDisplay.set(display.id, { display, hwnds: [] })
     byDisplay.get(display.id).hwnds.push(hwnd)
   }
@@ -779,10 +777,12 @@ function applyDynamic() {
   const windows = enumManageableWindows()
   reconcileOrder(windows)
   pruneRuntimeMaps(windows)
+  const displayByHwnd = new Map()
+  for (const hwnd of windows) displayByHwnd.set(hwnd, displayForWindow(hwnd))
   if (config.handleOversized) {
-    for (const hwnd of windows) ensureMinSize(hwnd, displayForWindow(hwnd))
+    for (const hwnd of windows) ensureMinSize(hwnd, displayByHwnd.get(hwnd))
   }
-  const byDisplay = groupByDisplay(windows)
+  const byDisplay = groupByDisplay(windows, displayByHwnd)
 
   const snapshot = JSON.stringify(
     [...byDisplay.values()].map((g) => [g.display.id, orderedForDisplay(g.hwnds)])
