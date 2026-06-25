@@ -16,26 +16,44 @@ const scriptPath = path.join(scriptsDir, 'networkStatus.ps1')
 const scanScriptPath = path.join(scriptsDir, 'wifiScan.ps1')
 const radioScriptPath = path.join(scriptsDir, 'wifiRadio.ps1')
 
-function getNetworkStatus() {
+function getNetworkStatusAndRadio() {
   return new Promise((resolve) => {
     exec(
       `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
       (err, stdout) => {
-        if (err || !stdout) return resolve({ signal: null, connected: false, type: 'wifi', ssid: null })
+        if (err || !stdout) {
+          return resolve({
+            status: { signal: null, connected: false, type: 'wifi', ssid: null },
+            radio: { success: false, state: 'unknown' },
+          })
+        }
         try {
           const parsed = JSON.parse(stdout.trim())
           resolve({
-            signal: parsed.signal ?? null,
-            connected: !!parsed.connected,
-            type: parsed.type || 'wifi',
-            ssid: parsed.ssid || null,
+            status: {
+              signal: parsed.signal ?? null,
+              connected: !!parsed.connected,
+              type: parsed.type || 'wifi',
+              ssid: parsed.ssid || null,
+            },
+            radio: {
+              success: !!parsed.radioSuccess,
+              state: parsed.radioState || 'unknown',
+            },
           })
         } catch {
-          resolve({ signal: null, connected: false, type: 'wifi', ssid: null })
+          resolve({
+            status: { signal: null, connected: false, type: 'wifi', ssid: null },
+            radio: { success: false, state: 'unknown' },
+          })
         }
       }
     )
   })
+}
+
+function getNetworkStatus() {
+  return getNetworkStatusAndRadio().then((result) => result.status)
 }
 
 let broadcastFn = null
@@ -162,10 +180,7 @@ module.exports = {
       event.returnValue = { status: cachedStatus, radio: cachedRadio }
     })
     async function poll() {
-      const [current, radio] = await Promise.all([
-        getNetworkStatus(),
-        wifiRadio('get'),
-      ])
+      const { status: current, radio } = await getNetworkStatusAndRadio()
       cachedStatus = current
       if (radio.success) {
         const newRadio = radio.state === 'on'
