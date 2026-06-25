@@ -43,6 +43,22 @@ const SPIF_SENDCHANGE = 0x02
 
 let lastPath = null
 let broadcastFn = null
+const wallpaperPathListeners = new Set()
+
+function onWallpaperPathChange(listener) {
+  wallpaperPathListeners.add(listener)
+  return () => wallpaperPathListeners.delete(listener)
+}
+
+function notifyWallpaperPathChange(filePath) {
+  for (const listener of wallpaperPathListeners) {
+    try {
+      listener(filePath)
+    } catch (e) {
+      console.error('[wallpaper] path listener error:', e.message)
+    }
+  }
+}
 
 function getMineDir() {
   return path.join(app.getPath('userData'), 'wallpapers')
@@ -90,6 +106,11 @@ function getPath() {
   })
 }
 
+function resolveWallpaperPath() {
+  if (lastPath) return Promise.resolve(lastPath)
+  return getPath()
+}
+
 function encode(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null
   const mtime = fs.statSync(filePath).mtimeMs
@@ -109,11 +130,13 @@ function setWallpaper(filePath) {
     savePref(filePath)
     persistAsync(filePath)
     if (broadcastFn) broadcastFn('windows/wallpaper-changed', encode(filePath))
+    notifyWallpaperPathChange(filePath)
   }
   return !!ok
 }
 
 module.exports = {
+  resolveWallpaperPath,
   handlers: {
     'windows/wallpaper': () => encode(lastPath),
     'windows/wallpaper-set': async (_event, filePath) => {

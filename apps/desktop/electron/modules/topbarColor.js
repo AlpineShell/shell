@@ -1,7 +1,7 @@
 const { app, nativeImage } = require('electron')
-const { exec } = require('child_process')
 const fs = require('fs')
 const path = require('path')
+const { resolveWallpaperPath, onWallpaperPathChange } = require('./wallpaper')
 
 const STORE_FILE = 'topbar-color.json'
 
@@ -47,18 +47,6 @@ function saveOverride() {
   } catch (e) {
     console.error('[topbarColor] save error:', e.message)
   }
-}
-
-function getWallpaperPath() {
-  return new Promise((resolve) => {
-    exec(
-      'reg query "HKCU\\Control Panel\\Desktop" /v Wallpaper',
-      (err, stdout) => {
-        const match = stdout?.match(/Wallpaper\s+REG_SZ\s+(.+)/)
-        resolve(match ? match[1].trim() : null)
-      }
-    )
-  })
 }
 
 function rgbToOklab(r, g, b) {
@@ -196,21 +184,23 @@ function getEffectiveColor() {
   return lastColor
 }
 
-function updateColor(broadcast) {
-  getWallpaperPath().then((wallpaperPath) => {
-    if (wallpaperPath === lastWallpaperPath && lastColor) return
-    lastWallpaperPath = wallpaperPath
-    const result = extractColor(wallpaperPath)
-    if (!result) return
-    lastPalette = buildPalette(result.clusters)
-    const color = result.color
-    if (!lastColor || color.r !== lastColor.r || color.g !== lastColor.g || color.b !== lastColor.b) {
-      lastColor = color
-      if (!userOverride) {
-        broadcast('topbar/color-changed', color)
-      }
+function applyColorForPath(wallpaperPath, broadcast) {
+  if (wallpaperPath === lastWallpaperPath && lastColor) return
+  lastWallpaperPath = wallpaperPath
+  const result = extractColor(wallpaperPath)
+  if (!result) return
+  lastPalette = buildPalette(result.clusters)
+  const color = result.color
+  if (!lastColor || color.r !== lastColor.r || color.g !== lastColor.g || color.b !== lastColor.b) {
+    lastColor = color
+    if (!userOverride) {
+      broadcast('topbar/color-changed', color)
     }
-  })
+  }
+}
+
+function updateColor(broadcast) {
+  resolveWallpaperPath().then((wallpaperPath) => applyColorForPath(wallpaperPath, broadcast))
 }
 
 module.exports = {
@@ -218,7 +208,7 @@ module.exports = {
     'topbar/color': () => {
       if (userOverride) return userOverride
       if (lastColor) return lastColor
-      return getWallpaperPath().then((p) => {
+      return resolveWallpaperPath().then((p) => {
         const result = extractColor(p)
         if (result) {
           lastColor = result.color
@@ -261,6 +251,6 @@ module.exports = {
     broadcastRef = broadcast
     loadOverride()
     updateColor(broadcast)
-    setInterval(() => updateColor(broadcast), 5000)
+    onWallpaperPathChange((wallpaperPath) => applyColorForPath(wallpaperPath, broadcast))
   },
 }
