@@ -575,7 +575,6 @@ module.exports = {
   start(b) {
     broadcast = b
     appActivator.warm()
-    buildIndex().catch((e) => console.error('[launcher] initial index error:', e.message))
     refreshStartApps().catch((e) => console.error('[launcher] start apps error:', e.message))
     watchScanDirs()
     setInterval(() => {
