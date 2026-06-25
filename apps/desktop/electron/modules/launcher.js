@@ -41,7 +41,6 @@ const START_APPS_REFRESH_INTERVAL = 300000
 
 function publishIndex() {
   if (!broadcast) return
-  broadcast('launcher/index-changed', index)
   broadcast('apps/catalog-changed', index)
 }
 
