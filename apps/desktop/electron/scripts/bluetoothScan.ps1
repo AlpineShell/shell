@@ -1,10 +1,19 @@
 param(
-    [switch]$Discover
+    [switch]$Discover,
+    [switch]$WithRadio
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$pnp = Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue |
+$bluetoothDevices = Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue
+$radioEnabled = (($bluetoothDevices | Where-Object { $_.Status -eq 'OK' }).Count -gt 0)
+
+if ($WithRadio -and -not $radioEnabled) {
+    @{ enabled = $false; devices = @() } | ConvertTo-Json -Compress
+    return
+}
+
+$pnp = $bluetoothDevices |
     Where-Object { $_.InstanceId -match '^BTHENUM\\Dev_([0-9a-fA-F]{12})' -or $_.InstanceId -match '^BTHLE\\Dev_([0-9a-fA-F]{12})' } |
     Select-Object FriendlyName, InstanceId
 
@@ -101,4 +110,9 @@ if ($Discover) {
 $sorted = $result | Sort-Object @(
     @{ Expression = { if ($_.connected) { 0 } elseif ($_.paired) { 1 } else { 2 } } }
 )
-ConvertTo-Json -InputObject @($sorted) -Compress
+
+if ($WithRadio) {
+    @{ enabled = $radioEnabled; devices = @($sorted) } | ConvertTo-Json -Depth 5 -Compress
+} else {
+    ConvertTo-Json -InputObject @($sorted) -Compress
+}
