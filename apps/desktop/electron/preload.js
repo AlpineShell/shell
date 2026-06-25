@@ -48,7 +48,6 @@ function paintDesktopBackgroundEarly() {
 try { paintDesktopBackgroundEarly() } catch {}
 
 contextBridge.exposeInMainWorld('topbar', {
-  setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
   setActiveRegion: (region) => ipcRenderer.send('topbar/set-active-region', region),
   color: () => ipcRenderer.invoke('topbar/color'),
   onColorChanged: (callback) => {
@@ -125,9 +124,6 @@ contextBridge.exposeInMainWorld('launcher', {
   defaultHotkey: () => ipcRenderer.invoke('launcher/hotkey-default'),
   onHotkeyChanged: (callback) => {
     ipcRenderer.on('launcher/hotkey-changed', (_, data) => callback(data))
-  },
-  onIndexChanged: (callback) => {
-    ipcRenderer.on('launcher/index-changed', (_, data) => callback(data))
   },
   onShow: (callback) => {
     ipcRenderer.on('launcher/show', (_, data) => callback(data))
