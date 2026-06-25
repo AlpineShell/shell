@@ -35,7 +35,6 @@ const LAUNCHER_WIDTH = 600
 
 function publishIndex() {
   if (!broadcast) return
-  broadcast('launcher/index-changed', index)
   broadcast('apps/catalog-changed', index)
 }
 
