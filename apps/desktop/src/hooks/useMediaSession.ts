@@ -6,8 +6,14 @@ export function useMediaSession() {
   const [state, setState] = useState<MediaPlayback>(initialState)
 
   useEffect(() => {
-    window.shell.media.session().then(setState)
-    window.shell.media.onSessionChanged(setState)
+    let alive = true
+    const apply = (data: MediaPlayback) => { if (alive) setState(data) }
+    window.shell.media.session().then(apply)
+    const unsubscribe = window.shell.media.onSessionChanged(apply)
+    return () => {
+      alive = false
+      unsubscribe()
+    }
   }, [])
 
   const control = useCallback((action: 'toggle' | 'next' | 'previous') => {
