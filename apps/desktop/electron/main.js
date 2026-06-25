@@ -561,9 +561,8 @@ function startShellMode() {
     altTab.onEmojiCaptureClose(() => launcher.closeEmoji())
   }
 
-  const screenshotWindow = createScreenshotWindow()
   if (screenshot) {
-    screenshot.setOverlayWindow(screenshotWindow)
+    screenshot.setOverlayWindowFactory(createScreenshotWindow)
     altTab.onScreenshot(
       () => screenshot.showOverlay(),
       () => screenshot.hideOverlay()

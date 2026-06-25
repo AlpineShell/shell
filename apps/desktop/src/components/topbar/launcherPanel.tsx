@@ -19,6 +19,12 @@ const BAR_BOTTOM = 24
 const LAUNCHER_WIDTH_DEFAULT = 600
 const EMOJI_COLS = 9
 const EMOJI_SEARCH_LIMIT = 180
+const EMOJI_CELL_HEIGHT = 40
+const EMOJI_ROW_GAP = 2
+const EMOJI_ROW_PITCH = EMOJI_CELL_HEIGHT + EMOJI_ROW_GAP
+const EMOJI_GRID_PADDING = 8
+const EMOJI_GRID_MAX_HEIGHT = 264
+const EMOJI_OVERSCAN_ROWS = 2
 const EMOJI_BY_CHAR = new Map(EMOJIS.map((e) => [e.c, e]))
 const WALLPAPER_TILE_WIDTH = 200
 const WALLPAPER_TILE_GAP = 12
@@ -1225,21 +1231,23 @@ interface EmojiGridProps {
 interface EmojiCellProps {
   entry: EmojiEntry
   index: number
+  row: number
+  col: number
   selected: boolean
   darkText: boolean
   onHover: (idx: number) => void
   onPick: (idx: number) => void
 }
 
-const EmojiCell = memo(function EmojiCell({ entry, index, selected, darkText, onHover, onPick }: EmojiCellProps) {
+const EmojiCell = memo(function EmojiCell({ entry, index, row, col, selected, darkText, onHover, onPick }: EmojiCellProps) {
   const selectedBg = darkText ? "bg-black/10" : "bg-white/10"
   const hoverBg = darkText ? "hover:bg-black/5" : "hover:bg-white/5"
   return (
     <button
-      data-eidx={index}
       onMouseEnter={() => onHover(index)}
       onClick={() => onPick(index)}
       title={entry.n}
+      style={{ gridRowStart: row + 1, gridColumnStart: col + 1 }}
       className={`flex items-center justify-center h-10 rounded-md cursor-pointer transition-colors text-[22px] leading-none ${
         selected ? selectedBg : hoverBg
       }`}
@@ -1251,36 +1259,65 @@ const EmojiCell = memo(function EmojiCell({ entry, index, selected, darkText, on
 
 function EmojiGrid({ emojis, selectedIndex, darkText, onHover, onPick }: EmojiGridProps) {
   const dimText = darkText ? "text-black/50" : "text-white/50"
-  const gridRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [viewportHeight, setViewportHeight] = useState(EMOJI_GRID_MAX_HEIGHT)
   const selected = emojis[selectedIndex]
+  const rowCount = Math.ceil(emojis.length / EMOJI_COLS)
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setViewportHeight(el.clientHeight)
+    setScrollTop(el.scrollTop)
+  }, [emojis.length])
 
   useEffect(() => {
-    const el = gridRef.current?.querySelector(`[data-eidx="${selectedIndex}"]`) as HTMLElement | null
-    el?.scrollIntoView({ block: "nearest" })
+    const el = scrollRef.current
+    if (!el) return
+    const row = Math.floor(selectedIndex / EMOJI_COLS)
+    const rowTop = EMOJI_GRID_PADDING + row * EMOJI_ROW_PITCH
+    const rowBottom = rowTop + EMOJI_CELL_HEIGHT
+    if (rowTop < el.scrollTop) el.scrollTop = rowTop
+    else if (rowBottom > el.scrollTop + el.clientHeight) el.scrollTop = rowBottom - el.clientHeight
   }, [selectedIndex])
 
   if (emojis.length === 0) {
     return <div className={`px-4 py-6 text-[13px] ${dimText}`}>No emoji found</div>
   }
 
+  const firstVisibleRow = Math.max(0, Math.floor((scrollTop - EMOJI_GRID_PADDING) / EMOJI_ROW_PITCH) - EMOJI_OVERSCAN_ROWS)
+  const lastVisibleRow = Math.min(rowCount - 1, Math.floor((scrollTop + viewportHeight - EMOJI_GRID_PADDING) / EMOJI_ROW_PITCH) + EMOJI_OVERSCAN_ROWS)
+  const firstIndex = firstVisibleRow * EMOJI_COLS
+  const lastIndex = Math.min(emojis.length - 1, (lastVisibleRow + 1) * EMOJI_COLS - 1)
+
+  const visibleCells = []
+  for (let i = firstIndex; i <= lastIndex; i++) {
+    const e = emojis[i]
+    visibleCells.push(
+      <EmojiCell
+        key={e.c}
+        entry={e}
+        index={i}
+        row={Math.floor(i / EMOJI_COLS)}
+        col={i % EMOJI_COLS}
+        selected={i === selectedIndex}
+        darkText={darkText}
+        onHover={onHover}
+        onPick={onPick}
+      />
+    )
+  }
+
   return (
     <div className="flex flex-col">
       <div
-        ref={gridRef}
+        ref={scrollRef}
+        onScroll={() => { const el = scrollRef.current; if (el) setScrollTop(el.scrollTop) }}
         className={`grid gap-0.5 p-2 max-h-[264px] overflow-y-auto cc-scroll ${darkText ? "cc-scroll-light" : ""}`}
-        style={{ gridTemplateColumns: `repeat(${EMOJI_COLS}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${EMOJI_COLS}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rowCount}, ${EMOJI_CELL_HEIGHT}px)` }}
       >
-        {emojis.map((e, i) => (
-          <EmojiCell
-            key={e.c}
-            entry={e}
-            index={i}
-            selected={i === selectedIndex}
-            darkText={darkText}
-            onHover={onHover}
-            onPick={onPick}
-          />
-        ))}
+        {visibleCells}
       </div>
       {selected && (
         <>
