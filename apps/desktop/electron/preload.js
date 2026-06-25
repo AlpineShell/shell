@@ -48,7 +48,6 @@ function paintDesktopBackgroundEarly() {
 try { paintDesktopBackgroundEarly() } catch {}
 
 contextBridge.exposeInMainWorld('topbar', {
-  setIgnoreMouseEvents: (ignore) => ipcRenderer.send('topbar/set-ignore-mouse', ignore),
   setActiveRegion: (region) => ipcRenderer.send('topbar/set-active-region', region),
   color: () => ipcRenderer.invoke('topbar/color'),
   onColorChanged: (callback) => {
@@ -125,9 +124,6 @@ contextBridge.exposeInMainWorld('launcher', {
   defaultHotkey: () => ipcRenderer.invoke('launcher/hotkey-default'),
   onHotkeyChanged: (callback) => {
     ipcRenderer.on('launcher/hotkey-changed', (_, data) => callback(data))
-  },
-  onIndexChanged: (callback) => {
-    ipcRenderer.on('launcher/index-changed', (_, data) => callback(data))
   },
   onShow: (callback) => {
     ipcRenderer.on('launcher/show', (_, data) => callback(data))
@@ -255,7 +251,9 @@ contextBridge.exposeInMainWorld('shell', {
     subscribePeak: () => ipcRenderer.invoke('system/peak-subscribe'),
     unsubscribePeak: () => ipcRenderer.invoke('system/peak-unsubscribe'),
     onAudioPeak: (callback) => {
-      ipcRenderer.on('system/audio-peak', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/audio-peak', handler)
+      return () => ipcRenderer.removeListener('system/audio-peak', handler)
     },
     brightness: () => ipcRenderer.invoke('system/brightness-get'),
     setBrightness: (value) => ipcRenderer.invoke('system/brightness-set', value),
