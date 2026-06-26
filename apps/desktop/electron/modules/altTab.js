@@ -13,8 +13,11 @@ try {
 
 const LowLevelKeyboardProc = koffi.proto('__stdcall', 'LowLevelKeyboardProc', 'intptr_t', ['int', 'uintptr_t', 'intptr_t'])
 const WNDENUMPROC = koffi.proto('__stdcall', 'WNDENUMPROC', 'int', ['uintptr_t', 'intptr_t'])
+const ALTTAB_WIN_EVENT_PROC = koffi.proto('__stdcall', 'AltTabWinEventProc', 'void', ['uintptr_t', 'uint32', 'uintptr_t', 'int32', 'int32', 'uint32', 'uint32'])
 
 const SetWindowsHookExW = user32.func('__stdcall', 'SetWindowsHookExW', 'uintptr_t', ['int', 'LowLevelKeyboardProc *', 'uintptr_t', 'uint32'])
+const SetWinEventHook = user32.func('__stdcall', 'SetWinEventHook', 'uintptr_t', ['uint32', 'uint32', 'uintptr_t', 'AltTabWinEventProc *', 'uint32', 'uint32', 'uint32'])
+const UnhookWinEvent = user32.func('__stdcall', 'UnhookWinEvent', 'int', ['uintptr_t'])
 const UnhookWindowsHookEx = user32.func('__stdcall', 'UnhookWindowsHookEx', 'int', ['uintptr_t'])
 const CallNextHookEx = user32.func('__stdcall', 'CallNextHookEx', 'intptr_t', ['uintptr_t', 'int', 'uintptr_t', 'intptr_t'])
 const GetKeyState = user32.func('__stdcall', 'GetKeyState', 'int16', ['int'])
@@ -84,6 +87,11 @@ const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 const DWMWA_CLOAKED = 14
 const GWL_EXSTYLE = -20
 const WS_EX_TOOLWINDOW = 0x80
+const EVENT_SYSTEM_FOREGROUND = 0x0003
+const WINEVENT_OUTOFCONTEXT = 0x0000
+const WINEVENT_SKIPOWNPROCESS = 0x0002
+const OBJID_WINDOW = 0
+const CHILDID_SELF = 0
 
 const THUMBNAIL_MAX_WIDTH = 320
 const THUMBNAIL_MAX_HEIGHT = 200
@@ -324,11 +332,13 @@ async function buildWindowList() {
 
 const THUMBNAIL_REFRESH_MS = 4000
 const MAX_FILLS_PER_SWEEP = 3
+let warmerArmed = false
 
 let lastForegroundHwnd = 0
-let foregroundPollTimer = null
 let warmSweepTimer = null
 let foregroundCaptureTimer = null
+let foregroundHookHandle = null
+let foregroundHookCallback = null
 
 function toHwndNum(value) {
   return typeof value === 'bigint' ? Number(value) : value
@@ -344,26 +354,67 @@ function warmCapture(hwnd) {
   }
 }
 
-function pollForeground() {
-  if (emojiCaptureActive) {
-    if (emojiCaptureForeground) {
-      const current = toHwndNum(GetForegroundWindow())
-      if (current && current !== emojiCaptureForeground && !isOwnWindow(current)) {
-        try { if (emojiCaptureCloseCallback) emojiCaptureCloseCallback() } catch (e) { console.error('[altTab] emoji capture close error:', e.message) }
+function onForegroundEvent(_hook, _event, _hwnd, idObject, idChild) {
+  try {
+    if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
+    if (emojiCaptureActive) {
+      if (emojiCaptureForeground) {
+        const current = toHwndNum(GetForegroundWindow())
+        if (current && current !== emojiCaptureForeground && !isOwnWindow(current)) {
+          try { if (emojiCaptureCloseCallback) emojiCaptureCloseCallback() } catch (e) { console.error('[altTab] emoji capture close error:', e.message) }
+        }
       }
+      return
     }
-    return
+    if (switcherActive) return
+    const fg = toHwndNum(GetForegroundWindow())
+    if (!fg || fg === lastForegroundHwnd) return
+    lastForegroundHwnd = fg
+    if (foregroundCaptureTimer) clearTimeout(foregroundCaptureTimer)
+    foregroundCaptureTimer = setTimeout(() => warmCapture(fg), 250)
+  } catch (e) {
+    console.error('[altTab] foreground event error:', e.message)
   }
-  if (switcherActive) return
-  const fg = toHwndNum(GetForegroundWindow())
-  if (!fg || fg === lastForegroundHwnd) return
-  lastForegroundHwnd = fg
-  if (foregroundCaptureTimer) clearTimeout(foregroundCaptureTimer)
-  foregroundCaptureTimer = setTimeout(() => warmCapture(fg), 250)
+}
+
+function installForegroundHook() {
+  if (foregroundHookHandle) return
+  try {
+    foregroundHookCallback = koffi.register(onForegroundEvent, koffi.pointer(ALTTAB_WIN_EVENT_PROC))
+    foregroundHookHandle = SetWinEventHook(
+      EVENT_SYSTEM_FOREGROUND,
+      EVENT_SYSTEM_FOREGROUND,
+      0,
+      foregroundHookCallback,
+      0,
+      0,
+      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+    )
+    if (!toHwndNum(foregroundHookHandle)) {
+      console.error('[altTab] Failed to install foreground win event hook')
+      foregroundHookHandle = null
+      try { koffi.unregister(foregroundHookCallback) } catch (_) {}
+      foregroundHookCallback = null
+    }
+  } catch (e) {
+    console.error('[altTab] foreground hook install error:', e.message)
+  }
+}
+
+function uninstallForegroundHook() {
+  if (foregroundHookHandle) {
+    try { UnhookWinEvent(foregroundHookHandle) } catch (_) {}
+    foregroundHookHandle = null
+  }
+  if (foregroundHookCallback) {
+    try { koffi.unregister(foregroundHookCallback) } catch (_) {}
+    foregroundHookCallback = null
+  }
 }
 
 function warmSweep() {
   if (switcherActive) return
+  if (!warmerArmed) return
   try {
     const hwnds = enumTaskWindows()
     const live = new Set(hwnds)
@@ -383,16 +434,15 @@ function warmSweep() {
 }
 
 function startThumbnailWarmer() {
-  foregroundPollTimer = setInterval(pollForeground, 400)
+  installForegroundHook()
   warmSweepTimer = setInterval(warmSweep, THUMBNAIL_REFRESH_MS)
   setTimeout(warmSweep, 1500)
 }
 
 function stopThumbnailWarmer() {
-  if (foregroundPollTimer) clearInterval(foregroundPollTimer)
+  uninstallForegroundHook()
   if (warmSweepTimer) clearInterval(warmSweepTimer)
   if (foregroundCaptureTimer) clearTimeout(foregroundCaptureTimer)
-  foregroundPollTimer = null
   warmSweepTimer = null
   foregroundCaptureTimer = null
 }
@@ -452,6 +502,7 @@ function getActiveDisplay() {
 
 async function showSwitcher() {
   if (!shellsRef) return
+  warmerArmed = true
 
   windowList = await buildWindowList()
   if (windowList.length === 0) return
