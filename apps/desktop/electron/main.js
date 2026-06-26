@@ -1,5 +1,6 @@
 const { app, BrowserWindow, screen, ipcMain, protocol, net } = require('electron')
 const path = require('path')
+const fs = require('fs')
 const { pathToFileURL } = require('url')
 
 protocol.registerSchemesAsPrivileged([
@@ -526,6 +527,43 @@ app.whenReady().then(async () => {
   startShellMode()
 })
 
+function getUpdateReadyMarkerPath() {
+  const index = process.argv.indexOf('--update-ready-marker')
+  if (index === -1 || index + 1 >= process.argv.length) return null
+  const value = process.argv[index + 1]
+  return value && value.length > 0 ? value : null
+}
+
+function signalShellReadyForUpdate() {
+  const markerPath = getUpdateReadyMarkerPath()
+  if (!markerPath) return
+
+  let written = false
+  const writeMarker = () => {
+    if (written) return
+    written = true
+    try {
+      fs.writeFileSync(markerPath, String(Date.now()))
+    } catch (e) {
+      console.error('[main] Failed to write shell-ready marker:', e.message)
+    }
+  }
+
+  const primaryShell = shells.get(screen.getPrimaryDisplay().id) || [...shells.values()][0]
+  if (!primaryShell || primaryShell.desktop.isDestroyed()) {
+    writeMarker()
+    return
+  }
+
+  const wc = primaryShell.desktop.webContents
+  if (wc.isLoading()) {
+    wc.once('did-finish-load', writeMarker)
+  } else {
+    writeMarker()
+  }
+  setTimeout(writeMarker, 10000)
+}
+
 function startShellMode() {
   let isAlpineShell = null
   if (!setup.isFirstRun()) isAlpineShell = setup.ensureShellRegistration()
@@ -576,6 +614,8 @@ function startShellMode() {
   }
 
   startCursorTracking()
+
+  signalShellReadyForUpdate()
 
   if (powerThrottling) {
     powerThrottling.disableEcoQosForAllProcesses()

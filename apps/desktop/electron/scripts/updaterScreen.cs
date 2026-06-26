@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
@@ -25,6 +26,7 @@ class AlpineUpdater {
     static string installerPath = "";
     static string alpineExe = "";
     static string version = "";
+    static string readyMarkerPath = "";
 
     static readonly List<Form> covers = new List<Form>();
     static readonly List<SpinnerControl> spinners = new List<SpinnerControl>();
@@ -166,16 +168,31 @@ class AlpineUpdater {
         }
     }
 
-    static void WaitPresent(string name, int timeoutMs) {
+    static void DeleteMarker() {
+        try {
+            if (readyMarkerPath.Length > 0 && File.Exists(readyMarkerPath)) File.Delete(readyMarkerPath);
+        } catch { }
+    }
+
+    static void WaitForMarker(int timeoutMs) {
+        if (readyMarkerPath.Length == 0) {
+            Thread.Sleep(4000);
+            return;
+        }
         int waited = 0;
-        while (Process.GetProcessesByName(name).Length == 0 && waited < timeoutMs) {
-            Thread.Sleep(250);
-            waited += 250;
+        while (waited < timeoutMs) {
+            try {
+                if (File.Exists(readyMarkerPath)) return;
+            } catch { }
+            Thread.Sleep(120);
+            waited += 120;
         }
     }
 
     static void RunUpdate() {
         try {
+            try { readyMarkerPath = Path.Combine(Path.GetTempPath(), "alpine-shell-update-ready.flag"); } catch { readyMarkerPath = ""; }
+
             WaitGone("Alpine Shell", 15000);
             KillByName("Alpine Shell");
             Thread.Sleep(500);
@@ -187,9 +204,11 @@ class AlpineUpdater {
                 if (inst != null) inst.WaitForExit();
             }
 
+            DeleteMarker();
             HandBackToAlpine();
-            WaitPresent("Alpine Shell", 60000);
-            Thread.Sleep(4000);
+            WaitForMarker(60000);
+            Thread.Sleep(300);
+            DeleteMarker();
         } catch {
             try { HandBackToAlpine(); } catch { }
             try { Thread.Sleep(2000); } catch { }
@@ -200,8 +219,15 @@ class AlpineUpdater {
 
     static void HandBackToAlpine() {
         suppressTaskbar = false;
-        if (alpineExe.Length > 0) SetShell(alpineExe);
+        if (alpineExe.Length > 0) SetShell(BuildShellValue());
         KillByName("explorer");
+    }
+
+    static string BuildShellValue() {
+        if (readyMarkerPath.Length > 0) {
+            return "\"" + alpineExe + "\" --update-ready-marker \"" + readyMarkerPath + "\"";
+        }
+        return alpineExe;
     }
 
     static void FadeOutAndExit() {
