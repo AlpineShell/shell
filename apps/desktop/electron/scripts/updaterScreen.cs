@@ -282,8 +282,21 @@ class AlpineUpdater {
 
     static void HandBackToAlpine() {
         suppressTaskbar = false;
-        if (alpineExe.Length > 0) SetShell(alpineExe);
+        if (alpineExe.Length > 0) {
+            SetShell(alpineExe);
+            LaunchAlpine();
+        }
         KillByName("explorer");
+    }
+
+    static void LaunchAlpine() {
+        if (alpineExe.Length == 0) return;
+        try {
+            ProcessStartInfo psi = new ProcessStartInfo(alpineExe);
+            psi.UseShellExecute = true;
+            try { psi.WorkingDirectory = System.IO.Path.GetDirectoryName(alpineExe); } catch { }
+            Process.Start(psi);
+        } catch { }
     }
 
     static void FadeOutAndExit() {
