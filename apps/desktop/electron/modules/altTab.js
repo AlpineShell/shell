@@ -376,7 +376,6 @@ function warmSweep() {
       captureWindowThumbnail(hwnd)
       if (++fills >= MAX_FILLS_PER_SWEEP) break
     }
-    warmCapture(toHwndNum(GetForegroundWindow()))
   } catch (e) {
     console.error('[altTab] warm sweep error:', e.message)
   }
