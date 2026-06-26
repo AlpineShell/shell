@@ -113,8 +113,6 @@ class AlpineUpdater {
             }
         };
 
-        // TODO(DEV-37): swap this text wordmark for a rasterized white AlpineShellLogo.svg
-        // PNG asset (passed through installer.js startBrandedUpdate); GDI cannot render SVG.
         Label wordmark = new Label();
         wordmark.Text = "Alpine Shell";
         wordmark.ForeColor = Color.White;
