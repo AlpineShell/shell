@@ -219,7 +219,10 @@ class AlpineUpdater {
 
     static void HandBackToAlpine() {
         suppressTaskbar = false;
-        if (alpineExe.Length > 0) SetShell(BuildShellValue());
+        if (alpineExe.Length > 0) {
+            SetShell(BuildShellValue());
+            LaunchAlpine();
+        }
         KillByName("explorer");
     }
 
@@ -228,6 +231,17 @@ class AlpineUpdater {
             return "\"" + alpineExe + "\" --update-ready-marker \"" + readyMarkerPath + "\"";
         }
         return alpineExe;
+    }
+
+    static void LaunchAlpine() {
+        if (alpineExe.Length == 0) return;
+        try {
+            ProcessStartInfo psi = new ProcessStartInfo(alpineExe);
+            psi.UseShellExecute = true;
+            if (readyMarkerPath.Length > 0) psi.Arguments = "--update-ready-marker \"" + readyMarkerPath + "\"";
+            try { psi.WorkingDirectory = System.IO.Path.GetDirectoryName(alpineExe); } catch { }
+            Process.Start(psi);
+        } catch { }
     }
 
     static void FadeOutAndExit() {
