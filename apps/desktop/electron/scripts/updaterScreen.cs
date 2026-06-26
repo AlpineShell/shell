@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -25,21 +26,31 @@ class AlpineUpdater {
     static string installerPath = "";
     static string alpineExe = "";
     static string version = "";
+    static string logoPath = "";
+    static Image brandLogo = null;
+    static MemoryStream brandLogoStream = null;
 
     static readonly List<Form> covers = new List<Form>();
     static readonly List<SpinnerControl> spinners = new List<SpinnerControl>();
     static volatile bool suppressTaskbar = true;
     static bool workerStarted = false;
 
+    public static readonly Color GradientTop = ColorTranslator.FromHtml("#001C30");
+    public static readonly Color GradientBottom = ColorTranslator.FromHtml("#005896");
+    static readonly string brandFontFamily = ResolveBrandFontFamily();
+
     [STAThread]
     static void Main(string[] args) {
         if (args.Length > 0) installerPath = args[0];
         if (args.Length > 1) alpineExe = args[1];
         if (args.Length > 2) version = args[2];
+        if (args.Length > 3) logoPath = args[3];
 
         try { SetProcessDPIAware(); } catch { }
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+
+        brandLogo = LoadBrandLogo();
 
         foreach (Screen screen in Screen.AllScreens) {
             covers.Add(CreateCover(screen));
@@ -72,62 +83,133 @@ class AlpineUpdater {
         Application.Run(primary);
     }
 
+    static string ResolveBrandFontFamily() {
+        try {
+            using (new FontFamily("Segoe UI Variable Display")) { }
+            return "Segoe UI Variable Display";
+        } catch (ArgumentException) {
+            return "Segoe UI";
+        }
+    }
+
+    static Font BrandFont(float size, FontStyle style) {
+        try {
+            return new Font(brandFontFamily, size, style);
+        } catch (ArgumentException) {
+            return new Font("Segoe UI", size, style);
+        }
+    }
+
+    static Image LoadBrandLogo() {
+        try {
+            if (logoPath.Length > 0 && File.Exists(logoPath)) {
+                brandLogoStream = new MemoryStream(File.ReadAllBytes(logoPath));
+                return Image.FromStream(brandLogoStream);
+            }
+        } catch { }
+        return null;
+    }
+
     static Form CreateCover(Screen screen) {
         Form cover = new Form();
         cover.FormBorderStyle = FormBorderStyle.None;
         cover.StartPosition = FormStartPosition.Manual;
         cover.Bounds = screen.Bounds;
-        cover.BackColor = ColorTranslator.FromHtml("#1a1a2e");
+        cover.BackColor = GradientTop;
         cover.TopMost = true;
         cover.ShowInTaskbar = false;
         cover.ControlBox = false;
         cover.Cursor = Cursors.WaitCursor;
 
+        Form gradientTarget = cover;
+
+        int logoSlotHeight = 48;
+        int logoSlotWidth = 0;
+        if (brandLogo != null) {
+            logoSlotWidth = (int)Math.Round((double)brandLogo.Width * logoSlotHeight / brandLogo.Height);
+        }
+
+        Label wordmark = new Label();
+        wordmark.BackColor = Color.Transparent;
+        if (brandLogo != null) {
+            wordmark.AutoSize = false;
+            wordmark.Size = new Size(logoSlotWidth, logoSlotHeight);
+            wordmark.Visible = false;
+        } else {
+            wordmark.Text = "Alpine Shell";
+            wordmark.ForeColor = Color.White;
+            wordmark.Font = BrandFont(26f, FontStyle.Bold);
+            wordmark.AutoSize = true;
+            wordmark.UseCompatibleTextRendering = true;
+        }
+        cover.Controls.Add(wordmark);
+
+        Label wordmarkSlot = wordmark;
+        cover.Paint += delegate(object paintSender, PaintEventArgs paintArgs) {
+            Graphics g = paintArgs.Graphics;
+            Rectangle area = gradientTarget.ClientRectangle;
+            if (area.Width <= 0 || area.Height <= 0) return;
+            using (LinearGradientBrush background = new LinearGradientBrush(area, GradientTop, GradientBottom, LinearGradientMode.Vertical)) {
+                g.FillRectangle(background, area);
+            }
+            if (brandLogo != null && wordmarkSlot.Top > 0) {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                g.DrawImage(brandLogo, wordmarkSlot.Bounds);
+            }
+        };
+
         SpinnerControl spinner = new SpinnerControl();
         spinner.Size = new Size(72, 72);
-        spinner.BackColor = cover.BackColor;
+        spinner.BackColor = GradientTop;
         spinners.Add(spinner);
         cover.Controls.Add(spinner);
 
         Label title = new Label();
         title.Text = "Updating Alpine Shell";
         title.ForeColor = Color.White;
-        title.Font = new Font("Segoe UI", 20f, FontStyle.Regular);
+        title.Font = BrandFont(18f, FontStyle.Regular);
         title.AutoSize = true;
-        title.BackColor = cover.BackColor;
+        title.BackColor = Color.Transparent;
+        title.UseCompatibleTextRendering = true;
         cover.Controls.Add(title);
 
         Label subtitle = new Label();
         subtitle.Text = version.Length > 0
             ? "Installing version " + version + " \u2014 please don't turn off your PC"
             : "Please don't turn off your PC";
-        subtitle.ForeColor = ColorTranslator.FromHtml("#9aa0b4");
-        subtitle.Font = new Font("Segoe UI", 11f, FontStyle.Regular);
+        subtitle.ForeColor = Color.FromArgb(179, 255, 255, 255);
+        subtitle.Font = BrandFont(11f, FontStyle.Regular);
         subtitle.AutoSize = true;
-        subtitle.BackColor = cover.BackColor;
+        subtitle.BackColor = Color.Transparent;
+        subtitle.UseCompatibleTextRendering = true;
         cover.Controls.Add(subtitle);
 
         Form captured = cover;
         SpinnerControl capturedSpinner = spinner;
+        Label capturedWordmark = wordmark;
         Label capturedTitle = title;
         Label capturedSubtitle = subtitle;
-        EventHandler layout = delegate { LayoutCover(captured, capturedSpinner, capturedTitle, capturedSubtitle); };
+        EventHandler layout = delegate { LayoutCover(captured, capturedWordmark, capturedSpinner, capturedTitle, capturedSubtitle); };
         cover.Shown += layout;
         cover.Resize += layout;
 
         return cover;
     }
 
-    static void LayoutCover(Form cover, Control spinner, Control title, Control subtitle) {
+    static void LayoutCover(Form cover, Control wordmark, Control spinner, Control title, Control subtitle) {
         int centerX = cover.ClientSize.Width / 2;
-        int spinnerGap = 32;
-        int titleGap = 12;
-        int blockHeight = spinner.Height + spinnerGap + title.Height + titleGap + subtitle.Height;
+        int wordmarkGap = 40;
+        int spinnerGap = 28;
+        int titleGap = 8;
+        int blockHeight = wordmark.Height + wordmarkGap + spinner.Height + spinnerGap + title.Height + titleGap + subtitle.Height;
         int top = (cover.ClientSize.Height - blockHeight) / 2;
 
-        spinner.Location = new Point(centerX - spinner.Width / 2, top);
+        wordmark.Location = new Point(centerX - wordmark.Width / 2, top);
+        spinner.Location = new Point(centerX - spinner.Width / 2, wordmark.Bottom + wordmarkGap);
         title.Location = new Point(centerX - title.Width / 2, spinner.Bottom + spinnerGap);
         subtitle.Location = new Point(centerX - subtitle.Width / 2, title.Bottom + titleGap);
+        cover.Invalidate();
     }
 
     static void KeepOnTop() {
@@ -268,16 +350,25 @@ class SpinnerControl : Control {
     protected override void OnPaint(PaintEventArgs e) {
         Graphics g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.Clear(BackColor);
+
+        Control host = Parent;
+        if (host != null && host.ClientSize.Height > 0) {
+            Rectangle gradientArea = new Rectangle(0, -Top, Width, host.ClientSize.Height);
+            using (LinearGradientBrush background = new LinearGradientBrush(gradientArea, AlpineUpdater.GradientTop, AlpineUpdater.GradientBottom, LinearGradientMode.Vertical)) {
+                g.FillRectangle(background, 0, 0, Width, Height);
+            }
+        } else {
+            g.Clear(BackColor);
+        }
 
         int pad = 6;
         Rectangle ring = new Rectangle(pad, pad, Width - pad * 2 - 1, Height - pad * 2 - 1);
         float thickness = 5f;
 
-        using (Pen track = new Pen(Color.FromArgb(38, 255, 255, 255), thickness)) {
+        using (Pen track = new Pen(ColorTranslator.FromHtml("#404040"), thickness)) {
             g.DrawEllipse(track, ring);
         }
-        using (Pen arc = new Pen(ColorTranslator.FromHtml("#7c9cff"), thickness)) {
+        using (Pen arc = new Pen(Color.White, thickness)) {
             arc.StartCap = LineCap.Round;
             arc.EndCap = LineCap.Round;
             g.DrawArc(arc, ring, angle, 100f);
