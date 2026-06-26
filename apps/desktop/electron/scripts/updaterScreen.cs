@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -25,6 +26,9 @@ class AlpineUpdater {
     static string installerPath = "";
     static string alpineExe = "";
     static string version = "";
+    static string logoPath = "";
+    static Image brandLogo = null;
+    static MemoryStream brandLogoStream = null;
 
     static readonly List<Form> covers = new List<Form>();
     static readonly List<SpinnerControl> spinners = new List<SpinnerControl>();
@@ -40,10 +44,13 @@ class AlpineUpdater {
         if (args.Length > 0) installerPath = args[0];
         if (args.Length > 1) alpineExe = args[1];
         if (args.Length > 2) version = args[2];
+        if (args.Length > 3) logoPath = args[3];
 
         try { SetProcessDPIAware(); } catch { }
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+
+        brandLogo = LoadBrandLogo();
 
         foreach (Screen screen in Screen.AllScreens) {
             covers.Add(CreateCover(screen));
@@ -93,6 +100,16 @@ class AlpineUpdater {
         }
     }
 
+    static Image LoadBrandLogo() {
+        try {
+            if (logoPath.Length > 0 && File.Exists(logoPath)) {
+                brandLogoStream = new MemoryStream(File.ReadAllBytes(logoPath));
+                return Image.FromStream(brandLogoStream);
+            }
+        } catch { }
+        return null;
+    }
+
     static Form CreateCover(Screen screen) {
         Form cover = new Form();
         cover.FormBorderStyle = FormBorderStyle.None;
@@ -105,22 +122,42 @@ class AlpineUpdater {
         cover.Cursor = Cursors.WaitCursor;
 
         Form gradientTarget = cover;
+
+        int logoSlotHeight = 48;
+        int logoSlotWidth = 0;
+        if (brandLogo != null) {
+            logoSlotWidth = (int)Math.Round((double)brandLogo.Width * logoSlotHeight / brandLogo.Height);
+        }
+
+        Label wordmark = new Label();
+        wordmark.BackColor = Color.Transparent;
+        if (brandLogo != null) {
+            wordmark.AutoSize = false;
+            wordmark.Size = new Size(logoSlotWidth, logoSlotHeight);
+            wordmark.Visible = false;
+        } else {
+            wordmark.Text = "Alpine Shell";
+            wordmark.ForeColor = Color.White;
+            wordmark.Font = BrandFont(26f, FontStyle.Bold);
+            wordmark.AutoSize = true;
+            wordmark.UseCompatibleTextRendering = true;
+        }
+        cover.Controls.Add(wordmark);
+
+        Label wordmarkSlot = wordmark;
         cover.Paint += delegate(object paintSender, PaintEventArgs paintArgs) {
+            Graphics g = paintArgs.Graphics;
             Rectangle area = gradientTarget.ClientRectangle;
             if (area.Width <= 0 || area.Height <= 0) return;
             using (LinearGradientBrush background = new LinearGradientBrush(area, GradientTop, GradientBottom, LinearGradientMode.Vertical)) {
-                paintArgs.Graphics.FillRectangle(background, area);
+                g.FillRectangle(background, area);
+            }
+            if (brandLogo != null && wordmarkSlot.Top > 0) {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                g.DrawImage(brandLogo, wordmarkSlot.Bounds);
             }
         };
-
-        Label wordmark = new Label();
-        wordmark.Text = "Alpine Shell";
-        wordmark.ForeColor = Color.White;
-        wordmark.Font = BrandFont(26f, FontStyle.Bold);
-        wordmark.AutoSize = true;
-        wordmark.BackColor = Color.Transparent;
-        wordmark.UseCompatibleTextRendering = true;
-        cover.Controls.Add(wordmark);
 
         SpinnerControl spinner = new SpinnerControl();
         spinner.Size = new Size(72, 72);
@@ -172,6 +209,7 @@ class AlpineUpdater {
         spinner.Location = new Point(centerX - spinner.Width / 2, wordmark.Bottom + wordmarkGap);
         title.Location = new Point(centerX - title.Width / 2, spinner.Bottom + spinnerGap);
         subtitle.Location = new Point(centerX - subtitle.Width / 2, title.Bottom + titleGap);
+        cover.Invalidate();
     }
 
     static void KeepOnTop() {
