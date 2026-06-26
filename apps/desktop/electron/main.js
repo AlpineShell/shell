@@ -81,6 +81,10 @@ function loadAppURL(win, url) {
 
 const TOP_BAR_HEIGHT = 24
 
+const CURSOR_POLL_FAST_MS = 50
+const CURSOR_POLL_SLOW_MS = 150
+const NEAR_BAR_MARGIN = 200
+
 const INTERACTIVE_RIGHT = 600
 const INTERACTIVE_LEFT = 40
 const INTERACTIVE_CENTER = 120
@@ -124,20 +128,38 @@ function evaluateTopBarInteraction(win, state) {
   }
 }
 
+function isCursorNearBarBand(cursor, state) {
+  if (state.activeRegion) return true
+  const bounds = state.bounds
+  if (cursor.x < bounds.x || cursor.x >= bounds.x + bounds.width) return false
+  return cursor.y >= bounds.y - NEAR_BAR_MARGIN && cursor.y < bounds.y + TOP_BAR_HEIGHT + NEAR_BAR_MARGIN
+}
+
 function trackCursorInteraction() {
-  if (shells.size === 0) return
-  const nearest = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  if (shells.size === 0) return CURSOR_POLL_SLOW_MS
+  const cursor = screen.getCursorScreenPoint()
+  const nearest = screen.getDisplayNearestPoint(cursor)
+  let needsFastPoll = false
   for (const shell of shells.values()) {
     const state = shell.topBarState
     if (shell.display.id === nearest.id || !state.ignoring || state.activeRegion) {
       evaluateTopBarInteraction(shell.topBar, state)
     }
+    if (!needsFastPoll && isCursorNearBarBand(cursor, state)) needsFastPoll = true
   }
+  return needsFastPoll ? CURSOR_POLL_FAST_MS : CURSOR_POLL_SLOW_MS
+}
+
+function scheduleCursorTracking(interval) {
+  cursorTracker = setTimeout(() => {
+    const nextInterval = trackCursorInteraction()
+    scheduleCursorTracking(nextInterval)
+  }, interval)
 }
 
 function startCursorTracking() {
   if (cursorTracker) return
-  cursorTracker = setInterval(trackCursorInteraction, 50)
+  scheduleCursorTracking(CURSOR_POLL_FAST_MS)
 }
 
 function createDesktopWindow(display) {
