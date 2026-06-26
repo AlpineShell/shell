@@ -228,9 +228,10 @@ function startBrandedUpdate(installerPath, version) {
   if (!installerPath || !fs.existsSync(installerPath)) return false
   const updaterExe = ensureUpdaterExe()
   if (!updaterExe) return false
+  const logoPath = path.join(path.dirname(getUpdaterSourcePath()), 'alpineWordmark.png')
   try {
     regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', 'explorer.exe')
-    spawn(updaterExe, [installerPath, getInstalledExePath(), version || ''], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    spawn(updaterExe, [installerPath, getInstalledExePath(), version || '', fs.existsSync(logoPath) ? logoPath : ''], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
     return true
   } catch (e) {
     console.error('[installer] Failed to start branded update:', e.message)
