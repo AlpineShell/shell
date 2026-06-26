@@ -324,6 +324,7 @@ async function buildWindowList() {
 
 const THUMBNAIL_REFRESH_MS = 4000
 const MAX_FILLS_PER_SWEEP = 3
+let warmerArmed = false
 
 let lastForegroundHwnd = 0
 let foregroundPollTimer = null
@@ -364,6 +365,7 @@ function pollForeground() {
 
 function warmSweep() {
   if (switcherActive) return
+  if (!warmerArmed) return
   try {
     const hwnds = enumTaskWindows()
     const live = new Set(hwnds)
@@ -376,6 +378,7 @@ function warmSweep() {
       captureWindowThumbnail(hwnd)
       if (++fills >= MAX_FILLS_PER_SWEEP) break
     }
+    warmCapture(toHwndNum(GetForegroundWindow()))
   } catch (e) {
     console.error('[altTab] warm sweep error:', e.message)
   }
@@ -451,6 +454,7 @@ function getActiveDisplay() {
 
 async function showSwitcher() {
   if (!shellsRef) return
+  warmerArmed = true
 
   windowList = await buildWindowList()
   if (windowList.length === 0) return
