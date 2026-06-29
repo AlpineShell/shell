@@ -1,10 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useShellState } from './useShellState'
 
 export function useDisplays() {
-  const [displays, setDisplays] = useState<DisplayInfo[]>([])
-  useEffect(() => {
-    window.shell.system.getDisplays().then(setDisplays)
-    return window.shell.system.onDisplaysChanged(setDisplays)
-  }, [])
-  return displays
+  return useShellState<DisplayInfo[]>([], window.shell.system.getDisplays, window.shell.system.onDisplaysChanged)
 }

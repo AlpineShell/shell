@@ -78,7 +78,10 @@ export default function DisplaysPage() {
         setPhase('editing')
       }
     }, 1000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      window.shell.system.keepDisplayLayout()
+    }
   }, [phase])
 
   const dirty = !sameLayout(draft, committed)
