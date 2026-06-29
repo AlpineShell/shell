@@ -77,7 +77,7 @@ function runCheck(announce) {
   })
 }
 
-autoUpdater.autoDownload = false
+autoUpdater.autoDownload = true
 autoUpdater.autoInstallOnAppQuit = false
 
 autoUpdater.on('checking-for-update', () => {
