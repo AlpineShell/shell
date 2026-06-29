@@ -27,6 +27,7 @@ const SetWindowPlacement = user32.func('__stdcall', 'SetWindowPlacement', 'int',
 const SetWindowPos = user32.func('__stdcall', 'SetWindowPos', 'int', ['uintptr_t', 'uintptr_t', 'int', 'int', 'int', 'int', 'uint32'])
 
 const EVENT_SYSTEM_FOREGROUND = 0x0003
+const EVENT_SYSTEM_MOVESIZEEND = 0x000b
 const EVENT_SYSTEM_MINIMIZESTART = 0x0016
 const EVENT_SYSTEM_MINIMIZEEND = 0x0017
 const WINEVENT_OUTOFCONTEXT = 0x0000
@@ -44,7 +45,6 @@ const SW_SHOWMAXIMIZED = 3
 const WPF_SETMINPOSITION = 0x0001
 
 const SM_CXMINIMIZED = 57
-const SM_CYMINIMIZED = 58
 const MONITOR_DEFAULTTONEAREST = 2
 
 const SWP_NOSIZE = 0x0001
@@ -55,6 +55,7 @@ const WINDOWPLACEMENT_SIZE = 44
 const MONITORINFO_SIZE = 40
 const PARK_SETTLE_MS = 300
 const MAX_TRACKED_TARGETS = 128
+const OFFSCREEN_PARK = -32000
 
 let winEventHookHandle = null
 let winEventProcPointer = null
@@ -83,7 +84,7 @@ function isManageableWindow(hwnd) {
   return true
 }
 
-function topbarParkPosition(hwnd) {
+function topbarAnimationTarget(hwnd) {
   const monitor = toNum(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
   if (!monitor) return null
   const info = Buffer.alloc(MONITORINFO_SIZE)
@@ -93,15 +94,13 @@ function topbarParkPosition(hwnd) {
   const top = info.readInt32LE(8)
   const right = info.readInt32LE(12)
   const stubWidth = GetSystemMetrics(SM_CXMINIMIZED) || 160
-  const stubHeight = GetSystemMetrics(SM_CYMINIMIZED) || 31
   const x = left + Math.round((right - left - stubWidth) / 2)
-  const y = top - stubHeight - 2
-  return { x, y }
+  return { x, y: top }
 }
 
 function aimMinimizeAtTopbar(hwnd) {
   if (!isManageableWindow(hwnd)) return
-  const target = topbarParkPosition(hwnd)
+  const target = topbarAnimationTarget(hwnd)
   if (!target) return
   const previous = minPositionTargets.get(hwnd)
   if (previous && previous.x === target.x && previous.y === target.y) return
@@ -123,9 +122,7 @@ function aimMinimizeAtTopbar(hwnd) {
 
 function parkMinimizedWindow(hwnd) {
   if (!IsWindow(hwnd) || !IsIconic(hwnd) || !isManageableWindow(hwnd)) return
-  const target = minPositionTargets.get(hwnd) || topbarParkPosition(hwnd)
-  if (!target) return
-  SetWindowPos(hwnd, 0, target.x, target.y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE)
+  SetWindowPos(hwnd, 0, OFFSCREEN_PARK, OFFSCREEN_PARK, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE)
 }
 
 function schedulePark(hwnd) {
@@ -146,7 +143,7 @@ function onWinEvent(_hook, event, hwndRaw, idObject, idChild) {
     if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
     const hwnd = toNum(hwndRaw)
     if (!hwnd) return
-    if (event === EVENT_SYSTEM_FOREGROUND) {
+    if (event === EVENT_SYSTEM_FOREGROUND || event === EVENT_SYSTEM_MOVESIZEEND) {
       aimMinimizeAtTopbar(hwnd)
     } else if (event === EVENT_SYSTEM_MINIMIZESTART) {
       schedulePark(hwnd)
