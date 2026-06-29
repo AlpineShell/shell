@@ -191,6 +191,8 @@ module.exports = {
       runCheck(true, true)
     }, INITIAL_CHECK_DELAY_MS)
 
+    setTimeout(() => { try { installer.ensureUpdaterExe() } catch {} }, INITIAL_CHECK_DELAY_MS)
+
     setInterval(() => {
       clearRetry()
       runCheck(false, true)
