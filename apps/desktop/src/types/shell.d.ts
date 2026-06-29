@@ -195,6 +195,35 @@ declare global {
     brightness: number
   }
 
+  type DisplayOrientation = 0 | 90 | 180 | 270
+
+  interface DisplayInfo {
+    id: string
+    name: string
+    x: number
+    y: number
+    width: number
+    height: number
+    orientation: DisplayOrientation
+    refreshRate: number
+    primary: boolean
+  }
+
+  interface DisplayLayoutEntry {
+    id: string
+    x: number
+    y: number
+    orientation: DisplayOrientation
+    primary: boolean
+  }
+
+  interface DisplayApplyResult {
+    ok: boolean
+    code: number | null
+    device?: string
+    displays: DisplayInfo[]
+  }
+
   interface DiskInfo {
     letter: string
     label: string
@@ -462,6 +491,11 @@ declare global {
         getMonitors: () => Promise<MonitorInfo[]>
         setMonitorBrightness: (id: string, value: number) => Promise<number>
         onMonitorsChanged: (callback: (data: MonitorInfo[]) => void) => () => void
+        getDisplays: () => Promise<DisplayInfo[]>
+        applyDisplayLayout: (layout: DisplayLayoutEntry[]) => Promise<DisplayApplyResult>
+        keepDisplayLayout: () => Promise<{ ok: boolean }>
+        revertDisplayLayout: () => Promise<DisplayInfo[]>
+        onDisplaysChanged: (callback: (data: DisplayInfo[]) => void) => () => void
         powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>

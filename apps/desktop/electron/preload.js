@@ -281,6 +281,15 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('system/monitors-changed', handler)
       return () => ipcRenderer.removeListener('system/monitors-changed', handler)
     },
+    getDisplays: () => ipcRenderer.invoke('system/displays-get'),
+    applyDisplayLayout: (layout) => ipcRenderer.invoke('system/displays-apply', layout),
+    keepDisplayLayout: () => ipcRenderer.invoke('system/displays-keep'),
+    revertDisplayLayout: () => ipcRenderer.invoke('system/displays-revert'),
+    onDisplaysChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/displays-changed', handler)
+      return () => ipcRenderer.removeListener('system/displays-changed', handler)
+    },
     powerAction: (action) => ipcRenderer.invoke('system/power-action', action),
     info: () => ipcRenderer.invoke('system/info'),
     battery: () => ipcRenderer.invoke('system/battery'),
