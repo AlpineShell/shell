@@ -137,49 +137,6 @@ export default function DisplaysPage() {
         <p className="text-sm text-white/50">No displays detected.</p>
       ) : (
         <>
-          <Section title="Arrangement" subtitle="Drag the displays to match how they are physically placed on your desk.">
-            <DisplayCanvas displays={draft} selectedId={selectedId} onSelect={setSelectedId} onMove={moveDisplay} />
-          </Section>
-
-          {selected && (
-            <Section title={selected.name}>
-              <div className="flex items-center justify-between gap-4 rounded-lg bg-neutral-900 border border-white/5 px-4 py-4">
-                <div className="min-w-0">
-                  <div className="text-[13px] text-white/90">
-                    {selected.width} × {selected.height}
-                    {selected.refreshRate ? ` · ${selected.refreshRate} Hz` : ''}
-                  </div>
-                  <div className="text-xs text-white/50 mt-0.5">{orientationLabel(selected.orientation)}</div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={rotateSelected}
-                    className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/90 text-xs font-medium transition-colors cursor-pointer"
-                  >
-                    <RotateCw size={14} />
-                    Rotate
-                  </button>
-                  {selected.primary ? (
-                    <span className="inline-flex items-center gap-1.5 h-8 px-3 text-xs text-emerald-400">
-                      <Star size={14} />
-                      Primary
-                    </span>
-                  ) : (
-                    <button
-                      onClick={setPrimarySelected}
-                      className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/90 text-xs font-medium transition-colors cursor-pointer"
-                    >
-                      <Star size={14} />
-                      Set as primary
-                    </button>
-                  )}
-                </div>
-              </div>
-            </Section>
-          )}
-
-          {error && <p className="text-xs text-red-300">{error}</p>}
-
           {phase === 'confirming' ? (
             <div className="flex items-center justify-between gap-4 rounded-lg bg-neutral-900 border border-white/5 px-4 py-3">
               <span className="inline-flex items-center gap-2 text-[13px] text-white/90">
@@ -222,6 +179,49 @@ export default function DisplaysPage() {
                 </div>
               </div>
             )
+          )}
+
+          {error && <p className="text-xs text-red-300">{error}</p>}
+
+          <Section title="Arrangement" subtitle="Drag the displays to match how they are physically placed on your desk.">
+            <DisplayCanvas displays={draft} selectedId={selectedId} onSelect={setSelectedId} onMove={moveDisplay} />
+          </Section>
+
+          {selected && (
+            <Section title={selected.name}>
+              <div className="flex items-center justify-between gap-4 rounded-lg bg-neutral-900 border border-white/5 px-4 py-4">
+                <div className="min-w-0">
+                  <div className="text-[13px] text-white/90">
+                    {selected.width} × {selected.height}
+                    {selected.refreshRate ? ` · ${selected.refreshRate} Hz` : ''}
+                  </div>
+                  <div className="text-xs text-white/50 mt-0.5">{orientationLabel(selected.orientation)}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={rotateSelected}
+                    className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/90 text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    <RotateCw size={14} />
+                    Rotate
+                  </button>
+                  {selected.primary ? (
+                    <span className="inline-flex items-center gap-1.5 h-8 px-3 text-xs text-emerald-400">
+                      <Star size={14} />
+                      Primary
+                    </span>
+                  ) : (
+                    <button
+                      onClick={setPrimarySelected}
+                      className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/90 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      <Star size={14} />
+                      Set as primary
+                    </button>
+                  )}
+                </div>
+              </div>
+            </Section>
           )}
         </>
       )}
