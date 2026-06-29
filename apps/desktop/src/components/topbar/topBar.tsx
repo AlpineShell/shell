@@ -5,6 +5,7 @@ import SystemMenu from "./systemMenu";
 import { ThemeProvider } from "../themeContext";
 import MediaStatus from "./status/mediaStatus";
 import MicrophoneStatus from "./status/microphoneStatus";
+import UpdateStatus from "./status/updateStatus";
 import SystemTray from "./systemTray";
 import LauncherTrigger from "./launcherTrigger";
 import LauncherPanel from "./launcherPanel";
@@ -51,6 +52,7 @@ export default function TopBar() {
                     <SystemTray />
                     <MediaStatus />
                     <MicrophoneStatus />
+                    <UpdateStatus />
                     <StatusIndicator />
                     <Clock />
                 </div>
