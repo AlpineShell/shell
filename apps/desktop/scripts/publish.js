@@ -1,12 +1,13 @@
 const fs = require('fs')
 const path = require('path')
 const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require('@aws-sdk/client-s3')
+const { Upload } = require('@aws-sdk/lib-storage')
 
 const requiredEnvVars = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET']
 const releaseDir = path.join(__dirname, '..', 'release')
 const uploadExtensions = ['.exe', '.exe.blockmap', '.yml']
 const installerKeyPattern = /^Alpine Shell Setup (.+)\.exe$/
-const versionsToKeep = 2
+const versionsToKeep = 5
 
 function readEnv() {
   const missing = requiredEnvVars.filter((name) => !process.env[name])
@@ -30,6 +31,8 @@ function createClient(config) {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
     },
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   })
 }
 
@@ -39,6 +42,12 @@ function isUploadable(fileName) {
 
 function contentTypeFor(fileName) {
   return fileName.endsWith('.yml') ? 'text/yaml' : 'application/octet-stream'
+}
+
+function cacheControlFor(fileName) {
+  if (fileName.endsWith('.yml')) return 'no-cache'
+  if (fileName.endsWith('.exe') || fileName.endsWith('.exe.blockmap')) return 'public, max-age=31536000, immutable'
+  return undefined
 }
 
 function collectArtifacts() {
@@ -52,15 +61,19 @@ function collectArtifacts() {
 }
 
 async function uploadArtifact(client, bucket, fileName) {
-  const body = fs.readFileSync(path.join(releaseDir, fileName))
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: fileName,
-      Body: body,
-      ContentType: contentTypeFor(fileName),
-    })
-  )
+  const filePath = path.join(releaseDir, fileName)
+  const params = {
+    Bucket: bucket,
+    Key: fileName,
+    ContentType: contentTypeFor(fileName),
+    CacheControl: cacheControlFor(fileName),
+  }
+  if (fileName.endsWith('.exe')) {
+    const upload = new Upload({ client, params: { ...params, Body: fs.createReadStream(filePath) } })
+    await upload.done()
+  } else {
+    await client.send(new PutObjectCommand({ ...params, Body: fs.readFileSync(filePath) }))
+  }
   console.log(`Uploaded ${fileName}`)
 }
 
@@ -119,7 +132,17 @@ async function publish() {
     process.exit(1)
   }
 
-  for (const fileName of artifacts) {
+  const manifestFiles = artifacts.filter((fileName) => fileName.endsWith('.yml'))
+  const binaryFiles = artifacts.filter((fileName) => !fileName.endsWith('.yml'))
+
+  try {
+    await Promise.all(binaryFiles.map((fileName) => uploadArtifact(client, config.bucket, fileName)))
+  } catch (error) {
+    console.error(`Failed to upload binaries: ${error.message}`)
+    process.exit(1)
+  }
+
+  for (const fileName of manifestFiles) {
     try {
       await uploadArtifact(client, config.bucket, fileName)
     } catch (error) {
