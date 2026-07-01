@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, AppWindow, House, MonitorCog, Paintbrush, Plug, RefreshCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, AppWindow, House, MonitorCog, Paintbrush, Plug, Puzzle, RefreshCw, X } from 'lucide-react'
 import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
 import WallpaperPage from './wallpaperPage'
@@ -18,6 +18,7 @@ import AppsRunningPage from './appsRunningPage'
 import AppsInstalledPage from './appsInstalledPage'
 import AppsStartupPage from './appsStartupPage'
 import UpdatesPage from './updatesPage'
+import PluginsPage from './pluginsPage'
 
 interface NavItem {
   path: string
@@ -31,6 +32,7 @@ const NAV: NavItem[] = [
   { path: 'devices', label: 'Devices & Connections', icon: Plug },
   { path: 'apps', label: 'Apps', icon: AppWindow },
   { path: 'system', label: 'System', icon: MonitorCog },
+  { path: 'plugins', label: 'Plugins', icon: Puzzle },
   { path: 'updates', label: 'Updates', icon: RefreshCw },
 ]
 
@@ -202,6 +204,7 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'apps/startup') return <AppsStartupPage />
   if (path === 'system') return <SystemPage onNavigate={navigate} />
   if (path === 'system/revert') return <SystemRevertPage />
+  if (path === 'plugins') return <PluginsPage />
   if (path === 'updates') return <UpdatesPage />
   return null
 }
@@ -224,6 +227,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   wifi: 'Wi-Fi',
   system: 'System',
   revert: 'Revert back to Windows',
+  plugins: 'Plugins',
   updates: 'Updates',
 }
 

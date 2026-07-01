@@ -85,6 +85,18 @@ contextBridge.exposeInMainWorld('topbar', {
   },
 })
 
+contextBridge.exposeInMainWorld('plugins', {
+  list: () => ipcRenderer.invoke('plugins/list'),
+  dir: () => ipcRenderer.invoke('plugins/dir'),
+  openFolder: () => ipcRenderer.invoke('plugins/open-folder'),
+  reload: () => ipcRenderer.invoke('plugins/reload'),
+  onReload: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('plugins/reload', handler)
+    return () => ipcRenderer.removeListener('plugins/reload', handler)
+  },
+})
+
 contextBridge.exposeInMainWorld('screenshot', {
   onShow: (callback) => {
     ipcRenderer.on('screenshot/show', (_, data) => callback(data))

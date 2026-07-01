@@ -12,6 +12,8 @@ import AltTabPanel from "./altTabPanel";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
 import ChromeCanvas from "./chrome/ChromeCanvas";
+import PluginSlot from "./pluginSlot";
+import { loadTopbarPlugins } from "../../plugins/loadPlugins";
 
 const noop = () => {};
 
@@ -30,6 +32,11 @@ export default function TopBar() {
     useEffect(() => {
         window.launcher.onShow((data) => { setLauncherMode(data?.mode); setLauncherOpen(true); });
         window.launcher.onHide(() => setLauncherOpen(false));
+    }, []);
+
+    useEffect(() => {
+        loadTopbarPlugins();
+        return window.plugins.onReload(() => loadTopbarPlugins());
     }, []);
 
     return (
@@ -52,6 +59,7 @@ export default function TopBar() {
                     <MediaStatus />
                     <MicrophoneStatus />
                     <StatusIndicator />
+                    <PluginSlot slot="right" />
                     <Clock />
                 </div>
             </div>

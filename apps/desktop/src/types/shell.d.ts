@@ -305,7 +305,46 @@ declare global {
     centerOversized: boolean
   }
 
+  interface PluginListItem {
+    id: string
+    name: string
+    entry: string
+  }
+
+  type TopbarSlot = 'left' | 'center' | 'right'
+
+  interface TopbarWidgetContribution {
+    type: 'topbar-widget'
+    id: string
+    component: import('react').ComponentType
+    slot?: TopbarSlot
+    order?: number
+  }
+
+  interface AlpinePluginRuntime {
+    version: number
+    React: typeof import('react')
+    h: typeof import('react').createElement
+    Fragment: typeof import('react').Fragment
+    useState: typeof import('react').useState
+    useEffect: typeof import('react').useEffect
+    useRef: typeof import('react').useRef
+    useMemo: typeof import('react').useMemo
+    useCallback: typeof import('react').useCallback
+    useDarkText: () => boolean
+    useTopbarBg: () => string
+    register: (contribution: TopbarWidgetContribution) => () => void
+  }
+
   interface Window {
+    plugins: {
+      list: () => Promise<PluginListItem[]>
+      dir: () => Promise<string>
+      openFolder: () => Promise<void>
+      reload: () => Promise<boolean>
+      onReload: (callback: () => void) => () => void
+    }
+    alpine?: AlpinePluginRuntime
     setup: {
       status: () => Promise<SetupStatus>
       install: (options: SetupOptions) => Promise<SetupResult>

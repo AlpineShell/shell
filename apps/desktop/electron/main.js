@@ -5,6 +5,7 @@ const { pathToFileURL } = require('url')
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'alpine-wallpaper', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } },
+  { scheme: 'alpine-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ])
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
@@ -30,6 +31,7 @@ const trayLayout = require('./modules/trayLayout')
 const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
+const plugins = require('./modules/plugins')
 const appActivator = require('./appActivator')
 let trayHost = null
 try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[main] trayHost load error:', e.message) }
@@ -514,7 +516,25 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, updater, windowsUpdate)
+  protocol.handle('alpine-plugin', async (request) => {
+    const url = new URL(request.url)
+    const relativePath = decodeURIComponent(url.pathname).replace(/^\/+/, '')
+    const filePath = plugins.resolvePluginFile(url.hostname, relativePath || 'index.js')
+    if (!filePath) return new Response(null, { status: 404 })
+    const mime = plugins.mimeFor(path.extname(filePath).toLowerCase())
+    if (!mime) return new Response(null, { status: 403 })
+    try {
+      const data = await fs.promises.readFile(filePath)
+      return new Response(data, {
+        status: 200,
+        headers: { 'Content-Type': mime, 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' },
+      })
+    } catch {
+      return new Response(null, { status: 404 })
+    }
+  })
+
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, updater, windowsUpdate, plugins)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
