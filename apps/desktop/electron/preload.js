@@ -5,11 +5,13 @@ let bootBluetooth = null
 let bootWifi = null
 let bootSettingsIcon = null
 let bootSettingsPage = null
+let bootClockPrefs = null
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
 try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
 try { bootSettingsIcon = ipcRenderer.sendSync('windows/settings-icon') } catch {}
 try { bootSettingsPage = ipcRenderer.sendSync('windows/settings-init') } catch {}
+try { bootClockPrefs = ipcRenderer.sendSync('clock/prefs-init') } catch {}
 
 ipcRenderer.on('windows/wallpaper-changed', (_, data) => { bootWallpaper = data })
 ipcRenderer.on('system/bluetooth-changed', (_, data) => { bootBluetooth = data })
@@ -401,5 +403,33 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('tiling/config-changed', handler)
     },
     snap: (direction) => ipcRenderer.invoke('tiling/snap', direction),
+  },
+  clock: {
+    prefs: () => ipcRenderer.invoke('clock/prefs-get'),
+    setPrefs: (partial) => ipcRenderer.invoke('clock/prefs-set', partial),
+    onPrefsChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('clock/prefs-changed', handler)
+      return () => ipcRenderer.removeListener('clock/prefs-changed', handler)
+    },
+    initial: bootClockPrefs,
+  },
+  calendar: {
+    state: () => ipcRenderer.invoke('calendar/state-get'),
+    onStateChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('calendar/state-changed', handler)
+      return () => ipcRenderer.removeListener('calendar/state-changed', handler)
+    },
+    connect: () => ipcRenderer.invoke('calendar/connect'),
+    disconnect: () => ipcRenderer.invoke('calendar/disconnect'),
+    setCredentials: (clientId, clientSecret) => ipcRenderer.invoke('calendar/set-credentials', { clientId, clientSecret }),
+    data: () => ipcRenderer.invoke('calendar/data-get'),
+    onDataChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('calendar/data-changed', handler)
+      return () => ipcRenderer.removeListener('calendar/data-changed', handler)
+    },
+    refresh: (range) => ipcRenderer.invoke('calendar/refresh', range),
   },
 })
