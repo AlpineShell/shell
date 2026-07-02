@@ -423,7 +423,6 @@ contextBridge.exposeInMainWorld('shell', {
     },
     connect: () => ipcRenderer.invoke('calendar/connect'),
     disconnect: () => ipcRenderer.invoke('calendar/disconnect'),
-    setCredentials: (clientId, clientSecret) => ipcRenderer.invoke('calendar/set-credentials', { clientId, clientSecret }),
     data: () => ipcRenderer.invoke('calendar/data-get'),
     onDataChanged: (callback) => {
       const handler = (_, data) => callback(data)

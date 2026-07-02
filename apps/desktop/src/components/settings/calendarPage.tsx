@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Check, Loader2, LogOut } from 'lucide-react'
 import { useClockPrefs } from '../../hooks/useClockPrefs'
 import { useCalendar } from '../../hooks/useCalendar'
@@ -17,19 +16,9 @@ const DAY_OPTIONS: { value: CalendarDayCount; label: string }[] = [
 
 export default function CalendarPage() {
   const { prefs, setPrefs } = useClockPrefs()
-  const { state, connect, disconnect, setCredentials } = useCalendar()
-
-  const [clientId, setClientId] = useState('')
-  const [clientSecret, setClientSecret] = useState('')
+  const { state, connect, disconnect } = useCalendar()
 
   const systemLabel = prefs.systemTimeFormat === '12h' ? '12-hour' : '24-hour'
-
-  function saveCredentials() {
-    if (!clientId.trim() || !clientSecret.trim()) return
-    setCredentials(clientId.trim(), clientSecret.trim())
-    setClientId('')
-    setClientSecret('')
-  }
 
   return (
     <div className="flex flex-col gap-8 w-full">
@@ -54,7 +43,7 @@ export default function CalendarPage() {
               <LogOut size={14} /> Disconnect
             </button>
           </div>
-        ) : state.hasCredentials ? (
+        ) : (
           <div className="flex flex-col gap-3">
             <button
               onClick={() => connect()}
@@ -65,14 +54,6 @@ export default function CalendarPage() {
             </button>
             {state.error && !state.connecting && <ErrorNote error={state.error} />}
           </div>
-        ) : (
-          <CredentialsForm
-            clientId={clientId}
-            clientSecret={clientSecret}
-            onClientId={setClientId}
-            onClientSecret={setClientSecret}
-            onSave={saveCredentials}
-          />
         )}
       </Section>
 
@@ -105,18 +86,6 @@ export default function CalendarPage() {
         </>
       )}
 
-      {state.hasCredentials && (
-        <Section title="Advanced" subtitle="Replace the Google OAuth credentials used to sign in.">
-          <CredentialsForm
-            clientId={clientId}
-            clientSecret={clientSecret}
-            onClientId={setClientId}
-            onClientSecret={setClientSecret}
-            onSave={saveCredentials}
-            compact
-          />
-        </Section>
-      )}
     </div>
   )
 }
@@ -124,65 +93,13 @@ export default function CalendarPage() {
 function ErrorNote({ error }: { error: string }) {
   const message =
     error === 'no-credentials'
-      ? 'Add your Google OAuth credentials to connect.'
+      ? 'Google sign-in isn’t configured in this build.'
       : error === 'timeout'
         ? 'Sign-in timed out. Try connecting again.'
         : error === 'access_denied'
           ? 'Access was denied in the browser.'
           : `Couldn’t connect (${error}).`
   return <p className="text-xs text-red-400">{message}</p>
-}
-
-function CredentialsForm({
-  clientId,
-  clientSecret,
-  onClientId,
-  onClientSecret,
-  onSave,
-  compact,
-}: {
-  clientId: string
-  clientSecret: string
-  onClientId: (value: string) => void
-  onClientSecret: (value: string) => void
-  onSave: () => void
-  compact?: boolean
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      {!compact && (
-        <p className="text-xs text-white/50">
-          Create an OAuth <span className="text-white/70">Desktop app</span> client in Google Cloud Console (enable the Calendar &amp; Tasks APIs), then paste its Client ID and secret below. See GOOGLE_SETUP.md for step-by-step instructions.
-        </p>
-      )}
-      <Field label="Client ID" value={clientId} onChange={onClientId} placeholder="xxxx.apps.googleusercontent.com" />
-      <Field label="Client secret" value={clientSecret} onChange={onClientSecret} placeholder="GOCSPX-…" secret />
-      <button
-        onClick={onSave}
-        disabled={!clientId.trim() || !clientSecret.trim()}
-        className="self-start px-4 h-9 rounded-md bg-white text-neutral-900 text-[13px] font-medium cursor-pointer hover:bg-white/90 disabled:opacity-50 disabled:cursor-default transition-colors"
-      >
-        Save credentials
-      </button>
-    </div>
-  )
-}
-
-function Field({ label, value, onChange, placeholder, secret }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; secret?: boolean }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs text-white/50">{label}</span>
-      <input
-        type={secret ? 'password' : 'text'}
-        value={value}
-        placeholder={placeholder}
-        spellCheck={false}
-        autoComplete="off"
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 px-3 rounded-md bg-neutral-900 border border-white/10 text-[13px] text-white placeholder:text-white/30 outline-none focus:border-white/30 transition-colors"
-      />
-    </label>
-  )
 }
 
 function Segmented<T extends string | number>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (value: T) => void }) {

@@ -571,7 +571,6 @@ declare global {
         onStateChanged: (callback: (data: CalendarConnection) => void) => () => void
         connect: () => Promise<CalendarConnection>
         disconnect: () => Promise<CalendarConnection>
-        setCredentials: (clientId: string, clientSecret: string) => Promise<CalendarConnection>
         data: () => Promise<CalendarData>
         onDataChanged: (callback: (data: CalendarData) => void) => () => void
         refresh: (range?: CalendarRange) => Promise<CalendarData>

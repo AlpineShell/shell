@@ -20,7 +20,6 @@ export function useCalendar() {
     state,
     connect: () => window.shell?.calendar?.connect?.(),
     disconnect: () => window.shell?.calendar?.disconnect?.(),
-    setCredentials: (clientId: string, clientSecret: string) => window.shell?.calendar?.setCredentials?.(clientId, clientSecret),
     refresh: (range?: CalendarRange) => window.shell?.calendar?.refresh?.(range),
   }
 }

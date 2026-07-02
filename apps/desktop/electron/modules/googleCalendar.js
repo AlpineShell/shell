@@ -472,19 +472,6 @@ function disconnect() {
   return getState()
 }
 
-function setCredentials(clientId, clientSecret) {
-  const before = getCredentials()
-  storedClientId = typeof clientId === 'string' ? clientId.trim() : null
-  storedClientSecret = typeof clientSecret === 'string' ? clientSecret.trim() : null
-  const after = getCredentials()
-  const changed = before?.clientId !== after?.clientId || before?.clientSecret !== after?.clientSecret
-  if (changed) clearSession()
-  persist()
-  broadcastState()
-  if (changed) broadcastData()
-  return getState()
-}
-
 module.exports = {
   handlers: {
     'calendar/state-get': () => getState(),
@@ -492,7 +479,6 @@ module.exports = {
     'calendar/connect': () => connect(),
     'calendar/disconnect': () => disconnect(),
     'calendar/refresh': (_event, range) => refreshData(range),
-    'calendar/set-credentials': (_event, payload) => setCredentials(payload?.clientId, payload?.clientSecret),
   },
   start(b) {
     broadcast = b
