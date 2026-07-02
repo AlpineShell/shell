@@ -81,7 +81,7 @@ export default function CalendarFlyout() {
   return (
     <div className={`${text} select-none`} style={{ width: GUTTER + colWidth * dayCount }}>
       <div className="flex items-center justify-between pl-3 pr-2 pt-2.5 pb-1.5">
-        <span className="text-[15px] font-semibold text-red-500">{rangeLabel(days)}</span>
+        <span className={`text-sm font-medium ${text}`}>{rangeLabel(days)}</span>
         <div className={`flex items-center gap-0.5 ${text}`}>
           {offset !== 0 && (
             <button onClick={() => setOffset(0)} className={`px-1.5 h-6 rounded-md text-[11px] cursor-pointer transition-colors ${hoverBg}`}>
@@ -114,7 +114,9 @@ export default function CalendarFlyout() {
           return (
             <div key={day.getTime()} className="flex flex-col items-center py-1.5 gap-0.5" style={{ width: colWidth, borderLeft: `1px solid ${borderColor}` }}>
               <span className={`text-[9px] tracking-wide ${muted}`}>{day.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()}</span>
-              <span className={todayCol ? 'w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-[13px] font-semibold' : 'text-[13px] font-semibold'}>
+              <span className={todayCol
+                ? `w-6 h-6 rounded-full flex items-center justify-center text-[13px] font-semibold ${darkText ? 'bg-black text-white' : 'bg-white text-black'}`
+                : 'text-[13px] font-medium'}>
                 {day.getDate()}
               </span>
             </div>
@@ -122,9 +124,9 @@ export default function CalendarFlyout() {
         })}
       </div>
 
-      <AllDayStrip days={days} today={today} events={data.events} tasks={data.tasks} showTasks={prefs.showTasks} colWidth={colWidth} muted={muted} borderColor={borderColor} />
+      <AllDayStrip days={days} today={today} events={data.events} tasks={data.tasks} showTasks={prefs.showTasks} colWidth={colWidth} muted={muted} borderColor={borderColor} darkText={darkText} />
 
-      <div ref={scrollRef} className={`relative overflow-y-auto cc-scroll ${darkText ? 'cc-scroll-light' : ''}`} style={{ height: SCROLL_HEIGHT }}>
+      <div ref={scrollRef} className={`relative overflow-y-auto overflow-x-hidden cc-scroll ${darkText ? 'cc-scroll-light' : ''}`} style={{ height: SCROLL_HEIGHT }}>
         <div className="flex" style={{ height: GRID_HEIGHT }}>
           <div className="relative shrink-0" style={{ width: GUTTER }}>
             {HOURS.slice(1, 24).map((hour) => (
@@ -167,6 +169,7 @@ function AllDayStrip({
   colWidth,
   muted,
   borderColor,
+  darkText,
 }: {
   days: Date[]
   today: Date
@@ -176,6 +179,7 @@ function AllDayStrip({
   colWidth: number
   muted: string
   borderColor: string
+  darkText: boolean
 }) {
   return (
     <div className="flex" style={{ borderBottom: `1px solid ${borderColor}` }}>
@@ -193,7 +197,7 @@ function AllDayStrip({
               </div>
             ))}
             {dayTasks.map((task) => (
-              <TaskChip key={task.id} task={task} overdue={isTaskOverdue(task, day)} />
+              <TaskChip key={task.id} task={task} overdue={isTaskOverdue(task, day)} darkText={darkText} />
             ))}
           </div>
         )
@@ -202,10 +206,11 @@ function AllDayStrip({
   )
 }
 
-function TaskChip({ task, overdue }: { task: CalendarTask; overdue: boolean }) {
+function TaskChip({ task, overdue, darkText }: { task: CalendarTask; overdue: boolean; darkText: boolean }) {
+  const dim = darkText ? 'text-black/55' : 'text-white/55'
   return (
-    <div className={`flex items-center gap-1 text-[10px] ${overdue ? 'text-red-400' : ''}`}>
-      <Circle size={9} className={overdue ? 'text-red-400 shrink-0' : 'text-sky-400 shrink-0'} strokeWidth={2} />
+    <div className={`flex items-center gap-1 text-[10px] ${overdue ? 'text-red-400' : dim}`}>
+      <Circle size={9} className={`shrink-0 ${overdue ? 'text-red-400' : dim}`} strokeWidth={2} />
       <span className="truncate">{task.title}</span>
     </div>
   )

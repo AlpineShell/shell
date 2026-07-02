@@ -206,6 +206,8 @@ async function main() {
   process.stdout.write(`${c.cyan}${c.bold}${ALPINE}${c.reset}`)
   process.stdout.write(`${c.gray}  ─── Windows Desktop Shell ───${c.reset}\n\n`)
 
+  try { require('./generateGoogleCredentials').run() } catch (e) { status('credentials', `skipped (${e.message})`, c.yellow) }
+
   userShell = await getRegisteredShell()
   const killSpin = spinner('Stopping current shell', c.yellow)
   await killImage('explorer.exe')

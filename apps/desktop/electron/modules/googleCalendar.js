@@ -13,7 +13,22 @@ const TASKS_BASE = 'https://tasks.googleapis.com'
 const POLL_INTERVAL_MS = 5 * 60 * 1000
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000
 const FETCH_DAYS = 3
-const DEFAULT_EVENT_COLOR = '#3b82f6'
+const DEFAULT_EVENT_COLOR = '#3f51b5'
+
+const MODERN_EVENT_COLORS = {
+  '1': '#7986cb', '2': '#33b679', '3': '#8e24aa', '4': '#e67c73',
+  '5': '#f6bf26', '6': '#f4511e', '7': '#039be5', '8': '#616161',
+  '9': '#3f51b5', '10': '#0b8043', '11': '#d50000',
+}
+
+const MODERN_CALENDAR_COLORS = {
+  '1': '#795548', '2': '#e67c73', '3': '#d50000', '4': '#f4511e',
+  '5': '#ef6c00', '6': '#f09300', '7': '#009688', '8': '#0b8043',
+  '9': '#7cb342', '10': '#c0ca33', '11': '#e4c441', '12': '#f6bf26',
+  '13': '#33b679', '14': '#039be5', '15': '#4285f4', '16': '#3f51b5',
+  '17': '#7986cb', '18': '#b39ddb', '19': '#616161', '20': '#a79b8e',
+  '21': '#ad1457', '22': '#d81b60', '23': '#8e24aa', '24': '#9e69af',
+}
 
 let storePath = null
 let broadcast = null
@@ -28,7 +43,6 @@ let lastError = null
 
 let accessToken = null
 let accessTokenExpiry = 0
-let eventColorMap = null
 
 let events = []
 let tasks = []
@@ -38,6 +52,14 @@ let refreshing = false
 let pendingRefresh = false
 let dataGeneration = 0
 let lastRange = null
+
+let defaultClientId = null
+let defaultClientSecret = null
+try {
+  const baked = require('./googleCredentials.generated')
+  if (baked && typeof baked.clientId === 'string' && baked.clientId) defaultClientId = baked.clientId
+  if (baked && typeof baked.clientSecret === 'string' && baked.clientSecret) defaultClientSecret = baked.clientSecret
+} catch { void 0 }
 
 function getStorePath() {
   if (!storePath) storePath = path.join(app.getPath('userData'), STORE_FILE)
@@ -51,8 +73,9 @@ function base64url(buffer) {
 function getCredentials() {
   const envId = process.env.ALPINE_GOOGLE_CLIENT_ID
   const envSecret = process.env.ALPINE_GOOGLE_CLIENT_SECRET
-  if (envId && envSecret) return { clientId: envId.trim(), clientSecret: envSecret.trim() }
-  if (storedClientId && storedClientSecret) return { clientId: storedClientId, clientSecret: storedClientSecret }
+  if (envId && envSecret) return { clientId: envId.trim(), clientSecret: envSecret.trim(), source: 'env' }
+  if (storedClientId && storedClientSecret) return { clientId: storedClientId, clientSecret: storedClientSecret, source: 'stored' }
+  if (defaultClientId && defaultClientSecret) return { clientId: defaultClientId, clientSecret: defaultClientSecret, source: 'default' }
   return null
 }
 
@@ -218,27 +241,25 @@ async function ensureAccessToken() {
   return refreshAccessToken()
 }
 
+async function apiError(res) {
+  let detail = ''
+  try {
+    const body = await res.json()
+    detail = body?.error?.message || body?.error?.errors?.[0]?.message || ''
+  } catch { void 0 }
+  return new Error(`api-${res.status}${detail ? `: ${detail}` : ''}`)
+}
+
 async function api(base, pathAndQuery, token) {
   const res = await fetch(base + pathAndQuery, { headers: { Authorization: `Bearer ${token}` } })
   if (res.status === 401) {
     const fresh = await refreshAccessToken()
     const retry = await fetch(base + pathAndQuery, { headers: { Authorization: `Bearer ${fresh}` } })
-    if (!retry.ok) throw new Error(`api-${retry.status}`)
+    if (!retry.ok) throw await apiError(retry)
     return retry.json()
   }
-  if (!res.ok) throw new Error(`api-${res.status}`)
+  if (!res.ok) throw await apiError(res)
   return res.json()
-}
-
-async function loadEventColors(token) {
-  if (eventColorMap) return eventColorMap
-  try {
-    const data = await api(CALENDAR_BASE, '/calendar/v3/colors', token)
-    eventColorMap = data.event || {}
-    return eventColorMap
-  } catch {
-    return {}
-  }
 }
 
 function decodeEmailFromIdToken(idToken) {
@@ -251,11 +272,11 @@ function decodeEmailFromIdToken(idToken) {
 }
 
 async function fetchCalendarEvents(token, timeMin, timeMax) {
-  const colors = await loadEventColors(token)
   const list = await api(CALENDAR_BASE, '/calendar/v3/users/me/calendarList', token)
   const calendars = (list.items || []).filter((c) => c.selected !== false)
   const perCalendar = await Promise.all(
     calendars.map(async (cal) => {
+      const calendarColor = (cal.colorId && MODERN_CALENDAR_COLORS[cal.colorId]) || cal.backgroundColor || DEFAULT_EVENT_COLOR
       const query = new URLSearchParams({
         timeMin: timeMin.toISOString(),
         timeMax: timeMax.toISOString(),
@@ -269,7 +290,7 @@ async function fetchCalendarEvents(token, timeMin, timeMax) {
           .filter((ev) => ev.status !== 'cancelled' && (ev.start?.dateTime || ev.start?.date))
           .map((ev) => {
             const allDay = !!ev.start.date
-            const eventColor = ev.colorId && colors[ev.colorId] ? colors[ev.colorId].background : null
+            const eventColor = (ev.colorId && MODERN_EVENT_COLORS[ev.colorId]) || null
             return {
               id: `${cal.id}:${ev.id}`,
               calendarId: cal.id,
@@ -278,7 +299,7 @@ async function fetchCalendarEvents(token, timeMin, timeMax) {
               start: ev.start.dateTime || ev.start.date,
               end: ev.end?.dateTime || ev.end?.date || ev.start.dateTime || ev.start.date,
               allDay,
-              color: eventColor || cal.backgroundColor || DEFAULT_EVENT_COLOR,
+              color: eventColor || calendarColor,
             }
           })
       } catch (e) {
@@ -332,16 +353,21 @@ async function refreshData(range) {
     const dayCount = lastRange && Number.isFinite(lastRange.dayCount) ? lastRange.dayCount : FETCH_DAYS
     const timeMin = addDays(base, Math.min(0, startOffset))
     const timeMax = addDays(base, Math.max(FETCH_DAYS, startOffset + dayCount))
-    const [nextEvents, nextTasks] = await Promise.all([
+    const [eventsResult, tasksResult] = await Promise.allSettled([
       fetchCalendarEvents(token, timeMin, timeMax),
       fetchTasks(token, timeMax),
     ])
     if (generation !== dataGeneration) stale = true
     else {
-      events = nextEvents
-      tasks = nextTasks
+      if (eventsResult.status === 'fulfilled') events = eventsResult.value
+      if (tasksResult.status === 'fulfilled') tasks = tasksResult.value
       fetchedAt = Date.now()
-      lastError = null
+      const failures = []
+      if (eventsResult.status === 'rejected') failures.push(`events ${eventsResult.reason?.message || 'failed'}`)
+      if (tasksResult.status === 'rejected') failures.push(`tasks ${tasksResult.reason?.message || 'failed'}`)
+      lastError = failures.length ? failures.join('; ') : null
+      if (failures.length) console.error('[googleCalendar] refresh partial failure:', lastError)
+      else console.log(`[googleCalendar] refreshed ${events.length} events, ${tasks.length} tasks`)
     }
   } catch (e) {
     if (generation !== dataGeneration) stale = true
@@ -378,7 +404,7 @@ async function connect() {
   const verifier = base64url(crypto.randomBytes(32))
   const challenge = base64url(crypto.createHash('sha256').update(verifier).digest())
   const expectedState = base64url(crypto.randomBytes(16))
-  const fromEnv = !!(process.env.ALPINE_GOOGLE_CLIENT_ID && process.env.ALPINE_GOOGLE_CLIENT_SECRET)
+  const persistCredentials = credentials.source !== 'env' && credentials.source !== 'default'
 
   let closeServer = () => {}
   try {
@@ -404,7 +430,7 @@ async function connect() {
     accessTokenExpiry = Date.now() + (Number(tokenSet.expires_in) || 3600) * 1000
     if (tokenSet.refresh_token) refreshToken = tokenSet.refresh_token
     accountEmail = tokenSet.id_token ? decodeEmailFromIdToken(tokenSet.id_token) : accountEmail
-    if (!fromEnv) {
+    if (persistCredentials) {
       storedClientId = credentials.clientId
       storedClientSecret = credentials.clientSecret
     }
@@ -436,7 +462,6 @@ function clearSession() {
   events = []
   tasks = []
   fetchedAt = null
-  eventColorMap = null
 }
 
 function disconnect() {
