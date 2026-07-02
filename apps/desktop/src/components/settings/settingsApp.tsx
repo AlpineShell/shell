@@ -4,6 +4,7 @@ import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
 import WallpaperPage from './wallpaperPage'
 import TopBarPage from './topBarPage'
+import CalendarPage from './calendarPage'
 import TrayPage from './trayPage'
 import TrayIconsPage from './trayIconsPage'
 import HotkeysPage from './hotkeysPage'
@@ -189,6 +190,7 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'personalization') return <PersonalizationHub onNavigate={navigate} />
   if (path === 'personalization/wallpaper') return <WallpaperPage />
   if (path === 'personalization/topbar') return <TopBarPage />
+  if (path === 'personalization/calendar') return <CalendarPage />
   if (path === 'personalization/tray') return <TrayPage onNavigate={navigate} />
   if (path === 'personalization/tray/icons') return <TrayIconsPage />
   if (path === 'personalization/hotkeys') return <HotkeysPage />
@@ -215,6 +217,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   personalization: 'Personalization',
   wallpaper: 'Wallpaper',
   topbar: 'Top Bar',
+  calendar: 'Calendar',
   tray: 'System Tray',
   icons: 'Manage Icons',
   hotkeys: 'Hotkeys',

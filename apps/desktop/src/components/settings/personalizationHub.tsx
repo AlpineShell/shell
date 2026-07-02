@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Keyboard, LayoutDashboard, LayoutGrid, PanelTop } from 'lucide-react'
+import { CalendarDays, Image as ImageIcon, Keyboard, LayoutDashboard, LayoutGrid, PanelTop } from 'lucide-react'
 import { NavRow } from './appsShared'
 
 interface PersonalizationHubProps {
@@ -8,6 +8,7 @@ interface PersonalizationHubProps {
 const ROWS = [
   { path: 'personalization/wallpaper', label: 'Wallpaper', description: 'Change background image', icon: ImageIcon },
   { path: 'personalization/topbar', label: 'Top Bar', description: 'Color, icon', icon: PanelTop },
+  { path: 'personalization/calendar', label: 'Calendar', description: 'Google Calendar, clock format', icon: CalendarDays },
   { path: 'personalization/tray', label: 'System Tray', description: 'Show, hide and reorder tray icons', icon: LayoutGrid },
   { path: 'personalization/hotkeys', label: 'Hotkeys', description: 'Function keys', icon: Keyboard },
   { path: 'personalization/tiling', label: 'Window Tiling', description: 'Snap and auto-arrange windows', icon: LayoutDashboard },
