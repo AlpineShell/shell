@@ -57,12 +57,23 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!node_modules/koffi/build/koffi/**",
+      "node_modules/koffi/build/koffi/win32_x64/**",
+      "!node_modules/koffi/src/**",
+      "!node_modules/koffi/doc/**",
+      "!node_modules/koffi/vendor/**",
+      "!node_modules/lightningcss-*/**",
+      "!node_modules/@tailwindcss/oxide-*/**",
+      "!dist/cursor/**",
+      "!electron/**/*.test.js",
+      "!electron/scripts/**"
     ],
     "extraResources": [
       {
         "from": "public/cursor",
-        "to": "cursor"
+        "to": "cursor",
+        "filter": ["**/*", "!Bibata-Modern-Ice/**"]
       },
       {
         "from": "electron/scripts",

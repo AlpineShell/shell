@@ -3,6 +3,8 @@ const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
 
+try { require('node:module').enableCompileCache(path.join(app.getPath('userData'), 'v8-cache')) } catch {}
+
 protocol.registerSchemesAsPrivileged([
   { scheme: 'alpine-wallpaper', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } },
 ])

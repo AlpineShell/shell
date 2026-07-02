@@ -253,4 +253,5 @@ module.exports = {
   revertShell,
   relaunchFromInstalled,
   startBrandedUpdate,
+  ensureUpdaterExe,
 }
