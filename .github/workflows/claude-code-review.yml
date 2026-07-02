@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  issues: read
+  issues: write
   id-token: write
 
 concurrency:
@@ -40,6 +40,20 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+
+          upsert_summary() {
+            existing=$(gh api --paginate "repos/$OWNER/$REPO/issues/$PR/comments" \
+              --jq '.[] | select(.body | contains("<!-- claude-review-summary -->")) | .id' | head -n1)
+            if [ -n "$existing" ]; then
+              gh api -X PATCH "repos/$OWNER/$REPO/issues/comments/$existing" -f body="$1" >/dev/null \
+                && echo "Updated review summary comment." \
+                || echo "::warning::Could not update summary comment."
+            else
+              gh api "repos/$OWNER/$REPO/issues/$PR/comments" -f body="$1" >/dev/null \
+                && echo "Posted review summary comment." \
+                || echo "::warning::Could not post summary comment."
+            fi
+          }
 
           threads_json="$(gh api graphql -F o="$OWNER" -F r="$REPO" -F n="$PR" -f query='
             query($o:String!, $r:String!, $n:Int!) {
@@ -82,6 +96,7 @@ jobs:
           outstanding=$(echo "$reviews" | jq '[.[] | select(.user.login == "github-actions[bot]" and .state == "CHANGES_REQUESTED")] | length')
 
           if [ "$open" -gt 0 ]; then
+            upsert_summary "$(printf '<!-- claude-review-summary -->\n## Code review\n\nFound %s issue(s) - see the inline comments.' "$open")"
             if [ "$outstanding" -eq 0 ]; then
               gh api "repos/$OWNER/$REPO/pulls/$PR/reviews" \
                 -f event=REQUEST_CHANGES \
@@ -101,5 +116,6 @@ jobs:
                     && echo "Dismissed prior change-request $id." \
                     || echo "::warning::Could not dismiss review $id."
                 done
+            upsert_summary $'<!-- claude-review-summary -->\n## Code review\n\nNo issues found. Checked for bugs and CLAUDE.md compliance.'
             echo "No open findings; did not approve."
           fi
