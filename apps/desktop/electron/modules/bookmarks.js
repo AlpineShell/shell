@@ -4,6 +4,7 @@ const path = require('path')
 const { execFile } = require('child_process')
 const frecency = require('./frecency')
 const browserFavicons = require('./browserFavicons')
+const firefoxData = require('./firefoxData')
 
 const MAX_BOOKMARKS = 3000
 const RELOAD_DEBOUNCE_MS = 600
@@ -53,32 +54,45 @@ function resolveProfileDir(userDataDir) {
   return 'Default'
 }
 
-async function resolveBrowserPaths() {
+function isFirefox(progId) {
+  return !!progId && /firefox/i.test(progId)
+}
+
+async function loadFromBrowser() {
   const progId = await getDefaultBrowserProgId()
+
+  if (isFirefox(progId)) {
+    const profileDir = firefoxData.resolveProfileDir()
+    if (!profileDir) return { list: [], watchFile: null, watchName: null }
+    const list = firefoxData.readBookmarks(profileDir)
+    attachFavicons(list, (hosts) => firefoxData.readFaviconMap(profileDir, hosts))
+    return { list, watchFile: path.join(profileDir, 'places.sqlite'), watchName: 'places.sqlite' }
+  }
+
   const userDataDir = resolveUserDataDir(progId)
-  if (!userDataDir) return { bookmarks: null, favicons: null }
+  if (!userDataDir) return { list: [], watchFile: null, watchName: null }
   const profileDir = path.join(userDataDir, resolveProfileDir(userDataDir))
   const bookmarksFile = path.join(profileDir, 'Bookmarks')
+  if (!fs.existsSync(bookmarksFile)) return { list: [], watchFile: null, watchName: null }
+  const list = parseBookmarks(bookmarksFile)
   const faviconsFile = path.join(profileDir, 'Favicons')
-  return {
-    bookmarks: fs.existsSync(bookmarksFile) ? bookmarksFile : null,
-    favicons: fs.existsSync(faviconsFile) ? faviconsFile : null,
-  }
+  if (fs.existsSync(faviconsFile)) attachFavicons(list, (hosts) => browserFavicons.readFaviconMap(faviconsFile, hosts))
+  return { list, watchFile: bookmarksFile, watchName: 'Bookmarks' }
 }
 
 function hostOf(url) {
   try { return new URL(url).hostname } catch { return '' }
 }
 
-function attachFavicons(list, faviconsFile) {
-  if (!faviconsFile) return
+function attachFavicons(list, readMap) {
   const neededHosts = new Set()
   for (const entry of list) {
     const host = hostOf(entry.url)
     if (host) neededHosts.add(host)
   }
+  if (neededHosts.size === 0) return
   let iconByHost
-  try { iconByHost = browserFavicons.readFaviconMap(faviconsFile, neededHosts) } catch { return }
+  try { iconByHost = readMap(neededHosts) } catch { return }
   for (const entry of list) {
     const icon = iconByHost.get(hostOf(entry.url))
     if (icon) entry.favicon = icon
@@ -122,11 +136,11 @@ function publish() {
   if (broadcast) broadcast('bookmarks/changed', bookmarks)
 }
 
-function watch(file) {
+function watch(file, name) {
   if (watcher) return
   try {
     watcher = fs.watch(path.dirname(file), (_event, filename) => {
-      if (filename && filename !== 'Bookmarks') return
+      if (filename && filename !== name) return
       if (reloadTimer) clearTimeout(reloadTimer)
       reloadTimer = setTimeout(() => {
         reload().catch((e) => console.error('[bookmarks] reload error:', e.message))
@@ -138,17 +152,10 @@ function watch(file) {
 }
 
 async function reload() {
-  const paths = await resolveBrowserPaths()
-  if (!paths.bookmarks) {
-    bookmarks = []
-    publish()
-    return
-  }
-  const list = parseBookmarks(paths.bookmarks)
-  attachFavicons(list, paths.favicons)
+  const { list, watchFile, watchName } = await loadFromBrowser()
   bookmarks = list
   publish()
-  watch(paths.bookmarks)
+  if (watchFile) watch(watchFile, watchName)
 }
 
 async function ensureLoaded() {
