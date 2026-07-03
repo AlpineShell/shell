@@ -25,23 +25,20 @@ try {
   console.error('[powerThrottling] koffi load failed:', e?.message ?? e)
 }
 
-function toNum(v) {
-  return typeof v === 'bigint' ? Number(v) : v
-}
-
 function disableEcoQosForPid(pid) {
   if (!SetProcessInformation || !OpenProcess || !CloseHandle || !PowerThrottlingState) return
   if (!pid) return
   let handle = 0
   try {
-    handle = toNum(OpenProcess(PROCESS_SET_INFORMATION, 0, pid))
+    handle = OpenProcess(PROCESS_SET_INFORMATION, 0, pid)
     if (!handle) return
     const state = {
       Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
       ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
       StateMask: 0,
     }
-    SetProcessInformation(handle, PROCESS_INFORMATION_CLASS_POWER_THROTTLING, state, koffi.sizeof(PowerThrottlingState))
+    const ok = SetProcessInformation(handle, PROCESS_INFORMATION_CLASS_POWER_THROTTLING, state, koffi.sizeof(PowerThrottlingState))
+    if (!ok) console.error('[powerThrottling] SetProcessInformation failed for pid', pid)
   } catch (e) {
     console.error('[powerThrottling] disableEcoQosForPid failed:', e?.message ?? e)
   } finally {
