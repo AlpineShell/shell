@@ -334,6 +334,56 @@ declare global {
     centerOversized: boolean
   }
 
+  type TimeFormat = 'auto' | '12h' | '24h'
+  type ResolvedTimeFormat = '12h' | '24h'
+  type CalendarDayCount = 1 | 2 | 3
+
+  interface ClockPrefs {
+    timeFormat: TimeFormat
+    systemTimeFormat: ResolvedTimeFormat
+    calendarDays: CalendarDayCount
+    showTasks: boolean
+  }
+
+  interface CalendarConnection {
+    connected: boolean
+    email: string | null
+    hasCredentials: boolean
+    connecting: boolean
+    error: string | null
+  }
+
+  interface CalendarEvent {
+    id: string
+    calendarId: string
+    title: string
+    location: string | null
+    start: string
+    end: string
+    allDay: boolean
+    color: string
+  }
+
+  interface CalendarTask {
+    id: string
+    title: string
+    due: string | null
+    completed: boolean
+    listTitle: string | null
+  }
+
+  interface CalendarData {
+    events: CalendarEvent[]
+    tasks: CalendarTask[]
+    fetchedAt: number | null
+    error: string | null
+  }
+
+  interface CalendarRange {
+    startOffset: number
+    dayCount: number
+  }
+
   interface Window {
     setup: {
       status: () => Promise<SetupStatus>
@@ -543,6 +593,21 @@ declare global {
         setConfig: (partial: Partial<TilingConfig>) => Promise<TilingConfig>
         onConfigChanged: (callback: (config: TilingConfig) => void) => () => void
         snap: (direction: 'left' | 'right' | 'up' | 'down') => Promise<boolean>
+      }
+      clock: {
+        prefs: () => Promise<ClockPrefs>
+        setPrefs: (partial: Partial<ClockPrefs>) => Promise<ClockPrefs>
+        onPrefsChanged: (callback: (data: ClockPrefs) => void) => () => void
+        initial: ClockPrefs | null
+      }
+      calendar: {
+        state: () => Promise<CalendarConnection>
+        onStateChanged: (callback: (data: CalendarConnection) => void) => () => void
+        connect: () => Promise<CalendarConnection>
+        disconnect: () => Promise<CalendarConnection>
+        data: () => Promise<CalendarData>
+        onDataChanged: (callback: (data: CalendarData) => void) => () => void
+        refresh: (range?: CalendarRange) => Promise<CalendarData>
       }
     }
   }

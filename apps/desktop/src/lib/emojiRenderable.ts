@@ -73,3 +73,14 @@ export function getRenderableEmojis(): EmojiEntry[] {
   }
   return cache
 }
+
+export function warmRenderableEmojis(): () => void {
+  if (cache) return () => {}
+  const warm = () => { getRenderableEmojis() }
+  if (typeof window.requestIdleCallback === "function") {
+    const handle = window.requestIdleCallback(warm, { timeout: 3000 })
+    return () => window.cancelIdleCallback(handle)
+  }
+  const handle = window.setTimeout(warm, 500)
+  return () => window.clearTimeout(handle)
+}
