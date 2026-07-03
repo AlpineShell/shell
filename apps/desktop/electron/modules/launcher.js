@@ -37,7 +37,7 @@ function setEmojiCapture(active, hwnd) {
 }
 
 const LAUNCHER_WIDTH = 600
-const START_APPS_REFRESH_INTERVAL = 300000
+const START_APPS_REFRESH_INTERVAL = 1800000
 
 function publishIndex() {
   if (!broadcast) return
@@ -241,7 +241,6 @@ async function buildIndex() {
 async function refreshStartApps() {
   const apps = await getStartApps()
   if (apps.length > 0) startApps = apps
-  startAppIconCache.clear()
   await buildIndex()
 }
 

@@ -994,6 +994,8 @@ function openInstalledLocation({ id }) {
   return { ok: false }
 }
 
+const BOOT_DEFER_MS = 15000
+
 module.exports = {
   handlers: {
     'apps/startup-list': () => getStartup(),
@@ -1014,11 +1016,13 @@ module.exports = {
   uninstallByLaunch,
   start(broadcast) {
     broadcastRef = broadcast
-    refreshStartup()
-      .catch(() => {})
-      .then(() => refreshInstalledShared())
-      .then(broadcastInstalled)
-      .catch(() => {})
-    listRunning().then((list) => { cachedRunning = list }).catch(() => {})
+    setTimeout(() => {
+      refreshStartup()
+        .catch(() => {})
+        .then(() => refreshInstalledShared())
+        .then(broadcastInstalled)
+        .catch(() => {})
+      listRunning().then((list) => { cachedRunning = list }).catch(() => {})
+    }, BOOT_DEFER_MS)
   },
 }
