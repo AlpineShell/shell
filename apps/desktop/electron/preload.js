@@ -161,6 +161,13 @@ contextBridge.exposeInMainWorld('launcher', {
     ipcRenderer.on('launcher/recent-apps-changed', handler)
     return () => ipcRenderer.removeListener('launcher/recent-apps-changed', handler)
   },
+  showBookmarks: () => ipcRenderer.invoke('launcher/show-bookmarks-get'),
+  setShowBookmarks: (value) => ipcRenderer.invoke('launcher/show-bookmarks-set', value),
+  onShowBookmarksChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('launcher/show-bookmarks-changed', handler)
+    return () => ipcRenderer.removeListener('launcher/show-bookmarks-changed', handler)
+  },
   maxResults: () => ipcRenderer.invoke('launcher/max-results-get'),
   setMaxResults: (value) => ipcRenderer.invoke('launcher/max-results-set', value),
   onMaxResultsChanged: (callback) => {
@@ -380,6 +387,15 @@ contextBridge.exposeInMainWorld('shell', {
     windowCommand: (action) => ipcRenderer.invoke('apps/window-command', action),
     launchableOpenLocation: (id) => ipcRenderer.invoke('apps/app-open-location', id),
     launchableUninstall: (id) => ipcRenderer.invoke('apps/app-uninstall', id),
+  },
+  bookmarks: {
+    list: () => ipcRenderer.invoke('bookmarks/list'),
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('bookmarks/changed', handler)
+      return () => ipcRenderer.removeListener('bookmarks/changed', handler)
+    },
+    open: (url) => ipcRenderer.invoke('bookmarks/open', url),
   },
   updates: {
     getState: () => ipcRenderer.invoke('updates/get-state'),

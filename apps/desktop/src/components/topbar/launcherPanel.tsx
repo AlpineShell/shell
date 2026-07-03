@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
+import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
@@ -12,11 +12,16 @@ import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type S
 import { useFrecencyScores } from "../../hooks/useFrecencyScores"
 import { useLauncherRecentApps } from "../../hooks/useLauncherRecentApps"
 import { useLauncherMaxResults } from "../../hooks/useLauncherMaxResults"
+import { useLauncherShowBookmarks } from "../../hooks/useLauncherShowBookmarks"
+import { useBookmarks } from "../../hooks/useBookmarks"
 import { EMOJIS, type EmojiEntry } from "../../lib/emojiData"
 import { getRenderableEmojis } from "../../lib/emojiRenderable"
 
 const BAR_BOTTOM = 24
 const LAUNCHER_WIDTH_DEFAULT = 600
+const BOOKMARK_LIMIT = 2000
+const BOOKMARK_ID_BASE = -1000
+const BOOKMARK_URL_PENALTY = 6
 const EMOJI_COLS = 9
 const EMOJI_SEARCH_LIMIT = 180
 const EMOJI_CELL_HEIGHT = 40
@@ -190,6 +195,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const [openApps, setOpenApps] = useState<OpenApp[]>([])
   const scores = useFrecencyScores()
   const showRecentApps = useLauncherRecentApps()
+  const showBookmarks = useLauncherShowBookmarks()
+  const bookmarks = useBookmarks(showBookmarks)
   const maxResults = useLauncherMaxResults()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
@@ -233,6 +240,25 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     for (const item of items) map.set(item.id, deriveFields(item))
     return map
   }, [items])
+
+  const bookmarkEntries = useMemo(
+    () =>
+      bookmarks.slice(0, BOOKMARK_LIMIT).map((b, i) => ({
+        item: {
+          id: BOOKMARK_ID_BASE - i,
+          name: b.title,
+          lnkPath: null,
+          target: b.url,
+          url: b.url,
+          isBookmark: true,
+          icon: null,
+          favicon: b.favicon,
+        } as LauncherItem,
+        fields: deriveFields({ name: b.title, target: "" }),
+        url: b.url,
+      })),
+    [bookmarks]
+  )
 
   const recentEmojiEntries = useMemo(
     () => recentEmoji.map((c) => EMOJI_BY_CHAR.get(c)).filter((e): e is EmojiEntry => !!e),
@@ -539,6 +565,13 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       if (base < 0) continue
       scored.push({ item, s: base + frecencyBoost(scores[frecencyKey(item.target)] ?? 0) })
     }
+    for (const bm of bookmarkEntries) {
+      const titleScore = scoreItem(q, bm.fields)
+      const urlScore = scoreField(q, bm.url) - BOOKMARK_URL_PENALTY
+      const best = Math.max(titleScore, urlScore)
+      if (best < 0) continue
+      scored.push({ item: bm.item, s: best + frecencyBoost(scores[frecencyKey(bm.url)] ?? 0) })
+    }
     scored.sort((a, b) => b.s - a.s)
     const settingsScore = ALPINE_SETTINGS_KEYWORDS.reduce((m, k) => Math.max(m, scoreField(q, k)), -1)
     const settingsAlreadyOpen = matchedOpenApps.some((a) => a.path.toLowerCase() === ALPINE_SETTINGS_PATH)
@@ -546,7 +579,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     const list = scored.map((r) => r.item)
     if (showSettings) list.push(ALPINE_SETTINGS_ITEM)
     return list
-  }, [query, items, fieldsById, scores, showRecentApps, matchedOpenApps])
+  }, [query, items, fieldsById, bookmarkEntries, scores, showRecentApps, matchedOpenApps])
 
   const display = useMemo(() => {
     let budget = Math.max(1, maxResults) - (mathResult ? 1 : 0) - (mapResult ? 1 : 0)
@@ -744,7 +777,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     } else if (e.key === "ArrowRight" && selectedEntry && (
       selectedEntry.type === "open" ||
       selectedEntry.type === "run" ||
-      (selectedEntry.type === "app" && selectedEntry.item && selectedEntry.item.id !== ALPINE_SETTINGS_ID)
+      (selectedEntry.type === "app" && selectedEntry.item && selectedEntry.item.id !== ALPINE_SETTINGS_ID && !selectedEntry.item.isBookmark)
     )) {
       e.preventDefault()
       setContextOpen(true)
@@ -772,11 +805,15 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
         else window.shell.run.exec(query)
         window.launcher.hide()
       } else if (selectedEntry.type === "app" && selectedEntry.item) {
-        if (selectedEntry.item.id === ALPINE_SETTINGS_ID) {
+        const appItem = selectedEntry.item
+        if (appItem.isBookmark) {
+          if (appItem.url) window.shell.bookmarks.open(appItem.url)
+          window.launcher.hide()
+        } else if (appItem.id === ALPINE_SETTINGS_ID) {
           window.shell.windows.openSettings()
           window.launcher.hide()
         } else {
-          window.launcher.launch(selectedEntry.item.id)
+          window.launcher.launch(appItem.id)
         }
       }
     }
@@ -1087,12 +1124,16 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                       {display.apps.map((item, i) => {
                         const idx = winOffset + i
                         const isAlpineSettings = item.id === ALPINE_SETTINGS_ID
+                        const isBookmark = !!item.isBookmark
                         return (
                           <button
                             key={item.id}
                             onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
                             onClick={() => {
-                              if (isAlpineSettings) {
+                              if (isBookmark) {
+                                if (item.url) window.shell.bookmarks.open(item.url)
+                                window.launcher.hide()
+                              } else if (isAlpineSettings) {
                                 window.shell.windows.openSettings()
                                 window.launcher.hide()
                               } else {
@@ -1103,14 +1144,23 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                               idx === selected ? selectedBg : hoverBg
                             }`}
                           >
-                            {isAlpineSettings ? (
+                            {isBookmark ? (
+                              <BookmarkIcon favicon={item.favicon} darkText={darkText} />
+                            ) : isAlpineSettings ? (
                               <img src={window.shell.settingsIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
                             ) : item.icon ? (
                               <img src={item.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
                             ) : (
                               <div className={`w-7 h-7 shrink-0 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
                             )}
-                            <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
+                            {isBookmark ? (
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
+                                <span className={`text-[11px] truncate ${dimText}`}>{item.url}</span>
+                              </div>
+                            ) : (
+                              <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
+                            )}
                           </button>
                         )
                       })}
@@ -1145,6 +1195,33 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       </div>
     </div>,
     document.body
+  )
+}
+
+function BookmarkIcon({ favicon, darkText }: { favicon?: string; darkText: boolean }) {
+  const [failed, setFailed] = useState(false)
+  return (
+    <div className="relative w-7 h-7 shrink-0">
+      {favicon && !failed ? (
+        <img
+          src={favicon}
+          alt=""
+          className="w-7 h-7 rounded"
+          draggable={false}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="w-7 h-7 flex items-center justify-center">
+          <Globe size={18} className={darkText ? "text-black/40" : "text-white/40"} />
+        </div>
+      )}
+      <span
+        className="absolute flex items-center justify-center rounded-full"
+        style={{ right: -3, bottom: -3, width: 13, height: 13, backgroundColor: darkText ? "rgba(255,255,255,0.95)" : "rgba(24,24,27,0.95)" }}
+      >
+        <Star size={9} color="#fbbf24" fill="#fbbf24" strokeWidth={0} />
+      </span>
+    </div>
   )
 }
 
