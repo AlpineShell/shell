@@ -280,11 +280,13 @@ declare global {
     appId?: string
     url?: string
     isBookmark?: boolean
+    favicon?: string
   }
 
   interface Bookmark {
     title: string
     url: string
+    favicon?: string
   }
 
   interface RunResult {

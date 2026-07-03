@@ -3,6 +3,7 @@ const fs = require('fs')
 const path = require('path')
 const { execFile } = require('child_process')
 const frecency = require('./frecency')
+const browserFavicons = require('./browserFavicons')
 
 const MAX_BOOKMARKS = 3000
 const RELOAD_DEBOUNCE_MS = 600
@@ -52,12 +53,36 @@ function resolveProfileDir(userDataDir) {
   return 'Default'
 }
 
-async function resolveBookmarksPath() {
+async function resolveBrowserPaths() {
   const progId = await getDefaultBrowserProgId()
   const userDataDir = resolveUserDataDir(progId)
-  if (!userDataDir) return null
-  const file = path.join(userDataDir, resolveProfileDir(userDataDir), 'Bookmarks')
-  return fs.existsSync(file) ? file : null
+  if (!userDataDir) return { bookmarks: null, favicons: null }
+  const profileDir = path.join(userDataDir, resolveProfileDir(userDataDir))
+  const bookmarksFile = path.join(profileDir, 'Bookmarks')
+  const faviconsFile = path.join(profileDir, 'Favicons')
+  return {
+    bookmarks: fs.existsSync(bookmarksFile) ? bookmarksFile : null,
+    favicons: fs.existsSync(faviconsFile) ? faviconsFile : null,
+  }
+}
+
+function hostOf(url) {
+  try { return new URL(url).hostname } catch { return '' }
+}
+
+function attachFavicons(list, faviconsFile) {
+  if (!faviconsFile) return
+  const neededHosts = new Set()
+  for (const entry of list) {
+    const host = hostOf(entry.url)
+    if (host) neededHosts.add(host)
+  }
+  let iconByHost
+  try { iconByHost = browserFavicons.readFaviconMap(faviconsFile, neededHosts) } catch { return }
+  for (const entry of list) {
+    const icon = iconByHost.get(hostOf(entry.url))
+    if (icon) entry.favicon = icon
+  }
 }
 
 function flatten(node, out) {
@@ -104,8 +129,7 @@ function watch(file) {
       if (filename && filename !== 'Bookmarks') return
       if (reloadTimer) clearTimeout(reloadTimer)
       reloadTimer = setTimeout(() => {
-        bookmarks = parseBookmarks(file)
-        publish()
+        reload().catch((e) => console.error('[bookmarks] reload error:', e.message))
       }, RELOAD_DEBOUNCE_MS)
     })
   } catch (e) {
@@ -114,15 +138,17 @@ function watch(file) {
 }
 
 async function reload() {
-  const file = await resolveBookmarksPath()
-  if (!file) {
+  const paths = await resolveBrowserPaths()
+  if (!paths.bookmarks) {
     bookmarks = []
     publish()
     return
   }
-  bookmarks = parseBookmarks(file)
+  const list = parseBookmarks(paths.bookmarks)
+  attachFavicons(list, paths.favicons)
+  bookmarks = list
   publish()
-  watch(file)
+  watch(paths.bookmarks)
 }
 
 async function ensureLoaded() {

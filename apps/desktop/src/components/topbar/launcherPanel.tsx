@@ -252,6 +252,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
           url: b.url,
           isBookmark: true,
           icon: null,
+          favicon: b.favicon,
         } as LauncherItem,
         fields: deriveFields({ name: b.title, target: "" }),
         url: b.url,
@@ -1144,7 +1145,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                             }`}
                           >
                             {isBookmark ? (
-                              <BookmarkIcon url={item.url ?? ""} darkText={darkText} />
+                              <BookmarkIcon favicon={item.favicon} darkText={darkText} />
                             ) : isAlpineSettings ? (
                               <img src={window.shell.settingsIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
                             ) : item.icon ? (
@@ -1197,16 +1198,13 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   )
 }
 
-function BookmarkIcon({ url, darkText }: { url: string; darkText: boolean }) {
+function BookmarkIcon({ favicon, darkText }: { favicon?: string; darkText: boolean }) {
   const [failed, setFailed] = useState(false)
-  const host = useMemo(() => {
-    try { return new URL(url).hostname } catch { return "" }
-  }, [url])
   return (
     <div className="relative w-7 h-7 shrink-0">
-      {host && !failed ? (
+      {favicon && !failed ? (
         <img
-          src={`https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(host)}`}
+          src={favicon}
           alt=""
           className="w-7 h-7 rounded"
           draggable={false}
