@@ -1,6 +1,6 @@
 const { app, shell: electronShell } = require('electron')
 const path = require('path')
-const { execSync, execFileSync, spawn } = require('child_process')
+const { execSync, execFileSync, execFile, spawn } = require('child_process')
 const fs = require('fs')
 const originalFs = require('original-fs')
 const crypto = require('crypto')
@@ -223,6 +223,40 @@ function ensureUpdaterExe() {
   }
 }
 
+function ensureUpdaterExeAsync() {
+  return new Promise((resolve) => {
+    const sourcePath = getUpdaterSourcePath()
+    if (!fs.existsSync(sourcePath)) return resolve(null)
+
+    let exePath
+    try {
+      exePath = getUpdaterExePathForHash(getUpdaterSourceHash(sourcePath))
+    } catch {
+      return resolve(null)
+    }
+
+    if (fs.existsSync(exePath)) {
+      pruneStaleUpdaterExes(exePath)
+      return resolve(exePath)
+    }
+    if (!fs.existsSync(UPDATER_CSC_PATH)) return resolve(null)
+
+    try { fs.mkdirSync(getUpdaterDir(), { recursive: true }) } catch {}
+    execFile(UPDATER_CSC_PATH, [
+      '/nologo', '/optimize', '/target:winexe',
+      '/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll',
+      `/out:${exePath}`, sourcePath,
+    ], { windowsHide: true }, (err) => {
+      if (err) {
+        console.error('[installer] Failed to compile updater screen:', err.message)
+        return resolve(fs.existsSync(exePath) ? exePath : null)
+      }
+      pruneStaleUpdaterExes(exePath)
+      resolve(exePath)
+    })
+  })
+}
+
 function startBrandedUpdate(installerPath, version) {
   if (!app.isPackaged) return false
   if (!installerPath || !fs.existsSync(installerPath)) return false
@@ -254,4 +288,5 @@ module.exports = {
   relaunchFromInstalled,
   startBrandedUpdate,
   ensureUpdaterExe,
+  ensureUpdaterExeAsync,
 }
