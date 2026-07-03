@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, protocol, net } = require('electron')
+const { app, BrowserWindow, screen, ipcMain, protocol, net, powerMonitor } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
@@ -47,6 +47,7 @@ let powerThrottling = null
 try { powerThrottling = require('./modules/powerThrottling') } catch (e) { console.error('[main] powerThrottling load error:', e.message) }
 let shellWindow = null
 try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error('[main] shellWindow load error:', e.message) }
+const gpuPreference = require('./modules/gpuPreference')
 const { processAutostart } = require('./modules/autostart')
 const installer = require('./modules/installer')
 const updater = require('./modules/updater')
@@ -66,6 +67,7 @@ let killedExplorer = false
 app.commandLine.appendSwitch('disable-features', 'NetworkServiceSandbox,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+app.commandLine.appendSwitch('force_high_performance_gpu')
 
 function getURL(mode, displayId) {
   const params = displayId != null ? `mode=${mode}&displayId=${displayId}` : `mode=${mode}`
@@ -76,7 +78,10 @@ function getURL(mode, displayId) {
 function loadAppURL(win, url) {
   win.loadURL(url)
   let attempts = 0
-  win.webContents.on('did-finish-load', () => { attempts = 0 })
+  win.webContents.on('did-finish-load', () => {
+    attempts = 0
+    if (powerThrottling) powerThrottling.disableEcoQosForAllProcesses()
+  })
   win.webContents.on('did-fail-load', (_event, errorCode, _desc, _validatedURL, isMainFrame) => {
     if (!isMainFrame || errorCode === -3 || attempts >= 30) return
     attempts++
@@ -649,7 +654,14 @@ function startShellMode() {
   if (powerThrottling) {
     powerThrottling.disableEcoQosForAllProcesses()
     setTimeout(() => powerThrottling.disableEcoQosForAllProcesses(), 3000)
+    const reassertEcoQos = () => powerThrottling.disableEcoQosForAllProcesses()
+    powerMonitor.on('on-battery', reassertEcoQos)
+    powerMonitor.on('on-ac', reassertEcoQos)
+    try { powerMonitor.on('speed-limit-change', reassertEcoQos) } catch {}
+    setInterval(reassertEcoQos, 45000)
   }
+
+  if (!isDev) gpuPreference.pinHighPerformanceGpu()
 
   if (process.env.ALPINE_TRAY_DEBUG) {
     try {
