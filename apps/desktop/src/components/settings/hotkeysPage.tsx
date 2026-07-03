@@ -50,16 +50,19 @@ function buildAccelerator(e: React.KeyboardEvent): string | null {
 export default function HotkeysPage() {
   const [searchKey, setSearchKey] = useState('Win')
   const [recentApps, setRecentApps] = useState(false)
+  const [showBookmarks, setShowBookmarks] = useState(true)
   const [maxResults, setMaxResults] = useState(8)
 
   useEffect(() => {
     window.launcher.getHotkey().then(setSearchKey)
     window.launcher.onHotkeyChanged(setSearchKey)
     window.launcher.recentApps().then(setRecentApps)
+    window.launcher.showBookmarks().then(setShowBookmarks)
     window.launcher.maxResults().then(setMaxResults)
     const offRecentApps = window.launcher.onRecentAppsChanged(setRecentApps)
+    const offShowBookmarks = window.launcher.onShowBookmarksChanged(setShowBookmarks)
     const offMaxResults = window.launcher.onMaxResultsChanged(setMaxResults)
-    return () => { offRecentApps(); offMaxResults() }
+    return () => { offRecentApps(); offShowBookmarks(); offMaxResults() }
   }, [])
 
   async function setSearch(hk: string) {
@@ -70,6 +73,11 @@ export default function HotkeysPage() {
   function toggleRecentApps(value: boolean) {
     setRecentApps(value)
     window.launcher.setRecentApps(value)
+  }
+
+  function toggleShowBookmarks(value: boolean) {
+    setShowBookmarks(value)
+    window.launcher.setShowBookmarks(value)
   }
 
   function changeMaxResults(value: number) {
@@ -106,6 +114,12 @@ export default function HotkeysPage() {
           description="When you open Search, list your most-used apps before you type. Turn this off to start with an empty search."
           checked={recentApps}
           onChange={toggleRecentApps}
+        />
+        <ToggleRow
+          label="Show browser bookmarks"
+          description="Search your default browser's bookmarks and open them from Search. Works with Chromium browsers (Chrome, Edge, Brave and more)."
+          checked={showBookmarks}
+          onChange={toggleShowBookmarks}
         />
         <StepperRow
           label="Maximum results"
