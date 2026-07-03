@@ -43,6 +43,21 @@ jobs:
         run: |
           set -euo pipefail
 
+          # The review action posts its own top-level "## Code review" summary comment
+          # (author claude[bot], no marker) whenever there is reviewable code. This
+          # workflow owns the single marker-tagged summary via upsert_summary below, so
+          # delete the action's copy to avoid two identical comments on every code PR.
+          # Inline finding comments are review-thread comments (a different endpoint) and
+          # are left untouched.
+          gh api --paginate "repos/$OWNER/$REPO/issues/$PR/comments" \
+            --jq '.[] | select((.user.login | test("claude"; "i")) and (.body | startswith("## Code review")) and ((.body | contains("<!-- claude-review-summary -->")) | not)) | .id' \
+            | while IFS= read -r dupe_id; do
+                [ -z "$dupe_id" ] && continue
+                gh api -X DELETE "repos/$OWNER/$REPO/issues/comments/$dupe_id" >/dev/null \
+                  && echo "Removed the action's duplicate summary comment $dupe_id." \
+                  || echo "::warning::Could not delete duplicate summary comment $dupe_id."
+              done
+
           upsert_summary() {
             existing=$(gh api --paginate "repos/$OWNER/$REPO/issues/$PR/comments" \
               --jq '.[] | select(.body | contains("<!-- claude-review-summary -->")) | .id' | head -n1)
