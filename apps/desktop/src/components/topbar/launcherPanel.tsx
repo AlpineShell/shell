@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
+import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
@@ -1144,7 +1144,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                             }`}
                           >
                             {isBookmark ? (
-                              <Globe size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+                              <BookmarkIcon url={item.url ?? ""} darkText={darkText} />
                             ) : isAlpineSettings ? (
                               <img src={window.shell.settingsIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
                             ) : item.icon ? (
@@ -1194,6 +1194,36 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       </div>
     </div>,
     document.body
+  )
+}
+
+function BookmarkIcon({ url, darkText }: { url: string; darkText: boolean }) {
+  const [failed, setFailed] = useState(false)
+  const host = useMemo(() => {
+    try { return new URL(url).hostname } catch { return "" }
+  }, [url])
+  return (
+    <div className="relative w-7 h-7 shrink-0">
+      {host && !failed ? (
+        <img
+          src={`https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(host)}`}
+          alt=""
+          className="w-7 h-7 rounded"
+          draggable={false}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="w-7 h-7 flex items-center justify-center">
+          <Globe size={18} className={darkText ? "text-black/40" : "text-white/40"} />
+        </div>
+      )}
+      <span
+        className="absolute flex items-center justify-center rounded-full"
+        style={{ right: -3, bottom: -3, width: 13, height: 13, backgroundColor: darkText ? "rgba(255,255,255,0.95)" : "rgba(24,24,27,0.95)" }}
+      >
+        <Star size={9} color="#fbbf24" fill="#fbbf24" strokeWidth={0} />
+      </span>
+    </div>
   )
 }
 
