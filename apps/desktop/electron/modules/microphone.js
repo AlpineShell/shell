@@ -2,6 +2,7 @@ const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { createPersistentRunner } = require('../powershell')
+const { friendlyAppName } = require('../appNames')
 
 let lastActive = false
 let lastApps = ''
@@ -9,7 +10,7 @@ let lastApps = ''
 const SCRIPT_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts', 'microphoneStatus.ps1')
   : path.join(__dirname, '..', 'scripts', 'microphoneStatus.ps1')
-const QUERY = `$r=[MicDetect]::GetActiveCapturers(); if($r.Count -eq 0){'{}'}else{@{active=$true;apps=$r}|ConvertTo-Json -Compress}`
+const QUERY = `$names=[MicDetect]::GetActiveCapturers(); if($names.Count -eq 0){'{}'}else{$apps=@(foreach($n in $names){$fp=$null;$fd=$null;try{$mp=Get-Process -Name $n -ErrorAction Stop | Select-Object -First 1;$fp=$mp.MainModule.FileName;$fd=$mp.MainModule.FileVersionInfo.FileDescription;if(-not $fd){$fd=$mp.MainModule.FileVersionInfo.ProductName}}catch{};[PSCustomObject]@{name=$n;path=$fp;desc=$fd}});@{active=$true;apps=$apps} | ConvertTo-Json -Compress}`
 
 function loadTypeDefinition() {
   const script = fs.readFileSync(SCRIPT_PATH, 'utf8')
@@ -24,10 +25,9 @@ async function getMicrophoneStatus() {
     const result = await runner.run(QUERY)
     if (!result) return { active: false, apps: [] }
     const parsed = JSON.parse(result)
-    return {
-      active: !!parsed.active,
-      apps: Array.isArray(parsed.apps) ? parsed.apps : parsed.apps ? [parsed.apps] : [],
-    }
+    const rawApps = Array.isArray(parsed.apps) ? parsed.apps : parsed.apps ? [parsed.apps] : []
+    const apps = [...new Set(rawApps.map((a) => friendlyAppName({ path: a.path, description: a.desc, processName: a.name })))]
+    return { active: !!parsed.active, apps }
   } catch {
     return { active: false, apps: [] }
   }
