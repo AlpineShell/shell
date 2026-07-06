@@ -341,7 +341,9 @@ async function buildWindowList() {
 
 const THUMBNAIL_REFRESH_MS = 4000
 const MAX_FILLS_PER_SWEEP = 3
+const BOOT_SETTLE_MS = 60000
 let warmerArmed = false
+let bootSettleUntil = 0
 
 let lastForegroundHwnd = 0
 let warmSweepTimer = null
@@ -355,6 +357,7 @@ function toHwndNum(value) {
 
 function warmCapture(hwnd) {
   if (!hwnd) return
+  if (!warmerArmed || Date.now() < bootSettleUntil) return
   try {
     if (IsIconic(hwnd) || isOwnWindow(hwnd) || !isAltTabWindow(hwnd)) return
     captureWindowThumbnail(hwnd)
@@ -424,6 +427,7 @@ function uninstallForegroundHook() {
 function warmSweep() {
   if (switcherActive) return
   if (!warmerArmed) return
+  if (Date.now() < bootSettleUntil) return
   try {
     const hwnds = enumTaskWindows()
     const live = new Set(hwnds)
@@ -896,6 +900,7 @@ module.exports = {
   hideForLauncher,
 
   start(_broadcast) {
+    bootSettleUntil = Date.now() + BOOT_SETTLE_MS
     installHook()
     startThumbnailWarmer()
     app.on('will-quit', () => {
