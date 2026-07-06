@@ -295,6 +295,7 @@ async function fetchCalendarEvents(token, timeMin, timeMax) {
               id: `${cal.id}:${ev.id}`,
               calendarId: cal.id,
               title: ev.summary || '(No title)',
+              description: ev.description || null,
               location: ev.location || null,
               start: ev.start.dateTime || ev.start.date,
               end: ev.end?.dateTime || ev.end?.date || ev.start.dateTime || ev.start.date,

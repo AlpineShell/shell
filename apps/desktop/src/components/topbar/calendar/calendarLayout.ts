@@ -23,6 +23,21 @@ export function formatHourLabel(hour: number, format: ResolvedTimeFormat): strin
   return `${String(hour % 24).padStart(2, '0')}:00`
 }
 
+export function stripHtml(html: string): string {
+  return html
+    .replace(/<(br|\/p|\/div|\/li)\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&amp;/gi, '&')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{2,}/g, '\n')
+    .trim()
+}
+
 export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
