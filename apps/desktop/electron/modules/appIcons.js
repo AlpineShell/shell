@@ -153,6 +153,11 @@ async function iconForFile(filePath) {
   const key = filePath.toLowerCase()
   if (iconCache.has(key)) return iconCache.get(key)
   const target = squirrelRedirect(filePath) || filePath
+  const packagedUrl = packagedIconDataUrl(target)
+  if (packagedUrl) {
+    iconCache.set(key, packagedUrl)
+    return packagedUrl
+  }
   let url = null
   try {
     if (IMAGE_EXTS.has(path.extname(target).toLowerCase())) {
@@ -180,6 +185,8 @@ async function resolveExeIcons(targets) {
     const key = original.toLowerCase()
     if (iconCache.has(key)) { result.set(original, iconCache.get(key)); continue }
     const src = squirrelRedirect(original) || original
+    const packagedUrl = packagedIconDataUrl(src)
+    if (packagedUrl) { iconCache.set(key, packagedUrl); result.set(original, packagedUrl); continue }
     if (IMAGE_EXTS.has(path.extname(src).toLowerCase())) {
       let url = null
       try { const image = nativeImage.createFromPath(src); url = image.isEmpty() ? null : image.toDataURL() } catch {}
@@ -215,6 +222,44 @@ function resolveStoreLogo(basePath) {
       try { return fs.statSync(path.join(dir, b)).size - fs.statSync(path.join(dir, a)).size } catch { return 0 }
     })
     return path.join(dir, matches[0])
+  } catch {
+    return null
+  }
+}
+
+function packagedAppRoot(exePath) {
+  if (!exePath) return null
+  const marker = '\\windowsapps\\'
+  const markerIndex = exePath.toLowerCase().indexOf(marker)
+  if (markerIndex < 0) return null
+  const afterMarker = exePath.slice(markerIndex + marker.length)
+  const packageSegment = afterMarker.split(/[\\/]/)[0]
+  if (!packageSegment) return null
+  return exePath.slice(0, markerIndex + marker.length) + packageSegment
+}
+
+function packagedIconPath(exePath) {
+  if (!exePath || !/\.exe$/i.test(exePath)) return null
+  const root = packagedAppRoot(exePath)
+  if (!root) return null
+  let manifest
+  try {
+    manifest = fs.readFileSync(path.join(root, 'AppxManifest.xml'), 'utf8')
+  } catch {
+    return null
+  }
+  const match = manifest.match(/Square44x44Logo\s*=\s*"([^"]+)"/i)
+  if (!match) return null
+  const relativeLogo = match[1].replace(/\//g, '\\')
+  return resolveStoreLogo(path.join(root, relativeLogo))
+}
+
+function packagedIconDataUrl(exePath) {
+  const logoPath = packagedIconPath(exePath)
+  if (!logoPath) return null
+  try {
+    const image = nativeImage.createFromPath(logoPath)
+    return image.isEmpty() ? null : image.toDataURL()
   } catch {
     return null
   }

@@ -278,6 +278,15 @@ declare global {
     target: string
     icon: string | null
     appId?: string
+    url?: string
+    isBookmark?: boolean
+    favicon?: string
+  }
+
+  interface Bookmark {
+    title: string
+    url: string
+    favicon?: string
   }
 
   interface RunResult {
@@ -423,6 +432,9 @@ declare global {
       recentApps: () => Promise<boolean>
       setRecentApps: (value: boolean) => Promise<boolean>
       onRecentAppsChanged: (callback: (value: boolean) => void) => () => void
+      showBookmarks: () => Promise<boolean>
+      setShowBookmarks: (value: boolean) => Promise<boolean>
+      onShowBookmarksChanged: (callback: (value: boolean) => void) => () => void
       maxResults: () => Promise<number>
       setMaxResults: (value: number) => Promise<number>
       onMaxResultsChanged: (callback: (value: number) => void) => () => void
@@ -504,6 +516,11 @@ declare global {
         windowCommand: (action: 'minimize' | 'maximize' | 'close') => Promise<{ ok: boolean }>
         launchableOpenLocation: (id: number) => Promise<{ success: boolean }>
         launchableUninstall: (id: number) => Promise<{ success: boolean }>
+      }
+      bookmarks: {
+        list: () => Promise<Bookmark[]>
+        onChanged: (callback: (data: Bookmark[]) => void) => () => void
+        open: (url: string) => Promise<{ ok: boolean }>
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>

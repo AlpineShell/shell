@@ -1,4 +1,4 @@
-const { execSync, exec } = require('child_process')
+const { exec, execFile } = require('child_process')
 const { shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
@@ -41,6 +41,13 @@ function execText(cmd, opts = {}) {
       resolve(err ? '' : (stdout || ''))
     })
   })
+}
+
+const LAUNCH_STAGGER_MS = 400
+const MSIX_CACHE_REFRESH_DELAY_MS = 60000
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function isBlockedEntry(entry) {
@@ -255,29 +262,28 @@ async function getMsixStartupEntries() {
 }
 
 function ensureMsixLauncher() {
-  if (fs.existsSync(MSIX_EXE_CACHE)) return MSIX_EXE_CACHE
-  if (!fs.existsSync(CSC_PATH)) {
-    console.error('[autostart] csc.exe not found, cannot compile MSIX launcher')
-    return null
-  }
-  try {
-    fs.mkdirSync(path.dirname(MSIX_EXE_CACHE), { recursive: true })
-    execSync(`"${CSC_PATH}" /nologo /optimize /target:exe /out:"${MSIX_EXE_CACHE}" "${MSIX_LAUNCHER_SRC}"`, {
-      windowsHide: true,
-      encoding: 'utf8',
+  return new Promise((resolve) => {
+    if (fs.existsSync(MSIX_EXE_CACHE)) return resolve(MSIX_EXE_CACHE)
+    if (!fs.existsSync(CSC_PATH)) {
+      console.error('[autostart] csc.exe not found, cannot compile MSIX launcher')
+      return resolve(null)
+    }
+    try { fs.mkdirSync(path.dirname(MSIX_EXE_CACHE), { recursive: true }) } catch {}
+    execFile(CSC_PATH, ['/nologo', '/optimize', '/target:exe', `/out:${MSIX_EXE_CACHE}`, MSIX_LAUNCHER_SRC], { windowsHide: true }, (err) => {
+      if (err) {
+        console.error('[autostart] Failed to compile MSIX launcher:', err.message)
+        return resolve(null)
+      }
+      console.log('[autostart] Compiled MSIX launcher exe')
+      resolve(MSIX_EXE_CACHE)
     })
-    console.log('[autostart] Compiled MSIX launcher exe')
-    return MSIX_EXE_CACHE
-  } catch (e) {
-    console.error('[autostart] Failed to compile MSIX launcher:', e.message)
-    return null
-  }
+  })
 }
 
-function launchMsixApps(entries) {
+async function launchMsixApps(entries) {
   if (entries.length === 0) return
 
-  const exePath = ensureMsixLauncher()
+  const exePath = await ensureMsixLauncher()
   if (!exePath) return
 
   const aumids = entries.map(e => `"${e.aumid}"`).join(' ')
@@ -321,7 +327,7 @@ async function getEnabledMsixEntries() {
   let entries
   if (cached && cached.length > 0 && cached.every(e => e && e.aumid && e.taskId)) {
     entries = cached
-    refreshMsixCache()
+    setTimeout(() => refreshMsixCache(), MSIX_CACHE_REFRESH_DELAY_MS)
   } else {
     entries = await getMsixStartupEntries()
     try {
@@ -363,12 +369,13 @@ async function processAutostart() {
 
   for (const entry of launchableEntries) {
     launchEntry(entry)
+    await delay(LAUNCH_STAGGER_MS)
   }
 
   const enabledMsix = await getEnabledMsixEntries()
   if (enabledMsix.length > 0) {
     console.log(`[autostart] Launching ${enabledMsix.length} enabled MSIX startup apps...`)
-    launchMsixApps(enabledMsix)
+    await launchMsixApps(enabledMsix)
   }
 
   console.log(`[autostart] Launched ${launchableEntries.length} classic entries (${runEntries.length} registry, ${runOnceEntries.length} run-once, ${folderEntries.length} startup folder) and ${enabledMsix.length} MSIX apps`)

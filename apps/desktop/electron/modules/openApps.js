@@ -6,6 +6,7 @@ const path = require('path')
 const crypto = require('crypto')
 const koffi = require('koffi')
 const appIcons = require('./appIcons')
+const { friendlyAppName } = require('../appNames')
 
 let lastSnapshot = null
 
@@ -125,7 +126,8 @@ function buildQueryScript(dllPath) {
     `  $proc = $pids[[int]$w[1]]\n` +
     `  if ($proc) {\n` +
     `    $p = $null; try { $p = $proc.MainModule.FileName } catch {}\n` +
-    `    if ($p) { [PSCustomObject]@{ id = [int]$w[1]; hwnd = $w[0]; name = $proc.ProcessName; title = [string]$w[2]; path = $p } }\n` +
+    `    $d = $null; try { $d = $proc.MainModule.FileVersionInfo.FileDescription; if (-not $d) { $d = $proc.MainModule.FileVersionInfo.ProductName } } catch {}\n` +
+    `    if ($p) { [PSCustomObject]@{ id = [int]$w[1]; hwnd = $w[0]; name = $proc.ProcessName; title = [string]$w[2]; path = $p; desc = $d } }\n` +
     `  }\n` +
     `})\n` +
     `if ($r.Count -eq 0) { '[]' } else { $r | ConvertTo-Json -Compress }\n`
@@ -179,7 +181,9 @@ async function parseApps(stdout) {
   const apps = await Promise.all(
     candidates.map(async (p) => {
       const icon = (await appIcons.iconForFile(p.path)) || generic
-      const displayName = SHELL_NAMES.has(p.name.toLowerCase()) ? p.title : p.name
+      const displayName = SHELL_NAMES.has(p.name.toLowerCase())
+        ? p.title
+        : friendlyAppName({ path: p.path, description: p.desc, processName: p.name })
       return { id: p.id, hwnd: p.hwnd, name: displayName, title: p.title, path: p.path, icon }
     })
   )
@@ -191,7 +195,8 @@ const FALLBACK_CMD =
   `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ` +
   `$r = Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | ` +
   `ForEach-Object { $p = $null; try { $p = $_.MainModule.FileName } catch {}; ` +
-  `[PSCustomObject]@{ id = $_.Id; hwnd = $_.MainWindowHandle.ToInt64(); name = $_.ProcessName; title = $_.MainWindowTitle; path = $p } } | ` +
+  `$d = $null; try { $d = $_.MainModule.FileVersionInfo.FileDescription; if (-not $d) { $d = $_.MainModule.FileVersionInfo.ProductName } } catch {}; ` +
+  `[PSCustomObject]@{ id = $_.Id; hwnd = $_.MainWindowHandle.ToInt64(); name = $_.ProcessName; title = $_.MainWindowTitle; path = $p; desc = $d } } | ` +
   `ConvertTo-Json -Compress; if ($null -eq $r) { '[]' } else { $r }`
 
 function getOpenApps() {
