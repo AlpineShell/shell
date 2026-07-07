@@ -174,8 +174,8 @@ function SystemTrayInner() {
             clickTray(s.id, "left", s.el);
             return;
         }
-        window.topbar?.setActiveRegion?.(null);
         if (s.source === "visible") {
+            window.topbar?.setActiveRegion?.(null);
             if (s.overCaret) hideIcon(s.id);
             else reorderTo(s.id, s.dropIndex);
         } else if (s.lastY <= BAR_DROP_Y) {
