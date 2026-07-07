@@ -35,10 +35,10 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     const idRef = useRef(0);
     if (!idRef.current) idRef.current = nextSurfaceId();
     const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const suppressReset = useRef(false);
     const regionBottomRef = useRef(0);
     const shrinkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const pendingClose = useRef(false);
 
     const superseded = useSurfaceSuperseded(idRef.current);
 
@@ -50,7 +50,6 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         selfRef.current = {
             close: () => {
                 clearTimeout(closeTimer.current);
-                clearTimeout(leaveTimer.current);
                 clearTimeout(shrinkTimer.current);
                 regionBottomRef.current = 0;
                 suppressReset.current = true;
@@ -151,13 +150,16 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
 
     useEffect(() => () => {
         clearTimeout(closeTimer.current);
-        clearTimeout(leaveTimer.current);
         clearTimeout(shrinkTimer.current);
-        if (activeMenu === selfRef.current) activeMenu = null;
         clearChromeSurface(idRef.current);
+        if (activeMenu === selfRef.current) {
+            activeMenu = null;
+            window.topbar.setActiveRegion(null);
+        }
     }, []);
 
     function triggerClose() {
+        pendingClose.current = true;
         if (activeMenu === selfRef.current) activeMenu = null;
         clearChromeSurface(idRef.current);
         clearTimeout(shrinkTimer.current);
@@ -172,11 +174,17 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
 
     function handleEnter() {
         clearTimeout(closeTimer.current);
-        clearTimeout(leaveTimer.current);
         const other = activeMenu && activeMenu !== selfRef.current ? activeMenu : null;
         if (other) other.close();
         activeMenu = selfRef.current;
-        if (open) return;
+        if (open) {
+            if (pendingClose.current) {
+                pendingClose.current = false;
+                setShape(null);
+            }
+            return;
+        }
+        pendingClose.current = false;
         const triggerRect = wrapperRef.current?.getBoundingClientRect();
         window.topbar.setActiveRegion({
             top: triggerRect ? triggerRect.bottom : BAR_BOTTOM,
@@ -188,24 +196,18 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         setOpen(true);
     }
 
-    function handleLeave() {
-        leaveTimer.current = setTimeout(() => triggerClose(), 80);
-    }
-
     return (
         <div
             ref={wrapperRef}
             className="relative flex items-center self-stretch"
             style={{ backgroundColor: open ? BG : "transparent", transition: "background-color 120ms ease" }}
             onMouseEnter={handleEnter}
-            onMouseLeave={handleLeave}
         >
             <div className="cursor-pointer">{trigger}</div>
             {open && createPortal(
                 <div
                     ref={clipRef}
                     onMouseEnter={handleEnter}
-                    onMouseLeave={handleLeave}
                     style={{
                         position: "fixed",
                         left: shape ? shape.left : -9999,
