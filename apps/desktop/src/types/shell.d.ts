@@ -366,6 +366,7 @@ declare global {
     id: string
     calendarId: string
     title: string
+    description: string | null
     location: string | null
     start: string
     end: string

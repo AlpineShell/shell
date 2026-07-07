@@ -16,6 +16,7 @@ import {
   allDayEventsForDay,
   tasksForDay,
   isTaskOverdue,
+  stripHtml,
   type PositionedEvent,
 } from './calendarLayout'
 
@@ -254,6 +255,7 @@ function EventBlock({ item, format }: { item: PositionedEvent; format: ResolvedT
   const height = Math.max(15, ((item.endMinutes - item.startMinutes) / 60) * HOUR_HEIGHT)
   const width = 100 / item.columns
   const left = width * item.column
+  const description = item.event.description ? stripHtml(item.event.description) : ''
   return (
     <div
       className="absolute rounded-[5px] px-1.5 py-[1px] overflow-hidden text-white"
@@ -262,6 +264,11 @@ function EventBlock({ item, format }: { item: PositionedEvent; format: ResolvedT
       <div className="text-[10px] font-medium leading-tight truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.35)' }}>
         {item.event.title}
       </div>
+      {description && height >= 30 && (
+        <div className="text-[9px] font-light leading-tight opacity-80 break-words" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.35)' }}>
+          {description}
+        </div>
+      )}
       {height >= 30 && (
         <div className="text-[9px] leading-tight truncate opacity-90" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.35)' }}>
           {formatClock(new Date(item.event.start), format)}

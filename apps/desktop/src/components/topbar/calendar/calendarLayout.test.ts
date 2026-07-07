@@ -3,6 +3,7 @@ import {
   resolveTimeFormat,
   formatClock,
   formatHourLabel,
+  stripHtml,
   layoutTimedEvents,
   allDayEventsForDay,
   tasksForDay,
@@ -11,11 +12,11 @@ import {
 } from './calendarLayout'
 
 function timedEvent(id: string, start: string, end: string): CalendarEvent {
-  return { id, calendarId: 'c', title: id, location: null, start, end, allDay: false, color: '#fff' }
+  return { id, calendarId: 'c', title: id, description: null, location: null, start, end, allDay: false, color: '#fff' }
 }
 
 function allDayEvent(id: string, start: string, end: string): CalendarEvent {
-  return { id, calendarId: 'c', title: id, location: null, start, end, allDay: true, color: '#fff' }
+  return { id, calendarId: 'c', title: id, description: null, location: null, start, end, allDay: true, color: '#fff' }
 }
 
 describe('resolveTimeFormat', () => {
@@ -50,6 +51,21 @@ describe('formatHourLabel', () => {
   it('formats 24-hour', () => {
     expect(formatHourLabel(8, '24h')).toBe('08:00')
     expect(formatHourLabel(24, '24h')).toBe('00:00')
+  })
+})
+
+describe('stripHtml', () => {
+  it('turns block tags and <br> into single newlines', () => {
+    expect(stripHtml('one<br>two<br/>three')).toBe('one\ntwo\nthree')
+    expect(stripHtml('<p>one</p><p>two</p>')).toBe('one\ntwo')
+  })
+  it('drops remaining tags and decodes common entities', () => {
+    expect(stripHtml('<a href="https://x.test">Tom &amp; Jerry</a>')).toBe('Tom & Jerry')
+    expect(stripHtml('a&nbsp;&nbsp;b')).toBe('a b')
+    expect(stripHtml('&amp;lt;')).toBe('&lt;')
+  })
+  it('collapses whitespace and trims', () => {
+    expect(stripHtml('  <div>hello   world</div>\n\n\n')).toBe('hello world')
   })
 })
 
