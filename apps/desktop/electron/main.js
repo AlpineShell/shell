@@ -1,7 +1,9 @@
-const { app, BrowserWindow, screen, ipcMain, protocol, net } = require('electron')
+const { app, BrowserWindow, screen, ipcMain, protocol, net, powerMonitor } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
+
+try { require('node:module').enableCompileCache(path.join(app.getPath('userData'), 'v8-cache')) } catch {}
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'alpine-wallpaper', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } },
@@ -33,6 +35,11 @@ const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const plugins = require('./modules/plugins')
 const claudeUsage = require('./modules/claudeUsage')
+const displayConfig = require('./modules/displayConfig')
+const clockPrefs = require('./modules/clockPrefs')
+const bookmarks = require('./modules/bookmarks')
+let googleCalendar = null
+try { googleCalendar = require('./modules/googleCalendar') } catch (e) { console.error('[main] googleCalendar load error:', e.message) }
 const appActivator = require('./appActivator')
 let trayHost = null
 try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[main] trayHost load error:', e.message) }
@@ -44,6 +51,7 @@ let powerThrottling = null
 try { powerThrottling = require('./modules/powerThrottling') } catch (e) { console.error('[main] powerThrottling load error:', e.message) }
 let shellWindow = null
 try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error('[main] shellWindow load error:', e.message) }
+const gpuPreference = require('./modules/gpuPreference')
 const { processAutostart } = require('./modules/autostart')
 const installer = require('./modules/installer')
 const updater = require('./modules/updater')
@@ -63,6 +71,7 @@ let killedExplorer = false
 app.commandLine.appendSwitch('disable-features', 'NetworkServiceSandbox,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+app.commandLine.appendSwitch('force_high_performance_gpu')
 
 function getURL(mode, displayId) {
   const params = displayId != null ? `mode=${mode}&displayId=${displayId}` : `mode=${mode}`
@@ -73,7 +82,10 @@ function getURL(mode, displayId) {
 function loadAppURL(win, url) {
   win.loadURL(url)
   let attempts = 0
-  win.webContents.on('did-finish-load', () => { attempts = 0 })
+  win.webContents.on('did-finish-load', () => {
+    attempts = 0
+    if (powerThrottling) powerThrottling.disableEcoQosForAllProcesses()
+  })
   win.webContents.on('did-fail-load', (_event, errorCode, _desc, _validatedURL, isMainFrame) => {
     if (!isMainFrame || errorCode === -3 || attempts >= 30) return
     attempts++
@@ -91,12 +103,38 @@ const CURSOR_POLL_SLOW_MS = 150
 const NEAR_BAR_MARGIN = 200
 
 const INTERACTIVE_RIGHT = 600
-const INTERACTIVE_LEFT = 40
+const INTERACTIVE_LEFT = 300
 const INTERACTIVE_CENTER = 120
+
+const MENU_HOT_MARGIN = 64
+const MENU_CLOSE_GRACE_MS = 300
 
 const shells = new Map()
 
 let cursorTracker = null
+
+function clearCloseGrace(state) {
+  if (state.closeGraceTimer) {
+    clearTimeout(state.closeGraceTimer)
+    state.closeGraceTimer = null
+  }
+}
+
+function cursorInMenuHotZone(cursor, bounds, region) {
+  const top = bounds.y + region.top - MENU_HOT_MARGIN
+  const bottom = bounds.y + region.bottom + MENU_HOT_MARGIN
+  const left = bounds.x + region.left - MENU_HOT_MARGIN
+  const right = bounds.x + region.right + MENU_HOT_MARGIN
+  return cursor.y >= top && cursor.y < bottom && cursor.x >= left && cursor.x < right
+}
+
+function scheduleMenuClose(win, state) {
+  if (!state.activeRegion || state.closeGraceTimer) return
+  state.closeGraceTimer = setTimeout(() => {
+    state.closeGraceTimer = null
+    if (!win.isDestroyed() && state.activeRegion) win.webContents.send('topbar/close-menus')
+  }, MENU_CLOSE_GRACE_MS)
+}
 
 function evaluateTopBarInteraction(win, state) {
   if (win.isDestroyed()) return
@@ -114,22 +152,23 @@ function evaluateTopBarInteraction(win, state) {
 
   let inInteractive
   if (state.activeRegion) {
-    const inMenu = cursor.y >= bounds.y + state.activeRegion.top && cursor.y < bounds.y + state.activeRegion.bottom &&
-                   cursor.x >= bounds.x + state.activeRegion.left && cursor.x < bounds.x + state.activeRegion.right
-    inInteractive = inBarRow || inMenu
+    inInteractive = inBarRow || cursorInMenuHotZone(cursor, bounds, state.activeRegion)
   } else {
     inInteractive = inBarRow && (inLeftZone || inRightZone || inCenterZone)
   }
 
-  if (inInteractive && state.ignoring) {
-    state.ignoring = false
-    win.setIgnoreMouseEvents(false)
-  } else if (!inInteractive && !state.ignoring) {
-    state.ignoring = true
-    win.setIgnoreMouseEvents(true)
-    if (state.activeRegion) {
-      win.webContents.send('topbar/close-menus')
+  if (inInteractive) {
+    clearCloseGrace(state)
+    if (state.ignoring) {
+      state.ignoring = false
+      win.setIgnoreMouseEvents(false)
     }
+  } else {
+    if (!state.ignoring) {
+      state.ignoring = true
+      win.setIgnoreMouseEvents(true)
+    }
+    scheduleMenuClose(win, state)
   }
 }
 
@@ -230,7 +269,7 @@ function createTopBarWindow(display) {
   win.setIgnoreMouseEvents(true)
   loadAppURL(win, getURL('topbar', display.id))
 
-  const state = { ignoring: true, activeRegion: null, bounds: win.getBounds() }
+  const state = { ignoring: true, activeRegion: null, bounds: win.getBounds(), closeGraceTimer: null }
   win.topBarState = state
 
   win.refreshBarBounds = () => {
@@ -242,6 +281,7 @@ function createTopBarWindow(display) {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
     if (altTab && altTab.isAltTabActive(win)) return
+    clearCloseGrace(state)
     state.activeRegion = null
     win.setAlwaysOnTop(false)
     state.ignoring = true
@@ -261,6 +301,7 @@ function createTopBarWindow(display) {
       state.activeRegion = region
       win.setAlwaysOnTop(true, 'screen-saver')
     } else {
+      clearCloseGrace(state)
       state.activeRegion = null
       win.setAlwaysOnTop(false)
     }
@@ -270,6 +311,7 @@ function createTopBarWindow(display) {
 
   win.on('blur', () => launcher.handleBlur(win))
   win.on('closed', () => {
+    clearCloseGrace(state)
     ipcMain.removeListener('topbar/set-active-region', onSetActiveRegion)
   })
 
@@ -535,7 +577,7 @@ app.whenReady().then(async () => {
     }
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, updater, windowsUpdate, plugins, claudeUsage)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, plugins, claudeUsage)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
@@ -664,7 +706,14 @@ function startShellMode() {
   if (powerThrottling) {
     powerThrottling.disableEcoQosForAllProcesses()
     setTimeout(() => powerThrottling.disableEcoQosForAllProcesses(), 3000)
+    const reassertEcoQos = () => powerThrottling.disableEcoQosForAllProcesses()
+    powerMonitor.on('on-battery', reassertEcoQos)
+    powerMonitor.on('on-ac', reassertEcoQos)
+    try { powerMonitor.on('speed-limit-change', reassertEcoQos) } catch {}
+    setInterval(reassertEcoQos, 45000)
   }
+
+  if (!isDev) gpuPreference.pinHighPerformanceGpu()
 
   if (process.env.ALPINE_TRAY_DEBUG) {
     try {

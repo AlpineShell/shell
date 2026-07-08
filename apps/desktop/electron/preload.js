@@ -5,11 +5,13 @@ let bootBluetooth = null
 let bootWifi = null
 let bootSettingsIcon = null
 let bootSettingsPage = null
+let bootClockPrefs = null
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
 try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
 try { bootSettingsIcon = ipcRenderer.sendSync('windows/settings-icon') } catch {}
 try { bootSettingsPage = ipcRenderer.sendSync('windows/settings-init') } catch {}
+try { bootClockPrefs = ipcRenderer.sendSync('clock/prefs-init') } catch {}
 
 ipcRenderer.on('windows/wallpaper-changed', (_, data) => { bootWallpaper = data })
 ipcRenderer.on('system/bluetooth-changed', (_, data) => { bootBluetooth = data })
@@ -180,6 +182,13 @@ contextBridge.exposeInMainWorld('launcher', {
     ipcRenderer.on('launcher/recent-apps-changed', handler)
     return () => ipcRenderer.removeListener('launcher/recent-apps-changed', handler)
   },
+  showBookmarks: () => ipcRenderer.invoke('launcher/show-bookmarks-get'),
+  setShowBookmarks: (value) => ipcRenderer.invoke('launcher/show-bookmarks-set', value),
+  onShowBookmarksChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('launcher/show-bookmarks-changed', handler)
+    return () => ipcRenderer.removeListener('launcher/show-bookmarks-changed', handler)
+  },
   maxResults: () => ipcRenderer.invoke('launcher/max-results-get'),
   setMaxResults: (value) => ipcRenderer.invoke('launcher/max-results-set', value),
   onMaxResultsChanged: (callback) => {
@@ -302,6 +311,15 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('system/monitors-changed', handler)
       return () => ipcRenderer.removeListener('system/monitors-changed', handler)
     },
+    getDisplays: () => ipcRenderer.invoke('system/displays-get'),
+    applyDisplayLayout: (layout) => ipcRenderer.invoke('system/displays-apply', layout),
+    keepDisplayLayout: () => ipcRenderer.invoke('system/displays-keep'),
+    revertDisplayLayout: () => ipcRenderer.invoke('system/displays-revert'),
+    onDisplaysChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/displays-changed', handler)
+      return () => ipcRenderer.removeListener('system/displays-changed', handler)
+    },
     powerAction: (action) => ipcRenderer.invoke('system/power-action', action),
     info: () => ipcRenderer.invoke('system/info'),
     battery: () => ipcRenderer.invoke('system/battery'),
@@ -391,6 +409,15 @@ contextBridge.exposeInMainWorld('shell', {
     launchableOpenLocation: (id) => ipcRenderer.invoke('apps/app-open-location', id),
     launchableUninstall: (id) => ipcRenderer.invoke('apps/app-uninstall', id),
   },
+  bookmarks: {
+    list: () => ipcRenderer.invoke('bookmarks/list'),
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('bookmarks/changed', handler)
+      return () => ipcRenderer.removeListener('bookmarks/changed', handler)
+    },
+    open: (url) => ipcRenderer.invoke('bookmarks/open', url),
+  },
   updates: {
     getState: () => ipcRenderer.invoke('updates/get-state'),
     getLog: () => ipcRenderer.invoke('updates/get-log'),
@@ -422,5 +449,32 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('tiling/config-changed', handler)
     },
     snap: (direction) => ipcRenderer.invoke('tiling/snap', direction),
+  },
+  clock: {
+    prefs: () => ipcRenderer.invoke('clock/prefs-get'),
+    setPrefs: (partial) => ipcRenderer.invoke('clock/prefs-set', partial),
+    onPrefsChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('clock/prefs-changed', handler)
+      return () => ipcRenderer.removeListener('clock/prefs-changed', handler)
+    },
+    initial: bootClockPrefs,
+  },
+  calendar: {
+    state: () => ipcRenderer.invoke('calendar/state-get'),
+    onStateChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('calendar/state-changed', handler)
+      return () => ipcRenderer.removeListener('calendar/state-changed', handler)
+    },
+    connect: () => ipcRenderer.invoke('calendar/connect'),
+    disconnect: () => ipcRenderer.invoke('calendar/disconnect'),
+    data: () => ipcRenderer.invoke('calendar/data-get'),
+    onDataChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('calendar/data-changed', handler)
+      return () => ipcRenderer.removeListener('calendar/data-changed', handler)
+    },
+    refresh: (range) => ipcRenderer.invoke('calendar/refresh', range),
   },
 })

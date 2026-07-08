@@ -195,6 +195,35 @@ declare global {
     brightness: number
   }
 
+  type DisplayOrientation = 0 | 90 | 180 | 270
+
+  interface DisplayInfo {
+    id: string
+    name: string
+    x: number
+    y: number
+    width: number
+    height: number
+    orientation: DisplayOrientation
+    refreshRate: number
+    primary: boolean
+  }
+
+  interface DisplayLayoutEntry {
+    id: string
+    x: number
+    y: number
+    orientation: DisplayOrientation
+    primary: boolean
+  }
+
+  interface DisplayApplyResult {
+    ok: boolean
+    code: number | null
+    device?: string
+    displays: DisplayInfo[]
+  }
+
   interface DiskInfo {
     letter: string
     label: string
@@ -249,6 +278,15 @@ declare global {
     target: string
     icon: string | null
     appId?: string
+    url?: string
+    isBookmark?: boolean
+    favicon?: string
+  }
+
+  interface Bookmark {
+    title: string
+    url: string
+    favicon?: string
   }
 
   interface RunResult {
@@ -344,6 +382,57 @@ declare global {
     register: (contribution: TopbarWidgetContribution) => () => void
   }
 
+  type TimeFormat = 'auto' | '12h' | '24h'
+  type ResolvedTimeFormat = '12h' | '24h'
+  type CalendarDayCount = 1 | 2 | 3
+
+  interface ClockPrefs {
+    timeFormat: TimeFormat
+    systemTimeFormat: ResolvedTimeFormat
+    calendarDays: CalendarDayCount
+    showTasks: boolean
+  }
+
+  interface CalendarConnection {
+    connected: boolean
+    email: string | null
+    hasCredentials: boolean
+    connecting: boolean
+    error: string | null
+  }
+
+  interface CalendarEvent {
+    id: string
+    calendarId: string
+    title: string
+    description: string | null
+    location: string | null
+    start: string
+    end: string
+    allDay: boolean
+    color: string
+  }
+
+  interface CalendarTask {
+    id: string
+    title: string
+    due: string | null
+    completed: boolean
+    listTitle: string | null
+  }
+
+  interface CalendarData {
+    events: CalendarEvent[]
+    tasks: CalendarTask[]
+    fetchedAt: number | null
+    error: string | null
+  }
+
+  interface CalendarRange {
+    startOffset: number
+    dayCount: number
+  }
+
   interface Window {
     plugins: {
       list: () => Promise<PluginListItem[]>
@@ -394,6 +483,9 @@ declare global {
       recentApps: () => Promise<boolean>
       setRecentApps: (value: boolean) => Promise<boolean>
       onRecentAppsChanged: (callback: (value: boolean) => void) => () => void
+      showBookmarks: () => Promise<boolean>
+      setShowBookmarks: (value: boolean) => Promise<boolean>
+      onShowBookmarksChanged: (callback: (value: boolean) => void) => () => void
       maxResults: () => Promise<number>
       setMaxResults: (value: number) => Promise<number>
       onMaxResultsChanged: (callback: (value: number) => void) => () => void
@@ -476,6 +568,11 @@ declare global {
         launchableOpenLocation: (id: number) => Promise<{ success: boolean }>
         launchableUninstall: (id: number) => Promise<{ success: boolean }>
       }
+      bookmarks: {
+        list: () => Promise<Bookmark[]>
+        onChanged: (callback: (data: Bookmark[]) => void) => () => void
+        open: (url: string) => Promise<{ ok: boolean }>
+      }
       network: {
         wifiSignal: () => Promise<NetworkStatus>
         onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => void
@@ -512,6 +609,11 @@ declare global {
         getMonitors: () => Promise<MonitorInfo[]>
         setMonitorBrightness: (id: string, value: number) => Promise<number>
         onMonitorsChanged: (callback: (data: MonitorInfo[]) => void) => () => void
+        getDisplays: () => Promise<DisplayInfo[]>
+        applyDisplayLayout: (layout: DisplayLayoutEntry[]) => Promise<DisplayApplyResult>
+        keepDisplayLayout: () => Promise<{ ok: boolean }>
+        revertDisplayLayout: () => Promise<DisplayInfo[]>
+        onDisplaysChanged: (callback: (data: DisplayInfo[]) => void) => () => void
         powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>
@@ -559,6 +661,21 @@ declare global {
         setConfig: (partial: Partial<TilingConfig>) => Promise<TilingConfig>
         onConfigChanged: (callback: (config: TilingConfig) => void) => () => void
         snap: (direction: 'left' | 'right' | 'up' | 'down') => Promise<boolean>
+      }
+      clock: {
+        prefs: () => Promise<ClockPrefs>
+        setPrefs: (partial: Partial<ClockPrefs>) => Promise<ClockPrefs>
+        onPrefsChanged: (callback: (data: ClockPrefs) => void) => () => void
+        initial: ClockPrefs | null
+      }
+      calendar: {
+        state: () => Promise<CalendarConnection>
+        onStateChanged: (callback: (data: CalendarConnection) => void) => () => void
+        connect: () => Promise<CalendarConnection>
+        disconnect: () => Promise<CalendarConnection>
+        data: () => Promise<CalendarData>
+        onDataChanged: (callback: (data: CalendarData) => void) => () => void
+        refresh: (range?: CalendarRange) => Promise<CalendarData>
       }
     }
   }

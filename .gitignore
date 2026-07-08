@@ -13,6 +13,11 @@ dist-ssr
 release
 *.local
 
+# Local secrets + baked Google client (never commit)
+.env
+.env.local
+apps/desktop/electron/modules/googleCredentials.generated.js
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

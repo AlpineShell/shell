@@ -1,9 +1,10 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, AppWindow, House, MonitorCog, Paintbrush, Plug, Puzzle, RefreshCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, AppWindow, House, Monitor, MonitorCog, Paintbrush, Plug, Puzzle, RefreshCw, X } from 'lucide-react'
 import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
 import WallpaperPage from './wallpaperPage'
 import TopBarPage from './topBarPage'
+import CalendarPage from './calendarPage'
 import TrayPage from './trayPage'
 import TrayIconsPage from './trayIconsPage'
 import HotkeysPage from './hotkeysPage'
@@ -19,6 +20,7 @@ import AppsInstalledPage from './appsInstalledPage'
 import AppsStartupPage from './appsStartupPage'
 import UpdatesPage from './updatesPage'
 import PluginsPage from './pluginsPage'
+import DisplaysPage from './displaysPage'
 
 interface NavItem {
   path: string
@@ -29,6 +31,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { path: 'home', label: 'Home', icon: House },
   { path: 'personalization', label: 'Personalization', icon: Paintbrush },
+  { path: 'displays', label: 'Displays', icon: Monitor },
   { path: 'devices', label: 'Devices & Connections', icon: Plug },
   { path: 'apps', label: 'Apps', icon: AppWindow },
   { path: 'system', label: 'System', icon: MonitorCog },
@@ -191,10 +194,12 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'personalization') return <PersonalizationHub onNavigate={navigate} />
   if (path === 'personalization/wallpaper') return <WallpaperPage />
   if (path === 'personalization/topbar') return <TopBarPage />
+  if (path === 'personalization/calendar') return <CalendarPage />
   if (path === 'personalization/tray') return <TrayPage onNavigate={navigate} />
   if (path === 'personalization/tray/icons') return <TrayIconsPage />
   if (path === 'personalization/hotkeys') return <HotkeysPage />
   if (path === 'personalization/tiling') return <TilingPage />
+  if (path === 'displays') return <DisplaysPage />
   if (path === 'devices') return <DevicesHub onNavigate={navigate} />
   if (path === 'devices/bluetooth') return <BluetoothSettingsPage />
   if (path === 'devices/wifi') return <WifiSettingsPage />
@@ -216,8 +221,10 @@ const SEGMENT_LABELS: Record<string, string> = {
   installed: 'Installed',
   startup: 'Startup',
   personalization: 'Personalization',
+  displays: 'Displays',
   wallpaper: 'Wallpaper',
   topbar: 'Top Bar',
+  calendar: 'Calendar',
   tray: 'System Tray',
   icons: 'Manage Icons',
   hotkeys: 'Hotkeys',

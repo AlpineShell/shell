@@ -3,13 +3,14 @@ const { app } = require('electron')
 const os = require('os')
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const koffi = require('koffi')
 const appIcons = require('./appIcons')
+const { friendlyAppName } = require('../appNames')
 
 let lastSnapshot = null
 
 const TEMP = os.tmpdir()
-const DLL_PATH = path.join(TEMP, 'alpine_taskbar_filter.dll')
 const COMPILE_PS1 = path.join(TEMP, 'alpine_compile_filter.ps1')
 const QUERY_PS1 = path.join(TEMP, 'alpine_query_apps.ps1')
 
@@ -54,57 +55,69 @@ function withShellApps(apps) {
   return [...extras, ...apps.filter((a) => !extraHwnds.has(a.hwnd))]
 }
 
-async function compileDll() {
-  try { fs.unlinkSync(DLL_PATH) } catch {}
-  const compileScript =
+const CSHARP_FILTER_SOURCE =
+  `using System;\n` +
+  `using System.Text;\n` +
+  `using System.Collections.Generic;\n` +
+  `using System.Runtime.InteropServices;\n` +
+  `public class TaskbarFilter {\n` +
+  `    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);\n` +
+  `    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);\n` +
+  `    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);\n` +
+  `    [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);\n` +
+  `    [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);\n` +
+  `    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder sb, int n);\n` +
+  `    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);\n` +
+  `    [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hWnd, int a, out int v, int s);\n` +
+  `    public static bool IsTaskbarWindow(IntPtr hWnd) {\n` +
+  `        if (!IsWindowVisible(hWnd)) return false;\n` +
+  `        if (GetWindowTextLength(hWnd) == 0) return false;\n` +
+  `        int ex = GetWindowLong(hWnd, -20);\n` +
+  `        if ((ex & 0x80) != 0) return false;\n` +
+  `        if (GetWindowLong(hWnd, -8) != 0 && (ex & 0x40000) == 0) return false;\n` +
+  `        int cloaked = 0; DwmGetWindowAttribute(hWnd, 14, out cloaked, 4);\n` +
+  `        return cloaked == 0;\n` +
+  `    }\n` +
+  `    public static string GetTitle(IntPtr hWnd) {\n` +
+  `        var sb = new StringBuilder(256); GetWindowText(hWnd, sb, 256); return sb.ToString();\n` +
+  `    }\n` +
+  `    public static object[][] GetTaskbarWindows() {\n` +
+  `        var list = new List<object[]>();\n` +
+  `        EnumWindows((h, _) => {\n` +
+  `            if (IsTaskbarWindow(h)) { uint pid; GetWindowThreadProcessId(h, out pid); list.Add(new object[]{ h.ToInt64(), (long)pid, GetTitle(h) }); }\n` +
+  `            return true;\n` +
+  `        }, IntPtr.Zero);\n` +
+  `        return list.ToArray();\n` +
+  `    }\n` +
+  `}\n`
+
+function getFilterDllPathForHash(hash) {
+  return path.join(TEMP, `alpine_taskbar_filter-${hash}.dll`)
+}
+
+function pruneStaleFilterDlls(keepDllPath) {
+  try {
+    for (const name of fs.readdirSync(TEMP)) {
+      const full = path.join(TEMP, name)
+      if (/^alpine_taskbar_filter-.*\.dll$/i.test(name) && full !== keepDllPath) {
+        try { fs.unlinkSync(full) } catch {}
+      }
+    }
+  } catch {}
+}
+
+function buildCompileScript(dllPath) {
+  return (
     `Add-Type -Language CSharp -TypeDefinition @'\n` +
-    `using System;\n` +
-    `using System.Text;\n` +
-    `using System.Collections.Generic;\n` +
-    `using System.Runtime.InteropServices;\n` +
-    `public class TaskbarFilter {\n` +
-    `    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);\n` +
-    `    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);\n` +
-    `    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);\n` +
-    `    [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);\n` +
-    `    [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);\n` +
-    `    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder sb, int n);\n` +
-    `    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);\n` +
-    `    [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hWnd, int a, out int v, int s);\n` +
-    `    public static bool IsTaskbarWindow(IntPtr hWnd) {\n` +
-    `        if (!IsWindowVisible(hWnd)) return false;\n` +
-    `        if (GetWindowTextLength(hWnd) == 0) return false;\n` +
-    `        int ex = GetWindowLong(hWnd, -20);\n` +
-    `        if ((ex & 0x80) != 0) return false;\n` +
-    `        if (GetWindowLong(hWnd, -8) != 0 && (ex & 0x40000) == 0) return false;\n` +
-    `        int cloaked = 0; DwmGetWindowAttribute(hWnd, 14, out cloaked, 4);\n` +
-    `        return cloaked == 0;\n` +
-    `    }\n` +
-    `    public static string GetTitle(IntPtr hWnd) {\n` +
-    `        var sb = new StringBuilder(256); GetWindowText(hWnd, sb, 256); return sb.ToString();\n` +
-    `    }\n` +
-    `    public static object[][] GetTaskbarWindows() {\n` +
-    `        var list = new List<object[]>();\n` +
-    `        EnumWindows((h, _) => {\n` +
-    `            if (IsTaskbarWindow(h)) { uint pid; GetWindowThreadProcessId(h, out pid); list.Add(new object[]{ h.ToInt64(), (long)pid, GetTitle(h) }); }\n` +
-    `            return true;\n` +
-    `        }, IntPtr.Zero);\n` +
-    `        return list.ToArray();\n` +
-    `    }\n` +
-    `}\n` +
-    `'@ -OutputAssembly '${DLL_PATH}'\n`
+    CSHARP_FILTER_SOURCE +
+    `'@ -OutputAssembly '${dllPath}'\n`
+  )
+}
 
-  fs.writeFileSync(COMPILE_PS1, compileScript, 'utf8')
-
-  await new Promise((resolve) => {
-    execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', COMPILE_PS1], resolve)
-  })
-
-  if (!fs.existsSync(DLL_PATH)) return
-
-  const queryScript =
+function buildQueryScript(dllPath) {
+  return (
     `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n` +
-    `Add-Type -Path '${DLL_PATH}'\n` +
+    `Add-Type -Path '${dllPath}'\n` +
     `$wins = [TaskbarFilter]::GetTaskbarWindows()\n` +
     `$ids = @($wins | ForEach-Object { [int]$_[1] } | Select-Object -Unique)\n` +
     `$pids = @{}\n` +
@@ -113,13 +126,36 @@ async function compileDll() {
     `  $proc = $pids[[int]$w[1]]\n` +
     `  if ($proc) {\n` +
     `    $p = $null; try { $p = $proc.MainModule.FileName } catch {}\n` +
-    `    if ($p) { [PSCustomObject]@{ id = [int]$w[1]; hwnd = $w[0]; name = $proc.ProcessName; title = [string]$w[2]; path = $p } }\n` +
+    `    $d = $null; try { $d = $proc.MainModule.FileVersionInfo.FileDescription; if (-not $d) { $d = $proc.MainModule.FileVersionInfo.ProductName } } catch {}\n` +
+    `    if ($p) { [PSCustomObject]@{ id = [int]$w[1]; hwnd = $w[0]; name = $proc.ProcessName; title = [string]$w[2]; path = $p; desc = $d } }\n` +
     `  }\n` +
     `})\n` +
     `if ($r.Count -eq 0) { '[]' } else { $r | ConvertTo-Json -Compress }\n`
+  )
+}
 
-  fs.writeFileSync(QUERY_PS1, queryScript, 'utf8')
+async function compileDll() {
+  const hash = crypto.createHash('sha256').update(CSHARP_FILTER_SOURCE).digest('hex').slice(0, 12)
+  const dllPath = getFilterDllPathForHash(hash)
+
+  if (fs.existsSync(dllPath)) {
+    fs.writeFileSync(QUERY_PS1, buildQueryScript(dllPath), 'utf8')
+    queryReady = true
+    pruneStaleFilterDlls(dllPath)
+    return
+  }
+
+  fs.writeFileSync(COMPILE_PS1, buildCompileScript(dllPath), 'utf8')
+
+  await new Promise((resolve) => {
+    execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', COMPILE_PS1], resolve)
+  })
+
+  if (!fs.existsSync(dllPath)) return
+
+  fs.writeFileSync(QUERY_PS1, buildQueryScript(dllPath), 'utf8')
   queryReady = true
+  pruneStaleFilterDlls(dllPath)
 }
 
 async function parseApps(stdout) {
@@ -145,7 +181,9 @@ async function parseApps(stdout) {
   const apps = await Promise.all(
     candidates.map(async (p) => {
       const icon = (await appIcons.iconForFile(p.path)) || generic
-      const displayName = SHELL_NAMES.has(p.name.toLowerCase()) ? p.title : p.name
+      const displayName = SHELL_NAMES.has(p.name.toLowerCase())
+        ? p.title
+        : friendlyAppName({ path: p.path, description: p.desc, processName: p.name })
       return { id: p.id, hwnd: p.hwnd, name: displayName, title: p.title, path: p.path, icon }
     })
   )
@@ -157,7 +195,8 @@ const FALLBACK_CMD =
   `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ` +
   `$r = Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | ` +
   `ForEach-Object { $p = $null; try { $p = $_.MainModule.FileName } catch {}; ` +
-  `[PSCustomObject]@{ id = $_.Id; hwnd = $_.MainWindowHandle.ToInt64(); name = $_.ProcessName; title = $_.MainWindowTitle; path = $p } } | ` +
+  `$d = $null; try { $d = $_.MainModule.FileVersionInfo.FileDescription; if (-not $d) { $d = $_.MainModule.FileVersionInfo.ProductName } } catch {}; ` +
+  `[PSCustomObject]@{ id = $_.Id; hwnd = $_.MainWindowHandle.ToInt64(); name = $_.ProcessName; title = $_.MainWindowTitle; path = $p; desc = $d } } | ` +
   `ConvertTo-Json -Compress; if ($null -eq $r) { '[]' } else { $r }`
 
 function getOpenApps() {

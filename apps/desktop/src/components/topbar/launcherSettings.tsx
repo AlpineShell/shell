@@ -2,6 +2,7 @@ import {
   Activity,
   AudioLines,
   Bluetooth,
+  Bookmark,
   History,
   Keyboard,
   LayoutDashboard,
@@ -85,6 +86,14 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     icon: History,
     keywords: ["recent apps", "recents", "suggestions", "frequent apps", "empty search", "show apps"],
     control: { kind: "toggle", get: () => window.launcher.recentApps(), set: (v) => window.launcher.setRecentApps(v) },
+  },
+  {
+    id: "browser-bookmarks",
+    label: "Browser bookmarks",
+    hint: "Show your browser bookmarks in Search",
+    icon: Bookmark,
+    keywords: ["bookmarks", "browser", "favorites", "favourites", "links", "sites"],
+    control: { kind: "toggle", get: () => window.launcher.showBookmarks(), set: (v) => window.launcher.setShowBookmarks(v) },
   },
   {
     id: "media-visualizer",

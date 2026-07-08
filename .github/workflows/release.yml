@@ -52,6 +52,8 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          ALPINE_GOOGLE_CLIENT_ID: ${{ secrets.ALPINE_GOOGLE_CLIENT_ID }}
+          ALPINE_GOOGLE_CLIENT_SECRET: ${{ secrets.ALPINE_GOOGLE_CLIENT_SECRET }}
 
       - name: Attach installer to GitHub Release
         shell: bash

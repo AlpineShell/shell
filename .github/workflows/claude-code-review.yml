@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  issues: read
+  issues: write
   id-token: write
 
 concurrency:
@@ -24,6 +24,7 @@ jobs:
           fetch-depth: 0
 
       - name: Claude code review
+        id: review
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -33,6 +34,7 @@ jobs:
           classify_inline_comments: false
 
       - name: Triage review threads
+        if: steps.review.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           OWNER: ${{ github.repository_owner }}
@@ -40,6 +42,43 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+
+          # The review action posts its own top-level "## Code review" summary comment
+          # (author claude[bot], no marker) whenever there is reviewable code. This
+          # workflow owns the single marker-tagged summary via upsert_summary below, so
+          # delete the action's copy to avoid two identical comments on every code PR.
+          # Inline finding comments are review-thread comments (a different endpoint) and
+          # are left untouched.
+          gh api --paginate "repos/$OWNER/$REPO/issues/$PR/comments" \
+            --jq '.[] | select((.user.login | test("claude"; "i")) and (.body | startswith("## Code review")) and ((.body | contains("<!-- claude-review-summary -->")) | not)) | .id' \
+            | while IFS= read -r dupe_id; do
+                [ -z "$dupe_id" ] && continue
+                gh api -X DELETE "repos/$OWNER/$REPO/issues/comments/$dupe_id" >/dev/null \
+                  && echo "Removed the action's duplicate summary comment $dupe_id." \
+                  || echo "::warning::Could not delete duplicate summary comment $dupe_id."
+              done
+
+          upsert_summary() {
+            existing=$(gh api --paginate "repos/$OWNER/$REPO/issues/$PR/comments" \
+              --jq '.[] | select(.body | contains("<!-- claude-review-summary -->")) | .id' | head -n1)
+            if [ -n "$existing" ]; then
+              gh api -X PATCH "repos/$OWNER/$REPO/issues/comments/$existing" -f body="$1" >/dev/null \
+                && echo "Updated review summary comment." \
+                || echo "::warning::Could not update summary comment."
+            else
+              gh api "repos/$OWNER/$REPO/issues/$PR/comments" -f body="$1" >/dev/null \
+                && echo "Posted review summary comment." \
+                || echo "::warning::Could not post summary comment."
+            fi
+          }
+
+          reviewed=true
+          changed=$(gh api --paginate "repos/$OWNER/$REPO/pulls/$PR/files" --jq '.[].filename')
+          case $'\n'"$changed"$'\n' in
+            *$'\n.github/workflows/claude-code-review.yml\n'*)
+              reviewed=false
+              echo "This PR modifies the review workflow, so the review action self-skips; no summary will be posted." ;;
+          esac
 
           threads_json="$(gh api graphql -F o="$OWNER" -F r="$REPO" -F n="$PR" -f query='
             query($o:String!, $r:String!, $n:Int!) {
@@ -82,6 +121,7 @@ jobs:
           outstanding=$(echo "$reviews" | jq '[.[] | select(.user.login == "github-actions[bot]" and .state == "CHANGES_REQUESTED")] | length')
 
           if [ "$open" -gt 0 ]; then
+            if [ "$reviewed" = true ]; then upsert_summary "$(printf '<!-- claude-review-summary -->\n## Code review\n\nFound %s issue(s) - see the inline comments.' "$open")"; fi
             if [ "$outstanding" -eq 0 ]; then
               gh api "repos/$OWNER/$REPO/pulls/$PR/reviews" \
                 -f event=REQUEST_CHANGES \
@@ -101,5 +141,6 @@ jobs:
                     && echo "Dismissed prior change-request $id." \
                     || echo "::warning::Could not dismiss review $id."
                 done
+            if [ "$reviewed" = true ]; then upsert_summary $'<!-- claude-review-summary -->\n## Code review\n\nNo issues found. Checked for bugs and CLAUDE.md compliance.'; fi
             echo "No open findings; did not approve."
           fi

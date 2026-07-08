@@ -9,6 +9,7 @@ import SystemTray from "./systemTray";
 import LauncherTrigger from "./launcherTrigger";
 import LauncherPanel from "./launcherPanel";
 import AltTabPanel from "./altTabPanel";
+import { warmRenderableEmojis } from "../../lib/emojiRenderable";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
 import ChromeCanvas from "./chrome/ChromeCanvas";
@@ -38,6 +39,8 @@ export default function TopBar() {
         loadTopbarPlugins();
         return window.plugins.onReload(() => loadTopbarPlugins());
     }, []);
+
+    useEffect(() => warmRenderableEmojis(), []);
 
     return (
         <ThemeProvider value={{ darkText, bg, fullscreenWindow, onMenuOpenChange: noop }}>

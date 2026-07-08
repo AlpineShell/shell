@@ -7,6 +7,7 @@ const frecency = require('./frecency')
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const INITIAL_CHECK_DELAY_MS = 10000
+const UPDATER_PRECOMPILE_DELAY_MS = 60000
 const MAX_LOG_ENTRIES = 50
 const RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 5 * 60 * 1000]
 
@@ -190,6 +191,8 @@ module.exports = {
       clearRetry()
       runCheck(true, true)
     }, INITIAL_CHECK_DELAY_MS)
+
+    setTimeout(() => { installer.ensureUpdaterExeAsync().catch(() => {}) }, UPDATER_PRECOMPILE_DELAY_MS)
 
     setInterval(() => {
       clearRetry()

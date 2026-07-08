@@ -1,5 +1,7 @@
 const { app, screen, nativeImage } = require('electron')
 const koffi = require('koffi')
+const appIcons = require('./appIcons')
+const { friendlyAppName } = require('../appNames')
 
 const user32 = koffi.load('user32.dll')
 const gdi32 = koffi.load('gdi32.dll')
@@ -293,6 +295,13 @@ async function getIcon(exePath) {
   if (!exePath) return ''
   const key = exePath.toLowerCase()
   if (iconCache.has(key)) return iconCache.get(key) || ''
+  if (/\\WindowsApps\\/i.test(exePath)) {
+    const packaged = await appIcons.iconForFile(exePath)
+    if (packaged) {
+      iconCache.set(key, packaged)
+      return packaged
+    }
+  }
   try {
     const icon = await app.getFileIcon(exePath, { size: 'normal' })
     const dataUrl = icon.toDataURL()
@@ -320,7 +329,7 @@ async function buildWindowList() {
     const exePath = getProcessPath(pid)
     const rawProcessName = exePath ? exePath.split('\\').pop().replace(/\.exe$/i, '') : 'Unknown'
     const isAlpineShell = SHELL_PROCESS_NAMES.has(rawProcessName.toLowerCase())
-    const processName = isAlpineShell ? title : rawProcessName
+    const processName = isAlpineShell ? title : friendlyAppName({ path: exePath, processName: rawProcessName })
     const icon = isAlpineShell && title === 'Settings'
       ? SETTINGS_ICON_DATA_URL
       : await getIcon(exePath)
@@ -332,7 +341,9 @@ async function buildWindowList() {
 
 const THUMBNAIL_REFRESH_MS = 4000
 const MAX_FILLS_PER_SWEEP = 3
+const BOOT_SETTLE_MS = 60000
 let warmerArmed = false
+let bootSettleUntil = 0
 
 let lastForegroundHwnd = 0
 let warmSweepTimer = null
@@ -346,6 +357,7 @@ function toHwndNum(value) {
 
 function warmCapture(hwnd) {
   if (!hwnd) return
+  if (!warmerArmed || Date.now() < bootSettleUntil) return
   try {
     if (IsIconic(hwnd) || isOwnWindow(hwnd) || !isAltTabWindow(hwnd)) return
     captureWindowThumbnail(hwnd)
@@ -415,6 +427,7 @@ function uninstallForegroundHook() {
 function warmSweep() {
   if (switcherActive) return
   if (!warmerArmed) return
+  if (Date.now() < bootSettleUntil) return
   try {
     const hwnds = enumTaskWindows()
     const live = new Set(hwnds)
@@ -887,6 +900,7 @@ module.exports = {
   hideForLauncher,
 
   start(_broadcast) {
+    bootSettleUntil = Date.now() + BOOT_SETTLE_MS
     installHook()
     startThumbnailWarmer()
     app.on('will-quit', () => {

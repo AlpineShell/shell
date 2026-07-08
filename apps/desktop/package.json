@@ -8,8 +8,8 @@
     "electron": "electron .",
     "start": "node scripts/dev.js",
     "start:setup": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron . --setup\"",
-    "build": "vite build && electron-builder --win",
-    "release": "vite build && electron-builder --win --publish never && node scripts/publish.js",
+    "build": "node scripts/generateGoogleCredentials.js && vite build && electron-builder --win",
+    "release": "node scripts/generateGoogleCredentials.js && vite build && electron-builder --win --publish never && node scripts/publish.js",
     "publish": "node scripts/publish.js",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
@@ -57,12 +57,23 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!node_modules/koffi/build/koffi/**",
+      "node_modules/koffi/build/koffi/win32_x64/**",
+      "!node_modules/koffi/src/**",
+      "!node_modules/koffi/doc/**",
+      "!node_modules/koffi/vendor/**",
+      "!node_modules/lightningcss-*/**",
+      "!node_modules/@tailwindcss/oxide-*/**",
+      "!dist/cursor/**",
+      "!electron/**/*.test.js",
+      "!electron/scripts/**"
     ],
     "extraResources": [
       {
         "from": "public/cursor",
-        "to": "cursor"
+        "to": "cursor",
+        "filter": ["**/*", "!Bibata-Modern-Ice/**"]
       },
       {
         "from": "electron/scripts",

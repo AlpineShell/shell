@@ -65,7 +65,6 @@ class AlpineUpdater {
     static MemoryStream brandLogoStream = null;
 
     static readonly List<Form> covers = new List<Form>();
-    static readonly List<SpinnerControl> spinners = new List<SpinnerControl>();
     static volatile bool suppressTaskbar = true;
     static bool workerStarted = false;
 
@@ -90,13 +89,6 @@ class AlpineUpdater {
             covers.Add(CreateCover(screen));
         }
         if (covers.Count == 0) return;
-
-        System.Windows.Forms.Timer spin = new System.Windows.Forms.Timer();
-        spin.Interval = 16;
-        spin.Tick += delegate {
-            foreach (SpinnerControl s in spinners) s.Advance();
-        };
-        spin.Start();
 
         System.Windows.Forms.Timer onTop = new System.Windows.Forms.Timer();
         onTop.Interval = 250;
@@ -149,7 +141,7 @@ class AlpineUpdater {
     }
 
     static Form CreateCover(Screen screen) {
-        Form cover = new Form();
+        CoverForm cover = new CoverForm();
         cover.FormBorderStyle = FormBorderStyle.None;
         cover.StartPosition = FormStartPosition.Manual;
         cover.Bounds = screen.Bounds;
@@ -197,12 +189,6 @@ class AlpineUpdater {
             }
         };
 
-        SpinnerControl spinner = new SpinnerControl();
-        spinner.Size = new Size(72, 72);
-        spinner.BackColor = GradientTop;
-        spinners.Add(spinner);
-        cover.Controls.Add(spinner);
-
         Label title = new Label();
         title.Text = "Updating Alpine Shell";
         title.ForeColor = Color.White;
@@ -224,28 +210,25 @@ class AlpineUpdater {
         cover.Controls.Add(subtitle);
 
         Form captured = cover;
-        SpinnerControl capturedSpinner = spinner;
         Label capturedWordmark = wordmark;
         Label capturedTitle = title;
         Label capturedSubtitle = subtitle;
-        EventHandler layout = delegate { LayoutCover(captured, capturedWordmark, capturedSpinner, capturedTitle, capturedSubtitle); };
-        cover.Shown += layout;
+        EventHandler layout = delegate { LayoutCover(captured, capturedWordmark, capturedTitle, capturedSubtitle); };
+        cover.Load += layout;
         cover.Resize += layout;
 
         return cover;
     }
 
-    static void LayoutCover(Form cover, Control wordmark, Control spinner, Control title, Control subtitle) {
+    static void LayoutCover(Form cover, Control wordmark, Control title, Control subtitle) {
         int centerX = cover.ClientSize.Width / 2;
-        int wordmarkGap = 40;
-        int spinnerGap = 28;
+        int wordmarkGap = 32;
         int titleGap = 8;
-        int blockHeight = wordmark.Height + wordmarkGap + spinner.Height + spinnerGap + title.Height + titleGap + subtitle.Height;
+        int blockHeight = wordmark.Height + wordmarkGap + title.Height + titleGap + subtitle.Height;
         int top = (cover.ClientSize.Height - blockHeight) / 2;
 
         wordmark.Location = new Point(centerX - wordmark.Width / 2, top);
-        spinner.Location = new Point(centerX - spinner.Width / 2, wordmark.Bottom + wordmarkGap);
-        title.Location = new Point(centerX - title.Width / 2, spinner.Bottom + spinnerGap);
+        title.Location = new Point(centerX - title.Width / 2, wordmark.Bottom + wordmarkGap);
         subtitle.Location = new Point(centerX - subtitle.Width / 2, title.Bottom + titleGap);
         cover.Invalidate();
     }
@@ -444,43 +427,8 @@ class AlpineUpdater {
     }
 }
 
-class SpinnerControl : Control {
-    float angle = 0f;
-
-    public SpinnerControl() {
-        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
-    }
-
-    public void Advance() {
-        angle = (angle + 6f) % 360f;
-        if (IsHandleCreated) Invalidate();
-    }
-
-    protected override void OnPaint(PaintEventArgs e) {
-        Graphics g = e.Graphics;
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-
-        Control host = Parent;
-        if (host != null && host.ClientSize.Height > 0) {
-            Rectangle gradientArea = new Rectangle(0, -Top, Width, host.ClientSize.Height);
-            using (LinearGradientBrush background = new LinearGradientBrush(gradientArea, AlpineUpdater.GradientTop, AlpineUpdater.GradientBottom, LinearGradientMode.Vertical)) {
-                g.FillRectangle(background, 0, 0, Width, Height);
-            }
-        } else {
-            g.Clear(BackColor);
-        }
-
-        int pad = 6;
-        Rectangle ring = new Rectangle(pad, pad, Width - pad * 2 - 1, Height - pad * 2 - 1);
-        float thickness = 5f;
-
-        using (Pen track = new Pen(ColorTranslator.FromHtml("#404040"), thickness)) {
-            g.DrawEllipse(track, ring);
-        }
-        using (Pen arc = new Pen(Color.White, thickness)) {
-            arc.StartCap = LineCap.Round;
-            arc.EndCap = LineCap.Round;
-            g.DrawArc(arc, ring, angle, 100f);
-        }
+class CoverForm : Form {
+    public CoverForm() {
+        DoubleBuffered = true;
     }
 }
