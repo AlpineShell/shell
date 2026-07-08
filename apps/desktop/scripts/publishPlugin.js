@@ -182,24 +182,48 @@ async function publishPlugin(pluginDir) {
     }
 
     let readmeUrl
+    let readmeText = null
     if (typeof mkt.readme === 'string') {
       const readmePath = path.join(resolved, mkt.readme)
       if (fs.existsSync(readmePath) && fs.statSync(readmePath).isFile()) {
+        readmeText = fs.readFileSync(readmePath, 'utf8')
         readmeUrl = `plugins/${id}/README.md`
-        await putObject(client, config.bucket, readmeUrl, fs.readFileSync(readmePath), 'text/markdown', NO_CACHE)
+        await putObject(client, config.bucket, readmeUrl, Buffer.from(readmeText), 'text/markdown', NO_CACHE)
       }
     }
 
+    // latest.json is the full per-plugin detail document (install metadata + display
+    // fields the website /plugins/[id] page renders).
     const latest = {
       schemaVersion: CATALOG_SCHEMA_VERSION,
       id,
+      name: mkt.displayName || manifest.name || id,
       version,
+      description: manifest.description,
+      shortDescription: mkt.shortDescription || manifest.description,
+      author: manifest.author,
+      homepage: manifest.homepage,
+      repository: manifest.repository,
+      license: manifest.license,
+      icon: manifest.icon,
+      iconUrl,
+      logo: iconUrl,
+      category: mkt.category,
+      keywords: mkt.keywords || [],
+      permissions: manifest.permissions || [],
+      optionalPermissions: manifest.optionalPermissions || [],
+      permissionRationale: mkt.permissionRationale || {},
+      network: manifest.network || {},
+      screenshots: mkt.screenshots || [],
+      readme: readmeText,
+      readmeUrl,
       sha256: hex,
       signature,
       size,
       url,
       apiVersion: manifest.apiVersion ?? 1,
       engines: manifest.engines,
+      verified: manifest.verified === true,
       publishedAt,
     }
     await putObject(client, config.bucket, latestKey(id), JSON.stringify(latest, null, 2), 'application/json', NO_CACHE)
