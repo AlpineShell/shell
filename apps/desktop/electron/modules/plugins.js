@@ -9,6 +9,7 @@ const STATE_FILE_NAME = 'pluginState.json'
 const MANIFEST_FILE = 'plugin.json'
 const DEFAULT_ENTRY = 'index.js'
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/
+const MARKETPLACE_SITE_BASE = (process.env.ALPINE_SITE_BASE || 'https://alpineshell.com').replace(/\/+$/, '')
 
 const MIME_BY_EXTENSION = {
   '.js': 'text/javascript',
@@ -198,6 +199,10 @@ module.exports = {
         pluginsDir: getPluginsDir(),
         onChange: () => broadcast && broadcast('plugins/reload'),
       }),
+    'plugins/marketplace-open-web': (_event, id) => {
+      if (typeof id !== 'string' || !SAFE_ID.test(id)) return false
+      return shell.openExternal(`${MARKETPLACE_SITE_BASE}/plugins/${encodeURIComponent(id)}`)
+    },
     'plugins/data-get': (_event, channel) => {
       const getter = capabilities.get(channel)
       return getter ? getter() : null

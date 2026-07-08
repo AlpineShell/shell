@@ -518,6 +518,7 @@ declare global {
         detail: (id: string) => Promise<MarketplaceDetail | null>
         install: (payload: { id: string; version?: string }) => Promise<InstallResult>
         uninstall: (id: string) => Promise<{ ok: boolean; id?: string; error?: string }>
+        openWeb: (id: string) => Promise<boolean>
       }
       onDeepInstall: (callback: (payload: DeepInstallRequest) => void) => () => void
       getData: <T = unknown>(channel: string) => Promise<T | null>

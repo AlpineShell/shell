@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
-  ChevronDown,
   Download,
+  ExternalLink,
   FolderOpen,
   Loader2,
   Puzzle,
@@ -11,21 +11,6 @@ import {
   Store,
   Trash2,
 } from 'lucide-react'
-
-const ERROR_LABEL: Record<string, string> = {
-  'not-found': 'no longer in the marketplace',
-  'catalog-unreachable': "couldn't reach the marketplace",
-  'download-failed': 'download failed',
-  'digest-mismatch': 'failed an integrity check',
-  'bad-digest': 'missing a valid checksum',
-  'bad-bundle-url': 'invalid bundle location',
-  'too-large': 'bundle too large',
-  'empty-bundle': 'empty bundle',
-  'no-manifest': 'no plugin.json in the bundle',
-  'bad-manifest': 'invalid plugin.json',
-  'id-mismatch': "bundle id doesn't match the listing",
-  'install-failed': 'could not be unpacked',
-}
 
 function assetUrl(id: string, rel?: string | null): string | null {
   if (!rel || rel.startsWith('lucide:')) return null
@@ -136,7 +121,6 @@ function BrowseCard({
   installing: boolean
   onInstall: (p: MarketplacePlugin) => void
 }) {
-  const [open, setOpen] = useState(false)
   const logo = plugin.iconUrl
   const installed = installedVersion !== null
   const canUpdate = installed && semverGt(plugin.version, installedVersion)
@@ -159,11 +143,12 @@ function BrowseCard({
           <span className="text-[11px] text-white/40 truncate">{plugin.shortDescription || plugin.id}</span>
         </div>
         <button
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => window.plugins.marketplace.openWeb(plugin.id)}
           className="text-white/40 hover:text-white/70 transition-colors p-1 cursor-pointer shrink-0"
-          aria-label="Details"
+          aria-label="View on the web"
+          title="View on the web"
         >
-          <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ExternalLink size={15} />
         </button>
         {installing ? (
           <span className="flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/5 text-[12px] text-white/45 shrink-0">
@@ -182,16 +167,6 @@ function BrowseCard({
           </button>
         )}
       </div>
-
-      {open && (
-        <div className="px-3 pb-3 pt-1 border-t border-white/5 flex flex-col gap-3">
-          {plugin.description && <p className="text-[12px] text-white/60 leading-relaxed">{plugin.description}</p>}
-          <div className="flex items-center justify-between text-[10px] text-white/25">
-            <span className="font-mono break-all">{plugin.id}</span>
-            {plugin.author && <span>by {plugin.author}</span>}
-          </div>
-        </div>
-      )}
     </li>
   )
 }
@@ -205,7 +180,6 @@ export default function PluginsPage() {
   const [browse, setBrowse] = useState<BrowseState>({ status: 'loading' })
   const [installingId, setInstallingId] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
 
   const installedById = new Map(plugins.map((p) => [p.id, p]))
 
@@ -241,17 +215,13 @@ export default function PluginsPage() {
   const install = useCallback(
     async (plugin: MarketplacePlugin) => {
       if (installingId) return
-      setNotice(null)
       setInstallingId(plugin.id)
       const res = await window.plugins.marketplace
         .install({ id: plugin.id, version: plugin.version })
         .catch((e): InstallResult => ({ ok: false, error: 'install-failed', detail: String(e) }))
       setInstallingId(null)
-      if (res.ok) {
-        await refreshInstalled()
-      } else {
-        setNotice(`Couldn't install ${plugin.name} — ${ERROR_LABEL[res.error] || res.error}.`)
-      }
+      if (res.ok) await refreshInstalled()
+      else console.error(`[plugins] install ${plugin.id} failed:`, res.error, res.detail)
     },
     [installingId, refreshInstalled],
   )
@@ -293,18 +263,13 @@ export default function PluginsPage() {
 
   async function uninstall(plugin: PluginRecord) {
     if (removingId) return
-    setNotice(null)
     setRemovingId(plugin.id)
     const res = await window.plugins.marketplace
       .uninstall(plugin.id)
       .catch(() => ({ ok: false, error: 'failed' }))
     setRemovingId(null)
-    if (res.ok || res.error === 'not-installed') {
-      setNotice(`Removed ${plugin.name}.`)
-      await refreshInstalled()
-    } else {
-      setNotice(`Couldn't remove ${plugin.name}.`)
-    }
+    if (res.ok || res.error === 'not-installed') await refreshInstalled()
+    else console.error(`[plugins] uninstall ${plugin.id} failed:`, res.error)
   }
 
   return (
@@ -360,8 +325,6 @@ export default function PluginsPage() {
           )}
         </div>
       </div>
-
-      {notice && <div className="mb-4 text-[12px] text-white/70 bg-white/5 rounded-md px-3 py-2">{notice}</div>}
 
       {tab === 'installed' ? (
         plugins.length === 0 ? (

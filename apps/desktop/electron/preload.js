@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld('plugins', {
     detail: (id) => ipcRenderer.invoke('plugins/marketplace-detail', id),
     install: (payload) => ipcRenderer.invoke('plugins/marketplace-install', payload),
     uninstall: (id) => ipcRenderer.invoke('plugins/marketplace-uninstall', id),
+    openWeb: (id) => ipcRenderer.invoke('plugins/marketplace-open-web', id),
   },
   onDeepInstall: (callback) => {
     const handler = (_event, payload) => callback(payload)
