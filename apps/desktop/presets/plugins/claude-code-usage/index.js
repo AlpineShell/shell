@@ -52,28 +52,10 @@ function LimitRow({ limit, dark }) {
 }
 
 function UsagePanel({ usage, dark }) {
-  const base = dark ? '0,0,0' : '255,255,255'
   const rows = usage.limits && usage.limits.length ? usage.limits : [
     { key: 'session', label: 'Session · 5h', percent: usage.sessionPercent, resetsAtMs: usage.sessionResetsAtMs },
   ]
-  const children = [
-    h(
-      'div',
-      {
-        key: 'hd',
-        style: {
-          fontSize: '11px',
-          fontWeight: 600,
-          color: `rgba(${base},0.85)`,
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          marginBottom: '2px',
-        },
-      },
-      'Claude Code usage' + (usage.subscriptionType ? ' · ' + usage.subscriptionType.replace(/^\w/, (c) => c.toUpperCase()) : ''),
-    ),
-  ]
-  for (const limit of rows) children.push(h(LimitRow, { key: limit.key || limit.label, limit, dark }))
+  const children = rows.map((limit) => h(LimitRow, { key: limit.key || limit.label, limit, dark }))
   return h(
     'div',
     { style: { padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '10px', minWidth: '212px' } },
