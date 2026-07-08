@@ -79,6 +79,33 @@ STORAGE_FORCE_PATH_STYLE=true
 STORAGE_PUBLIC_URL=https://<minio-service>.up.railway.app/alpine-plugins/
 ```
 
+## Migrating the installer auto-update channel to Railway (release CI)
+
+The website marketplace only needs `NEXT_PUBLIC_PLUGINS_BASE`. The **app installer
+auto-update** channel is different: the URL an installed app checks is baked into
+that build (`build.publish.url`). `.github/workflows/release.yml` is now driven by
+these GitHub **secrets** and **variables** so you never hardcode the URL:
+
+| GitHub | Name | Purpose |
+|---|---|---|
+| Secret | `STORAGE_ENDPOINT` | Railway MinIO endpoint. When set, `publish.js` uploads the installer + `latest.yml` here instead of R2. |
+| Secret | `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY` | Railway credentials. |
+| Secret | `STORAGE_BUCKET` | Bucket name (installer keys and `plugins/*` can share one bucket). |
+| Secret | `STORAGE_FORCE_PATH_STYLE` | `true` for MinIO. |
+| Variable | `UPDATE_PUBLIC_URL` | The Railway public read base (trailing slash). Baked into new builds via `-c.publish.url` so installed apps check Railway. Leave unset to keep R2. |
+| Variable | `DUAL_PUBLISH_R2` | `true` during the transition — also pushes this release to R2 (needs `R2_*` secrets present). |
+
+### Rollover (do this once, then decommission R2)
+
+Existing installs check **R2** (the URL baked into the build they're running). So:
+
+1. Provision Railway, set the `STORAGE_*` secrets + `UPDATE_PUBLIC_URL` variable, and keep the `R2_*` secrets in place. Set `DUAL_PUBLISH_R2=true`.
+2. Cut one release. The build now checks **Railway** (`UPDATE_PUBLIC_URL` baked in), the primary publish goes to **Railway**, and the dual-publish step also pushes the identical installer + `latest.yml` to **R2**. `latest.yml` carries no URL, so the same file works on both stores.
+3. Existing R2 installs see this release on R2, update, and the freshly-installed build now points at Railway. New downloads from the website point at Railway too.
+4. Once you're confident everyone has rolled over (a release cycle or two), set `DUAL_PUBLISH_R2=false` (or delete the variable) and remove the `R2_*` secrets. R2 can be decommissioned.
+
+If you have essentially no installed base yet, you can skip the dual-publish and just set `UPDATE_PUBLIC_URL` + `STORAGE_*` — the very next release is Railway-only.
+
 ## Migrating existing objects (one-time, optional)
 
 If plugin objects already live in R2:
