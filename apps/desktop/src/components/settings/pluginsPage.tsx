@@ -59,19 +59,9 @@ function InstalledCard({
   removing: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const [readme, setReadme] = useState<string | null>(null)
   const enabled = plugin.enabled !== false
   const logo = assetUrl(plugin.id, plugin.marketplace?.logo || plugin.icon)
   const subtitle = plugin.marketplace?.shortDescription || plugin.description
-
-  useEffect(() => {
-    if (open && readme === null && plugin.marketplace?.readme) {
-      window.plugins
-        .readme(plugin.id)
-        .then((text) => setReadme(text ?? ''))
-        .catch(() => setReadme(''))
-    }
-  }, [open, readme, plugin.id, plugin.marketplace?.readme])
 
   return (
     <li className="rounded-lg bg-white/5 overflow-hidden">
@@ -124,15 +114,6 @@ function InstalledCard({
 
       {open && (
         <div className="px-3 pb-3 pt-1 border-t border-white/5 flex flex-col gap-3">
-          {plugin.description && <p className="text-[12px] text-white/60 leading-relaxed">{plugin.description}</p>}
-          {plugin.marketplace?.readme && (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[10px] uppercase tracking-wide text-white/40">Readme</span>
-              <pre className="text-[11px] text-white/55 whitespace-pre-wrap font-sans max-h-56 overflow-y-auto bg-black/20 rounded p-2">
-                {readme === null ? 'Loading…' : readme || 'No readme.'}
-              </pre>
-            </div>
-          )}
           {plugin.errors.length > 0 && (
             <div className="text-[11px] text-amber-300/80">
               {plugin.errors.map((e, i) => (
@@ -288,7 +269,6 @@ export default function PluginsPage() {
         .catch((e): InstallResult => ({ ok: false, error: 'install-failed', detail: String(e) }))
       setInstallingId(null)
       if (res.ok) {
-        setNotice(`Installed ${plugin.name}.`)
         await refreshInstalled()
       } else {
         setNotice(`Couldn't install ${plugin.name} — ${ERROR_LABEL[res.error] || res.error}.`)
