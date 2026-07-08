@@ -165,11 +165,29 @@ async function publishPlugin(pluginDir) {
 
     await putObject(client, config.bucket, url, fs.readFileSync(bundlePath), 'application/zip', IMMUTABLE)
 
-    const iconPath = path.join(resolved, 'icon.png')
+    const mkt = manifest.marketplace || {}
+
     let iconUrl
-    if (fs.existsSync(iconPath) && fs.statSync(iconPath).isFile()) {
-      iconUrl = iconKey(id)
-      await putObject(client, config.bucket, iconUrl, fs.readFileSync(iconPath), 'image/png', IMMUTABLE)
+    const logoRel =
+      mkt.logo ||
+      (typeof manifest.icon === 'string' && !manifest.icon.startsWith('lucide:') ? manifest.icon : null) ||
+      'icon.png'
+    const logoPath = path.join(resolved, logoRel)
+    if (fs.existsSync(logoPath) && fs.statSync(logoPath).isFile()) {
+      const ext = (path.extname(logoPath) || '.png').toLowerCase()
+      const contentType =
+        ext === '.svg' ? 'image/svg+xml' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : 'image/png'
+      iconUrl = `plugins/${id}/icon${ext}`
+      await putObject(client, config.bucket, iconUrl, fs.readFileSync(logoPath), contentType, IMMUTABLE)
+    }
+
+    let readmeUrl
+    if (typeof mkt.readme === 'string') {
+      const readmePath = path.join(resolved, mkt.readme)
+      if (fs.existsSync(readmePath) && fs.statSync(readmePath).isFile()) {
+        readmeUrl = `plugins/${id}/README.md`
+        await putObject(client, config.bucket, readmeUrl, fs.readFileSync(readmePath), 'text/markdown', NO_CACHE)
+      }
     }
 
     const latest = {
@@ -188,19 +206,25 @@ async function publishPlugin(pluginDir) {
 
     const card = {
       id,
-      name: manifest.name || id,
+      name: mkt.displayName || manifest.name || id,
       version,
       description: manifest.description,
-      shortDescription: manifest.shortDescription || manifest.description,
+      shortDescription: mkt.shortDescription || manifest.description,
       author: authorName(manifest.author),
       homepage: manifest.homepage,
+      repository: manifest.repository,
       license: manifest.license,
       apiVersion: manifest.apiVersion ?? 1,
       engines: manifest.engines,
       iconUrl,
       logo: iconUrl,
-      category: manifest.category,
-      keywords: manifest.keywords || [],
+      category: mkt.category,
+      keywords: mkt.keywords || [],
+      permissions: manifest.permissions || [],
+      optionalPermissions: manifest.optionalPermissions || [],
+      permissionRationale: mkt.permissionRationale || {},
+      network: manifest.network || {},
+      readmeUrl,
       verified: manifest.verified === true,
       sha256: hex,
       size,
