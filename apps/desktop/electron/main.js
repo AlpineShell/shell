@@ -75,13 +75,22 @@ let killedExplorer = false
 // cleanup launches and dev bypass the lock — they legitimately hand off to, or
 // coexist with, another process and must never be blocked by it.
 const bypassSingleInstance =
-  isDev ||
   process.argv.includes('--uninstall') ||
   process.argv.includes('--uninstall-cleanup') ||
   installer.isPortableRun()
 const gotSingleInstanceLock = bypassSingleInstance ? true : app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) app.quit()
-if (!bypassSingleInstance) app.setAsDefaultProtocolClient('alpine-shell')
+if (!bypassSingleInstance) {
+  // Claim alpine-shell:// for THIS running instance. In dev (`electron .`) the
+  // handler command must include the app path, or the OS launches a bare Electron
+  // with no app; packaged builds register their own exe.
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('alpine-shell', process.execPath, [path.resolve(process.argv[1])])
+  } else {
+    app.setAsDefaultProtocolClient('alpine-shell')
+  }
+  console.log('[deeplink] single-instance lock held; alpine-shell:// registered')
+}
 
 app.on('second-instance', (_event, argv) => {
   const link = argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
@@ -535,6 +544,7 @@ function openSettingsToPlugins(deepInstall) {
 }
 
 function handleDeepLink(rawUrl) {
+  console.log('[deeplink] received:', rawUrl)
   let parsed
   try {
     parsed = new URL(rawUrl)
