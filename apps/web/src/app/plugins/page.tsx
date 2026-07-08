@@ -39,8 +39,7 @@ export default async function PluginsPage() {
             Plugins
           </h1>
           <p className="mt-3 max-w-xl text-lg text-gray-400">
-            Widgets, tools and integrations for your topbar and desktop. Every
-            install is confirmed inside Alpine Shell.
+            Widgets, tools and integrations for your topbar and desktop.
           </p>
           {catalog.plugins.length === 0 ? (
             <EmptyState />

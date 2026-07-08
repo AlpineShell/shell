@@ -68,6 +68,37 @@ const BASE_URL = isDev ? 'http://127.0.0.1:5173' : null
 const shouldTakeOverExplorer = !isDev || process.env.ALPINE_KILL_EXPLORER === '1'
 let killedExplorer = false
 
+// ── Single instance + alpine-shell:// deep links ─────────────────────────────
+// A normal packaged run holds a single-instance lock, so the website "Install in
+// Alpine Shell" link (or any second launch) is forwarded to the already-running
+// shell instead of spawning a second one. Portable bootstrap runs, uninstall /
+// cleanup launches and dev bypass the lock — they legitimately hand off to, or
+// coexist with, another process and must never be blocked by it.
+const bypassSingleInstance =
+  isDev ||
+  process.argv.includes('--uninstall') ||
+  process.argv.includes('--uninstall-cleanup') ||
+  installer.isPortableRun()
+const gotSingleInstanceLock = bypassSingleInstance ? true : app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) app.quit()
+if (!bypassSingleInstance) app.setAsDefaultProtocolClient('alpine-shell')
+
+app.on('second-instance', (_event, argv) => {
+  const link = argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
+  if (link) {
+    handleDeepLink(link)
+  } else if (settingsWin && !settingsWin.isDestroyed()) {
+    if (settingsWin.isMinimized()) settingsWin.restore()
+    settingsWin.focus()
+  }
+})
+
+// macOS delivers deep links via open-url rather than argv; harmless on Windows.
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  handleDeepLink(url)
+})
+
 app.commandLine.appendSwitch('disable-features', 'NetworkServiceSandbox,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
@@ -488,6 +519,37 @@ function createSettingsWindow() {
   return settingsWin
 }
 
+function openSettingsToPlugins(deepInstall) {
+  pendingSettingsPage = 'plugins'
+  const win = createSettingsWindow()
+  if (!win) return
+  const send = () => {
+    if (!win || win.isDestroyed()) return
+    win.webContents.send('windows/settings-navigate', 'plugins')
+    if (deepInstall) win.webContents.send('plugins/deep-install', deepInstall)
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send)
+  else send()
+}
+
+function handleDeepLink(rawUrl) {
+  let parsed
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    return
+  }
+  if (parsed.protocol !== 'alpine-shell:') return
+  const action = (parsed.hostname || parsed.pathname.replace(/^\/+/, '')).toLowerCase()
+  if (action === 'install-plugin') {
+    const id = parsed.searchParams.get('id')
+    if (!id) return
+    openSettingsToPlugins({ id, version: parsed.searchParams.get('version') || '' })
+  }
+}
+
 ipcMain.handle('windows/open-settings', (_event, page) => {
   const target = typeof page === 'string' && page ? page : null
   const wasOpen = settingsWin && !settingsWin.isDestroyed()
@@ -541,6 +603,8 @@ app.whenReady().then(async () => {
     app.quit()
     return
   }
+
+  if (!gotSingleInstanceLock) return
 
   const wallpaperExts = new Set(['.jpg', '.jpeg', '.png', '.bmp', '.webp'])
   protocol.handle('alpine-wallpaper', async (request) => {
@@ -611,6 +675,9 @@ app.whenReady().then(async () => {
   }
 
   startShellMode()
+
+  const startupLink = process.argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
+  if (startupLink) setTimeout(() => handleDeepLink(startupLink), 500)
 })
 
 function getUpdateReadyMarkerPath() {

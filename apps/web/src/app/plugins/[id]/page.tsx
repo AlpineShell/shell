@@ -22,36 +22,9 @@ export async function generateMetadata({
     : { title: "Plugin not found — Alpine Shell" };
 }
 
-function formatSize(bytes: number | null): string | null {
-  if (bytes == null) return null;
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 function hasReadScope(permissions: string[]): boolean {
   return permissions.some(
     (p) => p.startsWith("read:") || p === "net:fetch" || p === "location:coarse",
-  );
-}
-
-function CompatRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4 border-b border-white/5 py-2 text-sm">
-      <dt className="text-gray-500">{label}</dt>
-      <dd className="text-right text-gray-200">{value}</dd>
-    </div>
   );
 }
 
@@ -90,9 +63,6 @@ export default async function PluginDetailPage({ params }: PluginParams) {
   const { id } = await params;
   const detail = await fetchPluginDetail(id);
   if (!detail) notFound();
-
-  const size = formatSize(detail.size);
-  const updated = formatDate(detail.updatedAt);
 
   return (
     <main className="relative flex min-h-screen flex-col text-white">
@@ -191,46 +161,6 @@ export default async function PluginDetailPage({ params }: PluginParams) {
           )}
         </section>
 
-        <section className="mt-12 max-w-3xl">
-          <h2 className="font-averia text-2xl">Compatibility</h2>
-          <dl className="mt-4">
-            <CompatRow label="Version" value={detail.version} />
-            {detail.engines?.alpineShell && (
-              <CompatRow label="Requires Alpine Shell" value={detail.engines.alpineShell} />
-            )}
-            {detail.apiVersion != null && (
-              <CompatRow label="API version" value={String(detail.apiVersion)} />
-            )}
-            {size && <CompatRow label="Size" value={size} />}
-            {updated && <CompatRow label="Last updated" value={updated} />}
-            {detail.license && <CompatRow label="License" value={detail.license} />}
-          </dl>
-        </section>
-
-        {(detail.homepage || detail.repository) && (
-          <section className="mt-8 flex flex-wrap gap-4 text-sm">
-            {detail.homepage && (
-              <a
-                href={detail.homepage}
-                target="_blank"
-                rel="noreferrer"
-                className="text-gray-400 underline underline-offset-4 transition hover:text-white"
-              >
-                Homepage
-              </a>
-            )}
-            {detail.repository && (
-              <a
-                href={detail.repository}
-                target="_blank"
-                rel="noreferrer"
-                className="text-gray-400 underline underline-offset-4 transition hover:text-white"
-              >
-                Repository
-              </a>
-            )}
-          </section>
-        )}
         </div>
       </article>
       <Footer theme="dark" />
