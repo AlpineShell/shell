@@ -58,7 +58,6 @@ function InstalledCard({
   onUninstall: (p: PluginRecord) => void
   removing: boolean
 }) {
-  const [open, setOpen] = useState(false)
   const enabled = plugin.enabled !== false
   const logo = assetUrl(plugin.id, plugin.marketplace?.logo || plugin.icon)
   const subtitle = plugin.marketplace?.shortDescription || plugin.description
@@ -85,13 +84,16 @@ function InstalledCard({
           </span>
           <span className="text-[11px] text-white/40 truncate">{subtitle || plugin.id}</span>
         </div>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="text-white/40 hover:text-white/70 transition-colors p-1 cursor-pointer"
-          aria-label="Details"
-        >
-          <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-        </button>
+        {!plugin.preset && (
+          <button
+            onClick={() => onUninstall(plugin)}
+            disabled={removing}
+            aria-label="Uninstall"
+            className="text-white/40 hover:text-red-300 transition-colors p-1 cursor-pointer disabled:opacity-50 disabled:cursor-default"
+          >
+            {removing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+          </button>
+        )}
         <button
           onClick={() => onToggle(plugin)}
           role="switch"
@@ -112,29 +114,6 @@ function InstalledCard({
         </div>
       )}
 
-      {open && (
-        <div className="px-3 pb-3 pt-1 border-t border-white/5 flex flex-col gap-3">
-          {plugin.errors.length > 0 && (
-            <div className="text-[11px] text-amber-300/80">
-              {plugin.errors.map((e, i) => (
-                <div key={i}>• {e}</div>
-              ))}
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <div className="text-[10px] text-white/25 font-mono break-all">{plugin.id}</div>
-            {!plugin.preset && (
-              <button
-                onClick={() => onUninstall(plugin)}
-                disabled={removing}
-                className="flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-[12px] text-red-200 cursor-pointer transition-colors shrink-0 disabled:opacity-50 disabled:cursor-default"
-              >
-                {removing ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Uninstall
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </li>
   )
 }
