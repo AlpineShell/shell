@@ -31,9 +31,9 @@ function EmptyState() {
 export default async function PluginsPage() {
   const catalog = await fetchCatalog();
   return (
-    <main className="relative flex min-h-screen flex-col bg-[#050a1a] text-white">
+    <main className="relative flex min-h-screen flex-col text-white">
       <NavBar theme="dark" />
-      <section className="container mx-auto flex-1 px-8 pt-32 pb-16">
+      <section className="w-full flex-1 px-8 pt-32 pb-16">
         <h1 className="font-averia text-4xl font-semibold tracking-tight sm:text-5xl">
           Plugins
         </h1>

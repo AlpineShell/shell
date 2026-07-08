@@ -95,9 +95,9 @@ export default async function PluginDetailPage({ params }: PluginParams) {
   const updated = formatDate(detail.updatedAt);
 
   return (
-    <main className="relative flex min-h-screen flex-col bg-[#050a1a] text-white">
+    <main className="relative flex min-h-screen flex-col text-white">
       <NavBar theme="dark" />
-      <article className="container mx-auto flex-1 px-8 pt-32 pb-16">
+      <article className="w-full flex-1 px-8 pt-32 pb-16">
         <Link
           href="/plugins"
           className="text-sm text-gray-500 transition hover:text-gray-300"
