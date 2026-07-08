@@ -16,8 +16,7 @@ function emptyUsage() {
     ok: false,
     sessionPercent: 0,
     sessionResetsAtMs: null,
-    weeklyPercent: 0,
-    weeklyResetsAtMs: null,
+    limits: [],
     subscriptionType: null,
     updatedAtMs: 0,
   }
@@ -32,18 +31,43 @@ function readOAuth() {
   }
 }
 
-function sessionPercentFrom(data) {
-  if (data.five_hour && typeof data.five_hour.utilization === 'number') return data.five_hour.utilization
-  if (Array.isArray(data.limits)) {
-    const session = data.limits.find((l) => l && l.kind === 'session')
-    if (session && typeof session.percent === 'number') return session.percent
-  }
-  return 0
+function resetMs(value) {
+  const ms = value ? Date.parse(value) : NaN
+  return Number.isFinite(ms) ? ms : null
 }
 
-function resetMs(section) {
-  const value = section && section.resets_at ? Date.parse(section.resets_at) : NaN
-  return Number.isFinite(value) ? value : null
+function labelForLimit(limit) {
+  if (limit.kind === 'session') return 'Session · 5h'
+  if (limit.kind === 'weekly_all') return 'Weekly'
+  if (limit.kind === 'weekly_scoped') {
+    const model = limit.scope && limit.scope.model && limit.scope.model.display_name
+    return model ? 'Weekly · ' + model : 'Weekly · scoped'
+  }
+  return limit.kind || 'Limit'
+}
+
+function mapLimits(data) {
+  const raw = Array.isArray(data.limits) ? data.limits : []
+  const limits = raw.map((limit) => ({
+    key:
+      (limit.kind || 'limit') +
+      (limit.scope && limit.scope.model && limit.scope.model.display_name ? ':' + limit.scope.model.display_name : ''),
+    label: labelForLimit(limit),
+    percent: typeof limit.percent === 'number' ? limit.percent : 0,
+    resetsAtMs: resetMs(limit.resets_at),
+    severity: limit.severity || 'normal',
+  }))
+  const extra = data.extra_usage
+  if (extra && extra.is_enabled && typeof extra.utilization === 'number') {
+    limits.push({ key: 'extra', label: 'Extra usage', percent: extra.utilization, resetsAtMs: null, severity: 'normal' })
+  }
+  return limits
+}
+
+function sessionPercentFrom(data, limits) {
+  if (data.five_hour && typeof data.five_hour.utilization === 'number') return data.five_hour.utilization
+  const session = limits.find((l) => l.key.split(':')[0] === 'session')
+  return session ? session.percent : 0
 }
 
 async function fetchUsage() {
@@ -69,12 +93,12 @@ async function fetchUsage() {
   } catch {
     return null
   }
+  const limits = mapLimits(data)
   return {
     ok: true,
-    sessionPercent: sessionPercentFrom(data),
-    sessionResetsAtMs: resetMs(data.five_hour),
-    weeklyPercent: data.seven_day && typeof data.seven_day.utilization === 'number' ? data.seven_day.utilization : 0,
-    weeklyResetsAtMs: resetMs(data.seven_day),
+    sessionPercent: sessionPercentFrom(data, limits),
+    sessionResetsAtMs: resetMs(data.five_hour && data.five_hour.resets_at),
+    limits,
     subscriptionType: oauth.subscriptionType || null,
     updatedAtMs: Date.now(),
   }

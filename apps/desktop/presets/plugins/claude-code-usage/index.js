@@ -2,8 +2,8 @@ const { h, usePluginData, useDarkText, PopupMenu } = window.alpine
 
 const WARN_PCT = 70
 const DANGER_PCT = 90
-const BAR_WIDTH = 110
-const BAR_HEIGHT = 6
+const BAR_WIDTH = 132
+const BAR_HEIGHT = 8
 
 function fillColor(pct, dark) {
   if (pct >= DANGER_PCT) return 'rgba(239,68,68,0.95)'
@@ -17,25 +17,35 @@ function formatReset(ms) {
   if (delta <= 0) return 'resetting'
   const mins = Math.round(delta / 60000)
   if (mins < 60) return 'resets in ' + mins + 'm'
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  return 'resets in ' + h + 'h ' + (m ? m + 'm' : '')
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return 'resets in ' + hours + 'h'
+  const days = Math.round(hours / 24)
+  return 'resets in ' + days + 'd'
 }
 
-function Row({ label, percent, reset, dark }) {
+function LimitRow({ limit, dark }) {
   const base = dark ? '0,0,0' : '255,255,255'
+  const ratio = Math.max(0, Math.min(1, limit.percent / 100))
+  const reset = formatReset(limit.resetsAtMs)
   return h(
     'div',
-    { style: { display: 'flex', flexDirection: 'column', gap: '1px' } },
+    { style: { display: 'flex', flexDirection: 'column', gap: '3px' } },
     h(
       'div',
-      { style: { display: 'flex', justifyContent: 'space-between', gap: '20px', fontSize: '12px' } },
-      h('span', { style: { color: `rgba(${base},0.7)` } }, label),
+      { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '20px' } },
+      h('span', { style: { fontSize: '12px', color: `rgba(${base},0.8)` } }, limit.label),
       h(
         'span',
-        { style: { color: `rgba(${base},0.95)`, fontVariantNumeric: 'tabular-nums', fontWeight: 600 } },
-        Math.round(percent) + '%',
+        { style: { fontSize: '12px', fontWeight: 600, color: `rgba(${base},0.95)`, fontVariantNumeric: 'tabular-nums' } },
+        Math.round(limit.percent) + '%',
       ),
+    ),
+    h(
+      'div',
+      { style: { height: '5px', borderRadius: '999px', background: `rgba(${base},${dark ? 0.12 : 0.18})`, overflow: 'hidden' } },
+      h('div', {
+        style: { width: ratio * 100 + '%', height: '100%', borderRadius: '999px', background: fillColor(limit.percent, dark) },
+      }),
     ),
     reset && h('span', { style: { fontSize: '10px', color: `rgba(${base},0.45)` } }, reset),
   )
@@ -43,33 +53,32 @@ function Row({ label, percent, reset, dark }) {
 
 function UsagePanel({ usage, dark }) {
   const base = dark ? '0,0,0' : '255,255,255'
-  const children = [
-    h(Row, {
-      key: 'session',
-      label: 'Session',
-      percent: usage.sessionPercent,
-      reset: formatReset(usage.sessionResetsAtMs),
-      dark,
-    }),
-    h('div', { key: 'div', style: { height: '1px', background: `rgba(${base},0.1)`, margin: '2px 0' } }),
-    h(Row, {
-      key: 'weekly',
-      label: 'Weekly',
-      percent: usage.weeklyPercent,
-      reset: formatReset(usage.weeklyResetsAtMs),
-      dark,
-    }),
+  const rows = usage.limits && usage.limits.length ? usage.limits : [
+    { key: 'session', label: 'Session · 5h', percent: usage.sessionPercent, resetsAtMs: usage.sessionResetsAtMs },
   ]
-  if (usage.subscriptionType) {
-    children.push(
-      h(
-        'div',
-        { key: 'sub', style: { fontSize: '10px', color: `rgba(${base},0.4)`, marginTop: '3px' } },
-        'Claude ' + usage.subscriptionType.replace(/^\w/, (c) => c.toUpperCase()),
-      ),
-    )
-  }
-  return h('div', { style: { padding: '8px 11px', display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '150px' } }, children)
+  const children = [
+    h(
+      'div',
+      {
+        key: 'hd',
+        style: {
+          fontSize: '11px',
+          fontWeight: 600,
+          color: `rgba(${base},0.85)`,
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          marginBottom: '2px',
+        },
+      },
+      'Claude Code usage' + (usage.subscriptionType ? ' · ' + usage.subscriptionType.replace(/^\w/, (c) => c.toUpperCase()) : ''),
+    ),
+  ]
+  for (const limit of rows) children.push(h(LimitRow, { key: limit.key || limit.label, limit, dark }))
+  return h(
+    'div',
+    { style: { padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '10px', minWidth: '212px' } },
+    children,
+  )
 }
 
 function UsageBar() {
