@@ -80,7 +80,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         let centerX = Math.round(center);
         if (center - half - SHOULDER < SCREEN_PAD) {
             anchor = "left";
-            centerX = Math.round(EDGE_PAD + half);
+            const alignedLeft = Math.min(Math.max(EDGE_PAD, triggerRect.left), Math.max(EDGE_PAD, screenW - SCREEN_PAD - bodyWidth));
+            centerX = Math.round(alignedLeft + half);
         } else if (center + half + SHOULDER > screenW - SCREEN_PAD) {
             anchor = "right";
             centerX = Math.round(screenW - EDGE_PAD - half);

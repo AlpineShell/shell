@@ -95,14 +95,12 @@ export default function PluginsPage() {
                   onClick={() => toggle(plugin)}
                   role="switch"
                   aria-checked={enabled}
-                  className={`relative w-9 h-5 rounded-full shrink-0 cursor-pointer transition-colors ${
-                    enabled ? 'bg-white/70' : 'bg-white/15'
-                  }`}
+                  className="relative shrink-0 cursor-pointer rounded-full transition-colors"
+                  style={{ width: 26, height: 14, backgroundColor: enabled ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.18)' }}
                 >
                   <span
-                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-black/80 transition-transform ${
-                      enabled ? 'translate-x-4' : 'translate-x-0.5'
-                    }`}
+                    className="absolute top-0.5 rounded-full transition-all"
+                    style={{ width: 10, height: 10, left: enabled ? 14 : 2, backgroundColor: enabled ? 'rgb(20,20,20)' : 'rgba(255,255,255,0.7)' }}
                   />
                 </button>
               </li>

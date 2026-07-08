@@ -90,7 +90,7 @@ function UsageBar() {
 
   const trigger = h(
     'div',
-    { style: { display: 'flex', alignItems: 'center', padding: '0 8px', height: '100%' } },
+    { style: { display: 'flex', alignItems: 'center', padding: '0 8px 0 2px', height: '100%' } },
     h(
       'div',
       {
