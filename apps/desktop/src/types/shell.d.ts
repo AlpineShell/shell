@@ -309,6 +309,8 @@ declare global {
     id: string
     name: string
     entry: string
+    preset?: boolean
+    enabled?: boolean
   }
 
   type TopbarSlot = 'left' | 'center' | 'right'
@@ -333,6 +335,12 @@ declare global {
     useCallback: typeof import('react').useCallback
     useDarkText: () => boolean
     useTopbarBg: () => string
+    usePluginData: <T>(channel: string, initial: T) => T
+    PopupMenu: import('react').ComponentType<{
+      trigger: import('react').ReactNode
+      children: import('react').ReactNode
+      onOpen?: () => void
+    }>
     register: (contribution: TopbarWidgetContribution) => () => void
   }
 
@@ -342,6 +350,9 @@ declare global {
       dir: () => Promise<string>
       openFolder: () => Promise<void>
       reload: () => Promise<boolean>
+      setEnabled: (id: string, enabled: boolean) => Promise<boolean>
+      getData: <T = unknown>(channel: string) => Promise<T | null>
+      onData: <T = unknown>(channel: string, callback: (data: T) => void) => () => void
       onReload: (callback: () => void) => () => void
     }
     alpine?: AlpinePluginRuntime

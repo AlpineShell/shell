@@ -71,6 +71,10 @@
       {
         "from": "wallpapers",
         "to": "wallpapers"
+      },
+      {
+        "from": "presets/plugins",
+        "to": "plugins"
       }
     ],
     "win": {

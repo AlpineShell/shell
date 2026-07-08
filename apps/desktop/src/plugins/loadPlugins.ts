@@ -16,6 +16,7 @@ export async function loadTopbarPlugins() {
   }
   await Promise.all(
     list.map(async (plugin) => {
+      if (plugin.enabled === false) return
       const entry = plugin.entry || 'index.js'
       const url = `alpine-plugin://${plugin.id}/${entry}?v=${version}`
       try {

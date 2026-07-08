@@ -50,6 +50,7 @@ export default function TopBar() {
             >
                 <div className="flex items-center gap-1 relative z-1 self-stretch">
                     <SystemMenu />
+                    <PluginSlot slot="left" />
                 </div>
                 <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center z-1">
                     <LauncherTrigger />
