@@ -343,13 +343,47 @@ declare global {
     centerOversized: boolean
   }
 
-  interface PluginListItem {
+  interface PluginRecord {
     id: string
     name: string
-    entry: string
-    preset?: boolean
-    enabled?: boolean
+    version: string
+    apiVersion: number
+    renderer: string | null
+    entry?: string | null
+    main: string | null
+    hasBackend: boolean
+    icon: string | null
+    description: string | null
+    author: { name: string; url?: string; email?: string } | null
+    homepage: string | null
+    repository: string | null
+    license: string | null
+    engines: { alpineShell?: string } | null
+    contributes: Record<string, unknown[]>
+    permissions: string[]
+    optionalPermissions: string[]
+    network: { connect: string[] }
+    marketplace: {
+      displayName?: string
+      logo?: string
+      shortDescription?: string
+      readme?: string
+      screenshots?: { src: string; caption?: string; dark?: boolean }[]
+      category?: string
+      keywords?: string[]
+      permissionRationale?: Record<string, string>
+    } | null
+    preset: boolean
+    legacy?: boolean
+    verified: boolean
+    compat: { apiOk: boolean; engineOk: boolean; reason: string | null }
+    valid: boolean
+    errors: string[]
+    enabled: boolean
+    loadable: boolean
   }
+
+  type PluginListItem = PluginRecord
 
   type TopbarSlot = 'left' | 'center' | 'right'
 
@@ -435,11 +469,13 @@ declare global {
 
   interface Window {
     plugins: {
-      list: () => Promise<PluginListItem[]>
+      list: () => Promise<PluginRecord[]>
       dir: () => Promise<string>
       openFolder: () => Promise<void>
       reload: () => Promise<boolean>
       setEnabled: (id: string, enabled: boolean) => Promise<boolean>
+      manifest: (id: string) => Promise<PluginRecord | null>
+      readme: (id: string) => Promise<string | null>
       getData: <T = unknown>(channel: string) => Promise<T | null>
       onData: <T = unknown>(channel: string, callback: (data: T) => void) => () => void
       onReload: (callback: () => void) => () => void

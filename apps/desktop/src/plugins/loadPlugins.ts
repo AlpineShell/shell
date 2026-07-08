@@ -7,7 +7,7 @@ export async function loadTopbarPlugins() {
   installPluginRuntime()
   clearWidgets()
   version += 1
-  let list: PluginListItem[] = []
+  let list: PluginRecord[] = []
   try {
     list = await window.plugins.list()
   } catch (err) {
@@ -16,8 +16,8 @@ export async function loadTopbarPlugins() {
   }
   await Promise.all(
     list.map(async (plugin) => {
-      if (plugin.enabled === false) return
-      const entry = plugin.entry || 'index.js'
+      if (plugin.enabled === false || plugin.loadable === false) return
+      const entry = plugin.renderer || plugin.entry || 'index.js'
       const url = `alpine-plugin://${plugin.id}/${entry}?v=${version}`
       try {
         await import(/* @vite-ignore */ url)

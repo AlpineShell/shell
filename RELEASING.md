@@ -106,6 +106,48 @@ shell-replacement lifecycle with the NSIS installer:
 The legacy portable `--uninstall` path and `registerUninstaller()` remain for backward
 compatibility but are unused by NSIS installs.
 
+## Publishing a Plugin
+
+Plugins are published to the marketplace object store with `scripts/publishPlugin.js`:
+
+```sh
+bun run publish:plugin presets/plugins/<plugin-id>
+```
+
+This packs the plugin folder into `<id>.alpineplugin` (a zip with `plugin.json` at the root,
+built with the system `tar`/bsdtar and containment-checked against symlinks and path escapes),
+computes its SHA-256, signs the digest with Ed25519, uploads the immutable bundle plus a per-plugin
+`plugins/<id>/latest.json`, and rolls the plugin's card into the shared `plugins/index.json` catalog
+(fetched, merged, re-uploaded `no-cache`). `apps/web` and the desktop marketplace both read that same
+`index.json`.
+
+### Required environment for plugin publishing
+
+- Storage credentials — the `STORAGE_*` variables (or legacy `R2_*`); see `docs/STORAGE.md`.
+- `ALPINE_PLUGIN_SIGNING_KEY` — base64 of a PKCS8 PEM Ed25519 **private** key. If unset, the script
+  warns and publishes **unsigned** (fine for first-party curated bundles during bring-up, but the
+  desktop install path enforces the signature, so production bundles must be signed).
+
+Generate the key pair once:
+
+```sh
+node -e "const c=require('crypto');const{publicKey,privateKey}=c.generateKeyPairSync('ed25519');console.log('PUB',publicKey.export({type:'spki',format:'der'}).subarray(-32).toString('base64'));console.log('PRIV_B64',Buffer.from(privateKey.export({type:'pkcs8',format:'pem'})).toString('base64'))"
+```
+
+Paste `PUB` into `MARKETPLACE_PUBLIC_KEY` in `electron/pluginMarketplaceContract.js` (the client
+verifies against it), and store `PRIV_B64` as the `ALPINE_PLUGIN_SIGNING_KEY` GitHub secret / local
+env. The public key baked into the app and the private key used to sign must always match, or every
+install will fail signature verification.
+
+## Storage: R2 today, Railway/MinIO ready
+
+The upload code (`scripts/publish.js` for installers, `scripts/publishPlugin.js` for plugins) now
+sources its S3 client from the shared `scripts/storage.js` factory, which reads generic `STORAGE_*`
+env vars and falls back to the legacy `R2_*` vars. Switching from Cloudflare R2 to a Railway MinIO
+(or any S3-compatible) bucket is a **configuration change, not a code change** — see `docs/STORAGE.md`
+for the exact provisioning steps and env mapping. Add the `STORAGE_*` secrets to the GitHub Actions
+secrets alongside the existing `R2_*` when you migrate.
+
 ## Code Signing Note
 
 Auto-update on Windows works without code signing: clients will download and apply updates from R2

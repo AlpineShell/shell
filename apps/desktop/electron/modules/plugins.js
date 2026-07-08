@@ -1,6 +1,7 @@
 const { app, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { parseManifest } = require('../pluginManifest')
 
 const PLUGINS_DIR_NAME = 'plugins'
 const STATE_FILE_NAME = 'pluginState.json'
@@ -78,17 +79,13 @@ function ensurePluginsDir() {
 }
 
 function readManifest(baseDir, folder, preset) {
-  try {
-    const manifestPath = path.join(baseDir, folder, MANIFEST_FILE)
-    if (!fs.existsSync(manifestPath)) return null
-    const data = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-    const name = typeof data.name === 'string' && data.name ? data.name : folder
-    const entry = typeof data.entry === 'string' && data.entry ? data.entry : DEFAULT_ENTRY
-    return { id: folder, name, entry, preset }
-  } catch (e) {
-    console.error(`[plugins] manifest parse error in "${folder}":`, e.message)
-    return null
+  const dir = path.join(baseDir, folder)
+  if (!fs.existsSync(path.join(dir, MANIFEST_FILE))) return null
+  const { record } = parseManifest(dir, folder, { preset, appVersion: app.getVersion() })
+  if (record.errors && record.errors.length) {
+    console.error(`[plugins] "${folder}" manifest issues:`, record.errors.join('; '))
   }
+  return record
 }
 
 function scanDir(baseDir, preset) {
@@ -113,9 +110,25 @@ function listPlugins() {
   ensurePluginsDir()
   const disabled = loadDisabledIds()
   const byId = new Map()
-  for (const manifest of scanDir(getPresetPluginsDir(), true)) byId.set(manifest.id, manifest)
-  for (const manifest of scanDir(getPluginsDir(), false)) byId.set(manifest.id, manifest)
-  return [...byId.values()].map((manifest) => ({ ...manifest, enabled: !disabled.has(manifest.id) }))
+  for (const record of scanDir(getPresetPluginsDir(), true)) byId.set(record.id, record)
+  for (const record of scanDir(getPluginsDir(), false)) byId.set(record.id, record)
+  return [...byId.values()].map((record) => ({
+    ...record,
+    enabled: !disabled.has(record.id),
+    loadable: record.valid && record.compat.apiOk && record.compat.engineOk,
+  }))
+}
+
+function readPluginReadme(id) {
+  const record = listPlugins().find((p) => p.id === id)
+  if (!record || !record.marketplace || !record.marketplace.readme) return null
+  const file = resolvePluginFile(id, record.marketplace.readme)
+  if (!file) return null
+  try {
+    return fs.readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
 }
 
 function resolveInBase(baseDir, id, relativePath) {
@@ -169,6 +182,8 @@ module.exports = {
       return true
     },
     'plugins/set-enabled': (_event, payload) => setEnabled(payload && payload.id, !!(payload && payload.enabled)),
+    'plugins/manifest': (_event, id) => listPlugins().find((p) => p.id === id) || null,
+    'plugins/readme': (_event, id) => readPluginReadme(id),
     'plugins/data-get': (_event, channel) => {
       const getter = capabilities.get(channel)
       return getter ? getter() : null

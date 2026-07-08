@@ -7,12 +7,14 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "bun --filter @alpine/plugin-sdk build",
+    "sdk:build": "bun --filter @alpine/plugin-sdk build",
     "start": "bun scripts/start.js",
-    "build": "bun --filter alpine-shell build",
-    "release": "bun --filter alpine-shell release",
+    "build": "bun --filter @alpine/plugin-sdk build && bun --filter alpine-shell build",
+    "release": "bun --filter @alpine/plugin-sdk build && bun --filter alpine-shell release",
     "web:build": "bun --filter @alpine/web build",
-    "test": "bun --filter alpine-shell --filter @alpine/license test",
-    "typecheck": "bun --filter alpine-shell --filter @alpine/license typecheck",
+    "test": "bun --filter @alpine/plugin-sdk --filter alpine-shell --filter @alpine/license test",
+    "typecheck": "bun --filter @alpine/plugin-sdk --filter alpine-shell --filter @alpine/license typecheck",
     "lint": "bun --filter alpine-shell lint"
   }
 }

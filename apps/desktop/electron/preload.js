@@ -93,6 +93,8 @@ contextBridge.exposeInMainWorld('plugins', {
   openFolder: () => ipcRenderer.invoke('plugins/open-folder'),
   reload: () => ipcRenderer.invoke('plugins/reload'),
   setEnabled: (id, enabled) => ipcRenderer.invoke('plugins/set-enabled', { id, enabled }),
+  manifest: (id) => ipcRenderer.invoke('plugins/manifest', id),
+  readme: (id) => ipcRenderer.invoke('plugins/readme', id),
   getData: (channel) => ipcRenderer.invoke('plugins/data-get', channel),
   onData: (channel, callback) => {
     const handler = (_event, payload) => {

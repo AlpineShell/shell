@@ -11,12 +11,14 @@
     "build": "node scripts/generateGoogleCredentials.js && vite build && electron-builder --win",
     "release": "node scripts/generateGoogleCredentials.js && vite build && electron-builder --win --publish never && node scripts/publish.js",
     "publish": "node scripts/publish.js",
+    "publish:plugin": "node scripts/publishPlugin.js",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@alpine/plugin-sdk": "workspace:*",
     "electron-updater": "^6.3.9",
     "koffi": "^2.15.1"
   },
