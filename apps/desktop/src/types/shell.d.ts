@@ -385,6 +385,42 @@ declare global {
 
   type PluginListItem = PluginRecord
 
+  interface MarketplacePlugin {
+    id: string
+    name: string
+    version: string
+    shortDescription: string
+    description: string
+    category: string | null
+    iconUrl: string | null
+    author: string | null
+    verified: boolean
+    apiVersion: number
+    size: number | null
+  }
+
+  interface MarketplaceDetail extends MarketplacePlugin {
+    readme: string | null
+    homepage: string | null
+    repository: string | null
+    screenshots: { src: string; caption?: string }[]
+    network: { connect: string[] }
+  }
+
+  interface MarketplaceIndex {
+    base: string
+    plugins: MarketplacePlugin[]
+  }
+
+  type InstallResult =
+    | { ok: true; id: string; version: string; verified: boolean; reason?: string | null }
+    | { ok: false; error: string; detail?: string }
+
+  interface DeepInstallRequest {
+    id: string
+    version: string
+  }
+
   type TopbarSlot = 'left' | 'center' | 'right'
 
   interface TopbarWidgetContribution {
@@ -476,6 +512,14 @@ declare global {
       setEnabled: (id: string, enabled: boolean) => Promise<boolean>
       manifest: (id: string) => Promise<PluginRecord | null>
       readme: (id: string) => Promise<string | null>
+      marketplace: {
+        base: () => Promise<string>
+        list: () => Promise<MarketplaceIndex>
+        detail: (id: string) => Promise<MarketplaceDetail | null>
+        install: (payload: { id: string; version?: string }) => Promise<InstallResult>
+        uninstall: (id: string) => Promise<{ ok: boolean; id?: string; error?: string }>
+      }
+      onDeepInstall: (callback: (payload: DeepInstallRequest) => void) => () => void
       getData: <T = unknown>(channel: string) => Promise<T | null>
       onData: <T = unknown>(channel: string, callback: (data: T) => void) => () => void
       onReload: (callback: () => void) => () => void

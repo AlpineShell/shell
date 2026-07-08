@@ -95,6 +95,18 @@ contextBridge.exposeInMainWorld('plugins', {
   setEnabled: (id, enabled) => ipcRenderer.invoke('plugins/set-enabled', { id, enabled }),
   manifest: (id) => ipcRenderer.invoke('plugins/manifest', id),
   readme: (id) => ipcRenderer.invoke('plugins/readme', id),
+  marketplace: {
+    base: () => ipcRenderer.invoke('plugins/marketplace-base'),
+    list: () => ipcRenderer.invoke('plugins/marketplace-list'),
+    detail: (id) => ipcRenderer.invoke('plugins/marketplace-detail', id),
+    install: (payload) => ipcRenderer.invoke('plugins/marketplace-install', payload),
+    uninstall: (id) => ipcRenderer.invoke('plugins/marketplace-uninstall', id),
+  },
+  onDeepInstall: (callback) => {
+    const handler = (_event, payload) => callback(payload)
+    ipcRenderer.on('plugins/deep-install', handler)
+    return () => ipcRenderer.removeListener('plugins/deep-install', handler)
+  },
   getData: (channel) => ipcRenderer.invoke('plugins/data-get', channel),
   onData: (channel, callback) => {
     const handler = (_event, payload) => {

@@ -2,6 +2,7 @@ const { app, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { parseManifest } = require('../pluginManifest')
+const marketplace = require('../pluginMarketplace')
 
 const PLUGINS_DIR_NAME = 'plugins'
 const STATE_FILE_NAME = 'pluginState.json'
@@ -184,6 +185,19 @@ module.exports = {
     'plugins/set-enabled': (_event, payload) => setEnabled(payload && payload.id, !!(payload && payload.enabled)),
     'plugins/manifest': (_event, id) => listPlugins().find((p) => p.id === id) || null,
     'plugins/readme': (_event, id) => readPluginReadme(id),
+    'plugins/marketplace-base': () => marketplace.getBase(),
+    'plugins/marketplace-list': () => marketplace.list(),
+    'plugins/marketplace-detail': (_event, id) => marketplace.detail(id),
+    'plugins/marketplace-install': (_event, payload) =>
+      marketplace.install(payload, {
+        pluginsDir: getPluginsDir(),
+        onChange: () => broadcast && broadcast('plugins/reload'),
+      }),
+    'plugins/marketplace-uninstall': (_event, id) =>
+      marketplace.uninstall(id, {
+        pluginsDir: getPluginsDir(),
+        onChange: () => broadcast && broadcast('plugins/reload'),
+      }),
     'plugins/data-get': (_event, channel) => {
       const getter = capabilities.get(channel)
       return getter ? getter() : null
