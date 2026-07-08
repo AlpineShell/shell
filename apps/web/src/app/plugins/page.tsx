@@ -33,23 +33,25 @@ export default async function PluginsPage() {
   return (
     <main className="relative flex min-h-screen flex-col text-white">
       <NavBar theme="dark" />
-      <section className="w-full flex-1 px-8 pt-32 pb-16">
-        <h1 className="font-averia text-4xl font-semibold tracking-tight sm:text-5xl">
-          Plugins
-        </h1>
-        <p className="mt-3 max-w-xl text-lg text-gray-400">
-          Widgets, tools and integrations for your topbar and desktop. Every
-          install is confirmed inside Alpine Shell.
-        </p>
-        {catalog.plugins.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {catalog.plugins.map((plugin) => (
-              <PluginCard key={plugin.id} plugin={plugin} />
-            ))}
-          </ul>
-        )}
+      <section className="flex-1 px-8 pt-32 pb-16">
+        <div className="container mx-auto">
+          <h1 className="font-averia text-4xl font-semibold tracking-tight sm:text-5xl">
+            Plugins
+          </h1>
+          <p className="mt-3 max-w-xl text-lg text-gray-400">
+            Widgets, tools and integrations for your topbar and desktop. Every
+            install is confirmed inside Alpine Shell.
+          </p>
+          {catalog.plugins.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {catalog.plugins.map((plugin) => (
+                <PluginCard key={plugin.id} plugin={plugin} />
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
       <Footer theme="dark" />
     </main>

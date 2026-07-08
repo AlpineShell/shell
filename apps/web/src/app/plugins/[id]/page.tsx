@@ -97,7 +97,8 @@ export default async function PluginDetailPage({ params }: PluginParams) {
   return (
     <main className="relative flex min-h-screen flex-col text-white">
       <NavBar theme="dark" />
-      <article className="w-full flex-1 px-8 pt-32 pb-16">
+      <article className="flex-1 px-8 pt-32 pb-16">
+        <div className="container mx-auto">
         <Link
           href="/plugins"
           className="text-sm text-gray-500 transition hover:text-gray-300"
@@ -230,6 +231,7 @@ export default async function PluginDetailPage({ params }: PluginParams) {
             )}
           </section>
         )}
+        </div>
       </article>
       <Footer theme="dark" />
     </main>
