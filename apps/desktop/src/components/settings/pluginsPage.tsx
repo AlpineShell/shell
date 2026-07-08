@@ -31,12 +31,19 @@ export default function PluginsPage() {
   }
 
   async function toggle(plugin: PluginListItem) {
-    await window.plugins.setEnabled(plugin.id, plugin.enabled === false)
-    await refresh()
+    const next = plugin.enabled === false
+    setPlugins((prev) => prev.map((p) => (p.id === plugin.id ? { ...p, enabled: next } : p)))
+    try {
+      await window.plugins.setEnabled(plugin.id, next)
+    } catch {
+      /* ignore */
+    } finally {
+      refresh()
+    }
   }
 
   return (
-    <div className="max-w-2xl">
+    <div className="w-full">
       <h1 className="text-lg font-semibold mb-1">Plugins</h1>
       <p className="text-[13px] text-white/50 mb-5 leading-relaxed">
         Presets ship with Alpine. Drop a plugin folder into your plugins directory, then reload. Plugins run with
