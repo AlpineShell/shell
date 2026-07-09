@@ -6,25 +6,27 @@ import { Markdown } from "../_lib/Markdown";
 import { DocShell } from "../_components/DocShell";
 
 export function generateStaticParams() {
-  return DOCS_NAV.map((entry) => ({ slug: entry.slug }));
+  return DOCS_NAV.map((entry) => ({ slug: entry.slug.split("/") }));
 }
 
-type DocParams = { params: Promise<{ slug: string }> };
+type DocParams = { params: Promise<{ slug: string[] }> };
 
 export async function generateMetadata({
   params,
 }: DocParams): Promise<Metadata> {
   const { slug } = await params;
-  const entry = DOCS_NAV.find((doc) => doc.slug === slug);
-  return { title: entry ? `${entry.title} — Alpine Shell Docs` : "Docs — Alpine Shell" };
+  const docPath = slug.join("/");
+  const entry = DOCS_NAV.find((doc) => doc.slug === docPath);
+  return { title: entry ? `${entry.title} · Alpine Shell Docs` : "Docs · Alpine Shell" };
 }
 
 export default async function DocPage({ params }: DocParams) {
   const { slug } = await params;
-  if (!DOCS_NAV.some((doc) => doc.slug === slug)) notFound();
-  const source = await loadDoc(slug);
+  const docPath = slug.join("/");
+  if (!DOCS_NAV.some((doc) => doc.slug === docPath)) notFound();
+  const source = await loadDoc(docPath);
   return (
-    <DocShell slug={slug}>
+    <DocShell slug={docPath}>
       <Markdown source={source} />
     </DocShell>
   );

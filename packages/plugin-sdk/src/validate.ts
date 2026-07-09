@@ -51,10 +51,12 @@ export function validateManifestShape(raw: unknown): ValidationResult {
   const add = (path: string, message: string) => issues.push({ path, message })
   if (!raw || typeof raw !== 'object') return { ok: false, issues: [{ path: '', message: 'manifest must be an object' }] }
   const m = raw as Record<string, unknown>
-  if (!isValidId(m.id)) add('id', 'must be a reverse-DNS lowercase id')
+  if (m.id != null && !isValidId(m.id)) add('id', 'must be a reverse-DNS lowercase id')
   if (typeof m.name !== 'string' || !m.name) add('name', 'required string')
   if (!isSemver(m.version)) add('version', 'must be semver 2.0.0')
-  if (!Number.isInteger(m.apiVersion)) add('apiVersion', 'must be an integer')
-  else if (!isSupportedApiVersion(m.apiVersion as number)) add('apiVersion', 'unsupported api version')
+  if (m.apiVersion != null) {
+    if (!Number.isInteger(m.apiVersion)) add('apiVersion', 'must be an integer')
+    else if (!isSupportedApiVersion(m.apiVersion as number)) add('apiVersion', 'unsupported api version')
+  }
   return issues.length ? { ok: false, issues } : { ok: true }
 }

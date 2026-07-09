@@ -1,5 +1,5 @@
 // Supervisor for plugin backends. Each eligible plugin — one that declares a `main`
-// entry, is first-party/trusted, and is enabled + loadable —
+// entry and is enabled + loadable —
 // runs in its own isolated Electron utilityProcess (pluginBackendRuntime.js). Whatever a
 // backend publishes is registered as a plugin data channel and broadcast to the
 // renderers, the same contract renderer plugins already read via usePluginData().
@@ -13,26 +13,12 @@ const plugins = require('./modules/plugins')
 
 const RUNTIME_ENTRY = path.join(__dirname, 'pluginBackendRuntime.js')
 
-// First-party plugins allowed to run a Node backend before the untrusted-backend
-// sandbox lands. `verified` (marketplace-signed) and `preset` (bundled) are also
-// trusted; a third-party plugin is refused a backend regardless of what it declares.
-const FIRST_PARTY_BACKEND_IDS = new Set(['com.alpine.claude-code-usage'])
-
 let broadcastFn = null
 const running = new Map() // id -> { proc, channels: Set<string> }
 const lastByChannel = new Map() // channel -> last published data
 
-function isTrusted(record) {
-  return record.preset === true || record.verified === true || FIRST_PARTY_BACKEND_IDS.has(record.id)
-}
-
 function isEligible(record) {
-  return (
-    record.enabled !== false &&
-    record.loadable === true &&
-    record.hasBackend === true &&
-    isTrusted(record)
-  )
+  return record.enabled !== false && record.loadable === true && record.hasBackend === true
 }
 
 function forgetChannels(state) {

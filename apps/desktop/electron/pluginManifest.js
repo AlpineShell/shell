@@ -1,7 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const {
-  PLUGIN_ID_PATTERN,
+  PLUGIN_API_VERSION,
   isSupportedApiVersion,
   satisfiesRange,
   MARKETPLACE_CATEGORIES,
@@ -49,8 +49,12 @@ function validateContributions(raw, apiVersion, push) {
     const list = arr(raw[key])
     const kept = []
     for (const c of list) {
-      if (!c || typeof c.export !== 'string' || !c.export) {
-        push(`contributes.${key}: each item needs a string 'export'`)
+      if (!c || typeof c !== 'object') {
+        push(`contributes.${key}: each item must be an object`)
+        continue
+      }
+      if (c.export != null && (typeof c.export !== 'string' || !c.export)) {
+        push(`contributes.${key}: 'export' must be a non-empty string`)
         continue
       }
       if (typeof c.since === 'number' && c.since > apiVersion) continue
@@ -62,7 +66,7 @@ function validateContributions(raw, apiVersion, push) {
         push(`contributes.launcherCommands: invalid kind '${c.kind}'`)
         continue
       }
-      kept.push(c)
+      kept.push({ ...c, export: c.export || 'default' })
     }
     if (kept.length) out[key] = kept
   }
@@ -102,15 +106,14 @@ function validateMarketplace(raw, realBase, push) {
   return out
 }
 
-function legacyRecord(realBase, raw, folderName, preset) {
-  const entry = typeof raw.entry === 'string' && raw.entry ? raw.entry : 'index.js'
+function invalidRecord(raw, folderName, preset, errors) {
   return {
-    id: folderName,
+    id: String(folderName).toLowerCase(),
     name: typeof raw.name === 'string' && raw.name ? raw.name : folderName,
     version: '0.0.0',
-    apiVersion: 1,
-    renderer: entry,
-    entry,
+    apiVersion: PLUGIN_API_VERSION,
+    renderer: null,
+    entry: null,
     main: null,
     hasBackend: false,
     icon: null,
@@ -123,11 +126,11 @@ function legacyRecord(realBase, raw, folderName, preset) {
     contributes: {},
     marketplace: null,
     preset: !!preset,
-    legacy: true,
+    legacy: false,
     verified: false,
     compat: { apiOk: true, engineOk: true, reason: null },
-    valid: true,
-    errors: [],
+    valid: false,
+    errors,
   }
 }
 
@@ -140,30 +143,35 @@ function parseManifest(pluginDir, folderName, options) {
   try {
     realBase = fs.realpathSync(pluginDir)
   } catch {
-    return { ok: false, record: { ...legacyRecord(pluginDir, {}, folderName, preset), valid: false, errors: ['plugin dir unreadable'] } }
+    return { ok: false, record: invalidRecord({}, folderName, preset, ['plugin dir unreadable']) }
   }
 
   let raw
   try {
     raw = JSON.parse(fs.readFileSync(path.join(realBase, 'plugin.json'), 'utf8'))
   } catch (e) {
-    return { ok: false, record: { ...legacyRecord(realBase, {}, folderName, preset), valid: false, errors: ['plugin.json parse: ' + e.message] } }
-  }
-
-  if (raw.id == null && (raw.entry != null || raw.renderer == null)) {
-    return { ok: true, record: legacyRecord(realBase, raw, folderName, preset) }
+    return { ok: false, record: invalidRecord({}, folderName, preset, ['plugin.json parse: ' + e.message]) }
   }
 
   const errors = []
   const push = (m) => errors.push(m)
 
-  const id = String(raw.id || '')
-  if (!PLUGIN_ID_PATTERN.test(id)) push('id: not reverse-DNS lowercase')
-  if (id.toLowerCase() !== String(folderName).toLowerCase()) push('id: must equal folder name')
-  if (!isSemver(raw.version)) push('version: not semver 2.0.0')
-  if (!Number.isInteger(raw.apiVersion)) push('apiVersion: must be an integer')
+  const normalizedFolder = String(folderName).toLowerCase()
+  let id = normalizedFolder
+  if (raw.id != null) {
+    id = String(raw.id)
+    if (id.toLowerCase() !== normalizedFolder) push('id: must equal folder name')
+  }
 
-  const compat = { apiOk: isSupportedApiVersion(raw.apiVersion), engineOk: true, reason: null }
+  if (!isSemver(raw.version)) push('version: not semver 2.0.0')
+
+  let apiVersion = PLUGIN_API_VERSION
+  if (raw.apiVersion != null) {
+    if (!Number.isInteger(raw.apiVersion)) push('apiVersion: must be an integer')
+    else apiVersion = raw.apiVersion
+  }
+
+  const compat = { apiOk: raw.apiVersion == null || isSupportedApiVersion(apiVersion), engineOk: true, reason: null }
   const range = raw.engines && raw.engines.alpineShell
   if (range && appVersion && !satisfiesRange(appVersion, range)) {
     compat.engineOk = false
@@ -171,8 +179,9 @@ function parseManifest(pluginDir, folderName, options) {
   }
   if (!compat.apiOk) compat.reason = 'requires a newer Alpine'
 
-  const rendererPath = raw.renderer != null ? confinedFile(realBase, raw.renderer) : null
-  if (raw.renderer != null && !rendererPath) push('renderer: missing or escapes plugin dir')
+  const renderer = raw.renderer != null ? raw.renderer : 'index.js'
+  const rendererPath = confinedFile(realBase, renderer)
+  if (!rendererPath) push('renderer: missing or escapes plugin dir')
   const mainPath = raw.main != null ? confinedFile(realBase, raw.main) : null
   if (raw.main != null && !mainPath) push('main: missing or escapes plugin dir')
 
@@ -183,16 +192,16 @@ function parseManifest(pluginDir, folderName, options) {
     else push('icon: missing/escapes plugin dir')
   }
 
-  const contributes = validateContributions(raw.contributes, raw.apiVersion, push)
+  const contributes = validateContributions(raw.contributes, apiVersion, push)
   const marketplace = validateMarketplace(raw.marketplace, realBase, push)
 
   const record = {
     id,
     name: typeof raw.name === 'string' && raw.name ? raw.name : folderName,
     version: raw.version,
-    apiVersion: raw.apiVersion,
-    renderer: raw.renderer || null,
-    entry: raw.renderer || null,
+    apiVersion,
+    renderer,
+    entry: renderer,
     main: raw.main || null,
     hasBackend: !!raw.main,
     icon,

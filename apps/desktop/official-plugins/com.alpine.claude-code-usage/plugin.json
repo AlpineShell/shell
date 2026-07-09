@@ -1,16 +1,11 @@
 {
-  "$schema": "https://alpine.dev/schemas/plugin-v1.json",
   "id": "com.alpine.claude-code-usage",
   "name": "Claude Code Usage",
-  "version": "0.1.2",
-  "apiVersion": 1,
-  "description": "Your Claude Code subscription usage as a bar in the topbar.",
-  "author": { "name": "Marc Blattmann", "url": "https://marcs.ch" },
+  "version": "0.1.3",
   "icon": "assets/icon.png",
-  "renderer": "index.js",
   "main": "backend.js",
   "contributes": {
-    "topbarWidgets": [{ "export": "UsageBar", "slot": "left", "order": 0 }]
+    "topbarWidgets": [{ "slot": "left", "order": 0 }]
   },
   "marketplace": {
     "shortDescription": "Claude Code session & weekly limits, live in your topbar.",

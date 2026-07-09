@@ -9,7 +9,6 @@ const fs = require('fs')
 
 const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const CREDENTIALS_FILE = path.join(os.homedir(), '.claude', '.credentials.json')
-const REFRESH_MS = 60 * 1000
 
 function emptyUsage() {
   return {
@@ -104,21 +103,4 @@ async function fetchUsage() {
   }
 }
 
-module.exports = {
-  start(ctx) {
-    let timer = null
-
-    async function refresh() {
-      const next = await fetchUsage()
-      if (next) ctx.publish('claude-usage', next)
-    }
-
-    refresh()
-    timer = setInterval(refresh, REFRESH_MS)
-
-    return () => {
-      if (timer) clearInterval(timer)
-      timer = null
-    }
-  },
-}
+module.exports = (ctx) => ctx.poll('claude-usage', fetchUsage, 60000)

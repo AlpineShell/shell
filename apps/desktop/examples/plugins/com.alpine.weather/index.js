@@ -1,6 +1,6 @@
-const { h, useState, useEffect, useDarkText } = window.alpine
+const { html, useState, useEffect, useDarkText } = window.alpine
 
-function Weather() {
+export default function TopbarWeather() {
   const dark = useDarkText()
   const [temp, setTemp] = useState(null)
 
@@ -22,11 +22,7 @@ function Weather() {
     }
   }, [])
 
-  return h(
-    'span',
-    { style: { fontSize: '12px', padding: '0 6px', color: dark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)' } },
-    temp === null ? '—' : temp + '°C',
-  )
+  return html`<span
+    style=${{ fontSize: '12px', padding: '0 6px', color: dark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.85)' }}
+  >${temp === null ? '—' : temp + '°C'}</span>`
 }
-
-window.alpine.register({ type: 'topbar-widget', id: 'com.alpine.weather', component: Weather, slot: 'right', order: 20 })

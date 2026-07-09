@@ -2,7 +2,7 @@ export type TopbarSlot = 'left' | 'center' | 'right'
 export type DisplayScope = 'primary' | 'all'
 
 interface BaseContribution {
-  export: string
+  export?: string
   since?: number
 }
 

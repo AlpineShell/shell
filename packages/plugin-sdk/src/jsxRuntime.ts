@@ -24,3 +24,7 @@ const rt = resolveRuntime()
 export const jsx = rt.jsx
 export const jsxs = rt.jsxs
 export const Fragment = rt.Fragment
+
+export function jsxDEV(type: unknown, props: unknown, key?: unknown): unknown {
+  return rt.jsx(type, props, key)
+}

@@ -24,10 +24,10 @@ export interface PluginMarketplaceMeta {
 
 export interface PluginManifest {
   $schema?: string
-  id: string
+  id?: string
   name: string
   version: string
-  apiVersion: number
+  apiVersion?: number
   engines?: { alpineShell?: string }
   description?: string
   author?: PluginAuthor

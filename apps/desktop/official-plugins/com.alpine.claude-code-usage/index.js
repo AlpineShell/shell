@@ -1,4 +1,4 @@
-const { h, usePluginData, useDarkText, PopupMenu } = window.alpine
+const { html, usePluginData, useDarkText, PopupMenu } = window.alpine
 
 const WARN_PCT = 70
 const DANGER_PCT = 90
@@ -27,77 +27,62 @@ function LimitRow({ limit, dark }) {
   const base = dark ? '0,0,0' : '255,255,255'
   const ratio = Math.max(0, Math.min(1, limit.percent / 100))
   const reset = formatReset(limit.resetsAtMs)
-  return h(
-    'div',
-    { style: { display: 'flex', flexDirection: 'column', gap: '3px' } },
-    h(
-      'div',
-      { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '20px' } },
-      h('span', { style: { fontSize: '12px', color: `rgba(${base},0.8)` } }, limit.label),
-      h(
-        'span',
-        { style: { fontSize: '12px', fontWeight: 600, color: `rgba(${base},0.95)`, fontVariantNumeric: 'tabular-nums' } },
-        Math.round(limit.percent) + '%',
-      ),
-    ),
-    h(
-      'div',
-      { style: { height: '5px', borderRadius: '999px', background: `rgba(${base},${dark ? 0.12 : 0.18})`, overflow: 'hidden' } },
-      h('div', {
-        style: { width: ratio * 100 + '%', height: '100%', borderRadius: '999px', background: fillColor(limit.percent, dark) },
-      }),
-    ),
-    reset && h('span', { style: { fontSize: '10px', color: `rgba(${base},0.45)` } }, reset),
-  )
+  return html`
+    <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+      <div style=${{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '20px' }}>
+        <span style=${{ fontSize: '12px', color: `rgba(${base},0.8)` }}>${limit.label}</span>
+        <span style=${{ fontSize: '12px', fontWeight: 600, color: `rgba(${base},0.95)`, fontVariantNumeric: 'tabular-nums' }}>${Math.round(limit.percent) + '%'}</span>
+      </div>
+      <div style=${{ height: '5px', borderRadius: '999px', background: `rgba(${base},${dark ? 0.12 : 0.18})`, overflow: 'hidden' }}>
+        <div style=${{ width: ratio * 100 + '%', height: '100%', borderRadius: '999px', background: fillColor(limit.percent, dark) }} />
+      </div>
+      ${reset && html`<span style=${{ fontSize: '10px', color: `rgba(${base},0.45)` }}>${reset}</span>`}
+    </div>
+  `
 }
 
 function UsagePanel({ usage, dark }) {
   const rows = usage.limits && usage.limits.length ? usage.limits : [
     { key: 'session', label: 'Session · 5h', percent: usage.sessionPercent, resetsAtMs: usage.sessionResetsAtMs },
   ]
-  const children = rows.map((limit) => h(LimitRow, { key: limit.key || limit.label, limit, dark }))
-  return h(
-    'div',
-    { style: { padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '200px' } },
-    children,
-  )
+  return html`
+    <div style=${{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '200px' }}>
+      ${rows.map((limit) => html`<${LimitRow} key=${limit.key || limit.label} limit=${limit} dark=${dark} />`)}
+    </div>
+  `
 }
 
-function UsageBar() {
+export default function UsageBar() {
   const dark = useDarkText()
   const usage = usePluginData('claude-usage', null)
   const base = dark ? '0,0,0' : '255,255,255'
   const pct = usage ? usage.sessionPercent : 0
   const ratio = Math.max(0, Math.min(1, pct / 100))
 
-  const trigger = h(
-    'div',
-    { style: { display: 'flex', alignItems: 'center', padding: '0 8px 0 2px', height: '100%' } },
-    h(
-      'div',
-      {
-        style: {
+  const trigger = html`
+    <div style=${{ display: 'flex', alignItems: 'center', padding: '0 8px 0 2px', height: '100%' }}>
+      <div
+        style=${{
           width: BAR_WIDTH + 'px',
           height: BAR_HEIGHT + 'px',
           borderRadius: '999px',
           background: `rgba(${base},${dark ? 0.15 : 0.2})`,
           overflow: 'hidden',
-        },
-      },
-      h('div', {
-        style: {
-          width: ratio * 100 + '%',
-          height: '100%',
-          borderRadius: '999px',
-          background: fillColor(pct, dark),
-          transition: 'width 400ms ease, background 300ms ease',
-        },
-      }),
-    ),
-  )
+        }}
+      >
+        <div
+          style=${{
+            width: ratio * 100 + '%',
+            height: '100%',
+            borderRadius: '999px',
+            background: fillColor(pct, dark),
+            transition: 'width 400ms ease, background 300ms ease',
+          }}
+        />
+      </div>
+    </div>
+  `
 
   if (!usage || !usage.ok) return trigger
-  return h(PopupMenu, { trigger }, h(UsagePanel, { usage, dark }))
+  return html`<${PopupMenu} trigger=${trigger}><${UsagePanel} usage=${usage} dark=${dark} /><//>`
 }
-
-window.alpine.register({ type: 'topbar-widget', id: 'claude-code-usage', component: UsageBar, slot: 'left', order: 0 })

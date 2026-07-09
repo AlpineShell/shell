@@ -19,7 +19,7 @@ function EmptyState() {
         your own and get it ready to ship.
       </p>
       <Link
-        href="/docs/getting-started"
+        href="/docs/plugins/getting-started"
         className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-2 font-averia text-black transition hover:bg-gray-200"
       >
         Write your first plugin

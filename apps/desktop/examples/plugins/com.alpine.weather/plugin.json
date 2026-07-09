@@ -1,19 +1,15 @@
 {
-  "$schema": "https://alpine.dev/schemas/plugin-v1.json",
   "id": "com.alpine.weather",
   "name": "Weather",
   "version": "0.1.0",
-  "apiVersion": 1,
-  "engines": { "alpineShell": "^0.1.0" },
   "description": "Live temperature in your topbar, from Open-Meteo.",
   "author": { "name": "Alpine", "url": "https://github.com/MarcBlattmann/alpine-shell" },
   "homepage": "https://github.com/MarcBlattmann/alpine-shell",
   "repository": "https://github.com/MarcBlattmann/alpine-shell",
   "license": "MIT",
   "icon": "lucide:CloudSun",
-  "renderer": "index.js",
   "contributes": {
-    "topbarWidgets": [{ "export": "TopbarWeather", "slot": "right", "order": 20 }]
+    "topbarWidgets": [{ "slot": "right", "order": 20 }]
   },
   "marketplace": {
     "shortDescription": "Live weather in your topbar.",

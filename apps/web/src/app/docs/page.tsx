@@ -1,41 +1,49 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DOCS_NAV } from "./_lib/nav";
+import { DOCS_GROUPS, DOCS_NAV, DOCS_SECTIONS } from "./_lib/nav";
 
 export const metadata: Metadata = {
-  title: "Docs — Alpine Shell",
-  description: "Everything you need to build and ship an Alpine Shell plugin.",
+  title: "Docs · Alpine Shell",
+  description: "Guides and reference for extending Alpine Shell.",
 };
 
 export default function DocsIndexPage() {
   return (
     <div>
       <h1 className="font-averia text-4xl font-semibold tracking-tight">
-        Plugin documentation
+        Documentation
       </h1>
       <p className="mt-3 max-w-xl text-lg text-gray-400">
-        A plugin is a folder that contributes widgets, settings pages and
-        launcher commands. Write a custom plugin and drop it in, or install an
-        official one from the marketplace in a click. Start with your first
-        plugin, then dig into the manifest and SDK.
+        Guides and reference for extending Alpine Shell.
       </p>
-      <ul className="mt-10 grid gap-4 sm:grid-cols-2">
-        {DOCS_NAV.map((entry) => (
-          <li key={entry.slug}>
-            <Link
-              href={`/docs/${entry.slug}`}
-              className="flex h-full flex-col rounded-xl bg-white/5 p-5 transition hover:bg-white/10"
-            >
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                {entry.group}
-              </span>
-              <span className="mt-2 font-averia text-lg text-white">
-                {entry.title}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {DOCS_SECTIONS.map((section) => (
+        <section key={section} className="mt-12">
+          <h2 className="font-averia text-2xl font-semibold tracking-tight">
+            {section}
+          </h2>
+          <ul className="mt-6 grid gap-4 sm:grid-cols-2">
+            {DOCS_GROUPS.flatMap((group) =>
+              DOCS_NAV.filter(
+                (entry) => entry.section === section && entry.group === group,
+              ),
+            ).map((entry) => (
+              <li key={entry.slug}>
+                <Link
+                  href={`/docs/${entry.slug}`}
+                  className="flex h-full flex-col rounded-xl bg-white/5 p-5 transition hover:bg-white/10"
+                >
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    {entry.group}
+                  </span>
+                  <span className="mt-2 font-averia text-lg text-white">
+                    {entry.title}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

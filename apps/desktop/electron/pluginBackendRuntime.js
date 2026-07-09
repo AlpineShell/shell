@@ -21,7 +21,7 @@ function toText(value) {
 }
 
 function makeContext(init) {
-  return {
+  const ctx = {
     id: init.id,
     pluginDir: init.dir,
     publish(channel, data) {
@@ -33,7 +33,23 @@ function makeContext(init) {
     onStop(handler) {
       if (typeof handler === 'function') stopHandler = handler
     },
+    poll(channel, fn, everyMs) {
+      const tick = () => {
+        Promise.resolve()
+          .then(fn)
+          .then((data) => {
+            if (data) ctx.publish(channel, data)
+          })
+          .catch((e) => {
+            ctx.log('poll ' + channel + ' failed: ' + (e && e.message ? e.message : toText(e)))
+          })
+      }
+      tick()
+      const timer = setInterval(tick, everyMs)
+      return () => clearInterval(timer)
+    },
   }
+  return ctx
 }
 
 async function runStop() {
@@ -56,7 +72,13 @@ async function startBackend(init) {
     return
   }
   const startFn =
-    mod && typeof mod.start === 'function' ? mod.start : mod && mod.default && mod.default.start
+    typeof mod === 'function'
+      ? mod
+      : mod && typeof mod.start === 'function'
+        ? mod.start
+        : mod && typeof mod.default === 'function'
+          ? mod.default
+          : mod && mod.default && mod.default.start
   if (typeof startFn !== 'function') {
     post({ type: 'error', message: 'backend entry has no start(ctx) export' })
     process.exit(1)

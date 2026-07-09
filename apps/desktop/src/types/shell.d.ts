@@ -426,25 +426,47 @@ declare global {
     order?: number
   }
 
+  type AlpineHtml = (strings: TemplateStringsArray, ...values: unknown[]) => import('react').ReactNode
+
+  interface AlpineStoreRuntime {
+    createStore: typeof import('zustand/vanilla').createStore
+    useStore: typeof import('zustand').useStore
+    useShallow: typeof import('zustand/react/shallow').useShallow
+  }
+
   interface AlpinePluginRuntime {
     version: number
     React: typeof import('react')
+    react: typeof import('react')
+    reactDom: typeof import('react-dom')
+    jsxRuntime: typeof import('react/jsx-runtime')
     h: typeof import('react').createElement
+    html: AlpineHtml
     Fragment: typeof import('react').Fragment
     useState: typeof import('react').useState
     useEffect: typeof import('react').useEffect
     useRef: typeof import('react').useRef
     useMemo: typeof import('react').useMemo
     useCallback: typeof import('react').useCallback
+    useReducer: typeof import('react').useReducer
+    useContext: typeof import('react').useContext
+    createContext: typeof import('react').createContext
+    useSyncExternalStore: typeof import('react').useSyncExternalStore
+    useLayoutEffect: typeof import('react').useLayoutEffect
+    useId: typeof import('react').useId
+    memo: typeof import('react').memo
+    lazy: typeof import('react').lazy
+    Suspense: typeof import('react').Suspense
+    startTransition: typeof import('react').startTransition
     useDarkText: () => boolean
     useTopbarBg: () => string
     usePluginData: <T>(channel: string, initial: T) => T
+    store: AlpineStoreRuntime
     PopupMenu: import('react').ComponentType<{
       trigger: import('react').ReactNode
       children: import('react').ReactNode
       onOpen?: () => void
     }>
-    register: (contribution: TopbarWidgetContribution) => () => void
   }
 
   type TimeFormat = 'auto' | '12h' | '24h'

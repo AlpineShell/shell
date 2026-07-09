@@ -1,7 +1,17 @@
+export type AlpineHtml = (strings: TemplateStringsArray, ...values: unknown[]) => import('react').ReactNode
+
+export interface AlpineHostStore {
+  createStore: (...args: unknown[]) => unknown
+  useStore: (...args: unknown[]) => unknown
+  useShallow: (...args: unknown[]) => unknown
+}
+
 export interface AlpineHost {
   react: typeof import('react')
   reactDom?: typeof import('react-dom')
   jsxRuntime?: { jsx: unknown; jsxs: unknown; Fragment: unknown }
+  html?: AlpineHtml
+  store?: AlpineHostStore
   useDarkText(): boolean
   useTopbarBg(): string
   useTopbarTheme?(): { dark: boolean; bg: string }

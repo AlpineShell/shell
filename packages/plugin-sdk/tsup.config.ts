@@ -13,6 +13,8 @@ export default defineConfig([
       react: 'src/react.ts',
       jsxRuntime: 'src/jsxRuntime.ts',
       hooks: 'src/hooks.ts',
+      store: 'src/store.ts',
+      reactDomShim: 'src/reactDomShim.ts',
       vite: 'src/vite.ts',
     },
     format: ['esm'],
