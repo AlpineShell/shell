@@ -98,6 +98,7 @@
     },
   },
   "trustedDependencies": [
+    "electron",
     "sharp",
     "unrs-resolver",
   ],

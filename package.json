@@ -6,6 +6,7 @@
     "apps/*",
     "packages/*"
   ],
+  "trustedDependencies": ["electron"],
   "scripts": {
     "postinstall": "bun --filter @alpine/plugin-sdk build",
     "sdk:build": "bun --filter @alpine/plugin-sdk build",
