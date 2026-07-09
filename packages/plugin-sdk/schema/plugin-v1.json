@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://alpine.dev/schemas/plugin-v1.json",
+  "title": "Alpine Shell plugin manifest",
+  "type": "object",
+  "required": ["id", "name", "version", "apiVersion"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$" },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string" },
+    "apiVersion": { "type": "integer", "minimum": 1 },
+    "engines": { "type": "object", "properties": { "alpineShell": { "type": "string" } } },
+    "description": { "type": "string" },
+    "author": {
+      "type": "object",
+      "required": ["name"],
+      "properties": { "name": { "type": "string" }, "url": { "type": "string" }, "email": { "type": "string" } }
+    },
+    "homepage": { "type": "string" },
+    "repository": { "type": "string" },
+    "license": { "type": "string" },
+    "icon": { "type": "string" },
+    "renderer": { "type": "string" },
+    "main": { "type": "string" },
+    "contributes": { "type": "object" },
+    "marketplace": {
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "logo": { "type": "string" },
+        "shortDescription": { "type": "string", "maxLength": 120 },
+        "readme": { "type": "string" },
+        "screenshots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["src"],
+            "properties": { "src": { "type": "string" }, "caption": { "type": "string" }, "dark": { "type": "boolean" } }
+          }
+        },
+        "category": { "type": "string", "enum": ["productivity", "system", "media", "developer", "social", "fun", "other"] },
+        "keywords": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

@@ -39,9 +39,8 @@ export default function Footer({ theme = "light" }: FooterProps) {
 
                     <nav className={`flex flex-col gap-3 text-sm ${t.muted}`}>
                         <Link href="/" className={t.link}>Home</Link>
-                        <Link href="#" className={t.link}>Features</Link>
-                        <Link href="#" className={t.link}>Pricing</Link>
-                        <Link href="#" className={t.link}>Contact</Link>
+                        <Link href="/plugins" className={t.link}>Plugins</Link>
+                        <Link href="/docs" className={t.link}>Docs</Link>
                     </nav>
                 </div>
             </div>

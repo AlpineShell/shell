@@ -46,10 +46,9 @@ export default function NavBar({ theme = "dark" }: NavBarProps) {
                         />
                     </Link>
                     <div>
-                        <a href="#" className="px-4 rounded">Home</a>
-                        <a href="#" className="px-4 rounded">Features</a>
-                        <a href="#" className="px-4 rounded">Pricing</a>
-                        <a href="#" className="px-4 rounded">Contact</a>
+                        <Link href="/" className="px-4 rounded">Home</Link>
+                        <Link href="/plugins" className="px-4 rounded">Plugins</Link>
+                        <Link href="/docs" className="px-4 rounded">Docs</Link>
                     </div>
                     <button
                         className={`rounded-full border px-4 py-2 font-averia transition-colors duration-300 ${

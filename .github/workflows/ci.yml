@@ -27,7 +27,9 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        # not --frozen-lockfile: Bun's frozen check false-positives on this
+        # monorepo even on a freshly generated lockfile (matches release.yml).
+        run: bun install
 
       - name: Typecheck
         run: bun run typecheck

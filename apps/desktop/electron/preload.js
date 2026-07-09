@@ -87,6 +87,42 @@ contextBridge.exposeInMainWorld('topbar', {
   },
 })
 
+contextBridge.exposeInMainWorld('plugins', {
+  list: () => ipcRenderer.invoke('plugins/list'),
+  dir: () => ipcRenderer.invoke('plugins/dir'),
+  openFolder: () => ipcRenderer.invoke('plugins/open-folder'),
+  reload: () => ipcRenderer.invoke('plugins/reload'),
+  setEnabled: (id, enabled) => ipcRenderer.invoke('plugins/set-enabled', { id, enabled }),
+  manifest: (id) => ipcRenderer.invoke('plugins/manifest', id),
+  readme: (id) => ipcRenderer.invoke('plugins/readme', id),
+  marketplace: {
+    base: () => ipcRenderer.invoke('plugins/marketplace-base'),
+    list: () => ipcRenderer.invoke('plugins/marketplace-list'),
+    detail: (id) => ipcRenderer.invoke('plugins/marketplace-detail', id),
+    install: (payload) => ipcRenderer.invoke('plugins/marketplace-install', payload),
+    uninstall: (id) => ipcRenderer.invoke('plugins/marketplace-uninstall', id),
+    openWeb: (id) => ipcRenderer.invoke('plugins/marketplace-open-web', id),
+  },
+  onDeepInstall: (callback) => {
+    const handler = (_event, payload) => callback(payload)
+    ipcRenderer.on('plugins/deep-install', handler)
+    return () => ipcRenderer.removeListener('plugins/deep-install', handler)
+  },
+  getData: (channel) => ipcRenderer.invoke('plugins/data-get', channel),
+  onData: (channel, callback) => {
+    const handler = (_event, payload) => {
+      if (payload && payload.channel === channel) callback(payload.data)
+    }
+    ipcRenderer.on('plugins/data', handler)
+    return () => ipcRenderer.removeListener('plugins/data', handler)
+  },
+  onReload: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('plugins/reload', handler)
+    return () => ipcRenderer.removeListener('plugins/reload', handler)
+  },
+})
+
 contextBridge.exposeInMainWorld('screenshot', {
   onShow: (callback) => {
     ipcRenderer.on('screenshot/show', (_, data) => callback(data))

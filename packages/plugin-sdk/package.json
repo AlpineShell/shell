@@ -1,0 +1,65 @@
+{
+  "name": "@alpine/plugin-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/jsxRuntime.d.ts",
+      "import": "./dist/jsxRuntime.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks.d.ts",
+      "import": "./dist/hooks.js"
+    },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js"
+    },
+    "./react-dom": {
+      "types": "./dist/reactDomShim.d.ts",
+      "import": "./dist/reactDomShim.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js"
+    },
+    "./schema/plugin-v1.json": "./schema/plugin-v1.json"
+  },
+  "files": ["dist", "schema"],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19",
+    "vite": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.0.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19"
+  },
+  "dependencies": {
+    "htm": "^3.1"
+  }
+}

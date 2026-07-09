@@ -7,6 +7,7 @@ try { require('node:module').enableCompileCache(path.join(app.getPath('userData'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'alpine-wallpaper', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } },
+  { scheme: 'alpine-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ])
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
@@ -32,6 +33,8 @@ const trayLayout = require('./modules/trayLayout')
 const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
+const plugins = require('./modules/plugins')
+const pluginBackendHost = require('./pluginBackendHost')
 const displayConfig = require('./modules/displayConfig')
 const clockPrefs = require('./modules/clockPrefs')
 const bookmarks = require('./modules/bookmarks')
@@ -64,6 +67,46 @@ const isDev = !app.isPackaged
 const BASE_URL = isDev ? 'http://127.0.0.1:5173' : null
 const shouldTakeOverExplorer = !isDev || process.env.ALPINE_KILL_EXPLORER === '1'
 let killedExplorer = false
+
+// ── Single instance + alpine-shell:// deep links ─────────────────────────────
+// A normal packaged run holds a single-instance lock, so the website "Install in
+// Alpine Shell" link (or any second launch) is forwarded to the already-running
+// shell instead of spawning a second one. Portable bootstrap runs, uninstall /
+// cleanup launches and dev bypass the lock — they legitimately hand off to, or
+// coexist with, another process and must never be blocked by it.
+const bypassSingleInstance =
+  process.argv.includes('--uninstall') ||
+  process.argv.includes('--uninstall-cleanup') ||
+  installer.isPortableRun()
+const gotSingleInstanceLock = bypassSingleInstance ? true : app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) app.quit()
+if (!bypassSingleInstance) {
+  // Claim alpine-shell:// for THIS running instance. In dev (`electron .`) the
+  // handler command must include the app path, or the OS launches a bare Electron
+  // with no app; packaged builds register their own exe.
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('alpine-shell', process.execPath, [path.resolve(process.argv[1])])
+  } else {
+    app.setAsDefaultProtocolClient('alpine-shell')
+  }
+  console.log('[deeplink] single-instance lock held; alpine-shell:// registered')
+}
+
+app.on('second-instance', (_event, argv) => {
+  const link = argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
+  if (link) {
+    handleDeepLink(link)
+  } else if (settingsWin && !settingsWin.isDestroyed()) {
+    if (settingsWin.isMinimized()) settingsWin.restore()
+    settingsWin.focus()
+  }
+})
+
+// macOS delivers deep links via open-url rather than argv; harmless on Windows.
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  handleDeepLink(url)
+})
 
 app.commandLine.appendSwitch('disable-features', 'NetworkServiceSandbox,CalculateNativeWinOcclusion,IntensiveWakeUpThrottling')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
@@ -100,7 +143,7 @@ const CURSOR_POLL_SLOW_MS = 150
 const NEAR_BAR_MARGIN = 200
 
 const INTERACTIVE_RIGHT = 600
-const INTERACTIVE_LEFT = 40
+const INTERACTIVE_LEFT = 300
 const INTERACTIVE_CENTER = 120
 
 const MENU_HOT_MARGIN = 64
@@ -485,6 +528,38 @@ function createSettingsWindow() {
   return settingsWin
 }
 
+function openSettingsToPlugins(deepInstall) {
+  pendingSettingsPage = 'plugins'
+  const win = createSettingsWindow()
+  if (!win) return
+  const send = () => {
+    if (!win || win.isDestroyed()) return
+    win.webContents.send('windows/settings-navigate', 'plugins')
+    if (deepInstall) win.webContents.send('plugins/deep-install', deepInstall)
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send)
+  else send()
+}
+
+function handleDeepLink(rawUrl) {
+  console.log('[deeplink] received:', rawUrl)
+  let parsed
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    return
+  }
+  if (parsed.protocol !== 'alpine-shell:') return
+  const action = (parsed.hostname || parsed.pathname.replace(/^\/+/, '')).toLowerCase()
+  if (action === 'install-plugin') {
+    const id = parsed.searchParams.get('id')
+    if (!id) return
+    openSettingsToPlugins({ id, version: parsed.searchParams.get('version') || '' })
+  }
+}
+
 ipcMain.handle('windows/open-settings', (_event, page) => {
   const target = typeof page === 'string' && page ? page : null
   const wasOpen = settingsWin && !settingsWin.isDestroyed()
@@ -539,6 +614,8 @@ app.whenReady().then(async () => {
     return
   }
 
+  if (!gotSingleInstanceLock) return
+
   const wallpaperExts = new Set(['.jpg', '.jpeg', '.png', '.bmp', '.webp'])
   protocol.handle('alpine-wallpaper', async (request) => {
     const url = new URL(request.url)
@@ -556,7 +633,25 @@ app.whenReady().then(async () => {
     })
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks)
+  protocol.handle('alpine-plugin', async (request) => {
+    const url = new URL(request.url)
+    const relativePath = decodeURIComponent(url.pathname).replace(/^\/+/, '')
+    const filePath = plugins.resolvePluginFile(url.hostname, relativePath || 'index.js')
+    if (!filePath) return new Response(null, { status: 404 })
+    const mime = plugins.mimeFor(path.extname(filePath).toLowerCase())
+    if (!mime) return new Response(null, { status: 403 })
+    try {
+      const data = await fs.promises.readFile(filePath)
+      return new Response(data, {
+        status: 200,
+        headers: { 'Content-Type': mime, 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' },
+      })
+    } catch {
+      return new Response(null, { status: 404 })
+    }
+  })
+
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, plugins, pluginBackendHost)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
@@ -590,6 +685,9 @@ app.whenReady().then(async () => {
   }
 
   startShellMode()
+
+  const startupLink = process.argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
+  if (startupLink) setTimeout(() => handleDeepLink(startupLink), 500)
 })
 
 function getUpdateReadyMarkerPath() {

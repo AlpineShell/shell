@@ -343,6 +343,132 @@ declare global {
     centerOversized: boolean
   }
 
+  interface PluginRecord {
+    id: string
+    name: string
+    version: string
+    apiVersion: number
+    renderer: string | null
+    entry?: string | null
+    main: string | null
+    hasBackend: boolean
+    icon: string | null
+    description: string | null
+    author: { name: string; url?: string; email?: string } | null
+    homepage: string | null
+    repository: string | null
+    license: string | null
+    engines: { alpineShell?: string } | null
+    contributes: Record<string, unknown[]>
+    marketplace: {
+      displayName?: string
+      logo?: string
+      shortDescription?: string
+      readme?: string
+      screenshots?: { src: string; caption?: string; dark?: boolean }[]
+      category?: string
+      keywords?: string[]
+    } | null
+    preset: boolean
+    legacy?: boolean
+    verified: boolean
+    compat: { apiOk: boolean; engineOk: boolean; reason: string | null }
+    valid: boolean
+    errors: string[]
+    enabled: boolean
+    loadable: boolean
+  }
+
+  type PluginListItem = PluginRecord
+
+  interface MarketplacePlugin {
+    id: string
+    name: string
+    version: string
+    shortDescription: string
+    description: string
+    category: string | null
+    iconUrl: string | null
+    author: string | null
+    verified: boolean
+    apiVersion: number
+    size: number | null
+  }
+
+  interface MarketplaceDetail extends MarketplacePlugin {
+    readme: string | null
+    homepage: string | null
+    repository: string | null
+    screenshots: { src: string; caption?: string }[]
+  }
+
+  interface MarketplaceIndex {
+    base: string
+    plugins: MarketplacePlugin[]
+  }
+
+  type InstallResult =
+    | { ok: true; id: string; version: string; verified: boolean; reason?: string | null }
+    | { ok: false; error: string; detail?: string }
+
+  interface DeepInstallRequest {
+    id: string
+    version: string
+  }
+
+  type TopbarSlot = 'left' | 'center' | 'right'
+
+  interface TopbarWidgetContribution {
+    type: 'topbar-widget'
+    id: string
+    component: import('react').ComponentType
+    slot?: TopbarSlot
+    order?: number
+  }
+
+  type AlpineHtml = (strings: TemplateStringsArray, ...values: unknown[]) => import('react').ReactNode
+
+  interface AlpineStoreRuntime {
+    createStore: typeof import('zustand/vanilla').createStore
+    useStore: typeof import('zustand').useStore
+    useShallow: typeof import('zustand/react/shallow').useShallow
+  }
+
+  interface AlpinePluginRuntime {
+    version: number
+    React: typeof import('react')
+    react: typeof import('react')
+    reactDom: typeof import('react-dom')
+    jsxRuntime: typeof import('react/jsx-runtime')
+    h: typeof import('react').createElement
+    html: AlpineHtml
+    Fragment: typeof import('react').Fragment
+    useState: typeof import('react').useState
+    useEffect: typeof import('react').useEffect
+    useRef: typeof import('react').useRef
+    useMemo: typeof import('react').useMemo
+    useCallback: typeof import('react').useCallback
+    useReducer: typeof import('react').useReducer
+    useContext: typeof import('react').useContext
+    createContext: typeof import('react').createContext
+    useSyncExternalStore: typeof import('react').useSyncExternalStore
+    useLayoutEffect: typeof import('react').useLayoutEffect
+    useId: typeof import('react').useId
+    memo: typeof import('react').memo
+    lazy: typeof import('react').lazy
+    Suspense: typeof import('react').Suspense
+    startTransition: typeof import('react').startTransition
+    useDarkText: () => boolean
+    useTopbarBg: () => string
+    usePluginData: <T>(channel: string, initial: T) => T
+    store: AlpineStoreRuntime
+    PopupMenu: import('react').ComponentType<{
+      trigger: import('react').ReactNode
+      children: import('react').ReactNode
+      onOpen?: () => void
+    }>
+  }
+
   type TimeFormat = 'auto' | '12h' | '24h'
   type ResolvedTimeFormat = '12h' | '24h'
   type CalendarDayCount = 1 | 2 | 3
@@ -395,6 +521,28 @@ declare global {
   }
 
   interface Window {
+    plugins: {
+      list: () => Promise<PluginRecord[]>
+      dir: () => Promise<string>
+      openFolder: () => Promise<void>
+      reload: () => Promise<boolean>
+      setEnabled: (id: string, enabled: boolean) => Promise<boolean>
+      manifest: (id: string) => Promise<PluginRecord | null>
+      readme: (id: string) => Promise<string | null>
+      marketplace: {
+        base: () => Promise<string>
+        list: () => Promise<MarketplaceIndex>
+        detail: (id: string) => Promise<MarketplaceDetail | null>
+        install: (payload: { id: string; version?: string }) => Promise<InstallResult>
+        uninstall: (id: string) => Promise<{ ok: boolean; id?: string; error?: string }>
+        openWeb: (id: string) => Promise<boolean>
+      }
+      onDeepInstall: (callback: (payload: DeepInstallRequest) => void) => () => void
+      getData: <T = unknown>(channel: string) => Promise<T | null>
+      onData: <T = unknown>(channel: string, callback: (data: T) => void) => () => void
+      onReload: (callback: () => void) => () => void
+    }
+    alpine?: AlpinePluginRuntime
     setup: {
       status: () => Promise<SetupStatus>
       install: (options: SetupOptions) => Promise<SetupResult>

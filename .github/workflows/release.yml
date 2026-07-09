@@ -7,6 +7,18 @@ on:
 permissions:
   contents: write
 
+# --- Storage / update channel configuration ---
+# Uploads go to whichever store is configured. The publish scripts prefer the
+# generic STORAGE_* secrets and fall back to the legacy R2_* secrets, so:
+#   * set STORAGE_* secrets  -> artifacts upload to Railway/MinIO
+#   * leave only R2_* secrets -> artifacts upload to Cloudflare R2 (unchanged)
+# The URL installed apps CHECK for updates is baked into the installer at build
+# time. Set the repo variable UPDATE_PUBLIC_URL to override it (point new builds
+# at Railway); leave it unset to keep package.json's default (R2).
+# During the transition, set the repo variable DUAL_PUBLISH_R2=true to ALSO push
+# the same installer + latest.yml to R2 so already-installed copies (which still
+# check R2) receive this release and roll over onto a Railway-pointing build.
+
 jobs:
   build-and-publish:
     runs-on: windows-latest
@@ -45,15 +57,51 @@ jobs:
           rm -rf node_modules
           bun install
 
-      - name: Build and publish to R2
-        run: bun run release
+      - name: Build SDK
+        run: bun run sdk:build
+
+      - name: Build installer
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          ALPINE_GOOGLE_CLIENT_ID: ${{ secrets.ALPINE_GOOGLE_CLIENT_ID }}
+          ALPINE_GOOGLE_CLIENT_SECRET: ${{ secrets.ALPINE_GOOGLE_CLIENT_SECRET }}
+          UPDATE_PUBLIC_URL: ${{ vars.UPDATE_PUBLIC_URL }}
+        run: |
+          node scripts/generateGoogleCredentials.js
+          bunx vite build
+          EXTRA=""
+          if [ -n "$UPDATE_PUBLIC_URL" ]; then
+            echo "Baking update URL: $UPDATE_PUBLIC_URL"
+            EXTRA="-c.publish.url=$UPDATE_PUBLIC_URL"
+          fi
+          bunx electron-builder --win --publish never $EXTRA
+
+      - name: Publish installer to object store (Railway if STORAGE_* set, else R2)
+        working-directory: apps/desktop
+        env:
+          STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
+          STORAGE_REGION: ${{ secrets.STORAGE_REGION }}
+          STORAGE_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
+          STORAGE_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
+          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
+          STORAGE_FORCE_PATH_STYLE: ${{ secrets.STORAGE_FORCE_PATH_STYLE }}
+          STORAGE_PUBLIC_URL: ${{ vars.UPDATE_PUBLIC_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: node scripts/publish.js
+
+      - name: Transition dual-publish to R2 (existing installs roll over)
+        if: ${{ vars.DUAL_PUBLISH_R2 == 'true' }}
+        working-directory: apps/desktop
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          ALPINE_GOOGLE_CLIENT_ID: ${{ secrets.ALPINE_GOOGLE_CLIENT_ID }}
-          ALPINE_GOOGLE_CLIENT_SECRET: ${{ secrets.ALPINE_GOOGLE_CLIENT_SECRET }}
+        run: node scripts/publish.js
 
       - name: Attach installer to GitHub Release
         shell: bash

@@ -13,6 +13,8 @@ import { warmRenderableEmojis } from "../../lib/emojiRenderable";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
 import ChromeCanvas from "./chrome/ChromeCanvas";
+import PluginSlot from "./pluginSlot";
+import { loadTopbarPlugins } from "../../plugins/loadPlugins";
 
 const noop = () => {};
 
@@ -33,6 +35,11 @@ export default function TopBar() {
         window.launcher.onHide(() => setLauncherOpen(false));
     }, []);
 
+    useEffect(() => {
+        loadTopbarPlugins();
+        return window.plugins.onReload(() => loadTopbarPlugins());
+    }, []);
+
     useEffect(() => warmRenderableEmojis(), []);
 
     return (
@@ -46,6 +53,7 @@ export default function TopBar() {
             >
                 <div className="flex items-center gap-1 relative z-1 self-stretch">
                     <SystemMenu />
+                    <PluginSlot slot="left" />
                 </div>
                 <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center z-1">
                     <LauncherTrigger />
@@ -55,6 +63,7 @@ export default function TopBar() {
                     <MediaStatus />
                     <MicrophoneStatus />
                     <StatusIndicator />
+                    <PluginSlot slot="right" />
                     <Clock />
                 </div>
             </div>

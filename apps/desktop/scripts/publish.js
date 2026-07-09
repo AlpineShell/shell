@@ -1,40 +1,13 @@
 const fs = require('fs')
 const path = require('path')
-const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require('@aws-sdk/client-s3')
+const { PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require('@aws-sdk/client-s3')
 const { Upload } = require('@aws-sdk/lib-storage')
+const { readStorageEnv, createStorageClient } = require('./storage')
 
-const requiredEnvVars = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET']
 const releaseDir = path.join(__dirname, '..', 'release')
 const uploadExtensions = ['.exe', '.exe.blockmap', '.yml']
 const installerKeyPattern = /^Alpine Shell Setup (.+)\.exe$/
 const versionsToKeep = 5
-
-function readEnv() {
-  const missing = requiredEnvVars.filter((name) => !process.env[name])
-  if (missing.length > 0) {
-    console.error(`Missing required environment variables: ${missing.join(', ')}`)
-    process.exit(1)
-  }
-  return {
-    accountId: process.env.R2_ACCOUNT_ID,
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-    bucket: process.env.R2_BUCKET,
-  }
-}
-
-function createClient(config) {
-  return new S3Client({
-    region: 'auto',
-    endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-    },
-    requestChecksumCalculation: 'WHEN_REQUIRED',
-    responseChecksumValidation: 'WHEN_REQUIRED',
-  })
-}
 
 function isUploadable(fileName) {
   return uploadExtensions.some((extension) => fileName.endsWith(extension))
@@ -123,8 +96,8 @@ async function pruneOldReleases(client, bucket, keepCount) {
 }
 
 async function publish() {
-  const config = readEnv()
-  const client = createClient(config)
+  const config = readStorageEnv()
+  const client = createStorageClient(config)
   const artifacts = collectArtifacts()
 
   if (artifacts.length === 0) {
