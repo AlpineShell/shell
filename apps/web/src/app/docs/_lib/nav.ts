@@ -5,11 +5,17 @@ export interface DocEntry {
   group: string;
 }
 
-export const DOCS_SECTIONS = ["Building plugins"];
+export const DOCS_SECTIONS = ["Alpine Shell", "Building plugins"];
 
-export const DOCS_GROUPS = ["Get started", "Guides", "Reference"];
+export const DOCS_GROUPS = ["Overview", "Get started", "Guides", "Reference"];
 
 export const DOCS_NAV: DocEntry[] = [
+  {
+    slug: "welcome",
+    title: "Welcome",
+    section: "Alpine Shell",
+    group: "Overview",
+  },
   {
     slug: "plugins/getting-started",
     title: "Getting started: your first plugin",
