@@ -1,8 +1,10 @@
 # Storage: R2 → Railway/MinIO Migration
 
 Alpine Shell's release artifacts (installers, `latest.yml`) and plugin marketplace bundles are stored
-in an S3-compatible object store. Today that is Cloudflare R2; the code is ready to point at a Railway
-MinIO service (or any S3-compatible bucket) with **no code change** — only env/config.
+in an S3-compatible object store. Today that is a Railway MinIO service, for both the installer
+auto-update channel and the plugin marketplace. Cloudflare R2 was the previous store, retained only for
+the one-time update-channel dual-publish (see Rollover below). Pointing at a different S3-compatible
+bucket is **no code change**, only env/config.
 
 Both upload scripts source their S3 client from `apps/desktop/scripts/storage.js`:
 
@@ -38,10 +40,10 @@ hosting from R2 to Railway are:
    - `electron/pluginMarketplaceContract.js → MARKETPLACE_BASE_URL` — the marketplace catalog + bundle
      read base (owned by the marketplace subsystem). Catalog `url`/`iconUrl` values are **relative
      keys** resolved against this base, so no catalog data needs rewriting.
-   - `apps/desktop/package.json → build.publish.url` — **only** if you also migrate the installer
-     auto-update channel. Recommended: keep installer updates on R2 (proven) and migrate only the
-     plugin marketplace to Railway; scope the env per CI step so `publish.js` reads R2 and
-     `publishPlugin.js` reads Railway.
+   - `apps/desktop/package.json → build.publish.url` is the installer auto-update channel, and it has
+     already been migrated: `build.publish.url` now points at the Railway `alpine-shell` URL, so new
+     builds check Railway for updates. R2 stays wired only for the one-time dual-publish that rolls
+     older installs over (Rollover below).
 
 No `@aws-sdk/client-s3` change and no rewrite of the upload/list/prune logic.
 
@@ -92,19 +94,21 @@ these GitHub **secrets** and **variables** so you never hardcode the URL:
 | Secret | `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY` | Railway credentials. |
 | Secret | `STORAGE_BUCKET` | Bucket name (installer keys and `plugins/*` can share one bucket). |
 | Secret | `STORAGE_FORCE_PATH_STYLE` | `true` for MinIO. |
-| Variable | `UPDATE_PUBLIC_URL` | The Railway public read base (trailing slash). Baked into new builds via `-c.publish.url` so installed apps check Railway. Leave unset to keep R2. |
+| Variable | `UPDATE_PUBLIC_URL` | Optional override for the installer auto-update read base (trailing slash), baked into new builds via `-c.publish.url`. `package.json` already defaults `build.publish.url` to the Railway `alpine-shell` URL, so leave this unset to use that default; set it only to point new builds at a different base. |
 | Variable | `DUAL_PUBLISH_R2` | `true` during the transition — also pushes this release to R2 (needs `R2_*` secrets present). |
 
-### Rollover (do this once, then decommission R2)
+### Rollover (cut one dual-publish release, then decommission R2)
 
-Existing installs check **R2** (the URL baked into the build they're running). So:
+`package.json` already bakes the Railway `alpine-shell` URL into new builds, and the primary publish
+step targets Railway. The only loose end is installs still running an older build that checks **R2**
+(the URL baked into the build they're running). To roll those onto Railway:
 
-1. Provision Railway, set the `STORAGE_*` secrets + `UPDATE_PUBLIC_URL` variable, and keep the `R2_*` secrets in place. Set `DUAL_PUBLISH_R2=true`.
-2. Cut one release. The build now checks **Railway** (`UPDATE_PUBLIC_URL` baked in), the primary publish goes to **Railway**, and the dual-publish step also pushes the identical installer + `latest.yml` to **R2**. `latest.yml` carries no URL, so the same file works on both stores.
-3. Existing R2 installs see this release on R2, update, and the freshly-installed build now points at Railway. New downloads from the website point at Railway too.
-4. Once you're confident everyone has rolled over (a release cycle or two), set `DUAL_PUBLISH_R2=false` (or delete the variable) and remove the `R2_*` secrets. R2 can be decommissioned.
+1. Keep the `R2_*` secrets in place and set the repo variable `DUAL_PUBLISH_R2=true`.
+2. Cut one release. The primary publish goes to **Railway**, and the "One-time R2 dual-publish (migrate installs still checking R2)" step mirrors the identical installer + `latest.yml` to **R2**. `latest.yml` references the installer by relative filename (no absolute store URL), so the identical file works on both stores.
+3. Existing R2 installs see this release on R2, update, and the freshly-installed build (Railway URL baked in) now checks Railway. New downloads from the website point at Railway too.
+4. Once the installed base has rolled over (a release cycle or two), set `DUAL_PUBLISH_R2=false` (or delete the variable) and remove the `R2_*` secrets. R2 can be decommissioned.
 
-If you have essentially no installed base yet, you can skip the dual-publish and just set `UPDATE_PUBLIC_URL` + `STORAGE_*` — the very next release is Railway-only.
+If there is essentially no installed base to migrate, you can skip the dual-publish entirely and leave `DUAL_PUBLISH_R2` unset; every release is Railway-only.
 
 ## Migrating existing objects (one-time, optional)
 

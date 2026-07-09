@@ -106,7 +106,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "https://pub-634a0706ca394cf7a0eedfa4f8a71a56.r2.dev/",
+      "url": "https://bucket-production-4979d.up.railway.app/alpine-shell/",
       "channel": "latest"
     }
   },

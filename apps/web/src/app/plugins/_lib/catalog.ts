@@ -1,6 +1,6 @@
 const CATALOG_BASE = (
   process.env.NEXT_PUBLIC_PLUGINS_BASE ??
-  "https://pub-634a0706ca394cf7a0eedfa4f8a71a56.r2.dev"
+  "https://bucket-production-4979d.up.railway.app/alpine-plugins"
 ).replace(/\/+$/, "");
 
 const PLUGIN_ID_PATTERN =

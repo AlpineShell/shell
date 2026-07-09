@@ -9,7 +9,7 @@ const path = require('path')
 //   4. DEFAULT_BASE
 // The base is a *public read* URL — the same value the website uses as
 // NEXT_PUBLIC_PLUGINS_BASE. It is not a secret; it ships inside the app.
-const DEFAULT_BASE = 'https://pub-634a0706ca394cf7a0eedfa4f8a71a56.r2.dev'
+const DEFAULT_BASE = 'https://bucket-production-4979d.up.railway.app/alpine-plugins'
 
 function parseEnvFile(filePath) {
   const out = {}
