@@ -1,41 +1,40 @@
 # Releasing Alpine Shell
 
 Alpine Shell ships an NSIS installer and auto-updates clients using electron-updater with a
-generic provider backed by a Cloudflare R2 bucket. This document covers the one-time setup,
-the environment variables required to publish, and the per-release steps.
+generic provider backed by Railway/MinIO (any S3-compatible store). This document covers the
+one-time setup, the environment variables required to publish, and the per-release steps.
 
-## One-Time Cloudflare R2 Setup
+## One-Time Storage Setup (Railway/MinIO)
 
-1. In the Cloudflare dashboard, create an R2 bucket (for example `alpine-shell-updates`).
-2. Enable public access for the bucket. You can either:
-   - Use the bucket's managed `r2.dev` public URL, or
-   - Attach a custom domain to the bucket for a cleaner update URL.
-3. Copy the resulting public base URL and replace `REPLACE_WITH_R2_PUBLIC_URL` in
-   `package.json` under `build.publish.url`. Keep the trailing slash. For example:
+1. Provision the S3-compatible store (Railway/MinIO) and the `alpine-shell` bucket. See
+   `docs/STORAGE.md` for the exact provisioning steps and env mapping.
+2. Set `build.publish.url` in `package.json` to the store's public app-update URL. Keep the
+   trailing slash. For example:
 
    ```json
    "publish": {
      "provider": "generic",
-     "url": "https://pub-xxxxxxxx.r2.dev/",
+     "url": "https://bucket-production-4979d.up.railway.app/alpine-shell/",
      "channel": "latest"
    }
    ```
 
    electron-updater fetches `latest.yml` and the installer from this base URL, so it must point
-   at the public root of the bucket where those artifacts are uploaded.
+   at the public root of the store where those artifacts are uploaded.
 
 ## Required Environment Variables
 
-The publish script (`scripts/publish.js`) uploads the build artifacts to R2 using the S3-compatible
-API. Set these before running a release:
+The publish script (`scripts/publish.js`) uploads the build artifacts to the store using the
+S3-compatible API. Set these before running a release:
 
-- `R2_ACCOUNT_ID` — your Cloudflare account ID (used to build the R2 S3 endpoint).
-- `R2_ACCESS_KEY_ID` — R2 API token access key ID.
-- `R2_SECRET_ACCESS_KEY` — R2 API token secret access key.
-- `R2_BUCKET` — the bucket name (for example `alpine-shell-updates`).
+- `STORAGE_ENDPOINT`: the S3-compatible endpoint of the store.
+- `STORAGE_ACCESS_KEY_ID`: access key ID for the store.
+- `STORAGE_SECRET_ACCESS_KEY`: secret access key for the store.
+- `STORAGE_BUCKET`: the bucket name (`alpine-shell`).
+- `STORAGE_FORCE_PATH_STYLE`: set to `true` for MinIO-style path addressing.
 
-Create the access key pair from the R2 dashboard under "Manage R2 API Tokens". The token needs
-object read/write permission on the bucket.
+See `docs/STORAGE.md` for how to obtain these. The legacy `R2_*` vars are used only by the
+one-time R2 dual-publish that migrates installs still checking R2.
 
 ## Release Steps
 
@@ -49,15 +48,15 @@ object read/write permission on the bucket.
    This:
    - builds the renderer with Vite,
    - builds the NSIS installer with electron-builder (which also generates `latest.yml`),
-   - runs `scripts/publish.js`, which uploads the installer and `latest.yml` to R2.
+   - runs `scripts/publish.js`, which uploads the installer and `latest.yml` to the store.
 3. Once the new `latest.yml` and installer are in the bucket, existing installs detect the new
    version on their next update check and auto-update.
 
 You can re-run only the upload step with `bun run publish` if the build artifacts already exist.
 
-Old installers are pruned automatically: after each upload, `scripts/publish.js` keeps only the two
+Old installers are pruned automatically: after each upload, `scripts/publish.js` keeps only the five
 most recent versions in the bucket (plus `latest.yml`) and deletes older `.exe` / `.exe.blockmap`
-objects, so storage stays well within the R2 free tier.
+objects, so storage stays bounded.
 
 ## Automated Releases (GitHub Actions)
 
@@ -67,15 +66,18 @@ GitHub Release:
 1. In GitHub, create a new Release with a tag like `v0.2.0`. The tag is the version — the workflow
    sets the `package.json` version from it (a leading `v` is stripped).
 2. The workflow installs dependencies, runs `bun run release` (Vite build + NSIS installer +
-   `latest.yml` + upload to R2 with pruning), and attaches the installer to the GitHub Release.
-3. Installed clients auto-update from R2 on their next check.
+   `latest.yml` + upload to the store with pruning), and attaches the installer to the GitHub Release.
+3. Installed clients auto-update from the store on their next check.
 
 Add these repository secrets first (GitHub repo -> Settings -> Secrets and variables -> Actions):
 
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET`
+- `STORAGE_ENDPOINT`
+- `STORAGE_ACCESS_KEY_ID`
+- `STORAGE_SECRET_ACCESS_KEY`
+- `STORAGE_BUCKET`
+- `STORAGE_FORCE_PATH_STYLE`
+
+The `R2_*` secrets are only needed while `DUAL_PUBLISH_R2` migrates installs still checking R2.
 
 The job uses `windows-latest` because NSIS must build on Windows. Releasing on a published Release —
 rather than on every push to `main` — keeps each version explicit and avoids pushing an update to
@@ -139,18 +141,18 @@ verifies against it), and store `PRIV_B64` as the `ALPINE_PLUGIN_SIGNING_KEY` Gi
 env. The public key baked into the app and the private key used to sign must always match, or every
 install will fail signature verification.
 
-## Storage: R2 today, Railway/MinIO ready
+## Storage: Railway/MinIO
 
-The upload code (`scripts/publish.js` for installers, `scripts/publishPlugin.js` for plugins) now
-sources its S3 client from the shared `scripts/storage.js` factory, which reads generic `STORAGE_*`
-env vars and falls back to the legacy `R2_*` vars. Switching from Cloudflare R2 to a Railway MinIO
-(or any S3-compatible) bucket is a **configuration change, not a code change** — see `docs/STORAGE.md`
-for the exact provisioning steps and env mapping. Add the `STORAGE_*` secrets to the GitHub Actions
-secrets alongside the existing `R2_*` when you migrate.
+Railway/MinIO is the store now. The upload code (`scripts/publish.js` for installers,
+`scripts/publishPlugin.js` for plugins) sources its S3 client from the shared `scripts/storage.js`
+factory, which reads the primary `STORAGE_*` env vars and falls back to the legacy `R2_*` vars.
+The `STORAGE_*` set is the primary configuration; the `R2_*` vars are only for the one-time R2
+dual-publish that migrates installs still checking R2. See `docs/STORAGE.md` for the exact
+provisioning steps and env mapping.
 
 ## Code Signing Note
 
-Auto-update on Windows works without code signing: clients will download and apply updates from R2
-as configured. However, until the installer is code-signed, Windows SmartScreen will show an
+Auto-update on Windows works without code signing: clients will download and apply updates from the
+configured store. However, until the installer is code-signed, Windows SmartScreen will show an
 "unrecognized app" / publisher warning prompt when users run the installer. Code signing the NSIS
 installer removes that prompt and improves the reputation of subsequent auto-updates.
