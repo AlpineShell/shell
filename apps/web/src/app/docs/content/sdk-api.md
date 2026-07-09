@@ -40,7 +40,7 @@ The host publishes a `window.alpine` runtime. `h` is `React.createElement`; the 
 const { h, useState, usePluginData, useDarkText, PopupMenu } = window.alpine
 ```
 
-This is the path the bundled `claude-code-usage` preset uses today. The SDK is a thin, typed wrapper over the same runtime.
+This is the path the first-party `com.alpine.claude-code-usage` plugin uses today. The SDK is a thin, typed wrapper over the same runtime.
 
 ## Export table
 
@@ -50,8 +50,7 @@ From `@alpine/plugin-sdk/hooks` (renderer-only, ESM):
 |---|---|---|
 | `usePluginSetting(key, default)` | hook | Returns `[value, setValue]` for a setting private to your plugin. Optimistic; persists across restarts. |
 | `usePluginData(channel, initial)` | hook | Subscribes to a read-only host **data channel** and re-renders on every broadcast. |
-| `usePluginBackendState(channel, initial)` | hook | Subscribes to a backend module's state channel. **Gated** until backend plugins ship. |
-| `useShell()` | hook | Returns the capability-scoped shell object — only the methods your permissions grant. **Gated**: resolves to the read-only data bridge today. |
+| `useShell()` | hook | Returns the capability-scoped shell object — only the methods your permissions grant. **Gated**: resolves to an empty object today; the host exposes no shell surface yet. |
 | `useDarkText()` | hook | `true` when the topbar wants dark text (light background). |
 | `useTopbarBg()` | hook | The current topbar background color. |
 | `useTopbarTheme()` | hook | `{ dark, bg }` in one call. |
@@ -63,11 +62,11 @@ From `@alpine/plugin-sdk/vite`: `alpinePluginPreset({ entry, outDir? })` — a r
 
 ## Reading host data
 
-The renderer can't read files or run system code directly. First-party host modules publish read-only **data channels**; a widget subscribes with `usePluginData`. For example, the `claude-code-usage` preset reads the `claude-usage` channel:
+The renderer can't read files or run system code directly. First-party host modules publish read-only **data channels**; a widget subscribes with `usePluginData`. For example, the `com.alpine.claude-code-usage` plugin reads the `claude-usage` channel:
 
 ```js
 const { h, usePluginData } = window.alpine
-const usage = usePluginData("claude-usage", null) // { blockCost, blockTokens, todayCost, ... }
+const usage = usePluginData("claude-usage", null) // { ok, sessionPercent, sessionResetsAtMs, limits, subscriptionType, updatedAtMs }
 ```
 
 ## Dropdowns with `PopupMenu`

@@ -33,7 +33,6 @@ export interface CatalogPlugin {
   iconUrl: string | null;
   author: PluginAuthor | null;
   permissions: string[];
-  verified: boolean;
   apiVersion: number | null;
   engines: { alpineShell?: string } | null;
 }
@@ -51,6 +50,7 @@ export interface PluginScreenshot {
 
 export interface PluginDetail extends CatalogPlugin {
   screenshots: PluginScreenshot[];
+  keywords: string[];
   readme: string | null;
   homepage: string | null;
   repository: string | null;
@@ -85,6 +85,13 @@ function normalizePermissions(v: unknown): string[] {
   return v.filter((p): p is string => typeof p === "string");
 }
 
+function normalizeKeywords(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((k): k is string => typeof k === "string" && k.length > 0)
+    .slice(0, 12);
+}
+
 function normalizeEngines(v: unknown): { alpineShell?: string } | null {
   if (!v || typeof v !== "object") return null;
   const alpineShell = str((v as Record<string, unknown>).alpineShell);
@@ -115,7 +122,6 @@ function normalizeEntry(raw: unknown): CatalogPlugin | null {
     iconUrl: iconField(r),
     author: normalizeAuthor(r.author),
     permissions: normalizePermissions(r.permissions),
-    verified: r.verified === true,
     apiVersion: typeof r.apiVersion === "number" ? r.apiVersion : null,
     engines: normalizeEngines(r.engines),
   };
@@ -179,6 +185,7 @@ function normalizeDetail(raw: unknown): PluginDetail | null {
   return {
     ...base,
     screenshots: normalizeScreenshots(r.screenshots, base.id),
+    keywords: normalizeKeywords(r.keywords),
     readme: normalizeReadme(r.readme),
     homepage: httpsLink(r.homepage),
     repository: httpsLink(r.repository),

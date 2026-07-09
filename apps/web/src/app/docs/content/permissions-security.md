@@ -1,8 +1,8 @@
 # Permissions & the security model
 
-Alpine Shell plugins declare exactly what they need in the `permissions` array of their [manifest](/docs/manifest-reference). Every token is drawn from a fixed allowlist, and each maps to a **risk tier** that drives the consent dialog you see before installing — and the risk badges on every plugin's marketplace page.
+Alpine Shell plugins declare exactly what they need in the `permissions` array of their [manifest](/docs/manifest-reference). Every token is drawn from a fixed allowlist, and each maps to a **risk tier** that drives the risk badges and the per-permission rows you review on a plugin's marketplace page before you install.
 
-> **Curated model today.** Plugins currently run in-process with the shell's full privileges. There is no runtime sandbox yet. Only install plugins you trust. The marketplace lists first-party and vetted publishers only.
+> **Curated model today.** Every plugin — official or custom — runs in-process with the shell's full privileges. There is no runtime sandbox yet. The marketplace lists **official, first-party plugins only**; a custom plugin you drop in runs with the same full privileges, so only sideload ones you wrote or reviewed.
 
 ## The permission tiers
 
@@ -12,7 +12,7 @@ Alpine Shell plugins declare exactly what they need in the `permissions` array o
 | **Read** | Shown at install | `read:volume`, `read:battery`, `read:media`, `read:network`, `read:system-info`, `net:fetch`, `location:coarse`, `notifications` |
 | **Control** | Shown at install | `control:volume`, `control:brightness`, `control:media`, `control:wallpaper`, `control:windows` |
 | **Sensitive** | Confirmed at install **and** just-in-time on each use | `control:power`, `control:network`, `control:bluetooth`, `launch:apps` |
-| **Backend** | Verified publishers only | `node` |
+| **Backend** | First-party only | `node` |
 
 ### Auto
 
@@ -20,7 +20,7 @@ No consent needed. `storage` gives a plugin private key/value storage; `clock` a
 
 ### Read
 
-The plugin can *read* a piece of system state, or reach the network. `net:fetch` is special: it only works against the HTTPS origins you list in `network.connect`, which become the plugin's CSP `connect-src`. A plugin can never fetch a host it didn't declare.
+The plugin can *read* a piece of system state, or reach the network. `net:fetch` is special: you must pair it with the HTTPS origins you list in `network.connect`, cross-checked when the manifest loads. Under the future sandbox (Tier B) those origins pin the plugin's CSP `connect-src` so it can't reach a host it didn't declare. Today, in-process (Tier A), that boundary isn't enforced at runtime yet — the list is a declaration you're trusting the curated catalog to honor, not a hard limit.
 
 ### Control
 
@@ -28,11 +28,11 @@ The plugin can *change* a setting — volume, brightness, wallpaper, window layo
 
 ### Sensitive
 
-Power actions, joining Wi-Fi networks, launching apps. These require an explicit confirmation at install **and** a just-in-time native confirmation each time the plugin actually invokes them. `control:network` is gated until the safe-network capability lands.
+Power actions, joining Wi-Fi networks, launching apps. These are marked `confirm` so the shell can flag them prominently before you install and, under the sandbox, prompt again just-in-time each time the plugin invokes them. That runtime prompt isn't wired yet (Tier A) — today the flag drives the high-risk badges you review before installing. `control:network` is gated until the safe-network capability lands.
 
 ### Backend (`node`)
 
-Running a background Node process is the highest-trust grant. It is **reserved for verified publishers** and is inert until code signing and the backend supervisor ship.
+Running a background Node process is the highest-trust grant. It is **reserved for first-party plugins** and is inert until code signing and the backend supervisor ship.
 
 ## The data-flow warning
 
@@ -44,7 +44,7 @@ Some capabilities are simply not offered to plugins — arbitrary filesystem acc
 
 ## Tier A vs Tier B
 
-- **Tier A (today):** the plugin runs in-process with full privileges. Trust is established by curation — the human-controlled catalog only lists first-party and vetted plugins. This is why the marketplace is curated and why you should only sideload plugins you've reviewed.
+- **Tier A (today):** the plugin runs in-process with full privileges. Trust is established by curation — the human-controlled catalog only lists official, first-party plugins. This is why the marketplace is first-party only, and why you should only sideload custom plugins you've written or reviewed.
 - **Tier B (future):** untrusted plugins run in an isolated sandbox with capabilities brokered through audited adapters. Until that lands, the badges and the curated catalog are the guarantee.
 
 ## How this shows up on the marketplace

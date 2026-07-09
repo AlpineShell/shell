@@ -14,16 +14,17 @@ export default function DocsIndexPage() {
         Plugin documentation
       </h1>
       <p className="mt-3 max-w-xl text-lg text-gray-400">
-        A plugin is a folder you drop into Alpine Shell that contributes widgets,
-        settings pages and launcher commands. Start with your first plugin, then
-        dig into the manifest and SDK.
+        A plugin is a folder that contributes widgets, settings pages and
+        launcher commands. Write a custom plugin and drop it in, or install an
+        official one from the marketplace in a click. Start with your first
+        plugin, then dig into the manifest and SDK.
       </p>
       <ul className="mt-10 grid gap-4 sm:grid-cols-2">
         {DOCS_NAV.map((entry) => (
           <li key={entry.slug}>
             <Link
               href={`/docs/${entry.slug}`}
-              className="flex h-full flex-col rounded-2xl border border-white/10 bg-white/5 p-5 transition hover:bg-white/10"
+              className="flex h-full flex-col rounded-xl bg-white/5 p-5 transition hover:bg-white/10"
             >
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 {entry.group}

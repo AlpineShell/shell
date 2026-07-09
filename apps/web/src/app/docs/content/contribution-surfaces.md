@@ -84,4 +84,4 @@ Declares a backend (`main`) entry point that runs its own Node process.
 |---|---|---|
 | `export` | string | The export the supervisor runs. |
 
-Backend modules are **gated**: a plugin's `main` is validated for containment but is never executed until the plugin is signed by a verified publisher and the backend supervisor lands. Until then, treat backend modules as declaration-only. The `node` permission is likewise reserved for verified publishers — see [Permissions & the security model](/docs/permissions-security).
+Backend modules are **gated**: a plugin's `main` is validated for containment but is never executed until the plugin is signed and shipped by the Alpine Shell team and the backend supervisor lands. Until then, treat backend modules as declaration-only. The `node` permission is likewise reserved for first-party plugins — see [Permissions & the security model](/docs/permissions-security).

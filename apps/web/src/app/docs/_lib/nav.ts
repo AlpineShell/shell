@@ -32,7 +32,7 @@ export const DOCS_NAV: DocEntry[] = [
   },
   {
     slug: "publishing",
-    title: "Publishing to the marketplace",
+    title: "Sharing your plugin",
     group: "Ship it",
   },
 ];

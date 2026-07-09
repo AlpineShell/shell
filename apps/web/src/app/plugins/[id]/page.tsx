@@ -47,7 +47,7 @@ function DataFlowNote({ detail }: { detail: PluginDetail }) {
   if (detail.permissions.includes("node")) {
     notes.push(
       <p key="node" className="text-sm text-red-200">
-        Runs a background process (requires a verified publisher).
+        Runs a background process (first-party plugins only).
       </p>,
     );
   }
@@ -55,6 +55,114 @@ function DataFlowNote({ detail }: { detail: PluginDetail }) {
   return (
     <div className="mt-4 space-y-2 rounded-xl border border-white/10 bg-white/5 p-4">
       {notes}
+    </div>
+  );
+}
+
+function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="shrink-0 text-gray-500">{label}</dt>
+      <dd className="min-w-0 truncate text-right text-gray-200">{children}</dd>
+    </div>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function InfoCard({ detail }: { detail: PluginDetail }) {
+  const tags = [
+    ...(detail.category ? [detail.category] : []),
+    ...detail.keywords,
+  ];
+  return (
+    <div className="rounded-xl bg-white/5 p-5">
+      <dl className="space-y-3 text-sm">
+        {detail.author && (
+          <MetaRow label="Developer">
+            {detail.author.url ? (
+              <a
+                href={detail.author.url}
+                target="_blank"
+                rel="noreferrer"
+                className="transition hover:text-white"
+              >
+                {detail.author.name}
+              </a>
+            ) : (
+              detail.author.name
+            )}
+          </MetaRow>
+        )}
+        <MetaRow label="Version">
+          <span className="font-mono">v{detail.version}</span>
+        </MetaRow>
+        {detail.size != null && (
+          <MetaRow label="Size">{formatBytes(detail.size)}</MetaRow>
+        )}
+        {detail.updatedAt && (
+          <MetaRow label="Updated">{formatDate(detail.updatedAt)}</MetaRow>
+        )}
+      </dl>
+
+      {tags.length > 0 && (
+        <div className="mt-4 border-t border-white/10 pt-4">
+          <span className="text-sm text-gray-500">Tags</span>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-white/5 px-2.5 py-0.5 text-xs text-gray-300"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(detail.homepage || detail.repository) && (
+        <div className="mt-4 flex flex-col gap-1.5 border-t border-white/10 pt-4 text-sm">
+          {detail.homepage && (
+            <a
+              href={detail.homepage}
+              target="_blank"
+              rel="noreferrer"
+              className="text-gray-400 transition hover:text-white"
+            >
+              Homepage ↗
+            </a>
+          )}
+          {detail.repository && (
+            <a
+              href={detail.repository}
+              target="_blank"
+              rel="noreferrer"
+              className="text-gray-400 transition hover:text-white"
+            >
+              Repository ↗
+            </a>
+          )}
+        </div>
+      )}
+
+      <div className="mt-5 border-t border-white/10 pt-5">
+        <InstallButton id={detail.id} version={detail.version} />
+      </div>
     </div>
   );
 }
@@ -69,98 +177,74 @@ export default async function PluginDetailPage({ params }: PluginParams) {
       <NavBar theme="dark" />
       <article className="flex-1 px-8 pt-32 pb-16">
         <div className="container mx-auto">
-        <Link
-          href="/plugins"
-          className="text-sm text-gray-500 transition hover:text-gray-300"
-        >
-          ← All plugins
-        </Link>
+          <Link
+            href="/plugins"
+            className="text-sm text-gray-500 transition hover:text-gray-300"
+          >
+            ← All plugins
+          </Link>
 
-        <header className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
-            <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-              {detail.iconUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={detail.iconUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="font-averia text-2xl text-gray-400">
-                  {detail.name.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </span>
+          <div className="mt-6 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] xl:gap-12">
             <div className="min-w-0">
-              <div className="flex items-center gap-3">
-                <h1 className="font-averia text-3xl font-semibold">{detail.name}</h1>
-                {detail.verified && (
-                  <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-2.5 py-0.5 text-xs text-sky-200">
-                    Verified
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 text-gray-400">{detail.shortDescription}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
-                {detail.author &&
-                  (detail.author.url ? (
-                    <a
-                      href={detail.author.url}
-                      className="transition hover:text-gray-300"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {detail.author.name}
-                    </a>
+              <header className="flex items-start gap-4">
+                <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/5">
+                  {detail.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={detail.iconUrl} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <span>{detail.author.name}</span>
-                  ))}
-                <span>v{detail.version}</span>
-                {detail.category && (
-                  <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-xs text-gray-300">
-                    {detail.category}
-                  </span>
+                    <span className="font-averia text-2xl text-gray-400">
+                      {detail.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <h1 className="font-averia text-3xl font-semibold">{detail.name}</h1>
+                  <p className="mt-1 text-gray-400">{detail.shortDescription}</p>
+                </div>
+              </header>
+
+              {detail.screenshots.length > 0 && (
+                <section className="mt-10">
+                  <Screenshots screenshots={detail.screenshots} />
+                </section>
+              )}
+
+              {detail.readme && (
+                <section className="mt-10 max-w-3xl">
+                  <Markdown source={detail.readme} />
+                </section>
+              )}
+
+              <section className="mt-12">
+                <h2 className="font-averia text-2xl">Permissions this plugin requests</h2>
+                {detail.permissions.length === 0 ? (
+                  <p className="mt-3 text-gray-400">
+                    This plugin requests no special permissions.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm text-gray-500">
+                      Alpine Shell asks you to confirm these when you install.
+                    </p>
+                    <ul className="mt-4 space-y-3">
+                      {detail.permissions.map((token) => (
+                        <PermissionRow
+                          key={token}
+                          token={token}
+                          reason={detail.permissionReasons[token]}
+                        />
+                      ))}
+                    </ul>
+                    <DataFlowNote detail={detail} />
+                  </>
                 )}
-              </div>
+              </section>
             </div>
+
+            <aside className="self-start lg:sticky lg:top-28">
+              <InfoCard detail={detail} />
+            </aside>
           </div>
-          <InstallButton id={detail.id} version={detail.version} />
-        </header>
-
-        {detail.screenshots.length > 0 && (
-          <section className="mt-10">
-            <Screenshots screenshots={detail.screenshots} />
-          </section>
-        )}
-
-        {detail.readme && (
-          <section className="mt-10 max-w-3xl">
-            <Markdown source={detail.readme} />
-          </section>
-        )}
-
-        <section className="mt-12 max-w-3xl">
-          <h2 className="font-averia text-2xl">Permissions this plugin requests</h2>
-          {detail.permissions.length === 0 ? (
-            <p className="mt-3 text-gray-400">
-              This plugin requests no special permissions.
-            </p>
-          ) : (
-            <>
-              <p className="mt-2 text-sm text-gray-500">
-                Alpine Shell asks you to confirm these when you install.
-              </p>
-              <ul className="mt-4 space-y-3">
-                {detail.permissions.map((token) => (
-                  <PermissionRow
-                    key={token}
-                    token={token}
-                    reason={detail.permissionReasons[token]}
-                  />
-                ))}
-              </ul>
-              <DataFlowNote detail={detail} />
-            </>
-          )}
-        </section>
-
         </div>
       </article>
       <Footer theme="dark" />

@@ -129,7 +129,7 @@ export const PERMISSION_META: Record<string, PermissionMeta> = {
   },
   node: {
     label: "Run a background process",
-    description: "Run its own Node backend (verified publishers only).",
+    description: "Run its own Node backend (first-party plugins only).",
     risk: "node",
   },
 };

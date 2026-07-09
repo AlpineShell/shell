@@ -7,7 +7,7 @@
 | Field | Type | Required | Notes |
 |---|---|:--:|---|
 | `$schema` | string | – | `https://alpine.dev/schemas/plugin-v1.json` for editor autocomplete. |
-| `id` | string | ✓ | Reverse-DNS, lowercase (e.g. `com.example.weather`). Must equal the folder name. |
+| `id` | string | ✓ | **Reverse-DNS, lowercase**: dot-separated segments of `a-z 0-9 -`, each starting and ending alphanumeric, with **at least one dot** (e.g. `com.example.weather`). No underscores. Must equal the folder name (case-insensitive). A single bare word like `weather` is rejected — this applies to every plugin, custom or official. |
 | `name` | string | ✓ | Display name. |
 | `version` | string | ✓ | Strict [semver 2.0.0](https://semver.org). |
 | `apiVersion` | integer | ✓ | The contribution-contract version. Must be one the host supports or the plugin is not loaded. |
@@ -18,7 +18,7 @@
 | `icon` | string | – | `assets/icon.png` (a file in the plugin) or `lucide:CloudSun` (a curated Lucide icon). |
 | `contributes` | object | – | The surfaces the plugin adds. See [Contribution surfaces](/docs/contribution-surfaces). |
 | `permissions` | string[] | – | Capabilities required at install. Each must be in the permission allowlist. |
-| `optionalPermissions` | string[] | – | Capabilities you can grant later. Must be disjoint from `permissions`. |
+| `optionalPermissions` | string[] | – | Capabilities you can grant later. Should not repeat entries already in `permissions` (not currently enforced by the validator). |
 | `network.connect` | string[] | – | HTTPS origins the plugin may reach. Becomes the CSP `connect-src`. |
 | `author` | object | – | `{ name, url?, email? }`. |
 | `homepage` `repository` `license` | string | – | Metadata links. |
@@ -26,7 +26,7 @@
 
 ### Rules the validator enforces
 
-- `id` matches the reverse-DNS pattern **and** equals the normalized folder name.
+- `id` matches the reverse-DNS pattern (dot-separated `a-z 0-9 -` segments, at least one dot, no underscore) **and** equals the normalized folder name (case-insensitive). A single-label id like `weather` fails validation and the plugin won't load.
 - Every referenced file (`renderer`, `main`, `icon`, and the `marketplace` assets) exists inside the plugin folder. Symlinks and `..` path escapes are rejected.
 - Every permission is in the allowlist (see [Permissions & the security model](/docs/permissions-security)). Unknown tokens are dropped and reported.
 - `net:fetch` and `network.connect` are cross-checked: if you request `net:fetch` you must declare at least one `https://` origin, and vice versa.
