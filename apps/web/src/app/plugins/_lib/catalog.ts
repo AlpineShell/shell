@@ -33,6 +33,7 @@ export interface CatalogPlugin {
   iconUrl: string | null;
   author: PluginAuthor | null;
   permissions: string[];
+  keywords: string[];
   apiVersion: number | null;
   engines: { alpineShell?: string } | null;
 }
@@ -50,7 +51,6 @@ export interface PluginScreenshot {
 
 export interface PluginDetail extends CatalogPlugin {
   screenshots: PluginScreenshot[];
-  keywords: string[];
   readme: string | null;
   homepage: string | null;
   repository: string | null;
@@ -122,6 +122,7 @@ function normalizeEntry(raw: unknown): CatalogPlugin | null {
     iconUrl: iconField(r),
     author: normalizeAuthor(r.author),
     permissions: normalizePermissions(r.permissions),
+    keywords: normalizeKeywords(r.keywords),
     apiVersion: typeof r.apiVersion === "number" ? r.apiVersion : null,
     engines: normalizeEngines(r.engines),
   };
@@ -185,7 +186,6 @@ function normalizeDetail(raw: unknown): PluginDetail | null {
   return {
     ...base,
     screenshots: normalizeScreenshots(r.screenshots, base.id),
-    keywords: normalizeKeywords(r.keywords),
     readme: normalizeReadme(r.readme),
     homepage: httpsLink(r.homepage),
     repository: httpsLink(r.repository),
