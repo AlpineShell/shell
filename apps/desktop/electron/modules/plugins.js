@@ -30,9 +30,34 @@ let broadcast = null
 let disabledIds = null
 
 const capabilities = new Map()
+const changeListeners = new Set()
 
 function registerPluginCapability(channel, getter) {
   capabilities.set(channel, getter)
+}
+
+function unregisterPluginCapability(channel) {
+  capabilities.delete(channel)
+}
+
+function onPluginsChanged(listener) {
+  if (typeof listener === 'function') changeListeners.add(listener)
+  return () => changeListeners.delete(listener)
+}
+
+function notifyPluginsChanged() {
+  for (const listener of changeListeners) {
+    try {
+      listener()
+    } catch (e) {
+      console.error('[plugins] change listener error:', e && e.message)
+    }
+  }
+}
+
+function triggerReload() {
+  if (broadcast) broadcast('plugins/reload')
+  notifyPluginsChanged()
 }
 
 function getPluginsDir() {
@@ -163,7 +188,7 @@ function setEnabled(id, enabled) {
   if (enabled) disabled.delete(id)
   else disabled.add(id)
   writeDisabledIds()
-  if (broadcast) broadcast('plugins/reload')
+  triggerReload()
   return true
 }
 
@@ -180,7 +205,7 @@ module.exports = {
       return shell.openPath(getPluginsDir())
     },
     'plugins/reload': () => {
-      if (broadcast) broadcast('plugins/reload')
+      triggerReload()
       return true
     },
     'plugins/set-enabled': (_event, payload) => setEnabled(payload && payload.id, !!(payload && payload.enabled)),
@@ -192,12 +217,12 @@ module.exports = {
     'plugins/marketplace-install': (_event, payload) =>
       marketplace.install(payload, {
         pluginsDir: getPluginsDir(),
-        onChange: () => broadcast && broadcast('plugins/reload'),
+        onChange: () => triggerReload(),
       }),
     'plugins/marketplace-uninstall': (_event, id) =>
       marketplace.uninstall(id, {
         pluginsDir: getPluginsDir(),
-        onChange: () => broadcast && broadcast('plugins/reload'),
+        onChange: () => triggerReload(),
       }),
     'plugins/marketplace-open-web': (_event, id) => {
       if (typeof id !== 'string' || !SAFE_ID.test(id)) return false
@@ -218,5 +243,8 @@ module.exports = {
   getPresetPluginsDir,
   resolvePluginFile,
   registerPluginCapability,
+  unregisterPluginCapability,
+  onPluginsChanged,
+  listPlugins,
   mimeFor,
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { installDeepLink } from "../_lib/permissions";
+import { installDeepLink } from "../_lib/install";
 
 export function InstallButton({ id, version }: { id: string; version: string }) {
   return (

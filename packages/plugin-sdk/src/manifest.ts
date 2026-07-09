@@ -1,4 +1,3 @@
-import type { PluginPermission } from './constants'
 import type { PluginContributions } from './contributions'
 
 export interface PluginAuthor {
@@ -6,8 +5,6 @@ export interface PluginAuthor {
   url?: string
   email?: string
 }
-
-export type PermissionRationale = Partial<Record<PluginPermission, string>>
 
 export interface PluginScreenshot {
   src: string
@@ -23,7 +20,6 @@ export interface PluginMarketplaceMeta {
   screenshots?: PluginScreenshot[]
   category?: string
   keywords?: string[]
-  permissionRationale?: PermissionRationale
 }
 
 export interface PluginManifest {
@@ -42,8 +38,5 @@ export interface PluginManifest {
   renderer?: string
   main?: string
   contributes?: PluginContributions
-  permissions?: PluginPermission[]
-  optionalPermissions?: PluginPermission[]
-  network?: { connect?: string[] }
   marketplace?: PluginMarketplaceMeta
 }

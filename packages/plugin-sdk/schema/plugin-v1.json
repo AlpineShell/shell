@@ -5,20 +5,6 @@
   "type": "object",
   "required": ["id", "name", "version", "apiVersion"],
   "additionalProperties": true,
-  "definitions": {
-    "permission": {
-      "type": "string",
-      "enum": [
-        "storage", "clock", "theme",
-        "read:volume", "read:brightness", "read:media", "read:network", "read:bluetooth",
-        "read:battery", "read:apps", "read:windows", "read:system-info",
-        "net:fetch", "location:coarse", "notifications",
-        "control:volume", "control:brightness", "control:media", "control:wallpaper", "control:windows",
-        "control:power", "control:network", "control:bluetooth", "launch:apps",
-        "node"
-      ]
-    }
-  },
   "properties": {
     "$schema": { "type": "string" },
     "id": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$" },
@@ -39,12 +25,6 @@
     "renderer": { "type": "string" },
     "main": { "type": "string" },
     "contributes": { "type": "object" },
-    "permissions": { "type": "array", "items": { "$ref": "#/definitions/permission" } },
-    "optionalPermissions": { "type": "array", "items": { "$ref": "#/definitions/permission" } },
-    "network": {
-      "type": "object",
-      "properties": { "connect": { "type": "array", "items": { "type": "string", "format": "uri" } } }
-    },
     "marketplace": {
       "type": "object",
       "properties": {
@@ -61,8 +41,7 @@
           }
         },
         "category": { "type": "string", "enum": ["productivity", "system", "media", "developer", "social", "fun", "other"] },
-        "keywords": { "type": "array", "items": { "type": "string" } },
-        "permissionRationale": { "type": "object", "additionalProperties": { "type": "string" } }
+        "keywords": { "type": "array", "items": { "type": "string" } }
       }
     }
   }

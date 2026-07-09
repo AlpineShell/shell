@@ -1,4 +1,4 @@
-import { PLUGIN_ID_PATTERN, PLUGIN_PERMISSIONS, isSupportedApiVersion, type PluginPermission } from './constants'
+import { PLUGIN_ID_PATTERN, isSupportedApiVersion } from './constants'
 
 export const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
@@ -9,18 +9,12 @@ export interface ValidationIssue {
 }
 export type ValidationResult = { ok: true } | { ok: false; issues: ValidationIssue[] }
 
-const PERMISSION_SET = new Set<string>(PLUGIN_PERMISSIONS)
-
 export function isValidId(id: unknown): id is string {
   return typeof id === 'string' && PLUGIN_ID_PATTERN.test(id)
 }
 
 export function isSemver(v: unknown): v is string {
   return typeof v === 'string' && SEMVER_PATTERN.test(v)
-}
-
-export function isPermission(p: unknown): p is PluginPermission {
-  return typeof p === 'string' && PERMISSION_SET.has(p)
 }
 
 export function isHttpsOrigin(s: unknown): boolean {
@@ -62,19 +56,5 @@ export function validateManifestShape(raw: unknown): ValidationResult {
   if (!isSemver(m.version)) add('version', 'must be semver 2.0.0')
   if (!Number.isInteger(m.apiVersion)) add('apiVersion', 'must be an integer')
   else if (!isSupportedApiVersion(m.apiVersion as number)) add('apiVersion', 'unsupported api version')
-  for (const key of ['permissions', 'optionalPermissions'] as const) {
-    const v = m[key]
-    if (v == null) continue
-    if (!Array.isArray(v)) {
-      add(key, 'must be an array')
-      continue
-    }
-    for (const p of v) if (!isPermission(p)) add(key, `unknown permission '${String(p)}'`)
-  }
-  const connect = (m.network as { connect?: unknown })?.connect
-  if (connect != null) {
-    if (!Array.isArray(connect)) add('network.connect', 'must be an array')
-    else for (const o of connect) if (!isHttpsOrigin(o)) add('network.connect', `invalid https origin '${String(o)}'`)
-  }
   return issues.length ? { ok: false, issues } : { ok: true }
 }

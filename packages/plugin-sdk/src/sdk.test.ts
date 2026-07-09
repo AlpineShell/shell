@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
-  PLUGIN_PERMISSIONS,
-  PERMISSION_META,
   MARKETPLACE_CATEGORIES,
   satisfiesRange,
   isSupportedApiVersion,
@@ -61,13 +59,7 @@ describe('validators', () => {
 
 describe('schema/constants parity (anti-drift)', () => {
   const schema = JSON.parse(readFileSync(fileURLToPath(new URL('../schema/plugin-v1.json', import.meta.url)), 'utf8'))
-  it('permission enum equals PLUGIN_PERMISSIONS', () => {
-    expect(schema.definitions.permission.enum).toEqual([...PLUGIN_PERMISSIONS])
-  })
   it('category enum equals MARKETPLACE_CATEGORIES', () => {
     expect(schema.properties.marketplace.properties.category.enum).toEqual([...MARKETPLACE_CATEGORIES])
-  })
-  it('PERMISSION_META covers every permission', () => {
-    for (const p of PLUGIN_PERMISSIONS) expect(PERMISSION_META[p]).toBeTruthy()
   })
 })

@@ -50,7 +50,7 @@ From `@alpine/plugin-sdk/hooks` (renderer-only, ESM):
 |---|---|---|
 | `usePluginSetting(key, default)` | hook | Returns `[value, setValue]` for a setting private to your plugin. Optimistic; persists across restarts. |
 | `usePluginData(channel, initial)` | hook | Subscribes to a read-only host **data channel** and re-renders on every broadcast. |
-| `useShell()` | hook | Returns the capability-scoped shell object — only the methods your permissions grant. **Gated**: resolves to an empty object today; the host exposes no shell surface yet. |
+| `useShell()` | hook | The host shell object. **Gated**: resolves to an empty object today; the host exposes no shell surface yet. |
 | `useDarkText()` | hook | `true` when the topbar wants dark text (light background). |
 | `useTopbarBg()` | hook | The current topbar background color. |
 | `useTopbarTheme()` | hook | `{ dark, bg }` in one call. |

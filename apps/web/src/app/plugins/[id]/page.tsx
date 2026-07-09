@@ -6,7 +6,6 @@ import Footer from "../../components/Footer";
 import { Markdown } from "../../docs/_lib/Markdown";
 import { fetchPluginDetail } from "../_lib/catalog";
 import type { PluginDetail } from "../_lib/catalog";
-import { PermissionRow } from "../_components/PermissionRow";
 import { InstallButton } from "../_components/InstallButton";
 import { Screenshots } from "../_components/Screenshots";
 
@@ -20,43 +19,6 @@ export async function generateMetadata({
   return detail
     ? { title: `${detail.name} — Alpine Shell Plugins`, description: detail.shortDescription }
     : { title: "Plugin not found — Alpine Shell" };
-}
-
-function hasReadScope(permissions: string[]): boolean {
-  return permissions.some(
-    (p) => p.startsWith("read:") || p === "net:fetch" || p === "location:coarse",
-  );
-}
-
-function DataFlowNote({ detail }: { detail: PluginDetail }) {
-  const notes: React.ReactNode[] = [];
-  if (hasReadScope(detail.permissions) && detail.networkConnect.length > 0) {
-    notes.push(
-      <p key="flow" className="text-sm text-amber-200">
-        This plugin can send data it reads to:{" "}
-        {detail.networkConnect.map((host, i) => (
-          <span key={host}>
-            {i > 0 ? ", " : ""}
-            <span className="font-mono">{new URL(host).host}</span>
-          </span>
-        ))}
-        .
-      </p>,
-    );
-  }
-  if (detail.permissions.includes("node")) {
-    notes.push(
-      <p key="node" className="text-sm text-red-200">
-        Runs a background process (first-party plugins only).
-      </p>,
-    );
-  }
-  if (notes.length === 0) return null;
-  return (
-    <div className="mt-4 space-y-2 rounded-xl border border-white/10 bg-white/5 p-4">
-      {notes}
-    </div>
-  );
 }
 
 function ArrowLeftIcon() {
@@ -236,31 +198,6 @@ export default async function PluginDetailPage({ params }: PluginParams) {
                   <Markdown source={detail.readme} />
                 </section>
               )}
-
-              <section className="mt-12">
-                <h2 className="font-averia text-2xl">Permissions this plugin requests</h2>
-                {detail.permissions.length === 0 ? (
-                  <p className="mt-3 text-gray-400">
-                    This plugin requests no special permissions.
-                  </p>
-                ) : (
-                  <>
-                    <p className="mt-2 text-sm text-gray-500">
-                      Alpine Shell asks you to confirm these when you install.
-                    </p>
-                    <ul className="mt-4 space-y-3">
-                      {detail.permissions.map((token) => (
-                        <PermissionRow
-                          key={token}
-                          token={token}
-                          reason={detail.permissionReasons[token]}
-                        />
-                      ))}
-                    </ul>
-                    <DataFlowNote detail={detail} />
-                  </>
-                )}
-              </section>
             </div>
 
             <aside className="self-start lg:sticky lg:top-28">

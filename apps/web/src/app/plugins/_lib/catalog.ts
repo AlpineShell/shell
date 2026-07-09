@@ -32,7 +32,6 @@ export interface CatalogPlugin {
   category: string | null;
   iconUrl: string | null;
   author: PluginAuthor | null;
-  permissions: string[];
   keywords: string[];
   apiVersion: number | null;
   engines: { alpineShell?: string } | null;
@@ -55,8 +54,6 @@ export interface PluginDetail extends CatalogPlugin {
   homepage: string | null;
   repository: string | null;
   license: string | null;
-  permissionReasons: Record<string, string>;
-  networkConnect: string[];
   size: number | null;
   updatedAt: string | null;
 }
@@ -78,11 +75,6 @@ function normalizeAuthor(v: unknown): PluginAuthor | null {
     return { name, url: httpsLink((v as Record<string, unknown>).url) ?? undefined };
   }
   return null;
-}
-
-function normalizePermissions(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.filter((p): p is string => typeof p === "string");
 }
 
 function normalizeKeywords(v: unknown): string[] {
@@ -121,7 +113,6 @@ function normalizeEntry(raw: unknown): CatalogPlugin | null {
     category: str(r.category),
     iconUrl: iconField(r),
     author: normalizeAuthor(r.author),
-    permissions: normalizePermissions(r.permissions),
     keywords: normalizeKeywords(r.keywords),
     apiVersion: typeof r.apiVersion === "number" ? r.apiVersion : null,
     engines: normalizeEngines(r.engines),
@@ -155,28 +146,10 @@ function normalizeScreenshots(v: unknown, id: string): PluginScreenshot[] {
   return out;
 }
 
-function normalizeReasons(v: unknown): Record<string, string> {
-  if (!v || typeof v !== "object") return {};
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(v as Record<string, unknown>)) {
-    const reason = str(value);
-    if (reason) out[key] = reason;
-  }
-  return out;
-}
-
 function normalizeReadme(v: unknown): string | null {
   const s = str(v);
   if (!s) return null;
   return s.length > README_MAX_BYTES ? s.slice(0, README_MAX_BYTES) : s;
-}
-
-function normalizeConnect(v: unknown): string[] {
-  const connect = (v as Record<string, unknown> | null | undefined)?.connect;
-  if (!Array.isArray(connect)) return [];
-  return connect.filter(
-    (o): o is string => typeof o === "string" && o.startsWith("https://"),
-  );
 }
 
 function normalizeDetail(raw: unknown): PluginDetail | null {
@@ -190,8 +163,6 @@ function normalizeDetail(raw: unknown): PluginDetail | null {
     homepage: httpsLink(r.homepage),
     repository: httpsLink(r.repository),
     license: str(r.license),
-    permissionReasons: normalizeReasons(r.permissionReasons ?? r.permissionRationale),
-    networkConnect: normalizeConnect(r.network),
     size: typeof r.size === "number" ? r.size : null,
     updatedAt: str(r.updatedAt) ?? str(r.publishedAt),
   };

@@ -12,7 +12,7 @@ A custom plugin *is* its folder, so sharing one is just sharing that folder:
 
 That is the whole distribution story for custom plugins. No signing, no review, no marketplace entry — the folder is the package, and it installs by being dropped in.
 
-> **Custom plugins carry real security risk.** A dropped-in plugin runs in-process with the shell's full privileges — no sandbox and no runtime permission enforcement (Tier A). Installing one means running someone else's program with full access to your session, files and system. Only drop in a plugin whose source you've read or whose author you trust. When you share one, publish the source and state plainly what it does and which permissions it needs, so people can make that call before they install it.
+> **Custom plugins carry real security risk.** A dropped-in plugin runs in-process with the shell's full privileges — no sandbox (Tier A). Installing one means running someone else's program with full access to your session, files and system. Only drop in a plugin whose source you've read or whose author you trust. When you share one, publish the source and state plainly what it does, so people can make that call before they install it.
 
 ## The marketplace: official plugins only
 

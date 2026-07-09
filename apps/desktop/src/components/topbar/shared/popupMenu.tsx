@@ -79,14 +79,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         let anchor: ChromeAnchor = "center";
         let centerX = Math.round(center);
         if (center - half - SHOULDER < SCREEN_PAD) {
-            if (triggerRect.left <= EDGE_PAD + SHOULDER) {
-                anchor = "left";
-                centerX = Math.round(EDGE_PAD + half);
-            } else {
-                const maxLeft = Math.max(EDGE_PAD + SHOULDER, screenW - SCREEN_PAD - SHOULDER - bodyWidth);
-                const alignedLeft = Math.min(triggerRect.left, maxLeft);
-                centerX = Math.round(alignedLeft + half);
-            }
+            anchor = "left";
+            centerX = Math.round(EDGE_PAD + half);
         } else if (center + half + SHOULDER > screenW - SCREEN_PAD) {
             anchor = "right";
             centerX = Math.round(screenW - EDGE_PAD - half);

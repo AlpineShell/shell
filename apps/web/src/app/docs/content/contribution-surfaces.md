@@ -27,22 +27,6 @@ The topbar is a transparent 24px strip. A widget **cannot** overflow with a plai
 ]
 ```
 
-## `desktopWidgets`
-
-A resizable widget placed on the desktop wallpaper layer.
-
-| Field | Type | Notes |
-|---|---|---|
-| `defaultSize` | `{ w, h }` | Initial size in grid units. |
-| `minSize` | `{ w, h }` | Optional minimum size. |
-| `displayScope` | `"primary" \| "all"` | Optional. Which displays to render on. |
-
-```json
-"desktopWidgets": [
-  { "export": "Clock", "defaultSize": { "w": 4, "h": 2 }, "minSize": { "w": 2, "h": 1 } }
-]
-```
-
 ## `settingsPages`
 
 A page inside the shell's Settings window, namespaced to your plugin.
@@ -84,4 +68,4 @@ Declares a backend (`main`) entry point that runs its own Node process.
 |---|---|---|
 | `export` | string | The export the supervisor runs. |
 
-Backend modules are **gated**: a plugin's `main` is validated for containment but is never executed until the plugin is signed and shipped by the Alpine Shell team and the backend supervisor lands. Until then, treat backend modules as declaration-only. The `node` permission is likewise reserved for first-party plugins — see [Permissions & the security model](/docs/permissions-security).
+Backend modules are **gated**: a plugin's `main` is validated for containment but is never executed until the plugin is signed and shipped by the Alpine Shell team and the backend supervisor lands. Until then, treat backend modules as declaration-only.

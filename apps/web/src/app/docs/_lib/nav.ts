@@ -26,15 +26,10 @@ export const DOCS_NAV: DocEntry[] = [
     group: "Reference",
   },
   {
-    slug: "permissions-security",
-    title: "Permissions & the security model",
-    group: "Security",
-  },
-  {
     slug: "publishing",
     title: "Sharing your plugin",
     group: "Ship it",
   },
 ];
 
-export const DOCS_GROUPS = ["Start here", "Reference", "Security", "Ship it"];
+export const DOCS_GROUPS = ["Start here", "Reference", "Ship it"];

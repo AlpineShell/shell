@@ -360,9 +360,6 @@ declare global {
     license: string | null
     engines: { alpineShell?: string } | null
     contributes: Record<string, unknown[]>
-    permissions: string[]
-    optionalPermissions: string[]
-    network: { connect: string[] }
     marketplace: {
       displayName?: string
       logo?: string
@@ -371,7 +368,6 @@ declare global {
       screenshots?: { src: string; caption?: string; dark?: boolean }[]
       category?: string
       keywords?: string[]
-      permissionRationale?: Record<string, string>
     } | null
     preset: boolean
     legacy?: boolean
@@ -404,7 +400,6 @@ declare global {
     homepage: string | null
     repository: string | null
     screenshots: { src: string; caption?: string }[]
-    network: { connect: string[] }
   }
 
   interface MarketplaceIndex {

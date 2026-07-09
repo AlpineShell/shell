@@ -1,15 +1,15 @@
+// Backend for the Claude Code Usage plugin. Runs in an isolated Electron utilityProcess
+// (started by the shell only when this plugin is installed + enabled). It reads the local
+// Claude Code credentials, polls the Anthropic usage endpoint, and publishes the result on
+// the `claude-usage` channel that the plugin's topbar widget subscribes to.
+
 const os = require('os')
 const path = require('path')
 const fs = require('fs')
-const plugins = require('./plugins')
 
 const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const CREDENTIALS_FILE = path.join(os.homedir(), '.claude', '.credentials.json')
 const REFRESH_MS = 60 * 1000
-
-let broadcast = null
-let timer = null
-let current = emptyUsage()
 
 function emptyUsage() {
   return {
@@ -104,23 +104,21 @@ async function fetchUsage() {
   }
 }
 
-async function refresh() {
-  const next = await fetchUsage()
-  if (next) {
-    current = next
-    if (broadcast) broadcast('plugins/data', { channel: 'claude-usage', data: current })
-  }
-}
-
 module.exports = {
-  handlers: {
-    'claude-usage/get': () => current,
-  },
+  start(ctx) {
+    let timer = null
 
-  start(b) {
-    broadcast = b
-    plugins.registerPluginCapability('claude-usage', () => current)
+    async function refresh() {
+      const next = await fetchUsage()
+      if (next) ctx.publish('claude-usage', next)
+    }
+
     refresh()
     timer = setInterval(refresh, REFRESH_MS)
+
+    return () => {
+      if (timer) clearInterval(timer)
+      timer = null
+    }
   },
 }

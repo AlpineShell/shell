@@ -12,12 +12,6 @@ export interface TopbarWidgetContribution extends BaseContribution {
   displayScope?: DisplayScope
 }
 
-export interface DesktopWidgetContribution extends BaseContribution {
-  defaultSize: { w: number; h: number }
-  minSize?: { w: number; h: number }
-  displayScope?: DisplayScope
-}
-
 export interface SettingsPageContribution extends BaseContribution {
   label: string
   icon?: string
@@ -35,7 +29,6 @@ export interface BackendModuleContribution extends BaseContribution {}
 
 export interface PluginContributions {
   topbarWidgets?: TopbarWidgetContribution[]
-  desktopWidgets?: DesktopWidgetContribution[]
   settingsPages?: SettingsPageContribution[]
   launcherCommands?: LauncherCommandContribution[]
   backendModules?: BackendModuleContribution[]

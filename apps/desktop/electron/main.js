@@ -34,7 +34,7 @@ const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const plugins = require('./modules/plugins')
-const claudeUsage = require('./modules/claudeUsage')
+const pluginBackendHost = require('./pluginBackendHost')
 const displayConfig = require('./modules/displayConfig')
 const clockPrefs = require('./modules/clockPrefs')
 const bookmarks = require('./modules/bookmarks')
@@ -651,7 +651,7 @@ app.whenReady().then(async () => {
     }
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, plugins, claudeUsage)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, plugins, pluginBackendHost)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())

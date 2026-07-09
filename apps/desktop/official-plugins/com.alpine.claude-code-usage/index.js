@@ -58,7 +58,7 @@ function UsagePanel({ usage, dark }) {
   const children = rows.map((limit) => h(LimitRow, { key: limit.key || limit.label, limit, dark }))
   return h(
     'div',
-    { style: { padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '10px', minWidth: '212px' } },
+    { style: { padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '200px' } },
     children,
   )
 }

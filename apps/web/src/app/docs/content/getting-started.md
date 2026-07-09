@@ -15,7 +15,7 @@ There are exactly two ways a plugin gets onto a machine:
 
 **This guide is about writing a custom plugin** — the path anyone can use today. Only **official** plugins can be installed with one click; the marketplace is first-party only. To run a plugin you wrote, you drop its folder in (steps below). When you want to hand it to someone else, see [Sharing your plugin](/docs/publishing).
 
-> A custom plugin runs **in-process** with the shell's React runtime — full trust, no sandbox (*Tier A*). Only load plugins you wrote or reviewed. The security model is covered in [Permissions & the security model](/docs/permissions-security).
+> A custom plugin runs **in-process** with the shell's React runtime — full trust, no sandbox (*Tier A*). Only load plugins you wrote or reviewed.
 
 ## Build your first plugin
 
@@ -88,5 +88,4 @@ Every plugin can be switched on and off on the **Installed** tab. The disabled s
 
 - Learn every manifest field in the [manifest reference](/docs/manifest-reference).
 - See what your plugin can contribute in [Contribution surfaces](/docs/contribution-surfaces).
-- Understand what you can ask for in [Permissions & the security model](/docs/permissions-security).
 - Hand it to other people in [Sharing your plugin](/docs/publishing).

@@ -15,15 +15,10 @@
   "contributes": {
     "topbarWidgets": [{ "export": "TopbarWeather", "slot": "right", "order": 20 }]
   },
-  "permissions": ["net:fetch"],
-  "network": { "connect": ["https://api.open-meteo.com"] },
   "marketplace": {
     "shortDescription": "Live weather in your topbar.",
     "readme": "README.md",
     "category": "productivity",
-    "keywords": ["weather", "forecast", "topbar"],
-    "permissionRationale": {
-      "net:fetch": "To fetch the current temperature from Open-Meteo (api.open-meteo.com only)."
-    }
+    "keywords": ["weather", "forecast", "topbar"]
   }
 }

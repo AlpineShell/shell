@@ -119,10 +119,6 @@ async function detail(id) {
           })
           .filter(Boolean)
       : [],
-    network:
-      json.network && typeof json.network === 'object' && Array.isArray(json.network.connect)
-        ? { connect: json.network.connect.filter((h) => typeof h === 'string') }
-        : { connect: [] },
   }
 }
 

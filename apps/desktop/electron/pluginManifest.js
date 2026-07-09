@@ -2,17 +2,14 @@ const fs = require('fs')
 const path = require('path')
 const {
   PLUGIN_ID_PATTERN,
-  PLUGIN_PERMISSIONS,
   isSupportedApiVersion,
   satisfiesRange,
   MARKETPLACE_CATEGORIES,
-  isHttpsOrigin,
   isSemver,
 } = require('@alpine/plugin-sdk')
 
-const PERMISSION_SET = new Set(PLUGIN_PERMISSIONS)
 const CATEGORY_SET = new Set(MARKETPLACE_CATEGORIES)
-const CONTRIBUTION_KEYS = ['topbarWidgets', 'desktopWidgets', 'settingsPages', 'launcherCommands', 'backendModules']
+const CONTRIBUTION_KEYS = ['topbarWidgets', 'settingsPages', 'launcherCommands', 'backendModules']
 
 function arr(value) {
   return Array.isArray(value) ? value : []
@@ -72,7 +69,7 @@ function validateContributions(raw, apiVersion, push) {
   return out
 }
 
-function validateMarketplace(raw, realBase, permissions, optionalPermissions, push) {
+function validateMarketplace(raw, realBase, push) {
   if (!raw || typeof raw !== 'object') return null
   const out = {}
   if (typeof raw.displayName === 'string') out.displayName = raw.displayName
@@ -102,15 +99,6 @@ function validateMarketplace(raw, realBase, permissions, optionalPermissions, pu
     else push(`marketplace.category: unknown '${raw.category}'`)
   }
   if (Array.isArray(raw.keywords)) out.keywords = raw.keywords.filter((k) => typeof k === 'string')
-  if (raw.permissionRationale && typeof raw.permissionRationale === 'object') {
-    const declared = new Set([...permissions, ...optionalPermissions])
-    const rationale = {}
-    for (const [perm, text] of Object.entries(raw.permissionRationale)) {
-      if (!declared.has(perm)) push(`marketplace.permissionRationale: '${perm}' is not a declared permission`)
-      else if (typeof text === 'string') rationale[perm] = text
-    }
-    if (Object.keys(rationale).length) out.permissionRationale = rationale
-  }
   return out
 }
 
@@ -133,9 +121,6 @@ function legacyRecord(realBase, raw, folderName, preset) {
     license: null,
     engines: null,
     contributes: {},
-    permissions: [],
-    optionalPermissions: [],
-    network: { connect: [] },
     marketplace: null,
     preset: !!preset,
     legacy: true,
@@ -198,28 +183,8 @@ function parseManifest(pluginDir, folderName, options) {
     else push('icon: missing/escapes plugin dir')
   }
 
-  const permissions = arr(raw.permissions).filter((p) => {
-    const ok = PERMISSION_SET.has(p)
-    if (!ok) push(`permissions: unknown '${p}'`)
-    return ok
-  })
-  const optionalPermissions = arr(raw.optionalPermissions).filter((p) => {
-    const ok = PERMISSION_SET.has(p)
-    if (!ok) push(`optionalPermissions: unknown '${p}'`)
-    return ok
-  })
-
-  const connect = arr(raw.network && raw.network.connect).filter((o) => {
-    const ok = isHttpsOrigin(o)
-    if (!ok) push(`network.connect: invalid origin '${o}'`)
-    return ok
-  })
-  const wantsFetch = permissions.includes('net:fetch') || optionalPermissions.includes('net:fetch')
-  if (wantsFetch && connect.length === 0) push('net:fetch requires at least one network.connect origin')
-  if (!wantsFetch && connect.length > 0) push('network.connect present without net:fetch permission')
-
   const contributes = validateContributions(raw.contributes, raw.apiVersion, push)
-  const marketplace = validateMarketplace(raw.marketplace, realBase, permissions, optionalPermissions, push)
+  const marketplace = validateMarketplace(raw.marketplace, realBase, push)
 
   const record = {
     id,
@@ -238,9 +203,6 @@ function parseManifest(pluginDir, folderName, options) {
     license: raw.license || null,
     engines: raw.engines || null,
     contributes,
-    permissions,
-    optionalPermissions,
-    network: { connect },
     marketplace,
     preset,
     legacy: false,
