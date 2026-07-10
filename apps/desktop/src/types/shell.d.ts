@@ -179,8 +179,6 @@ declare global {
 
   interface ScreenshotShowPayload {
     image: string
-    width: number
-    height: number
   }
   interface BatteryStatus {
     percent: number | null
@@ -591,6 +589,7 @@ declare global {
     screenshot: {
       onShow: (callback: (data: ScreenshotShowPayload) => void) => void
       onHide: (callback: () => void) => void
+      ready: () => Promise<void>
       regionSelected: (region: { x: number; y: number; width: number; height: number }) => Promise<void>
       cancel: () => Promise<void>
     }

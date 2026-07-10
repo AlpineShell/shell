@@ -4,21 +4,39 @@ const fs = require('fs')
 
 let overlayWindow = null
 let overlayWindowFactory = null
-let overlayReady = null
+let overlayLoaded = null
+let rendererReady = null
+let rendererReadyResolve = null
 let capturedImage = null
 let capturedDisplay = null
 let active = false
+let showInFlight = false
+let cancelRequested = false
+
+function armRendererReady() {
+  rendererReady = new Promise((resolve) => {
+    rendererReadyResolve = resolve
+  })
+}
 
 function ensureOverlayWindow() {
   if (overlayWindow && !overlayWindow.isDestroyed()) return
   if (!overlayWindowFactory) return
+  armRendererReady()
   overlayWindow = overlayWindowFactory()
-  overlayReady = new Promise((resolve) => {
+  overlayLoaded = new Promise((resolve) => {
     overlayWindow.webContents.once('did-finish-load', () => resolve())
+  })
+  overlayWindow.webContents.on('render-process-gone', () => armRendererReady())
+  overlayWindow.webContents.on('did-start-loading', () => armRendererReady())
+  overlayWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.type === 'keyDown' && input.key === 'Escape') hideOverlay()
   })
   overlayWindow.on('closed', () => {
     overlayWindow = null
-    overlayReady = null
+    overlayLoaded = null
+    rendererReady = null
+    rendererReadyResolve = null
     active = false
   })
 }
@@ -30,49 +48,93 @@ function getScreenshotsFolder() {
   return folder
 }
 
+function resolvesWithinMs(promise, ms) {
+  return Promise.race([
+    promise.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), ms)),
+  ])
+}
+
+function parkOverlay() {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return
+  overlayWindow.setIgnoreMouseEvents(true)
+  overlayWindow.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
+  overlayWindow.hide()
+}
+
 async function showOverlay() {
-  if (active) return
-  ensureOverlayWindow()
-  if (!overlayWindow || overlayWindow.isDestroyed()) return
+  if (active || showInFlight) return
+  showInFlight = true
+  cancelRequested = false
+  try {
+    ensureOverlayWindow()
+    if (!overlayWindow || overlayWindow.isDestroyed()) return
 
-  const cursor = screen.getCursorScreenPoint()
-  const display = screen.getDisplayNearestPoint(cursor)
-  const { width, height } = display.bounds
-  const sf = display.scaleFactor || 1
-  const pw = Math.round(width * sf)
-  const ph = Math.round(height * sf)
+    const cursor = screen.getCursorScreenPoint()
+    const display = screen.getDisplayNearestPoint(cursor)
+    const { width, height } = display.bounds
+    const sf = display.scaleFactor || 1
+    const pw = Math.round(width * sf)
+    const ph = Math.round(height * sf)
 
-  const sources = await desktopCapturer.getSources({
-    types: ['screen'],
-    thumbnailSize: { width: pw, height: ph },
-  })
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: pw, height: ph },
+    })
 
-  const source = sources.find(s => s.display_id === String(display.id)) || sources[0]
-  if (!source) return
+    const source = sources.find(s => s.display_id === String(display.id)) || sources[0]
+    if (!source || source.thumbnail.isEmpty()) {
+      console.error('[screenshot] No usable screen source; aborting')
+      return
+    }
 
-  await overlayReady
-  if (!overlayWindow || overlayWindow.isDestroyed()) return
+    const ready = await resolvesWithinMs(Promise.all([overlayLoaded, rendererReady]), 3000)
+    if (!ready) {
+      console.error('[screenshot] Overlay renderer not ready within 3s; aborting')
+      parkOverlay()
+      return
+    }
+    if (cancelRequested) {
+      parkOverlay()
+      return
+    }
+    if (!overlayWindow || overlayWindow.isDestroyed()) return
 
-  active = true
-  capturedDisplay = display
-  capturedImage = source.thumbnail
+    active = true
+    capturedDisplay = display
+    capturedImage = source.thumbnail
 
-  const { x, y } = display.bounds
-  overlayWindow.setBounds({ x, y, width, height })
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver')
-  overlayWindow.show()
-  overlayWindow.focus()
-
-  overlayWindow.webContents.send('screenshot/show', { width, height })
+    const { x, y } = display.bounds
+    overlayWindow.webContents.send('screenshot/show', {
+      image: `data:image/jpeg;base64,${source.thumbnail.toJPEG(90).toString('base64')}`,
+    })
+    overlayWindow.setIgnoreMouseEvents(false)
+    overlayWindow.setBounds({ x, y, width, height })
+    overlayWindow.setAlwaysOnTop(true, 'screen-saver')
+    overlayWindow.show()
+    overlayWindow.focus()
+  } catch (err) {
+    console.error('[screenshot] Failed to show overlay:', err)
+    active = false
+    capturedImage = null
+    capturedDisplay = null
+    parkOverlay()
+  } finally {
+    showInFlight = false
+  }
 }
 
 function hideOverlay() {
+  if (showInFlight && !active) {
+    cancelRequested = true
+    return true
+  }
   if (!active || !overlayWindow || overlayWindow.isDestroyed()) return false
   active = false
   capturedImage = null
   capturedDisplay = null
   overlayWindow.webContents.send('screenshot/hide')
-  overlayWindow.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
+  parkOverlay()
   return true
 }
 
@@ -96,22 +158,32 @@ function cropAndSave(region) {
   clipboard.writeImage(cropped)
 
   console.log(`[screenshot] Saved: ${filepath}`)
-  hideOverlay()
 }
 
 module.exports = {
   handlers: {
     'screenshot/region-selected': (_event, region) => {
-      cropAndSave(region)
+      try {
+        cropAndSave(region)
+      } catch (err) {
+        console.error('[screenshot] Failed to save:', err)
+      } finally {
+        hideOverlay()
+      }
     },
     'screenshot/cancel': () => {
       hideOverlay()
+    },
+    'screenshot/overlay-ready': () => {
+      if (rendererReadyResolve) rendererReadyResolve()
     },
   },
 
   setOverlayWindowFactory(factory) {
     overlayWindowFactory = factory
   },
+
+  prewarmOverlay: ensureOverlayWindow,
 
   showOverlay,
   hideOverlay,

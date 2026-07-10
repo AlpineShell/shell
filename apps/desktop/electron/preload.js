@@ -130,6 +130,7 @@ contextBridge.exposeInMainWorld('screenshot', {
   onHide: (callback) => {
     ipcRenderer.on('screenshot/hide', () => callback())
   },
+  ready: () => ipcRenderer.invoke('screenshot/overlay-ready'),
   regionSelected: (region) => ipcRenderer.invoke('screenshot/region-selected', region),
   cancel: () => ipcRenderer.invoke('screenshot/cancel'),
 })
