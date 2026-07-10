@@ -33,8 +33,7 @@ S3-compatible API. Set these before running a release:
 - `STORAGE_BUCKET`: the bucket name (`alpine-shell`).
 - `STORAGE_FORCE_PATH_STYLE`: set to `true` for MinIO-style path addressing.
 
-See `docs/STORAGE.md` for how to obtain these. The legacy `R2_*` vars are used only by the
-one-time R2 dual-publish that migrates installs still checking R2.
+See `docs/STORAGE.md` for how to obtain these.
 
 ## Release Steps
 
@@ -76,8 +75,6 @@ Add these repository secrets first (GitHub repo -> Settings -> Secrets and varia
 - `STORAGE_SECRET_ACCESS_KEY`
 - `STORAGE_BUCKET`
 - `STORAGE_FORCE_PATH_STYLE`
-
-The `R2_*` secrets are only needed while `DUAL_PUBLISH_R2` migrates installs still checking R2.
 
 The job uses `windows-latest` because NSIS must build on Windows. Releasing on a published Release —
 rather than on every push to `main` — keeps each version explicit and avoids pushing an update to
@@ -125,7 +122,7 @@ computes its SHA-256, signs the digest with Ed25519, uploads the immutable bundl
 
 ### Required environment for plugin publishing
 
-- Storage credentials — the `STORAGE_*` variables (or legacy `R2_*`); see `docs/STORAGE.md`.
+- Storage credentials: the `STORAGE_*` variables; see `docs/STORAGE.md`.
 - `ALPINE_PLUGIN_SIGNING_KEY` — base64 of a PKCS8 PEM Ed25519 **private** key. If unset, the script
   warns and publishes **unsigned** (fine for first-party curated bundles during bring-up, but the
   desktop install path enforces the signature, so production bundles must be signed).
@@ -143,12 +140,10 @@ install will fail signature verification.
 
 ## Storage: Railway/MinIO
 
-Railway/MinIO is the store now. The upload code (`scripts/publish.js` for installers,
+Railway/MinIO is the store. The upload code (`scripts/publish.js` for installers,
 `scripts/publishPlugin.js` for plugins) sources its S3 client from the shared `scripts/storage.js`
-factory, which reads the primary `STORAGE_*` env vars and falls back to the legacy `R2_*` vars.
-The `STORAGE_*` set is the primary configuration; the `R2_*` vars are only for the one-time R2
-dual-publish that migrates installs still checking R2. See `docs/STORAGE.md` for the exact
-provisioning steps and env mapping.
+factory, which reads the `STORAGE_*` env vars. See `docs/STORAGE.md` for the exact provisioning
+steps and env mapping.
 
 ## Code Signing Note
 
