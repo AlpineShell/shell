@@ -33,22 +33,100 @@ function status(label, msg, color = c.cyan) {
   process.stdout.write(`${c.dim}[${color}${label}${c.reset}${c.dim}]${c.reset} ${msg}\n`)
 }
 
-function spinner(label, color = c.cyan) {
-  let i = 0
-  const id = setInterval(() => {
-    process.stdout.write(`\r${c.dim}[${color}${SPINNER[i]}${c.reset}${c.dim}]${c.reset} ${label}`)
-    i = (i + 1) % SPINNER.length
-  }, 80)
-  return {
-    succeed: (msg) => {
-      clearInterval(id)
-      process.stdout.write(`\r${c.dim}[${c.green}✓${c.reset}${c.dim}]${c.reset} ${msg || label}\n`)
+let activeGroup = null
+
+function stepGroup(title) {
+  const interactive = Boolean(process.stdout.isTTY)
+  const start = Date.now()
+  const tasks = []
+  let frame = 0
+  let lines = 0
+  let closed = false
+
+  const paint = () => {
+    if (!interactive || closed) return
+    if (lines) process.stdout.write(`\x1b[${lines}A`)
+    let out = `${c.cyan}${c.bold}❯${c.reset} ${c.bold}${title}${c.reset}\x1b[K\n`
+    for (const t of tasks) {
+      const icon =
+        t.state === 'run' ? `${c.cyan}${SPINNER[frame]}${c.reset}` :
+        t.state === 'ok' ? `${c.green}✓${c.reset}` :
+        `${c.red}✗${c.reset}`
+      const label = t.state === 'ok' ? `${c.dim}${t.label}${c.reset}` : t.label
+      const detail = t.detail ? ` ${c.dim}${t.detail}${c.reset}` : ''
+      out += `  ${icon} ${label}${detail}\x1b[K\n`
+    }
+    process.stdout.write(out)
+    lines = 1 + tasks.length
+  }
+
+  const elapsed = () => `${c.dim}(${((Date.now() - start) / 1000).toFixed(1)}s)${c.reset}`
+
+  const finish = (icon, summary) => {
+    closed = true
+    if (timer) clearInterval(timer)
+    activeGroup = null
+    if (interactive) {
+      if (lines) process.stdout.write(`\x1b[${lines}A`)
+      process.stdout.write(`${c.dim}[${icon}${c.dim}]${c.reset} ${summary} ${elapsed()}\x1b[K\n\x1b[J`)
+    } else {
+      process.stdout.write(`${c.dim}[${icon}${c.dim}]${c.reset} ${summary} ${elapsed()}\n`)
+    }
+  }
+
+  const api = {
+    task(label) {
+      const t = { label, state: 'run', detail: '' }
+      tasks.push(t)
+      paint()
+      const settle = (state, detail) => {
+        t.state = state
+        if (detail) t.detail = detail
+        if (interactive) {
+          paint()
+        } else {
+          const icon = state === 'ok' ? `${c.green}✓${c.reset}` : `${c.red}✗${c.reset}`
+          process.stdout.write(`  ${icon} ${t.label}${t.detail ? ` ${c.dim}${t.detail}${c.reset}` : ''}\n`)
+        }
+      }
+      return {
+        done: (detail) => settle('ok', detail),
+        fail: (detail) => settle('fail', detail),
+      }
     },
-    fail: (msg) => {
-      clearInterval(id)
-      process.stdout.write(`\r${c.dim}[${c.red}✗${c.reset}${c.dim}]${c.reset} ${msg || label}\n`)
+    collapse(summary) {
+      finish(`${c.green}✓${c.reset}`, summary || title)
+    },
+    fail(summary) {
+      closed = true
+      if (timer) clearInterval(timer)
+      activeGroup = null
+      process.stdout.write(`${c.dim}[${c.red}✗${c.reset}${c.dim}]${c.reset} ${summary || title} ${elapsed()}\n`)
+    },
+    abort() {
+      closed = true
+      if (timer) clearInterval(timer)
+      activeGroup = null
     },
   }
+
+  const timer = interactive ? setInterval(() => { frame = (frame + 1) % SPINNER.length; paint() }, 80) : null
+  if (interactive) paint()
+  else process.stdout.write(`${c.cyan}${c.bold}❯${c.reset} ${c.bold}${title}${c.reset}\n`)
+  activeGroup = api
+  return api
+}
+
+function captureConsoleLog(fn) {
+  const captured = []
+  const original = console.log
+  console.log = (...args) => captured.push(args.join(' '))
+  try {
+    fn()
+  } finally {
+    console.log = original
+  }
+  return captured
 }
 
 function killImage(image) {
@@ -149,10 +227,34 @@ function waitForPort(port) {
   })
 }
 
+function spawnVite() {
+  const viteBin = path.join(projectRoot, 'node_modules', 'vite', 'bin', 'vite.js')
+  if (fs.existsSync(viteBin)) {
+    return spawn(process.execPath, [viteBin], { cwd: projectRoot, stdio: ['ignore', 'pipe', 'pipe'] })
+  }
+  return spawn('npm', ['run', 'dev'], { cwd: projectRoot, shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
+}
+
+const VITE_BANNER_NOISE = /VITE|ready in|Local:|Network:|plugin-react/
+const ELECTRON_STDERR_NOISE = /DevTools listening|disk_cache|gpu_disk_cache|Unable to move the cache|Gpu Cache Creation failed|Autofill\.enable|CoInitialize|SharedImageManager|dxgi/i
+
 let viteProc = null
 let electronProc = null
 let exiting = false
 let userShell = null
+let viteLive = false
+const viteBuffer = []
+
+function writeViteLine(line, isError) {
+  const tag = `${c.dim}[${isError ? c.red : c.magenta}vite${c.reset}${c.dim}]${c.reset}`
+  const formatted = `${tag} ${line}\n`
+  if (viteLive) process.stdout.write(formatted)
+  else viteBuffer.push(formatted)
+}
+
+function flushViteBuffer() {
+  while (viteBuffer.length) process.stdout.write(viteBuffer.shift())
+}
 
 function syncWrite(text) {
   try { fs.writeSync(1, text) } catch {}
@@ -161,6 +263,8 @@ function syncWrite(text) {
 function cleanup() {
   if (exiting) return
   exiting = true
+
+  if (activeGroup) activeGroup.abort()
 
   restoreShell()
 
@@ -201,65 +305,82 @@ process.on('exit', () => {
   if (!exiting) restoreShell()
 })
 
-function spawnVite() {
-  const viteBin = path.join(projectRoot, 'node_modules', 'vite', 'bin', 'vite.js')
-  if (fs.existsSync(viteBin)) {
-    return spawn(process.execPath, [viteBin], { cwd: projectRoot, stdio: ['ignore', 'pipe', 'pipe'] })
-  }
-  return spawn('npm', ['run', 'dev'], { cwd: projectRoot, shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
-}
-
-const VITE_BANNER_NOISE = /VITE|ready in|Local:|Network:|plugin-react/
-const ELECTRON_STDERR_NOISE = /DevTools listening|disk_cache|gpu_disk_cache|Unable to move the cache|Gpu Cache Creation failed|Autofill\.enable|CoInitialize|SharedImageManager|dxgi/i
-
-function seconds(since) {
-  return `${c.dim}(${((Date.now() - since) / 1000).toFixed(1)}s)${c.reset}`
-}
-
 async function main() {
   console.clear()
   process.stdout.write(`${c.cyan}${c.bold}${ALPINE}${c.reset}`)
   process.stdout.write(`${c.gray}  ─── Windows Desktop Shell ───${c.reset}\n\n`)
 
-  try { require('./generateGoogleCredentials').run() } catch (e) { status('credentials', `skipped (${e.message})`, c.yellow) }
+  const prep = stepGroup('Preparing environment')
 
+  const credTask = prep.task('Google credentials')
+  try {
+    const logged = captureConsoleLog(() => require('./generateGoogleCredentials').run())
+    credTask.done((logged[0] || '').replace(/^\[credentials\]\s*/, ''))
+  } catch (e) {
+    credTask.fail(`skipped — ${e.message}`)
+  }
+
+  const shellTask = prep.task('Detecting registered shell')
   userShell = await getRegisteredShell()
+  shellTask.done(userShell ? 'Alpine Shell' : 'explorer.exe')
 
-  const portSpin = spinner('Freeing port 5173', c.yellow)
+  const portTask = prep.task('Freeing port 5173')
   await freePort(5173)
-  portSpin.succeed('Port 5173 free')
+  portTask.done()
 
-  const viteStart = Date.now()
-  const viteSpin = spinner('Starting frontend — current shell keeps running', c.magenta)
+  prep.collapse('Environment ready')
+
+  const frontend = stepGroup('Starting frontend — current shell keeps running')
+  const viteTask = frontend.task('Vite dev server')
+
   viteProc = spawnVite()
   viteProc.stdout.on('data', (data) => {
     if (exiting) return
     const lines = data.toString().split('\n').filter((l) => l.trim() && !VITE_BANNER_NOISE.test(l))
-    for (const line of lines) {
-      process.stdout.write(`${c.dim}[${c.magenta}vite${c.reset}${c.dim}]${c.reset} ${line.trim()}\n`)
-    }
+    for (const line of lines) writeViteLine(line.trim(), false)
   })
   viteProc.stderr.on('data', (data) => {
     if (exiting) return
-    const text = data.toString().trim()
-    if (text) process.stdout.write(`${c.dim}[${c.red}vite${c.reset}${c.dim}]${c.reset} ${text}\n`)
+    const lines = data.toString().split('\n').filter((l) => l.trim())
+    for (const line of lines) writeViteLine(line.trim(), true)
+  })
+  viteProc.on('close', (code) => {
+    if (exiting) return
+    if (!viteLive) {
+      viteTask.fail(`exited with code ${code}`)
+      frontend.fail('Frontend failed to start')
+      flushViteBuffer()
+      cleanup()
+    }
   })
 
   await waitForPort(5173)
-  viteSpin.succeed(`Frontend ready on http://localhost:5173 ${seconds(viteStart)}`)
+  if (exiting) return
+  viteTask.done('http://localhost:5173')
+  frontend.collapse('Frontend ready — http://localhost:5173')
 
-  const swapStart = Date.now()
-  const swapSpin = spinner('Swapping shell', c.blue)
+  const swap = stepGroup('Swapping shell')
+  if (userShell) {
+    const alpineTask = swap.task('Stopping Alpine Shell')
+    await killImage('Alpine Shell.exe')
+    alpineTask.done()
+  }
+  const explorerTask = swap.task('Stopping explorer.exe')
   await killImage('explorer.exe')
-  await killImage('Alpine Shell.exe')
+  explorerTask.done()
+
+  const electronTask = swap.task('Starting Electron backend')
   electronProc = spawn(electronPath, ['.'], {
     cwd: projectRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: false,
   })
-  swapSpin.succeed(`Shell swapped to dev (${userShell ? 'Alpine Shell' : 'explorer.exe'} stopped) ${seconds(swapStart)}`)
+  electronTask.done()
+  swap.collapse('Shell swapped to dev')
 
   console.log(`\n${c.gray}  ─── Logs ───${c.reset}\n`)
+  viteLive = true
+  flushViteBuffer()
 
   electronProc.stdout.on('data', (data) => {
     if (exiting) return
@@ -290,6 +411,7 @@ async function main() {
 }
 
 main().catch((err) => {
+  if (activeGroup) activeGroup.abort()
   process.stdout.write(`\n${c.red}Fatal error: ${err.message}${c.reset}\n`)
   cleanup()
 })
