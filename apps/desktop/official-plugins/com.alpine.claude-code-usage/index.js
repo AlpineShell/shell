@@ -52,12 +52,47 @@ function UsagePanel({ usage, dark }) {
   `
 }
 
+const SWEEP_WIDTH = 44
+const SWEEP_KEYFRAMES =
+  '@keyframes claude-usage-sweep{0%{transform:translateX(-' +
+  (SWEEP_WIDTH + 4) +
+  'px)}100%{transform:translateX(' +
+  (BAR_WIDTH + 4) +
+  'px)}}'
+
 export default function UsageBar() {
   const dark = useDarkText()
   const usage = usePluginData('claude-usage', null)
   const base = dark ? '0,0,0' : '255,255,255'
+  const loading = !usage || !usage.ok
   const pct = usage ? usage.sessionPercent : 0
   const ratio = Math.max(0, Math.min(1, pct / 100))
+
+  const fill = loading
+    ? html`
+        <div
+          style=${{
+            width: SWEEP_WIDTH + 'px',
+            height: '100%',
+            borderRadius: '999px',
+            background: `rgba(${base},${dark ? 0.4 : 0.5})`,
+            animation: 'claude-usage-sweep 1.4s ease-in-out infinite',
+          }}
+        >
+          <style>${SWEEP_KEYFRAMES}</style>
+        </div>
+      `
+    : html`
+        <div
+          style=${{
+            width: ratio * 100 + '%',
+            height: '100%',
+            borderRadius: '999px',
+            background: fillColor(pct, dark),
+            transition: 'width 400ms ease, background 300ms ease',
+          }}
+        />
+      `
 
   const trigger = html`
     <div style=${{ display: 'flex', alignItems: 'center', padding: '0 8px 0 2px', height: '100%' }}>
@@ -70,19 +105,11 @@ export default function UsageBar() {
           overflow: 'hidden',
         }}
       >
-        <div
-          style=${{
-            width: ratio * 100 + '%',
-            height: '100%',
-            borderRadius: '999px',
-            background: fillColor(pct, dark),
-            transition: 'width 400ms ease, background 300ms ease',
-          }}
-        />
+        ${fill}
       </div>
     </div>
   `
 
-  if (!usage || !usage.ok) return trigger
+  if (loading) return trigger
   return html`<${PopupMenu} trigger=${trigger}><${UsagePanel} usage=${usage} dark=${dark} /><//>`
 }
