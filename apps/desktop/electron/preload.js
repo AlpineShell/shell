@@ -151,6 +151,7 @@ contextBridge.exposeInMainWorld('launcher', {
   index: () => ipcRenderer.invoke('launcher/index'),
   show: () => ipcRenderer.invoke('launcher/show'),
   hide: () => ipcRenderer.invoke('launcher/hide'),
+  reportPanelBottom: (bottom) => ipcRenderer.invoke('launcher/panel-bottom', bottom),
   launch: (id) => ipcRenderer.invoke('launcher/launch', id),
   launchAdmin: (id) => ipcRenderer.invoke('launcher/launch-admin', id),
   uninstall: (id) => ipcRenderer.invoke('launcher/uninstall', id),

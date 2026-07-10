@@ -559,6 +559,7 @@ declare global {
       index: () => Promise<LauncherItem[]>
       show: () => Promise<void>
       hide: () => Promise<void>
+      reportPanelBottom: (bottom: number) => Promise<void>
       launch: (id: number) => Promise<{ success: boolean }>
       launchAdmin: (id: number) => Promise<{ success: boolean }>
       uninstall: (id: number) => Promise<{ ok: boolean; mode: 'store' | 'desktop' | 'settings' | 'none' }>
