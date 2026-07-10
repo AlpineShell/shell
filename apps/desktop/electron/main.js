@@ -137,6 +137,7 @@ function loadAppURL(win, url) {
 }
 
 const TOP_BAR_HEIGHT = 24
+const RAISED_REGION_PAD = 60
 
 const CURSOR_POLL_FAST_MS = 50
 const CURSOR_POLL_SLOW_MS = 150
@@ -317,6 +318,19 @@ function createTopBarWindow(display) {
     state.bounds = win.getBounds()
   }
 
+  win.setRaisedBounds = (bottom) => {
+    if (win.isDestroyed()) return
+    const db = screen.getDisplayMatching(win.getBounds()).bounds
+    const height = Math.min(db.height, Math.max(TOP_BAR_HEIGHT, Math.ceil(bottom) + RAISED_REGION_PAD))
+    win.setBounds({ x: db.x, y: db.y, width: db.width, height })
+  }
+
+  win.restoreFullBounds = () => {
+    if (win.isDestroyed()) return
+    const db = screen.getDisplayMatching(win.getBounds()).bounds
+    win.setBounds({ x: db.x, y: db.y, width: db.width, height: db.height })
+  }
+
   win.restorePassiveTopBar = () => {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
@@ -324,6 +338,7 @@ function createTopBarWindow(display) {
     clearCloseGrace(state)
     state.activeRegion = null
     win.setAlwaysOnTop(false)
+    win.restoreFullBounds()
     state.ignoring = true
     win.setIgnoreMouseEvents(true)
     evaluateTopBarInteraction(win, state)
@@ -339,11 +354,13 @@ function createTopBarWindow(display) {
     if (event.sender !== win.webContents) return
     if (region) {
       state.activeRegion = region
+      win.setRaisedBounds(region.bottom)
       win.setAlwaysOnTop(true, 'screen-saver')
     } else {
       clearCloseGrace(state)
       state.activeRegion = null
       win.setAlwaysOnTop(false)
+      win.restoreFullBounds()
     }
     evaluateTopBarInteraction(win, state)
   }

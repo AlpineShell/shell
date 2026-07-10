@@ -460,6 +460,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       anchor: "center",
       contentEl: panel,
     })
+    window.launcher.reportPanelBottom(BAR_BOTTOM + h)
   }
 
   useLayoutEffect(() => {

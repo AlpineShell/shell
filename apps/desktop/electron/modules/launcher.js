@@ -29,6 +29,12 @@ let hideTimeoutTopBar = null
 let lastUserForeground = 0
 let switcherCloser = null
 let emojiCaptureControl = null
+const lastPanelBottom = new Map()
+
+function applyPanelBounds(topBar, displayId) {
+  const bottom = lastPanelBottom.get(displayId)
+  if (bottom && typeof topBar.setRaisedBounds === 'function') topBar.setRaisedBounds(bottom)
+}
 
 function setEmojiCapture(active, hwnd) {
   if (emojiCaptureControl) {
@@ -379,6 +385,7 @@ function showLauncher(displayId, mode) {
   topBar.webContents.send('topbar/close-menus')
   topBar.setFocusable(true)
   topBar.setIgnoreMouseEvents(false)
+  applyPanelBounds(topBar, displayId)
   topBar.setAlwaysOnTop(true, 'screen-saver')
 
   topBar.webContents.send('launcher/show', { displayId, mode: mode || 'apps' })
@@ -432,6 +439,7 @@ function showEmoji() {
 
   topBar.webContents.send('topbar/close-menus')
   topBar.setIgnoreMouseEvents(false)
+  applyPanelBounds(topBar, display.id)
   topBar.setAlwaysOnTop(true, 'screen-saver')
   topBar.webContents.send('launcher/show', { displayId: display.id, mode: 'emoji', capture: true })
 
@@ -510,6 +518,13 @@ module.exports = {
       showLauncher(display.id)
     },
     'launcher/hide': () => animatedHide(),
+    'launcher/panel-bottom': (event, bottom) => {
+      if (!activeTopBar || activeTopBar.isDestroyed()) return
+      if (event.sender !== activeTopBar.webContents) return
+      if (typeof bottom !== 'number' || !Number.isFinite(bottom) || bottom <= 0) return
+      lastPanelBottom.set(activeDisplayId, bottom)
+      if (typeof activeTopBar.setRaisedBounds === 'function') activeTopBar.setRaisedBounds(bottom)
+    },
     'launcher/launch': (_event, id) => {
       const item = findItem(id)
       if (!item) return { success: false }
