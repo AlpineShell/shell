@@ -31,7 +31,7 @@ export default function PluginDetailLoading() {
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div
                       key={i}
-                      className="aspect-video w-72 shrink-0 rounded-xl border border-white/10 bg-white/5 sm:w-96"
+                      className="aspect-video w-72 shrink-0 rounded-xl bg-white/5 sm:w-96"
                     />
                   ))}
                 </div>
@@ -56,7 +56,7 @@ export default function PluginDetailLoading() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="mt-4 pt-4">
                   <div className="h-5 w-10 rounded bg-white/10" />
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <div className="h-5 w-16 rounded-full bg-white/10" />
@@ -64,7 +64,7 @@ export default function PluginDetailLoading() {
                     <div className="h-5 w-14 rounded-full bg-white/10" />
                   </div>
                 </div>
-                <div className="mt-5 border-t border-white/10 pt-5">
+                <div className="mt-5 pt-5">
                   <div className="h-11 w-full rounded-xl bg-white/10" />
                 </div>
               </div>
