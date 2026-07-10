@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import NavBar from "../../components/NavBar";
 import Footer from "../../components/Footer";
 import { Markdown } from "../../docs/_lib/Markdown";
 import { fetchPluginDetail } from "../_lib/catalog";
 import type { PluginDetail } from "../_lib/catalog";
+import { BackToPluginsLink } from "../_components/BackToPluginsLink";
 import { InstallButton } from "../_components/InstallButton";
 import { Screenshots } from "../_components/Screenshots";
 
@@ -19,27 +19,6 @@ export async function generateMetadata({
   return detail
     ? { title: `${detail.name} — Alpine Shell Plugins`, description: detail.shortDescription }
     : { title: "Plugin not found — Alpine Shell" };
-}
-
-function ArrowLeftIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className="shrink-0"
-    >
-      <path d="m12 19-7-7 7-7" />
-      <path d="M19 12H5" />
-    </svg>
-  );
 }
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -160,13 +139,7 @@ export default async function PluginDetailPage({ params }: PluginParams) {
       <NavBar theme="dark" />
       <article className="flex-1 px-8 pt-32 pb-16">
         <div className="container mx-auto">
-          <Link
-            href="/plugins"
-            className="inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-300"
-          >
-            <ArrowLeftIcon />
-            All plugins
-          </Link>
+          <BackToPluginsLink />
 
           <div className="mt-6 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] xl:gap-12">
             <div className="min-w-0">
