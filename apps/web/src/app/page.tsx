@@ -38,7 +38,7 @@ export default function Home() {
         />
 
         <div className="relative z-10 flex flex-1 flex-col">
-          <div className="container mx-auto flex min-h-[50vh] flex-1 flex-col items-center justify-center px-8 pb-8 pt-24 text-center">
+          <div className="container mx-auto flex min-h-[80vh] flex-1 flex-col items-center justify-center px-8 pb-8 pt-24 text-center">
             <h1 className="max-w-3xl font-averia text-5xl font-semibold tracking-tight sm:text-6xl">
               Not their slop. Your PC!
             </h1>
