@@ -201,6 +201,21 @@ process.on('exit', () => {
   if (!exiting) restoreShell()
 })
 
+function spawnVite() {
+  const viteBin = path.join(projectRoot, 'node_modules', 'vite', 'bin', 'vite.js')
+  if (fs.existsSync(viteBin)) {
+    return spawn(process.execPath, [viteBin], { cwd: projectRoot, stdio: ['ignore', 'pipe', 'pipe'] })
+  }
+  return spawn('npm', ['run', 'dev'], { cwd: projectRoot, shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
+}
+
+const VITE_BANNER_NOISE = /VITE|ready in|Local:|Network:|plugin-react/
+const ELECTRON_STDERR_NOISE = /DevTools listening|disk_cache|gpu_disk_cache|Unable to move the cache|Gpu Cache Creation failed|Autofill\.enable|CoInitialize|SharedImageManager|dxgi/i
+
+function seconds(since) {
+  return `${c.dim}(${((Date.now() - since) / 1000).toFixed(1)}s)${c.reset}`
+}
+
 async function main() {
   console.clear()
   process.stdout.write(`${c.cyan}${c.bold}${ALPINE}${c.reset}`)
@@ -209,23 +224,17 @@ async function main() {
   try { require('./generateGoogleCredentials').run() } catch (e) { status('credentials', `skipped (${e.message})`, c.yellow) }
 
   userShell = await getRegisteredShell()
-  const killSpin = spinner('Stopping current shell', c.yellow)
-  await killImage('explorer.exe')
-  await killImage('Alpine Shell.exe')
-  killSpin.succeed(userShell ? 'Stopped Alpine Shell + explorer.exe' : 'explorer.exe stopped')
 
   const portSpin = spinner('Freeing port 5173', c.yellow)
   await freePort(5173)
   portSpin.succeed('Port 5173 free')
 
-  const viteSpin = spinner('Starting frontend (Vite)', c.magenta)
-  viteProc = spawn('npm', ['run', 'dev'], {
-    shell: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  const viteStart = Date.now()
+  const viteSpin = spinner('Starting frontend — current shell keeps running', c.magenta)
+  viteProc = spawnVite()
   viteProc.stdout.on('data', (data) => {
     if (exiting) return
-    const lines = data.toString().split('\n').filter((l) => l.trim() && !l.includes('VITE') && !l.includes('ready in') && !l.includes('Local:') && !l.includes('Network:') && !l.includes('plugin-react'))
+    const lines = data.toString().split('\n').filter((l) => l.trim() && !VITE_BANNER_NOISE.test(l))
     for (const line of lines) {
       process.stdout.write(`${c.dim}[${c.magenta}vite${c.reset}${c.dim}]${c.reset} ${line.trim()}\n`)
     }
@@ -237,15 +246,18 @@ async function main() {
   })
 
   await waitForPort(5173)
-  viteSpin.succeed('Frontend ready on http://localhost:5173')
+  viteSpin.succeed(`Frontend ready on http://localhost:5173 ${seconds(viteStart)}`)
 
-  const electronSpin = spinner('Starting backend (Electron)', c.blue)
+  const swapStart = Date.now()
+  const swapSpin = spinner('Swapping shell', c.blue)
+  await killImage('explorer.exe')
+  await killImage('Alpine Shell.exe')
   electronProc = spawn(electronPath, ['.'], {
     cwd: projectRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: false,
   })
-  electronSpin.succeed('Backend started')
+  swapSpin.succeed(`Shell swapped to dev (${userShell ? 'Alpine Shell' : 'explorer.exe'} stopped) ${seconds(swapStart)}`)
 
   console.log(`\n${c.gray}  ─── Logs ───${c.reset}\n`)
 
@@ -264,8 +276,10 @@ async function main() {
   })
   electronProc.stderr.on('data', (data) => {
     if (exiting) return
-    const text = data.toString().trim()
-    if (text) process.stdout.write(`${c.dim}[${c.red}main${c.reset}${c.dim}]${c.reset} ${text}\n`)
+    const lines = data.toString().split('\n').filter((l) => l.trim() && !ELECTRON_STDERR_NOISE.test(l))
+    for (const line of lines) {
+      process.stdout.write(`${c.dim}[${c.red}main${c.reset}${c.dim}]${c.reset} ${line.trim()}\n`)
+    }
   })
 
   electronProc.on('close', (code) => {
