@@ -781,6 +781,7 @@ function startShellMode() {
 
   if (screenshot) {
     screenshot.setOverlayWindowFactory(createScreenshotWindow)
+    screenshot.prewarmOverlay()
     altTab.onScreenshot(
       () => screenshot.showOverlay(),
       () => screenshot.hideOverlay()

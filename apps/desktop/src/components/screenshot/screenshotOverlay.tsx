@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useScreenshot } from '../../hooks/useScreenshot'
 
 interface Selection {
@@ -17,9 +17,16 @@ function getRect(sel: Selection) {
 }
 
 export default function ScreenshotOverlay() {
-  const { visible } = useScreenshot()
+  const { visible, image } = useScreenshot()
   const [selection, setSelection] = useState<Selection | null>(null)
   const dragging = useRef(false)
+
+  useEffect(() => {
+    if (!visible) {
+      setSelection(null)
+      dragging.current = false
+    }
+  }, [visible])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     dragging.current = true
@@ -64,6 +71,14 @@ export default function ScreenshotOverlay() {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
+      {image && (
+        <img
+          src={image}
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full"
+        />
+      )}
       {!rect || rect.width === 0 || rect.height === 0 ? (
         <div className="absolute inset-0 bg-white/20" />
       ) : (
