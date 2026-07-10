@@ -173,6 +173,10 @@ export default function StarField() {
       ref={canvasRef}
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 h-full w-full"
+      style={{
+        maskImage: "linear-gradient(to bottom, black 55%, transparent 92%)",
+        WebkitMaskImage: "linear-gradient(to bottom, black 55%, transparent 92%)",
+      }}
     />
   );
 }

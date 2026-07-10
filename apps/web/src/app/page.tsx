@@ -7,14 +7,14 @@ const noise =
 
 export default function Home() {
   return (
-    <main className="relative bg-[#050a1a] text-white">
-      <NavBar theme="light" />
+    <main className="relative bg-black text-white">
+      <NavBar theme="dark" />
       <section className="relative flex min-h-screen flex-col overflow-hidden">
         <div
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(125% 85% at 50% -10%, #1b3a8f 0%, #0b1430 45%, #050a1a 75%)",
+              "radial-gradient(125% 85% at 50% -10%, #1b3a8f 0%, #0b1430 45%, #000000 75%)",
           }}
         />
         <div
@@ -30,16 +30,15 @@ export default function Home() {
         <div
           aria-hidden="true"
           className="absolute inset-0 opacity-[0.13]"
-          style={{ backgroundImage: noise }}
-        />
-
-        <div
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 top-[100vh] bg-white"
+          style={{
+            backgroundImage: noise,
+            maskImage: "linear-gradient(to bottom, black 55%, transparent 92%)",
+            WebkitMaskImage: "linear-gradient(to bottom, black 55%, transparent 92%)",
+          }}
         />
 
         <div className="relative z-10 flex flex-1 flex-col">
-          <div className="container mx-auto flex min-h-[50vh] flex-1 flex-col items-center justify-center px-8 pb-8 pt-24 text-center">
+          <div className="container mx-auto flex min-h-[80vh] flex-1 flex-col items-center justify-center px-8 pb-8 pt-24 text-center">
             <h1 className="max-w-3xl font-averia text-5xl font-semibold tracking-tight sm:text-6xl">
               Not their slop. Your PC!
             </h1>
@@ -52,7 +51,7 @@ export default function Home() {
             </div>
           </div>
           <div className="container mx-auto shrink-0">
-            <div className="aspect-video w-full overflow-hidden rounded-3xl bg-white">
+            <div className="aspect-video w-full overflow-hidden rounded-3xl bg-black">
               <iframe
                 className="h-full w-full"
                 src="https://www.youtube.com/embed/jxnqmhGL2aA?start=317"
@@ -64,7 +63,7 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <Footer />
+      <Footer theme="dark" />
     </main>
   );
 }
