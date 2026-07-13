@@ -11,8 +11,9 @@ Alpine Shell is a Windows desktop shell replacement built with Electron, React, 
 This is a Bun-workspaces monorepo. Run all commands from the repo root.
 
 - `apps/desktop/` — the Electron desktop shell (the original app; package name `alpine-shell`). Its build/release config (electron-builder, Railway/MinIO publish) lives in `apps/desktop/package.json`.
-- `apps/web/` — Next.js site for marketing + license sales (package name `@alpine/web`).
-- `packages/license/` — `@alpine/license`, the shared license/activation contract (types + key validation) imported by both the desktop app and the website.
+- `packages/license/` — `@alpine/license`, the shared license/activation contract (types + key validation) imported by the desktop app.
+
+The website (marketing, docs, plugin marketplace pages) lives in its own repo: [AlpineShell/website](https://github.com/AlpineShell/website).
 
 Unless noted otherwise, file paths in the sections below are relative to `apps/desktop/`.
 
@@ -41,11 +42,9 @@ React hooks in `src/hooks/` follow a consistent pattern:
 
 Run from the repo root; Bun resolves the right workspace via `--filter`.
 
-- `bun start app` — Start the full desktop app (Vite dev server + Electron). Replaces `explorer.exe` with Alpine Shell while running. (`bun start` with no target opens an interactive picker.)
-- `bun start web` — Start the Next.js website dev server (`apps/web`).
+- `bun start` (or `bun start app`) — Start the full desktop app (Vite dev server + Electron). Replaces `explorer.exe` with Alpine Shell while running.
 - `bun run build` — Build the Windows installer (Vite build + electron-builder).
 - `bun run release` — Build the installer and publish it to Railway/MinIO.
-- `bun run web:build` — Build the website.
 
 Desktop-only iteration: `bun --filter alpine-shell dev` (Vite server only), `bun --filter alpine-shell electron` (Electron only; requires Vite already running).
 

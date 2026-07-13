@@ -10,11 +10,10 @@
 
 ```bash
 bun install
-bun start app   # Windows desktop shell (Vite + Electron)
-bun start web   # marketing & license site (Next.js)
+bun start   # Windows desktop shell (Vite + Electron)
 ```
 
-`bun start app` launches both the Vite dev server and Electron; the shell appears on all connected displays. `bun start web` runs the Next.js site in `apps/web`. Running `bun start` with no target opens an interactive picker.
+`bun start` launches both the Vite dev server and Electron; the shell appears on all connected displays. The website lives in its own repo: [AlpineShell/website](https://github.com/AlpineShell/website).
 
 ## Code Standards
 
