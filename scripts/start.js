@@ -12,12 +12,10 @@ const c = {
 const targets = {
   app: { workspace: 'apps/desktop', script: 'start' },
   desktop: { workspace: 'apps/desktop', script: 'start' },
-  web: { workspace: 'apps/web', script: 'dev' },
 }
 
 const menu = [
   { value: 'app', label: 'Desktop shell', detail: 'Vite + Electron' },
-  { value: 'web', label: 'Website', detail: 'Next.js' },
 ]
 
 function promptTarget() {
@@ -83,12 +81,15 @@ async function main() {
   let selected = requested
 
   if (!selected) {
-    if (!process.stdin.isTTY) {
+    if (menu.length === 1) {
+      selected = menu[0].value
+    } else if (!process.stdin.isTTY) {
       const names = Object.keys(targets).join(' | ')
       console.error(`No start target given. Usage: bun start <${names}>`)
       process.exit(1)
+    } else {
+      selected = await promptTarget()
     }
-    selected = await promptTarget()
   }
 
   const target = targets[selected.toLowerCase()]
