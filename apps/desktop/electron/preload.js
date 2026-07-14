@@ -206,6 +206,13 @@ contextBridge.exposeInMainWorld('launcher', {
     ipcRenderer.on('launcher/show-bookmarks-changed', handler)
     return () => ipcRenderer.removeListener('launcher/show-bookmarks-changed', handler)
   },
+  showBrowserTabs: () => ipcRenderer.invoke('launcher/show-browser-tabs-get'),
+  setShowBrowserTabs: (value) => ipcRenderer.invoke('launcher/show-browser-tabs-set', value),
+  onShowBrowserTabsChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('launcher/show-browser-tabs-changed', handler)
+    return () => ipcRenderer.removeListener('launcher/show-browser-tabs-changed', handler)
+  },
   maxResults: () => ipcRenderer.invoke('launcher/max-results-get'),
   setMaxResults: (value) => ipcRenderer.invoke('launcher/max-results-set', value),
   onMaxResultsChanged: (callback) => {
@@ -434,6 +441,10 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('bookmarks/changed', handler)
     },
     open: (url) => ipcRenderer.invoke('bookmarks/open', url),
+  },
+  browserTabs: {
+    list: () => ipcRenderer.invoke('browser-tabs/list'),
+    activate: (tab) => ipcRenderer.invoke('browser-tabs/activate', tab),
   },
   updates: {
     getState: () => ipcRenderer.invoke('updates/get-state'),

@@ -10,6 +10,7 @@ const RESULTS_DEFAULT = 8
 let storePath = null
 let showRecentApps = false
 let showBookmarks = true
+let showBrowserTabs = true
 let maxResults = RESULTS_DEFAULT
 let recentEmoji = []
 let broadcast = null
@@ -34,6 +35,7 @@ function load() {
       const data = JSON.parse(fs.readFileSync(file, 'utf8'))
       if (typeof data.showRecentApps === 'boolean') showRecentApps = data.showRecentApps
       if (typeof data.showBookmarks === 'boolean') showBookmarks = data.showBookmarks
+      if (typeof data.showBrowserTabs === 'boolean') showBrowserTabs = data.showBrowserTabs
       if (typeof data.maxResults === 'number') maxResults = clampMaxResults(data.maxResults)
       if (Array.isArray(data.recentEmoji)) recentEmoji = data.recentEmoji.filter((c) => typeof c === 'string').slice(0, MAX_RECENT_EMOJI)
     }
@@ -44,7 +46,7 @@ function load() {
 
 function save() {
   try {
-    fs.writeFileSync(getStorePath(), JSON.stringify({ showRecentApps, showBookmarks, maxResults, recentEmoji }, null, 2))
+    fs.writeFileSync(getStorePath(), JSON.stringify({ showRecentApps, showBookmarks, showBrowserTabs, maxResults, recentEmoji }, null, 2))
   } catch (e) {
     console.error('[launcherPrefs] save error:', e.message)
   }
@@ -65,6 +67,13 @@ module.exports = {
       save()
       if (broadcast) broadcast('launcher/show-bookmarks-changed', showBookmarks)
       return showBookmarks
+    },
+    'launcher/show-browser-tabs-get': () => showBrowserTabs,
+    'launcher/show-browser-tabs-set': (_event, value) => {
+      showBrowserTabs = !!value
+      save()
+      if (broadcast) broadcast('launcher/show-browser-tabs-changed', showBrowserTabs)
+      return showBrowserTabs
     },
     'launcher/max-results-get': () => maxResults,
     'launcher/max-results-set': (_event, value) => {

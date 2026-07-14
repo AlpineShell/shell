@@ -38,6 +38,7 @@ const pluginBackendHost = require('./pluginBackendHost')
 const displayConfig = require('./modules/displayConfig')
 const clockPrefs = require('./modules/clockPrefs')
 const bookmarks = require('./modules/bookmarks')
+const browserTabs = require('./modules/browserTabs')
 let googleCalendar = null
 try { googleCalendar = require('./modules/googleCalendar') } catch (e) { console.error('[main] googleCalendar load error:', e.message) }
 const appActivator = require('./appActivator')
@@ -668,7 +669,7 @@ app.whenReady().then(async () => {
     }
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, plugins, pluginBackendHost)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())

@@ -287,6 +287,14 @@ declare global {
     favicon?: string
   }
 
+  interface BrowserTab {
+    hwnd: number
+    browser: string
+    index: number
+    title: string
+    selected: boolean
+  }
+
   interface RunResult {
     kind: "folder" | "file" | "url" | "shell" | "command"
     label: string
@@ -583,6 +591,9 @@ declare global {
       showBookmarks: () => Promise<boolean>
       setShowBookmarks: (value: boolean) => Promise<boolean>
       onShowBookmarksChanged: (callback: (value: boolean) => void) => () => void
+      showBrowserTabs: () => Promise<boolean>
+      setShowBrowserTabs: (value: boolean) => Promise<boolean>
+      onShowBrowserTabsChanged: (callback: (value: boolean) => void) => () => void
       maxResults: () => Promise<number>
       setMaxResults: (value: number) => Promise<number>
       onMaxResultsChanged: (callback: (value: number) => void) => () => void
@@ -670,6 +681,10 @@ declare global {
         list: () => Promise<Bookmark[]>
         onChanged: (callback: (data: Bookmark[]) => void) => () => void
         open: (url: string) => Promise<{ ok: boolean }>
+      }
+      browserTabs: {
+        list: () => Promise<BrowserTab[]>
+        activate: (tab: BrowserTab) => Promise<{ ok: boolean }>
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>

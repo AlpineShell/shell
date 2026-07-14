@@ -51,6 +51,7 @@ export default function HotkeysPage() {
   const [searchKey, setSearchKey] = useState('Win')
   const [recentApps, setRecentApps] = useState(false)
   const [showBookmarks, setShowBookmarks] = useState(true)
+  const [showBrowserTabs, setShowBrowserTabs] = useState(true)
   const [maxResults, setMaxResults] = useState(8)
 
   useEffect(() => {
@@ -58,11 +59,13 @@ export default function HotkeysPage() {
     window.launcher.onHotkeyChanged(setSearchKey)
     window.launcher.recentApps().then(setRecentApps)
     window.launcher.showBookmarks().then(setShowBookmarks)
+    window.launcher.showBrowserTabs().then(setShowBrowserTabs)
     window.launcher.maxResults().then(setMaxResults)
     const offRecentApps = window.launcher.onRecentAppsChanged(setRecentApps)
     const offShowBookmarks = window.launcher.onShowBookmarksChanged(setShowBookmarks)
+    const offShowBrowserTabs = window.launcher.onShowBrowserTabsChanged(setShowBrowserTabs)
     const offMaxResults = window.launcher.onMaxResultsChanged(setMaxResults)
-    return () => { offRecentApps(); offShowBookmarks(); offMaxResults() }
+    return () => { offRecentApps(); offShowBookmarks(); offShowBrowserTabs(); offMaxResults() }
   }, [])
 
   async function setSearch(hk: string) {
@@ -78,6 +81,11 @@ export default function HotkeysPage() {
   function toggleShowBookmarks(value: boolean) {
     setShowBookmarks(value)
     window.launcher.setShowBookmarks(value)
+  }
+
+  function toggleShowBrowserTabs(value: boolean) {
+    setShowBrowserTabs(value)
+    window.launcher.setShowBrowserTabs(value)
   }
 
   function changeMaxResults(value: number) {
@@ -120,6 +128,12 @@ export default function HotkeysPage() {
           description="Search your default browser's bookmarks and open them from Search. Works with Chromium browsers (Chrome, Edge, Brave and more)."
           checked={showBookmarks}
           onChange={toggleShowBookmarks}
+        />
+        <ToggleRow
+          label="Show open browser tabs"
+          description="Find the tabs you have open in Chrome, Edge, Firefox and other browsers, and switch straight to them from Search."
+          checked={showBrowserTabs}
+          onChange={toggleShowBrowserTabs}
         />
         <StepperRow
           label="Maximum results"
