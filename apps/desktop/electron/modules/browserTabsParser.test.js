@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import browserTabs from './browserTabs.js'
+import browserTabsParser from './browserTabsParser.js'
 
-const { cleanTabTitle, parseTabs } = browserTabs
+const { cleanTabTitle, parseTabs } = browserTabsParser
 
 describe('cleanTabTitle', () => {
   it('strips the Chrome memory usage annotation', () => {
