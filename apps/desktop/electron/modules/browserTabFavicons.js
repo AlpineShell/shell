@@ -116,28 +116,49 @@ function mapsFor(browser, tabs) {
   return read
 }
 
-async function attachFavicons(tabs) {
+function groupByBrowser(tabs) {
   const byBrowser = new Map()
   for (const tab of tabs) {
     if (!byBrowser.has(tab.browser)) byBrowser.set(tab.browser, [])
     byBrowser.get(tab.browser).push(tab)
   }
+  return byBrowser
+}
 
+function applyMaps(tabs, maps) {
+  if (!maps) return 0
   let attached = 0
-  for (const [browser, group] of byBrowser) {
-    const maps = await mapsFor(browser, group)
-    if (!maps) continue
-    for (const tab of group) {
-      const host = maps.titleHost.get(tab.title)
-      if (!host) continue
-      const icon = maps.iconByHost.get(host)
-      if (icon) {
-        tab.favicon = icon
-        attached++
-      }
-    }
+  for (const tab of tabs) {
+    const host = maps.titleHost.get(tab.title)
+    if (!host) continue
+    tab.host = host
+    const icon = maps.iconByHost.get(host)
+    if (icon) tab.favicon = icon
+    attached++
   }
   return attached
 }
 
-module.exports = { attachFavicons, titleHostMapFromRows }
+function attachFromCache(tabs) {
+  let attached = 0
+  let complete = true
+  for (const [browser, group] of groupByBrowser(tabs)) {
+    const cached = cacheByBrowser.get(browser)
+    if (!cached || Date.now() - cached.atMs >= CACHE_TTL_MS) {
+      complete = false
+      continue
+    }
+    attached += applyMaps(group, cached.maps)
+  }
+  return { attached, complete }
+}
+
+async function attachFavicons(tabs) {
+  let attached = 0
+  for (const [browser, group] of groupByBrowser(tabs)) {
+    attached += applyMaps(group, await mapsFor(browser, group))
+  }
+  return attached
+}
+
+module.exports = { attachFavicons, attachFromCache, applyMaps, titleHostMapFromRows }

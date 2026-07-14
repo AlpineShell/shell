@@ -15,7 +15,7 @@ import { useLauncherMaxResults } from "../../hooks/useLauncherMaxResults"
 import { useLauncherShowBookmarks } from "../../hooks/useLauncherShowBookmarks"
 import { useBookmarks } from "../../hooks/useBookmarks"
 import { useLauncherShowBrowserTabs } from "../../hooks/useLauncherShowBrowserTabs"
-import { useBrowserTabs, tabFaviconKey } from "../../hooks/useBrowserTabs"
+import { useBrowserTabs, tabKey } from "../../hooks/useBrowserTabs"
 import { EMOJIS, type EmojiEntry } from "../../lib/emojiData"
 import { getRenderableEmojis } from "../../lib/emojiRenderable"
 
@@ -25,6 +25,7 @@ const BOOKMARK_LIMIT = 2000
 const BOOKMARK_ID_BASE = -1000
 const BOOKMARK_URL_PENALTY = 6
 const TAB_RESULT_LIMIT = 3
+const TAB_HOST_PENALTY = 6
 const EMOJI_COLS = 9
 const EMOJI_SEARCH_LIMIT = 180
 const EMOJI_CELL_HEIGHT = 40
@@ -216,7 +217,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const showBookmarks = useLauncherShowBookmarks()
   const bookmarks = useBookmarks(showBookmarks)
   const showBrowserTabs = useLauncherShowBrowserTabs()
-  const { tabs: browserTabs, favicons: tabFavicons } = useBrowserTabs(showBrowserTabs)
+  const { tabs: browserTabs, meta: tabMeta } = useBrowserTabs(showBrowserTabs)
   const maxResults = useLauncherMaxResults()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
@@ -541,17 +542,17 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const matchedTabs = useMemo(() => {
     const q = query.trim()
     if (!q || browserTabs.length === 0) return NO_MATCHED_TABS
-    const matchedHwnds = new Set(matchedOpenApps.map((a) => a.hwnd))
     const matched: { tab: BrowserTab; s: number }[] = []
     for (const tab of browserTabs) {
-      if (tab.selected && matchedHwnds.has(tab.hwnd)) continue
-      const s = scoreField(q, tab.title)
+      const host = tab.host ?? tabMeta.get(tabKey(tab))?.host
+      let s = scoreField(q, tab.title)
+      if (host) s = Math.max(s, scoreField(q, host) - TAB_HOST_PENALTY)
       if (s >= 0) matched.push({ tab, s })
     }
     if (matched.length === 0) return NO_MATCHED_TABS
     matched.sort((a, b) => b.s - a.s)
     return matched.slice(0, TAB_RESULT_LIMIT).map((r) => r.tab)
-  }, [query, browserTabs, matchedOpenApps])
+  }, [query, browserTabs, tabMeta])
 
   const matchedSettings = useMemo(() => {
     const q = query.trim()
@@ -680,15 +681,16 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextOpen, selectedEntry])
 
-  const tabsArrivedRef = useRef(false)
+  const tabsSectionRef = useRef({ query: "", count: 0 })
   useEffect(() => {
-    if (tabsArrivedRef.current || browserTabs.length === 0) return
-    tabsArrivedRef.current = true
-    if (display.tabs.length > 0 && selected >= openOffset) {
-      setSelected((s) => s + display.tabs.length)
-    }
+    const prev = tabsSectionRef.current
+    tabsSectionRef.current = { query, count: display.tabs.length }
+    if (prev.query !== query) return
+    const grown = display.tabs.length - prev.count
+    if (grown <= 0) return
+    if (selected >= openOffset) setSelected((s) => s + grown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [browserTabs])
+  }, [display.tabs.length, query])
 
   useEffect(() => {
     if (selected >= totalCount) setSelected(0)
@@ -1073,6 +1075,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                       {display.tabs.map((tab, i) => {
                         const idx = openOffset + i
                         const windowIcon = openApps.find((a) => a.hwnd === tab.hwnd)?.icon
+                        const meta = tabMeta.get(tabKey(tab))
+                        const host = tab.host ?? meta?.host
                         return (
                           <button
                             key={`tab-${tab.hwnd}-${tab.index}`}
@@ -1082,10 +1086,10 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                               idx === selected ? selectedBg : hoverBg
                             }`}
                           >
-                            <TabIcon favicon={tabFavicons.get(tabFaviconKey(tab))} windowIcon={windowIcon} darkText={darkText} />
+                            <TabIcon favicon={tab.favicon ?? meta?.favicon} windowIcon={windowIcon} darkText={darkText} />
                             <div className="flex flex-col min-w-0 flex-1">
                               <span className={`text-[13px] truncate ${textColor}`}>{tab.title}</span>
-                              <span className={`text-[11px] truncate ${dimText}`}>{browserTabLabel(tab.browser)} tab</span>
+                              <span className={`text-[11px] truncate ${dimText}`}>{host ? `${host} · ` : ""}{browserTabLabel(tab.browser)} tab</span>
                             </div>
                           </button>
                         )

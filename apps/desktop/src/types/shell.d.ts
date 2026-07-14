@@ -294,6 +294,12 @@ declare global {
     title: string
     selected: boolean
     favicon?: string
+    host?: string
+  }
+
+  interface BrowserTabMeta {
+    favicon?: string
+    host?: string
   }
 
   interface RunResult {

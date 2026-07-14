@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react'
 
-export function tabFaviconKey(tab: BrowserTab): string {
+export function tabKey(tab: BrowserTab): string {
   return `${tab.hwnd}:${tab.index}`
 }
 
-export function useBrowserTabs(enabled: boolean): { tabs: BrowserTab[]; favicons: Map<string, string> } {
+export function useBrowserTabs(enabled: boolean): { tabs: BrowserTab[]; meta: Map<string, BrowserTabMeta> } {
   const [tabs, setTabs] = useState<BrowserTab[]>([])
-  const [favicons, setFavicons] = useState<Map<string, string>>(new Map())
+  const [meta, setMeta] = useState<Map<string, BrowserTabMeta>>(new Map())
 
   useEffect(() => {
     if (!enabled) {
       setTabs((prev) => (prev.length > 0 ? [] : prev))
-      setFavicons((prev) => (prev.size > 0 ? new Map() : prev))
+      setMeta((prev) => (prev.size > 0 ? new Map() : prev))
       return
     }
     let alive = true
@@ -21,11 +21,11 @@ export function useBrowserTabs(enabled: boolean): { tabs: BrowserTab[]; favicons
       .catch(() => {})
     const unsubscribe = window.shell.browserTabs.onChanged((data) => {
       if (!alive) return
-      const next = new Map<string, string>()
+      const next = new Map<string, BrowserTabMeta>()
       for (const tab of data) {
-        if (tab.favicon) next.set(tabFaviconKey(tab), tab.favicon)
+        if (tab.favicon || tab.host) next.set(tabKey(tab), { favicon: tab.favicon, host: tab.host })
       }
-      if (next.size > 0) setFavicons(next)
+      if (next.size > 0) setMeta(next)
     })
     return () => {
       alive = false
@@ -33,5 +33,5 @@ export function useBrowserTabs(enabled: boolean): { tabs: BrowserTab[]; favicons
     }
   }, [enabled])
 
-  return { tabs, favicons }
+  return { tabs, meta }
 }

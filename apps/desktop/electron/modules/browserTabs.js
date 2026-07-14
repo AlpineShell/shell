@@ -42,7 +42,9 @@ function scheduleFaviconEnrichment(tabs, generation) {
 async function listTabs() {
   try {
     const tabs = parseTabs(await ensureRunner().run('Get-BrowserTabs'))
-    scheduleFaviconEnrichment(tabs, ++listGeneration)
+    const generation = ++listGeneration
+    const { complete } = browserTabFavicons.attachFromCache(tabs)
+    if (!complete) scheduleFaviconEnrichment(tabs, generation)
     return tabs
   } catch (e) {
     console.error('[browserTabs] list error:', e?.message ?? e)
