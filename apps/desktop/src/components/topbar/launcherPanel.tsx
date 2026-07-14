@@ -14,6 +14,8 @@ import { useLauncherRecentApps } from "../../hooks/useLauncherRecentApps"
 import { useLauncherMaxResults } from "../../hooks/useLauncherMaxResults"
 import { useLauncherShowBookmarks } from "../../hooks/useLauncherShowBookmarks"
 import { useBookmarks } from "../../hooks/useBookmarks"
+import { useLauncherShowBrowserTabs } from "../../hooks/useLauncherShowBrowserTabs"
+import { useBrowserTabs, tabKey } from "../../hooks/useBrowserTabs"
 import { EMOJIS, type EmojiEntry } from "../../lib/emojiData"
 import { getRenderableEmojis } from "../../lib/emojiRenderable"
 
@@ -22,6 +24,8 @@ const LAUNCHER_WIDTH_DEFAULT = 600
 const BOOKMARK_LIMIT = 2000
 const BOOKMARK_ID_BASE = -1000
 const BOOKMARK_URL_PENALTY = 6
+const TAB_RESULT_LIMIT = 3
+const TAB_HOST_PENALTY = 6
 const EMOJI_COLS = 9
 const EMOJI_SEARCH_LIMIT = 180
 const EMOJI_CELL_HEIGHT = 40
@@ -113,6 +117,21 @@ function useRunCommand(query: string): RunResult | null {
 
 const RUN_ICONS = { folder: FolderOpen, file: FileText, url: Globe, shell: FolderOpen, command: Terminal }
 
+const NO_MATCHED_TABS: BrowserTab[] = []
+
+const BROWSER_TAB_LABELS: Record<string, string> = {
+  chrome: "Chrome",
+  msedge: "Edge",
+  firefox: "Firefox",
+  brave: "Brave",
+  opera: "Opera",
+  vivaldi: "Vivaldi",
+}
+
+function browserTabLabel(browser: string): string {
+  return BROWSER_TAB_LABELS[browser] ?? browser
+}
+
 function staticMapUrl(lat: number, lon: number): string {
   const zoom = 15
   const x = Math.floor(((lon + 180) / 360) * Math.pow(2, zoom))
@@ -197,6 +216,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const showRecentApps = useLauncherRecentApps()
   const showBookmarks = useLauncherShowBookmarks()
   const bookmarks = useBookmarks(showBookmarks)
+  const showBrowserTabs = useLauncherShowBrowserTabs()
+  const { tabs: browserTabs, meta: tabMeta } = useBrowserTabs(showBrowserTabs)
   const maxResults = useLauncherMaxResults()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
@@ -518,6 +539,21 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     return matched.slice(0, 3).map((r) => r.app)
   }, [query, openApps])
 
+  const matchedTabs = useMemo(() => {
+    const q = query.trim()
+    if (!q || browserTabs.length === 0) return NO_MATCHED_TABS
+    const matched: { tab: BrowserTab; s: number }[] = []
+    for (const tab of browserTabs) {
+      const host = tabMeta.get(tabKey(tab))?.host ?? tab.host
+      let s = scoreField(q, tab.title)
+      if (host) s = Math.max(s, scoreField(q, host) - TAB_HOST_PENALTY)
+      if (s >= 0) matched.push({ tab, s })
+    }
+    if (matched.length === 0) return NO_MATCHED_TABS
+    matched.sort((a, b) => b.s - a.s)
+    return matched.slice(0, TAB_RESULT_LIMIT).map((r) => r.tab)
+  }, [query, browserTabs, tabMeta])
+
   const matchedSettings = useMemo(() => {
     const q = query.trim()
     if (!q) return []
@@ -590,17 +626,19 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       return taken
     }
     const openApps = matchedOpenApps.slice(0, take(matchedOpenApps.length))
+    const tabs = matchedTabs.slice(0, take(matchedTabs.length))
     const settings = matchedSettings.slice(0, take(matchedSettings.length))
     const winCmds = matchedWindowCommands.slice(0, take(matchedWindowCommands.length))
     const apps = results.slice(0, take(results.length))
     const showRun = !!runResult && take(1) > 0
-    return { openApps, settings, winCmds, apps, showRun }
-  }, [maxResults, mathResult, mapResult, runResult, matchedOpenApps, matchedSettings, matchedWindowCommands, results])
+    return { openApps, tabs, settings, winCmds, apps, showRun }
+  }, [maxResults, mathResult, mapResult, runResult, matchedOpenApps, matchedTabs, matchedSettings, matchedWindowCommands, results])
 
   const mathOffset = mathResult ? 1 : 0
   const mapOffset = mathOffset + (mapResult ? 1 : 0)
   const openOffset = mapOffset + display.openApps.length
-  const settingsOffset = openOffset + display.settings.length
+  const tabsOffset = openOffset + display.tabs.length
+  const settingsOffset = tabsOffset + display.settings.length
   const winOffset = settingsOffset + display.winCmds.length
   const runOffset = winOffset + display.apps.length
   const totalCount = runOffset + (display.showRun ? 1 : 0)
@@ -609,12 +647,19 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     if (mathResult && selected === 0) return { type: "math" as const }
     if (mapResult && selected === mathOffset) return { type: "map" as const, result: mapResult }
     if (selected >= mapOffset && selected < openOffset) return { type: "open" as const, app: display.openApps[selected - mapOffset] }
-    if (selected >= openOffset && selected < settingsOffset) return { type: "setting" as const, setting: display.settings[selected - openOffset] }
+    if (selected >= openOffset && selected < tabsOffset) return { type: "tab" as const, tab: display.tabs[selected - openOffset] }
+    if (selected >= tabsOffset && selected < settingsOffset) return { type: "setting" as const, setting: display.settings[selected - tabsOffset] }
     if (selected >= settingsOffset && selected < winOffset) return { type: "wincmd" as const, cmd: display.winCmds[selected - settingsOffset] }
     if (selected >= winOffset && selected < runOffset) return { type: "app" as const, item: display.apps[selected - winOffset] }
     if (display.showRun && runResult && selected === runOffset) return { type: "run" as const, run: runResult }
     return null
-  }, [selected, mathResult, mapResult, runResult, display, mathOffset, mapOffset, openOffset, settingsOffset, winOffset, runOffset])
+  }, [selected, mathResult, mapResult, runResult, display, mathOffset, mapOffset, openOffset, tabsOffset, settingsOffset, winOffset, runOffset])
+
+  function activateBrowserTab(tab: BrowserTab) {
+    window.shell.browserTabs.activate(tab).catch(() => {})
+    window.alttab.activate(tab.hwnd)
+    window.launcher.hide()
+  }
 
   async function runUninstall(item: LauncherItem) {
     setNotice({ text: `Removing ${item.name}…`, busy: true })
@@ -635,6 +680,17 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     return []
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextOpen, selectedEntry])
+
+  const tabsSectionRef = useRef({ query: "", count: 0 })
+  useEffect(() => {
+    const prev = tabsSectionRef.current
+    tabsSectionRef.current = { query, count: display.tabs.length }
+    if (prev.query !== query) return
+    const grown = display.tabs.length - prev.count
+    if (grown <= 0) return
+    if (selected >= openOffset) setSelected((s) => s + grown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [display.tabs.length, query])
 
   useEffect(() => {
     if (selected >= totalCount) setSelected(0)
@@ -796,6 +852,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       } else if (selectedEntry.type === "open") {
         window.alttab.activate(selectedEntry.app.hwnd)
         window.launcher.hide()
+      } else if (selectedEntry.type === "tab" && selectedEntry.tab) {
+        activateBrowserTab(selectedEntry.tab)
       } else if (selectedEntry.type === "setting" && selectedEntry.setting) {
         activateSetting(selectedEntry.setting)
       } else if (selectedEntry.type === "wincmd" && selectedEntry.cmd) {
@@ -1011,11 +1069,36 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           </button>
                         )
                       })}
-                      {display.openApps.length > 0 && display.settings.length > 0 && (
+                      {display.tabs.length > 0 && display.openApps.length > 0 && (
+                        <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
+                      )}
+                      {display.tabs.map((tab, i) => {
+                        const idx = openOffset + i
+                        const windowIcon = openApps.find((a) => a.hwnd === tab.hwnd)?.icon
+                        const meta = tabMeta.get(tabKey(tab))
+                        const host = meta?.host ?? tab.host
+                        return (
+                          <button
+                            key={`tab-${tab.hwnd}-${tab.index}`}
+                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
+                            onClick={() => activateBrowserTab(tab)}
+                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
+                              idx === selected ? selectedBg : hoverBg
+                            }`}
+                          >
+                            <TabIcon favicon={meta?.favicon ?? tab.favicon} windowIcon={windowIcon} darkText={darkText} />
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className={`text-[13px] truncate ${textColor}`}>{tab.title}</span>
+                              <span className={`text-[11px] truncate ${dimText}`}>{host ? `${host} · ` : ""}{browserTabLabel(tab.browser)} tab</span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                      {(display.openApps.length > 0 || display.tabs.length > 0) && display.settings.length > 0 && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
                       {display.settings.map((s, i) => {
-                        const idx = openOffset + i
+                        const idx = tabsOffset + i
                         const Icon = s.icon
                         const isSel = idx === selected
                         const control = s.control
@@ -1096,7 +1179,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           </button>
                         )
                       })}
-                      {display.winCmds.length > 0 && (display.openApps.length > 0 || display.settings.length > 0) && (
+                      {display.winCmds.length > 0 && (display.openApps.length > 0 || display.tabs.length > 0 || display.settings.length > 0) && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
                       {display.winCmds.map((cmd, i) => {
@@ -1119,7 +1202,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           </button>
                         )
                       })}
-                      {(display.openApps.length > 0 || display.settings.length > 0 || display.winCmds.length > 0) && display.apps.length > 0 && (
+                      {(display.openApps.length > 0 || display.tabs.length > 0 || display.settings.length > 0 || display.winCmds.length > 0) && display.apps.length > 0 && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
                       {display.apps.map((item, i) => {
@@ -1196,6 +1279,38 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       </div>
     </div>,
     document.body
+  )
+}
+
+function TabIcon({ favicon, windowIcon, darkText }: { favicon?: string; windowIcon?: string; darkText: boolean }) {
+  const [faviconFailed, setFaviconFailed] = useState(false)
+  const showFavicon = !!favicon && !faviconFailed
+  return (
+    <div className="relative w-7 h-7 shrink-0">
+      {showFavicon ? (
+        <img
+          src={favicon}
+          alt=""
+          className="w-7 h-7 rounded"
+          draggable={false}
+          onError={() => setFaviconFailed(true)}
+        />
+      ) : windowIcon ? (
+        <img src={windowIcon} alt="" className="w-7 h-7" draggable={false} />
+      ) : (
+        <div className="w-7 h-7 flex items-center justify-center">
+          <Globe size={18} className={darkText ? "text-black/40" : "text-white/40"} />
+        </div>
+      )}
+      {showFavicon && windowIcon && (
+        <span
+          className="absolute flex items-center justify-center rounded-full"
+          style={{ right: -3, bottom: -3, width: 13, height: 13, backgroundColor: darkText ? "rgba(255,255,255,0.95)" : "rgba(24,24,27,0.95)" }}
+        >
+          <img src={windowIcon} alt="" style={{ width: 9, height: 9 }} draggable={false} />
+        </span>
+      )}
+    </div>
   )
 }
 

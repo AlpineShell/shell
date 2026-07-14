@@ -1,5 +1,6 @@
 import {
   Activity,
+  AppWindow,
   AudioLines,
   Bluetooth,
   Bookmark,
@@ -94,6 +95,14 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     icon: Bookmark,
     keywords: ["bookmarks", "browser", "favorites", "favourites", "links", "sites"],
     control: { kind: "toggle", get: () => window.launcher.showBookmarks(), set: (v) => window.launcher.setShowBookmarks(v) },
+  },
+  {
+    id: "browser-tabs",
+    label: "Browser tabs",
+    hint: "Show open browser tabs in Search",
+    icon: AppWindow,
+    keywords: ["tabs", "open tabs", "browser tabs", "switch tab", "chrome", "firefox", "edge"],
+    control: { kind: "toggle", get: () => window.launcher.showBrowserTabs(), set: (v) => window.launcher.setShowBrowserTabs(v) },
   },
   {
     id: "media-visualizer",

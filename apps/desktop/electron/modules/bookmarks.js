@@ -5,18 +5,11 @@ const { execFile } = require('child_process')
 const frecency = require('./frecency')
 const browserFavicons = require('./browserFavicons')
 const firefoxData = require('./firefoxData')
+const chromiumPaths = require('./chromiumPaths')
 
 const MAX_BOOKMARKS = 3000
 const RELOAD_DEBOUNCE_MS = 600
 const DEFAULT_BROWSER_KEY = 'HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice'
-
-const CHROMIUM_BROWSERS = [
-  { match: 'chrome', base: 'LOCALAPPDATA', dir: ['Google', 'Chrome', 'User Data'] },
-  { match: 'msedge', base: 'LOCALAPPDATA', dir: ['Microsoft', 'Edge', 'User Data'] },
-  { match: 'brave', base: 'LOCALAPPDATA', dir: ['BraveSoftware', 'Brave-Browser', 'User Data'] },
-  { match: 'vivaldi', base: 'LOCALAPPDATA', dir: ['Vivaldi', 'User Data'] },
-  { match: 'opera', base: 'APPDATA', dir: ['Opera Software', 'Opera Stable'] },
-]
 
 let broadcast = null
 let bookmarks = []
@@ -34,26 +27,6 @@ function getDefaultBrowserProgId() {
   })
 }
 
-function resolveUserDataDir(progId) {
-  if (!progId) return null
-  const lower = progId.toLowerCase()
-  for (const browser of CHROMIUM_BROWSERS) {
-    if (!lower.includes(browser.match)) continue
-    const base = process.env[browser.base]
-    return base ? path.join(base, ...browser.dir) : null
-  }
-  return null
-}
-
-function resolveProfileDir(userDataDir) {
-  try {
-    const localState = JSON.parse(fs.readFileSync(path.join(userDataDir, 'Local State'), 'utf8'))
-    const lastUsed = localState && localState.profile && localState.profile.last_used
-    if (lastUsed && fs.existsSync(path.join(userDataDir, lastUsed, 'Bookmarks'))) return lastUsed
-  } catch {}
-  return 'Default'
-}
-
 function isFirefox(progId) {
   return !!progId && /firefox/i.test(progId)
 }
@@ -69,9 +42,9 @@ async function loadFromBrowser() {
     return { list, watchFile: path.join(profileDir, 'places.sqlite'), watchName: 'places.sqlite' }
   }
 
-  const userDataDir = resolveUserDataDir(progId)
+  const userDataDir = chromiumPaths.userDataDirForProgId(progId)
   if (!userDataDir) return { list: [], watchFile: null, watchName: null }
-  const profileDir = path.join(userDataDir, resolveProfileDir(userDataDir))
+  const profileDir = path.join(userDataDir, chromiumPaths.lastUsedProfileName(userDataDir, 'Bookmarks'))
   const bookmarksFile = path.join(profileDir, 'Bookmarks')
   if (!fs.existsSync(bookmarksFile)) return { list: [], watchFile: null, watchName: null }
   const list = parseBookmarks(bookmarksFile)
@@ -81,7 +54,7 @@ async function loadFromBrowser() {
 }
 
 function hostOf(url) {
-  try { return new URL(url).hostname } catch { return '' }
+  try { return new URL(url).host } catch { return '' }
 }
 
 function attachFavicons(list, readMap) {
