@@ -22,7 +22,7 @@ function collectByHost(rows, neededHosts, toIcon) {
   for (const [pageUrl, data] of rows) {
     if (!pageUrl || !data) continue
     let host
-    try { host = new URL(pageUrl).hostname } catch { continue }
+    try { host = new URL(pageUrl).host } catch { continue }
     if (!host || map.has(host)) continue
     if (neededHosts && !neededHosts.has(host)) continue
     const icon = toIcon(data)

@@ -22,6 +22,16 @@ describe('titleHostMapFromRows', () => {
     expect(titleHostMapFromRows(rows).get('Dashboard')).toBe('recent.example.com')
   })
 
+  it('keeps the port so localhost apps on different ports stay distinct', () => {
+    const rows = [
+      ['Agent Portal', 'http://localhost:5173/en'],
+      ['Auth callback', 'http://localhost:1455/success'],
+    ]
+    const map = titleHostMapFromRows(rows)
+    expect(map.get('Agent Portal')).toBe('localhost:5173')
+    expect(map.get('Auth callback')).toBe('localhost:1455')
+  })
+
   it('skips empty titles and unparseable urls', () => {
     const rows = [
       ['', 'https://example.com'],
@@ -34,6 +44,17 @@ describe('titleHostMapFromRows', () => {
 })
 
 describe('applyMaps', () => {
+  it('falls back to the title without a notification-count prefix', () => {
+    const tabs = [{ title: '(3) YouTube', browser: 'chrome' }]
+    const maps = {
+      titleHost: new Map([['YouTube', 'www.youtube.com']]),
+      iconByHost: new Map([['www.youtube.com', 'data:image/png;base64,BBBB']]),
+    }
+    expect(applyMaps(tabs, maps)).toBe(1)
+    expect(tabs[0].host).toBe('www.youtube.com')
+    expect(tabs[0].favicon).toBe('data:image/png;base64,BBBB')
+  })
+
   it('attaches host even when no favicon exists and counts each enriched tab', () => {
     const tabs = [
       { title: 'Pull requests', browser: 'chrome' },

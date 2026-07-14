@@ -54,7 +54,7 @@ async function loadFromBrowser() {
 }
 
 function hostOf(url) {
-  try { return new URL(url).hostname } catch { return '' }
+  try { return new URL(url).host } catch { return '' }
 }
 
 function attachFavicons(list, readMap) {

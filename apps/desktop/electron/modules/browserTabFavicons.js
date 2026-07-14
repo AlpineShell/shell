@@ -20,7 +20,7 @@ function titleHostMapFromRows(rows) {
   const map = new Map()
   for (const [title, url] of rows) {
     if (!title || map.has(title)) continue
-    try { map.set(title, new URL(url).hostname) } catch {}
+    try { map.set(title, new URL(url).host) } catch {}
   }
   return map
 }
@@ -125,11 +125,20 @@ function groupByBrowser(tabs) {
   return byBrowser
 }
 
+const NOTIFICATION_PREFIX = /^\(\d+\)\s+/
+
+function hostForTitle(titleHost, title) {
+  const direct = titleHost.get(title)
+  if (direct) return direct
+  const stripped = title.replace(NOTIFICATION_PREFIX, '')
+  return stripped !== title ? titleHost.get(stripped) : undefined
+}
+
 function applyMaps(tabs, maps) {
   if (!maps) return 0
   let attached = 0
   for (const tab of tabs) {
-    const host = maps.titleHost.get(tab.title)
+    const host = hostForTitle(maps.titleHost, tab.title)
     if (!host) continue
     tab.host = host
     const icon = maps.iconByHost.get(host)

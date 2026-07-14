@@ -1284,23 +1284,32 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
 
 function TabIcon({ favicon, windowIcon, darkText }: { favicon?: string; windowIcon?: string; darkText: boolean }) {
   const [faviconFailed, setFaviconFailed] = useState(false)
-  if (favicon && !faviconFailed) {
-    return (
-      <img
-        src={favicon}
-        alt=""
-        className="w-7 h-7 shrink-0 rounded"
-        draggable={false}
-        onError={() => setFaviconFailed(true)}
-      />
-    )
-  }
-  if (windowIcon) {
-    return <img src={windowIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
-  }
+  const showFavicon = !!favicon && !faviconFailed
   return (
-    <div className="w-7 h-7 shrink-0 flex items-center justify-center">
-      <Globe size={18} className={darkText ? "text-black/40" : "text-white/40"} />
+    <div className="relative w-7 h-7 shrink-0">
+      {showFavicon ? (
+        <img
+          src={favicon}
+          alt=""
+          className="w-7 h-7 rounded"
+          draggable={false}
+          onError={() => setFaviconFailed(true)}
+        />
+      ) : windowIcon ? (
+        <img src={windowIcon} alt="" className="w-7 h-7" draggable={false} />
+      ) : (
+        <div className="w-7 h-7 flex items-center justify-center">
+          <Globe size={18} className={darkText ? "text-black/40" : "text-white/40"} />
+        </div>
+      )}
+      {showFavicon && windowIcon && (
+        <span
+          className="absolute flex items-center justify-center rounded-full"
+          style={{ right: -3, bottom: -3, width: 13, height: 13, backgroundColor: darkText ? "rgba(255,255,255,0.95)" : "rgba(24,24,27,0.95)" }}
+        >
+          <img src={windowIcon} alt="" style={{ width: 9, height: 9 }} draggable={false} />
+        </span>
+      )}
     </div>
   )
 }
