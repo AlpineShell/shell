@@ -9,12 +9,12 @@ export function useBrowserTabs(enabled: boolean): BrowserTab[] {
       return
     }
     let alive = true
-    window.shell.browserTabs
-      .list()
-      .then((data) => { if (alive && data.length > 0) setTabs(data) })
-      .catch(() => {})
+    const apply = (data: BrowserTab[]) => { if (alive && data.length > 0) setTabs(data) }
+    window.shell.browserTabs.list().then(apply).catch(() => {})
+    const unsubscribe = window.shell.browserTabs.onChanged(apply)
     return () => {
       alive = false
+      unsubscribe?.()
     }
   }, [enabled])
 

@@ -444,6 +444,11 @@ contextBridge.exposeInMainWorld('shell', {
   },
   browserTabs: {
     list: () => ipcRenderer.invoke('browser-tabs/list'),
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('browser-tabs/changed', handler)
+      return () => ipcRenderer.removeListener('browser-tabs/changed', handler)
+    },
     activate: (tab) => ipcRenderer.invoke('browser-tabs/activate', tab),
   },
   updates: {

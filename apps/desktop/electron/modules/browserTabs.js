@@ -3,10 +3,13 @@ const path = require('path')
 const fs = require('fs')
 const { createPersistentRunner } = require('../powershell')
 const launcherPrefs = require('./launcherPrefs')
+const browserTabFavicons = require('./browserTabFavicons')
 const { parseTabs } = require('./browserTabsParser')
 
 const COMMAND_TIMEOUT_MS = 30000
 const WARM_DELAY_MS = 30000
+
+let broadcastFn = null
 
 function scriptPath() {
   return app.isPackaged
@@ -23,9 +26,23 @@ function ensureRunner() {
   return runner
 }
 
+function scheduleFaviconEnrichment(tabs) {
+  if (tabs.length === 0) return
+  setImmediate(async () => {
+    try {
+      const attached = await browserTabFavicons.attachFavicons(tabs)
+      if (attached > 0 && broadcastFn) broadcastFn('browser-tabs/changed', tabs)
+    } catch (e) {
+      console.error('[browserTabs] favicon error:', e?.message ?? e)
+    }
+  })
+}
+
 async function listTabs() {
   try {
-    return parseTabs(await ensureRunner().run('Get-BrowserTabs'))
+    const tabs = parseTabs(await ensureRunner().run('Get-BrowserTabs'))
+    scheduleFaviconEnrichment(tabs)
+    return tabs
   } catch (e) {
     console.error('[browserTabs] list error:', e?.message ?? e)
     return []
@@ -52,7 +69,8 @@ module.exports = {
     'browser-tabs/list': () => (launcherPrefs.getShowBrowserTabs() ? listTabs() : []),
     'browser-tabs/activate': (_event, tab) => activateTab(tab),
   },
-  start() {
+  start(broadcast) {
+    broadcastFn = broadcast
     setTimeout(() => {
       if (launcherPrefs.getShowBrowserTabs()) ensureRunner().warm()
     }, WARM_DELAY_MS)

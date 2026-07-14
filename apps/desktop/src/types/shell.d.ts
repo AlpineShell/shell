@@ -293,6 +293,7 @@ declare global {
     index: number
     title: string
     selected: boolean
+    favicon?: string
   }
 
   interface RunResult {
@@ -684,6 +685,7 @@ declare global {
       }
       browserTabs: {
         list: () => Promise<BrowserTab[]>
+        onChanged: (callback: (data: BrowserTab[]) => void) => () => void
         activate: (tab: BrowserTab) => Promise<{ ok: boolean }>
       }
       network: {

@@ -1082,13 +1082,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                               idx === selected ? selectedBg : hoverBg
                             }`}
                           >
-                            {windowIcon ? (
-                              <img src={windowIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
-                            ) : (
-                              <div className="w-7 h-7 shrink-0 flex items-center justify-center">
-                                <Globe size={18} className={darkText ? "text-black/40" : "text-white/40"} />
-                              </div>
-                            )}
+                            <TabIcon favicon={tab.favicon} windowIcon={windowIcon} darkText={darkText} />
                             <div className="flex flex-col min-w-0 flex-1">
                               <span className={`text-[13px] truncate ${textColor}`}>{tab.title}</span>
                               <span className={`text-[11px] truncate ${dimText}`}>{browserTabLabel(tab.browser)} tab</span>
@@ -1281,6 +1275,29 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       </div>
     </div>,
     document.body
+  )
+}
+
+function TabIcon({ favicon, windowIcon, darkText }: { favicon?: string; windowIcon?: string; darkText: boolean }) {
+  const [faviconFailed, setFaviconFailed] = useState(false)
+  if (favicon && !faviconFailed) {
+    return (
+      <img
+        src={favicon}
+        alt=""
+        className="w-7 h-7 shrink-0 rounded"
+        draggable={false}
+        onError={() => setFaviconFailed(true)}
+      />
+    )
+  }
+  if (windowIcon) {
+    return <img src={windowIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
+  }
+  return (
+    <div className="w-7 h-7 shrink-0 flex items-center justify-center">
+      <Globe size={18} className={darkText ? "text-black/40" : "text-white/40"} />
+    </div>
   )
 }
 
