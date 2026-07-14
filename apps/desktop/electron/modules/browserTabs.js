@@ -2,6 +2,10 @@ const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { createPersistentRunner } = require('../powershell')
+const launcherPrefs = require('./launcherPrefs')
+
+const COMMAND_TIMEOUT_MS = 30000
+const WARM_DELAY_MS = 30000
 
 const CHROME_TAB_ANNOTATION = /(?: - (?:High memory usage|Memory usage) - [\d.,]+\s?[KMG]B| - (?:Audio playing|Audio muted))+$/
 
@@ -34,7 +38,7 @@ let runner = null
 
 function ensureRunner() {
   if (!runner) {
-    runner = createPersistentRunner(undefined, undefined, () => fs.readFileSync(scriptPath(), 'utf8'))
+    runner = createPersistentRunner(undefined, COMMAND_TIMEOUT_MS, () => fs.readFileSync(scriptPath(), 'utf8'))
   }
   return runner
 }
@@ -67,7 +71,12 @@ module.exports = {
   cleanTabTitle,
   parseTabs,
   handlers: {
-    'browser-tabs/list': () => listTabs(),
+    'browser-tabs/list': () => (launcherPrefs.getShowBrowserTabs() ? listTabs() : []),
     'browser-tabs/activate': (_event, tab) => activateTab(tab),
+  },
+  start() {
+    setTimeout(() => {
+      if (launcherPrefs.getShowBrowserTabs()) ensureRunner().warm()
+    }, WARM_DELAY_MS)
   },
 }

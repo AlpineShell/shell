@@ -5,13 +5,13 @@ export function useBrowserTabs(enabled: boolean): BrowserTab[] {
 
   useEffect(() => {
     if (!enabled) {
-      setTabs([])
+      setTabs((prev) => (prev.length > 0 ? [] : prev))
       return
     }
     let alive = true
     window.shell.browserTabs
       .list()
-      .then((data) => { if (alive) setTabs(data) })
+      .then((data) => { if (alive && data.length > 0) setTabs(data) })
       .catch(() => {})
     return () => {
       alive = false

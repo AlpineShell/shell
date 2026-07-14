@@ -53,6 +53,7 @@ function save() {
 }
 
 module.exports = {
+  getShowBrowserTabs: () => showBrowserTabs,
   handlers: {
     'launcher/recent-apps-get': () => showRecentApps,
     'launcher/recent-apps-set': (_event, value) => {

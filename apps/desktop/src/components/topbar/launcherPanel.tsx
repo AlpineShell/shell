@@ -116,6 +116,8 @@ function useRunCommand(query: string): RunResult | null {
 
 const RUN_ICONS = { folder: FolderOpen, file: FileText, url: Globe, shell: FolderOpen, command: Terminal }
 
+const NO_MATCHED_TABS: BrowserTab[] = []
+
 const BROWSER_TAB_LABELS: Record<string, string> = {
   chrome: "Chrome",
   msedge: "Edge",
@@ -538,7 +540,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
 
   const matchedTabs = useMemo(() => {
     const q = query.trim()
-    if (!q) return []
+    if (!q || browserTabs.length === 0) return NO_MATCHED_TABS
     const matchedHwnds = new Set(matchedOpenApps.map((a) => a.hwnd))
     const matched: { tab: BrowserTab; s: number }[] = []
     for (const tab of browserTabs) {
@@ -546,6 +548,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       const s = scoreField(q, tab.title)
       if (s >= 0) matched.push({ tab, s })
     }
+    if (matched.length === 0) return NO_MATCHED_TABS
     matched.sort((a, b) => b.s - a.s)
     return matched.slice(0, TAB_RESULT_LIMIT).map((r) => r.tab)
   }, [query, browserTabs, matchedOpenApps])
@@ -676,6 +679,16 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     return []
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextOpen, selectedEntry])
+
+  const tabsArrivedRef = useRef(false)
+  useEffect(() => {
+    if (tabsArrivedRef.current || browserTabs.length === 0) return
+    tabsArrivedRef.current = true
+    if (display.tabs.length > 0 && selected >= openOffset) {
+      setSelected((s) => s + display.tabs.length)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browserTabs])
 
   useEffect(() => {
     if (selected >= totalCount) setSelected(0)
