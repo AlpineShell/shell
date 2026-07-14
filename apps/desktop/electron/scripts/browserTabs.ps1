@@ -65,12 +65,36 @@ public class BrowserTabWalker {
         rows.Add(win.Hwnd + "\t" + win.Browser + "\t" + index + "\t" + (selected ? "1" : "0") + "\t" + Sanitize(title));
     }
 
+    private static bool UiaInsideDocument(AutomationElement element, AutomationElement windowRoot) {
+        var walker = TreeWalker.ControlViewWalker;
+        AutomationElement current = element;
+        for (int depth = 0; depth < 24; depth++) {
+            AutomationElement parent;
+            try { parent = walker.GetParent(current); } catch { return true; }
+            if (parent == null) return false;
+            try {
+                if (Automation.Compare(parent, windowRoot)) return false;
+                if (parent.Current.ControlType == ControlType.Document) return true;
+            } catch { return true; }
+            current = parent;
+        }
+        return true;
+    }
+
+    private static AutomationElement UiaTabStrip(AutomationElement window) {
+        AutomationElementCollection candidates;
+        try { candidates = window.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Tab)); } catch { return null; }
+        foreach (AutomationElement candidate in candidates) {
+            if (!UiaInsideDocument(candidate, window)) return candidate;
+        }
+        return null;
+    }
+
     private static AutomationElementCollection UiaTabItems(long hwnd) {
         AutomationElement window;
         try { window = AutomationElement.FromHandle(new IntPtr(hwnd)); } catch { return null; }
         if (window == null) return null;
-        AutomationElement strip;
-        try { strip = window.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Tab)); } catch { return null; }
+        AutomationElement strip = UiaTabStrip(window);
         if (strip == null) return null;
         try { return strip.FindAll(TreeScope.Children, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem)); } catch { return null; }
     }

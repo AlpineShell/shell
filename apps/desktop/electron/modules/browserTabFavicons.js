@@ -7,6 +7,8 @@ const chromiumPaths = require('./chromiumPaths')
 
 const HISTORY_ROW_LIMIT = 5000
 const CACHE_TTL_MS = 60000
+const FAILED_READ_TTL_MS = 5000
+const UNKNOWN_TITLE_REFRESH_MS = 15000
 
 const CHROMIUM_HISTORY_SQL =
   `SELECT title, url FROM urls WHERE title IS NOT NULL AND title != '' AND url LIKE 'http%' ORDER BY last_visit_time DESC LIMIT ${HISTORY_ROW_LIMIT}`
@@ -98,7 +100,7 @@ async function firefoxMaps(tabs) {
 
 function mapsFor(browser, tabs) {
   const cached = cacheByBrowser.get(browser)
-  if (cached && Date.now() - cached.atMs < CACHE_TTL_MS) return Promise.resolve(cached.maps)
+  if (cached && isFresh(cached, tabs)) return Promise.resolve(cached.maps)
   const pending = pendingByBrowser.get(browser)
   if (pending) return pending
   const read = (async () => {
@@ -108,7 +110,13 @@ function mapsFor(browser, tabs) {
     } catch (e) {
       console.error('[browserTabFavicons] read error:', e?.message ?? e)
     }
-    cacheByBrowser.set(browser, { atMs: Date.now(), maps })
+    const unresolvedTitles = new Set()
+    if (maps) {
+      for (const tab of tabs) {
+        if (!hostForTitle(maps.titleHost, tab.title)) unresolvedTitles.add(tab.title)
+      }
+    }
+    cacheByBrowser.set(browser, { atMs: Date.now(), maps, unresolvedTitles })
     pendingByBrowser.delete(browser)
     return maps
   })()
@@ -148,16 +156,24 @@ function applyMaps(tabs, maps) {
   return attached
 }
 
+function isFresh(entry, tabs) {
+  const age = Date.now() - entry.atMs
+  const succeeded = !!(entry.maps && entry.maps.titleHost.size > 0)
+  if (age >= (succeeded ? CACHE_TTL_MS : FAILED_READ_TTL_MS)) return false
+  if (!succeeded || age < UNKNOWN_TITLE_REFRESH_MS) return true
+  for (const tab of tabs) {
+    if (!hostForTitle(entry.maps.titleHost, tab.title) && !entry.unresolvedTitles.has(tab.title)) return false
+  }
+  return true
+}
+
 function attachFromCache(tabs) {
   let attached = 0
   let complete = true
   for (const [browser, group] of groupByBrowser(tabs)) {
     const cached = cacheByBrowser.get(browser)
-    if (!cached || Date.now() - cached.atMs >= CACHE_TTL_MS) {
-      complete = false
-      continue
-    }
-    attached += applyMaps(group, cached.maps)
+    if (cached) attached += applyMaps(group, cached.maps)
+    if (!cached || !isFresh(cached, group)) complete = false
   }
   return { attached, complete }
 }

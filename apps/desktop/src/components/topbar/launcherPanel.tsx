@@ -544,7 +544,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     if (!q || browserTabs.length === 0) return NO_MATCHED_TABS
     const matched: { tab: BrowserTab; s: number }[] = []
     for (const tab of browserTabs) {
-      const host = tab.host ?? tabMeta.get(tabKey(tab))?.host
+      const host = tabMeta.get(tabKey(tab))?.host ?? tab.host
       let s = scoreField(q, tab.title)
       if (host) s = Math.max(s, scoreField(q, host) - TAB_HOST_PENALTY)
       if (s >= 0) matched.push({ tab, s })
@@ -1076,7 +1076,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                         const idx = openOffset + i
                         const windowIcon = openApps.find((a) => a.hwnd === tab.hwnd)?.icon
                         const meta = tabMeta.get(tabKey(tab))
-                        const host = tab.host ?? meta?.host
+                        const host = meta?.host ?? tab.host
                         return (
                           <button
                             key={`tab-${tab.hwnd}-${tab.index}`}
@@ -1086,7 +1086,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                               idx === selected ? selectedBg : hoverBg
                             }`}
                           >
-                            <TabIcon favicon={tab.favicon ?? meta?.favicon} windowIcon={windowIcon} darkText={darkText} />
+                            <TabIcon favicon={meta?.favicon ?? tab.favicon} windowIcon={windowIcon} darkText={darkText} />
                             <div className="flex flex-col min-w-0 flex-1">
                               <span className={`text-[13px] truncate ${textColor}`}>{tab.title}</span>
                               <span className={`text-[11px] truncate ${dimText}`}>{host ? `${host} · ` : ""}{browserTabLabel(tab.browser)} tab</span>
