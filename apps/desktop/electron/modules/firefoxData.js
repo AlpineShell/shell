@@ -126,7 +126,7 @@ function readFaviconMapForHosts(profileDir, neededHosts) {
     JOIN moz_icons i ON i.id = ip.icon_id
     WHERE i.data IS NOT NULL AND (${clauses.join(' OR ')})
     GROUP BY i.id
-    ORDER BY i.width DESC`
+    ORDER BY COUNT(*) DESC, i.width DESC`
   const rows = winsqlite.readRows(faviconsDb, sql, ['text', 'blob'])
   return collectByHost(rows, neededHosts, toDataUrl)
 }

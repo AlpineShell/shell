@@ -58,7 +58,7 @@ function readFaviconMapForHosts(faviconsDbPath, neededHosts) {
     FROM icon_mapping im JOIN favicon_bitmaps fb ON fb.icon_id = im.icon_id
     WHERE fb.image_data IS NOT NULL AND (${clauses.join(' OR ')})
     GROUP BY fb.id
-    ORDER BY fb.width DESC`
+    ORDER BY COUNT(*) DESC, fb.width DESC`
   const rows = winsqlite.readRows(faviconsDbPath, sql, ['text', 'blob'])
   return collectByHost(rows, neededHosts, toPngDataUrl)
 }
