@@ -1,6 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const winsqlite = require('./winsqlite')
+const { hostRangeClauses, collectByHost } = require('./browserFavicons')
 
 const MAX_BOOKMARKS = 3000
 
@@ -100,10 +101,9 @@ function toDataUrl(buf) {
 }
 
 function readFaviconMap(profileDir, neededHosts) {
-  const map = new Map()
-  if (neededHosts && neededHosts.size === 0) return map
+  if (neededHosts && neededHosts.size === 0) return new Map()
   const faviconsDb = path.join(profileDir, 'favicons.sqlite')
-  if (!fs.existsSync(faviconsDb)) return map
+  if (!fs.existsSync(faviconsDb)) return new Map()
   const sql = `SELECT pg.page_url, i.data
     FROM moz_pages_w_icons pg
     JOIN moz_icons_to_pages ip ON ip.page_id = pg.id
@@ -111,16 +111,24 @@ function readFaviconMap(profileDir, neededHosts) {
     WHERE i.data IS NOT NULL AND length(i.data) > 0
     ORDER BY i.width DESC`
   const rows = winsqlite.readRows(faviconsDb, sql, ['text', 'blob'])
-  for (const [pageUrl, data] of rows) {
-    if (!pageUrl || !data) continue
-    let host
-    try { host = new URL(pageUrl).hostname } catch { continue }
-    if (!host || map.has(host)) continue
-    if (neededHosts && !neededHosts.has(host)) continue
-    const url = toDataUrl(data)
-    if (url) map.set(host, url)
-  }
-  return map
+  return collectByHost(rows, neededHosts, toDataUrl)
 }
 
-module.exports = { resolveProfileDir, readBookmarks, readFaviconMap }
+function readFaviconMapForHosts(profileDir, neededHosts) {
+  if (!neededHosts || neededHosts.size === 0) return new Map()
+  const faviconsDb = path.join(profileDir, 'favicons.sqlite')
+  if (!fs.existsSync(faviconsDb)) return new Map()
+  const clauses = hostRangeClauses(neededHosts, 'pg.page_url')
+  if (clauses.length === 0) return new Map()
+  const sql = `SELECT MIN(pg.page_url), i.data
+    FROM moz_pages_w_icons pg
+    JOIN moz_icons_to_pages ip ON ip.page_id = pg.id
+    JOIN moz_icons i ON i.id = ip.icon_id
+    WHERE i.data IS NOT NULL AND (${clauses.join(' OR ')})
+    GROUP BY i.id
+    ORDER BY i.width DESC`
+  const rows = winsqlite.readRows(faviconsDb, sql, ['text', 'blob'])
+  return collectByHost(rows, neededHosts, toDataUrl)
+}
+
+module.exports = { resolveProfileDir, readBookmarks, readFaviconMap, readFaviconMapForHosts }

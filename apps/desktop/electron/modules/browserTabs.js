@@ -10,6 +10,7 @@ const COMMAND_TIMEOUT_MS = 30000
 const WARM_DELAY_MS = 30000
 
 let broadcastFn = null
+let listGeneration = 0
 
 function scriptPath() {
   return app.isPackaged
@@ -26,12 +27,12 @@ function ensureRunner() {
   return runner
 }
 
-function scheduleFaviconEnrichment(tabs) {
+function scheduleFaviconEnrichment(tabs, generation) {
   if (tabs.length === 0) return
   setImmediate(async () => {
     try {
       const attached = await browserTabFavicons.attachFavicons(tabs)
-      if (attached > 0 && broadcastFn) broadcastFn('browser-tabs/changed', tabs)
+      if (attached > 0 && generation === listGeneration && broadcastFn) broadcastFn('browser-tabs/changed', tabs)
     } catch (e) {
       console.error('[browserTabs] favicon error:', e?.message ?? e)
     }
@@ -41,7 +42,7 @@ function scheduleFaviconEnrichment(tabs) {
 async function listTabs() {
   try {
     const tabs = parseTabs(await ensureRunner().run('Get-BrowserTabs'))
-    scheduleFaviconEnrichment(tabs)
+    scheduleFaviconEnrichment(tabs, ++listGeneration)
     return tabs
   } catch (e) {
     console.error('[browserTabs] list error:', e?.message ?? e)

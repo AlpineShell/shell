@@ -15,7 +15,7 @@ import { useLauncherMaxResults } from "../../hooks/useLauncherMaxResults"
 import { useLauncherShowBookmarks } from "../../hooks/useLauncherShowBookmarks"
 import { useBookmarks } from "../../hooks/useBookmarks"
 import { useLauncherShowBrowserTabs } from "../../hooks/useLauncherShowBrowserTabs"
-import { useBrowserTabs } from "../../hooks/useBrowserTabs"
+import { useBrowserTabs, tabFaviconKey } from "../../hooks/useBrowserTabs"
 import { EMOJIS, type EmojiEntry } from "../../lib/emojiData"
 import { getRenderableEmojis } from "../../lib/emojiRenderable"
 
@@ -216,7 +216,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const showBookmarks = useLauncherShowBookmarks()
   const bookmarks = useBookmarks(showBookmarks)
   const showBrowserTabs = useLauncherShowBrowserTabs()
-  const browserTabs = useBrowserTabs(showBrowserTabs)
+  const { tabs: browserTabs, favicons: tabFavicons } = useBrowserTabs(showBrowserTabs)
   const maxResults = useLauncherMaxResults()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
@@ -1082,7 +1082,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                               idx === selected ? selectedBg : hoverBg
                             }`}
                           >
-                            <TabIcon favicon={tab.favicon} windowIcon={windowIcon} darkText={darkText} />
+                            <TabIcon favicon={tabFavicons.get(tabFaviconKey(tab))} windowIcon={windowIcon} darkText={darkText} />
                             <div className="flex flex-col min-w-0 flex-1">
                               <span className={`text-[13px] truncate ${textColor}`}>{tab.title}</span>
                               <span className={`text-[11px] truncate ${dimText}`}>{browserTabLabel(tab.browser)} tab</span>

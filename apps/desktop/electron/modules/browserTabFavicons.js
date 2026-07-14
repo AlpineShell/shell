@@ -9,11 +9,12 @@ const HISTORY_ROW_LIMIT = 5000
 const CACHE_TTL_MS = 60000
 
 const CHROMIUM_HISTORY_SQL =
-  "SELECT title, url FROM urls WHERE title IS NOT NULL AND title != '' AND url LIKE 'http%' ORDER BY last_visit_time DESC"
+  `SELECT title, url FROM urls WHERE title IS NOT NULL AND title != '' AND url LIKE 'http%' ORDER BY last_visit_time DESC LIMIT ${HISTORY_ROW_LIMIT}`
 const FIREFOX_HISTORY_SQL =
-  "SELECT title, url FROM moz_places WHERE title IS NOT NULL AND title != '' AND url LIKE 'http%' ORDER BY last_visit_date DESC"
+  `SELECT title, url FROM moz_places WHERE title IS NOT NULL AND title != '' AND url LIKE 'http%' ORDER BY last_visit_date DESC LIMIT ${HISTORY_ROW_LIMIT}`
 
 const cacheByBrowser = new Map()
+const pendingByBrowser = new Map()
 
 function titleHostMapFromRows(rows) {
   const map = new Map()
@@ -76,7 +77,7 @@ async function chromiumMaps(browser, tabs) {
     if (hosts.size === 0) break
     const faviconsDb = path.join(dir, 'Favicons')
     if (!fs.existsSync(faviconsDb)) continue
-    mergeFirstWins(iconByHost, browserFavicons.readFaviconMap(faviconsDb, hosts))
+    mergeFirstWins(iconByHost, browserFavicons.readFaviconMapForHosts(faviconsDb, hosts))
     await yieldToEventLoop()
   }
   return { titleHost, iconByHost }
@@ -91,22 +92,28 @@ async function firefoxMaps(tabs) {
   await yieldToEventLoop()
 
   const hosts = neededHosts(tabs, titleHost)
-  const iconByHost = hosts.size > 0 ? firefoxData.readFaviconMap(profileDir, hosts) : new Map()
+  const iconByHost = hosts.size > 0 ? firefoxData.readFaviconMapForHosts(profileDir, hosts) : new Map()
   return { titleHost, iconByHost }
 }
 
-async function mapsFor(browser, tabs) {
-  const now = Date.now()
+function mapsFor(browser, tabs) {
   const cached = cacheByBrowser.get(browser)
-  if (cached && now - cached.atMs < CACHE_TTL_MS) return cached.maps
-  let maps = null
-  try {
-    maps = browser === 'firefox' ? await firefoxMaps(tabs) : await chromiumMaps(browser, tabs)
-  } catch (e) {
-    console.error('[browserTabFavicons] read error:', e?.message ?? e)
-  }
-  cacheByBrowser.set(browser, { atMs: now, maps })
-  return maps
+  if (cached && Date.now() - cached.atMs < CACHE_TTL_MS) return Promise.resolve(cached.maps)
+  const pending = pendingByBrowser.get(browser)
+  if (pending) return pending
+  const read = (async () => {
+    let maps = null
+    try {
+      maps = browser === 'firefox' ? await firefoxMaps(tabs) : await chromiumMaps(browser, tabs)
+    } catch (e) {
+      console.error('[browserTabFavicons] read error:', e?.message ?? e)
+    }
+    cacheByBrowser.set(browser, { atMs: Date.now(), maps })
+    pendingByBrowser.delete(browser)
+    return maps
+  })()
+  pendingByBrowser.set(browser, read)
+  return read
 }
 
 async function attachFavicons(tabs) {
