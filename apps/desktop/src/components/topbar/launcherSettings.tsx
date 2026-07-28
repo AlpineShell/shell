@@ -213,7 +213,7 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     label: "Revert to Windows",
     hint: "Switch back to Windows Explorer",
     icon: RotateCcw,
-    keywords: ["revert", "uninstall shell", "explorer", "windows"],
+    keywords: ["revert", "uninstall shell", "delete", "remove", "explorer", "windows"],
     control: { kind: "navigate", path: "system/revert" },
   },
   {

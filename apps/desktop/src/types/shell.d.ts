@@ -254,6 +254,13 @@ declare global {
     error: string | null
   }
 
+  interface RevertResult {
+    success: boolean
+    gpoBlocked: boolean
+    error: string | null
+    leftBehind: string[]
+  }
+
   interface SetupStatus {
     isShell: boolean
     hasStartup: boolean
@@ -563,9 +570,10 @@ declare global {
       testOut: () => Promise<void>
       relaunch: () => Promise<void>
       restartWindows: () => Promise<void>
-      revertShell: () => Promise<{ success: boolean }>
+      revertTemporary: () => Promise<RevertResult>
+      revertPermanent: () => Promise<RevertResult>
       setShell: () => Promise<{ success: boolean }>
-      uninstall: () => Promise<{ success: boolean }>
+      uninstall: () => Promise<RevertResult>
       onProgress: (callback: (step: string) => void) => void
     }
     launcher: {
