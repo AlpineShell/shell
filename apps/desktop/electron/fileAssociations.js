@@ -199,6 +199,12 @@ function writeCapabilities(extensions) {
   regAdd(REGISTERED_APPLICATIONS_KEY, APP_NAME, CAPABILITIES_PATH)
 }
 
+function fingerprint(register) {
+  const claims = Array.isArray(register) ? register : []
+  const types = claims.map((claim) => `${claim.extension}=${typeNameFor(claim.extension, claim.typeName)}`).join(',')
+  return `${openCommand()}|${iconLocation()}|${types}`
+}
+
 function apply(request) {
   const register = Array.isArray(request.register) ? request.register : []
   const unregister = Array.isArray(request.unregister) ? request.unregister : []
@@ -232,4 +238,4 @@ function openDefaultAppsSettings() {
   return shell.openExternal(DEFAULT_APPS_SETTINGS)
 }
 
-module.exports = { apply, defaultState, openDefaultAppsSettings, progIdFor }
+module.exports = { apply, fingerprint, defaultState, openDefaultAppsSettings, progIdFor }

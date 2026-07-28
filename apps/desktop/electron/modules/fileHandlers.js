@@ -17,10 +17,12 @@ const OPEN_TIMEOUT_MS = 900000
 const BACKEND_RETRY_ATTEMPTS = 6
 const BACKEND_RETRY_DELAY_MS = 1500
 const RETRYABLE_ERRORS = ['backend not running', 'backend does not accept commands']
+const FIRST_APPLY_DELAY_MS = 4000
 
 let claims = new Map()
 let openPluginsPage = null
 let synced = false
+let applyTimer = null
 
 function setPluginsPageOpener(fn) {
   openPluginsPage = typeof fn === 'function' ? fn : null
@@ -30,21 +32,24 @@ function statePath() {
   return path.join(app.getPath('userData'), STATE_FILE_NAME)
 }
 
-function readRegisteredExtensions() {
+function readState() {
   try {
     const parsed = JSON.parse(fs.readFileSync(statePath(), 'utf8'))
-    return Array.isArray(parsed.extensions) ? parsed.extensions.filter((e) => typeof e === 'string') : []
+    return {
+      extensions: Array.isArray(parsed.extensions) ? parsed.extensions.filter((e) => typeof e === 'string') : [],
+      fingerprint: typeof parsed.fingerprint === 'string' ? parsed.fingerprint : '',
+    }
   } catch (e) {
     if (e.code !== 'ENOENT') console.error('[file-handlers] state read error:', e.message)
-    return []
+    return { extensions: [], fingerprint: '' }
   }
 }
 
-function writeRegisteredExtensions(extensions) {
+function writeState(extensions, fingerprint) {
   const target = statePath()
   const temporary = `${target}.tmp`
   try {
-    fs.writeFileSync(temporary, JSON.stringify({ extensions }))
+    fs.writeFileSync(temporary, JSON.stringify({ extensions, fingerprint }))
     fs.renameSync(temporary, target)
   } catch (e) {
     console.error('[file-handlers] state write error:', e.message)
@@ -94,19 +99,27 @@ function nudgeToDefaultApps(extensions) {
 
 function sync() {
   const next = readClaims()
-  const previous = readRegisteredExtensions()
+  const stored = readState()
   const wanted = [...next.keys()].sort()
-  const gone = previous.filter((extension) => !next.has(extension))
-  const added = wanted.filter((extension) => !previous.includes(extension))
+  const register = wanted.map((extension) => ({ extension, typeName: next.get(extension).typeName }))
+  const gone = stored.extensions.filter((extension) => !next.has(extension))
+  const added = wanted.filter((extension) => !stored.extensions.includes(extension))
+  const fingerprint = fileAssociations.fingerprint(register)
   claims = next
-  if (!gone.length && !added.length && synced) return
-  fileAssociations.apply({
-    register: wanted.map((extension) => ({ extension, typeName: next.get(extension).typeName })),
-    unregister: gone,
-  })
-  writeRegisteredExtensions(wanted)
-  if (synced && added.length) nudgeToDefaultApps(added)
+  if (!gone.length && fingerprint === stored.fingerprint) {
+    synced = true
+    return
+  }
+  const delay = synced ? 0 : FIRST_APPLY_DELAY_MS
+  const shouldNudge = synced && added.length > 0
   synced = true
+  if (applyTimer) clearTimeout(applyTimer)
+  applyTimer = setTimeout(() => {
+    applyTimer = null
+    fileAssociations.apply({ register, unregister: gone })
+    writeState(wanted, fingerprint)
+    if (shouldNudge) nudgeToDefaultApps(added)
+  }, delay)
 }
 
 function findHandledFile(argv) {
