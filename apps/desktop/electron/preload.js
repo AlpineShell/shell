@@ -108,6 +108,7 @@ contextBridge.exposeInMainWorld('plugins', {
     ipcRenderer.on('plugins/deep-install', handler)
     return () => ipcRenderer.removeListener('plugins/deep-install', handler)
   },
+  command: (id, name, payload) => ipcRenderer.invoke('plugins/command', { id, name, payload }),
   getData: (channel) => ipcRenderer.invoke('plugins/data-get', channel),
   onData: (channel, callback) => {
     const handler = (_event, payload) => {
