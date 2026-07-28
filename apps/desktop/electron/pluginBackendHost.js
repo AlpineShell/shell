@@ -91,16 +91,17 @@ function rejectPending(state, reason) {
   }
 }
 
-function sendCommand(id, name, payload) {
+function sendCommand(id, name, payload, options) {
   const state = running.get(id)
   if (!state) return Promise.resolve({ ok: false, error: 'backend not running' })
   if (typeof name !== 'string' || !name) return Promise.resolve({ ok: false, error: 'invalid command' })
+  const timeoutMs = options && Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : COMMAND_TIMEOUT_MS
   const callId = nextCallId++
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       state.pending.delete(callId)
       resolve({ ok: false, error: 'command timed out' })
-    }, COMMAND_TIMEOUT_MS)
+    }, timeoutMs)
     state.pending.set(callId, { resolve, timer })
     try {
       state.proc.postMessage({ type: 'command', callId, name, payload })
@@ -153,4 +154,5 @@ module.exports = {
     plugins.onPluginsChanged(sync)
     sync()
   },
+  sendCommand,
 }

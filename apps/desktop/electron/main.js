@@ -35,6 +35,8 @@ const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const plugins = require('./modules/plugins')
 const pluginBackendHost = require('./pluginBackendHost')
+const shellNotice = require('./modules/shellNotice')
+const fileHandlers = require('./modules/fileHandlers')
 const displayConfig = require('./modules/displayConfig')
 const clockPrefs = require('./modules/clockPrefs')
 const bookmarks = require('./modules/bookmarks')
@@ -101,7 +103,14 @@ app.on('second-instance', (_event, argv) => {
   const link = argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
   if (link) {
     handleDeepLink(link)
-  } else if (settingsWin && !settingsWin.isDestroyed()) {
+    return
+  }
+  const file = fileHandlers.findHandledFile(argv)
+  if (file) {
+    fileHandlers.openFile(file).catch((e) => console.error('[main] file open failed:', e && e.message))
+    return
+  }
+  if (settingsWin && !settingsWin.isDestroyed()) {
     if (settingsWin.isMinimized()) settingsWin.restore()
     settingsWin.focus()
   }
@@ -675,7 +684,10 @@ app.whenReady().then(async () => {
     }
   })
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost)
+  shellNotice.configure({ url: getURL('notice'), loadUrl: loadAppURL })
+  fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
+
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
 
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
@@ -712,6 +724,13 @@ app.whenReady().then(async () => {
 
   const startupLink = process.argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
   if (startupLink) setTimeout(() => handleDeepLink(startupLink), 500)
+
+  const startupFile = fileHandlers.findHandledFile(process.argv)
+  if (startupFile) {
+    setTimeout(() => {
+      fileHandlers.openFile(startupFile).catch((e) => console.error('[main] file open failed:', e && e.message))
+    }, 1500)
+  }
 })
 
 function getUpdateReadyMarkerPath() {

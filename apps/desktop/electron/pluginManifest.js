@@ -9,10 +9,29 @@ const {
 } = require('@alpine/plugin-sdk')
 
 const CATEGORY_SET = new Set(MARKETPLACE_CATEGORIES)
-const CONTRIBUTION_KEYS = ['topbarWidgets', 'settingsPages', 'launcherCommands', 'backendModules']
+const CONTRIBUTION_KEYS = [
+  'topbarWidgets',
+  'settingsPages',
+  'launcherCommands',
+  'backendModules',
+  'fileHandlers',
+  'launcherFolders',
+]
+const EXTENSION_PATTERN = /^\.[a-z0-9][a-z0-9+._-]*$/
 
 function arr(value) {
   return Array.isArray(value) ? value : []
+}
+
+function normalizeExtensions(value) {
+  const out = []
+  for (const raw of arr(value)) {
+    if (typeof raw !== 'string') continue
+    const extension = raw.trim().toLowerCase()
+    if (!EXTENSION_PATTERN.test(extension)) continue
+    if (!out.includes(extension)) out.push(extension)
+  }
+  return out
 }
 
 function confinedFile(realBase, rel) {
@@ -64,6 +83,34 @@ function validateContributions(raw, apiVersion, push) {
       }
       if (key === 'launcherCommands' && !['action', 'provider'].includes(c.kind)) {
         push(`contributes.launcherCommands: invalid kind '${c.kind}'`)
+        continue
+      }
+      if (key === 'fileHandlers') {
+        const extensions = normalizeExtensions(c.extensions)
+        if (!extensions.length) {
+          push("contributes.fileHandlers: 'extensions' must list at least one extension like '.apk'")
+          continue
+        }
+        if (typeof c.command !== 'string' || !c.command) {
+          push("contributes.fileHandlers: 'command' must be a non-empty string")
+          continue
+        }
+        kept.push({
+          ...c,
+          extensions,
+          command: c.command,
+          name: typeof c.name === 'string' && c.name ? c.name : null,
+          export: c.export || 'default',
+        })
+        continue
+      }
+      if (key === 'launcherFolders') {
+        const folder = typeof c.startMenuFolder === 'string' ? c.startMenuFolder.trim() : ''
+        if (!folder || /[\\/:*?"<>|]/.test(folder) || folder === '.' || folder === '..') {
+          push("contributes.launcherFolders: 'startMenuFolder' must be a plain folder name")
+          continue
+        }
+        kept.push({ ...c, startMenuFolder: folder, export: c.export || 'default' })
         continue
       }
       kept.push({ ...c, export: c.export || 'default' })

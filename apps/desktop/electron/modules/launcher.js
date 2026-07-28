@@ -7,6 +7,7 @@ const appIcons = require('./appIcons')
 const appManager = require('./appManager')
 const appActivator = require('../appActivator')
 const frecency = require('./frecency')
+const plugins = require('./plugins')
 
 const SCAN_DIRS = [
   path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -125,21 +126,58 @@ function readShortcutInfoCached(scPath, isUrl) {
   return info
 }
 
+function dormantPluginFolders() {
+  const folders = new Set()
+  let records = []
+  try {
+    records = plugins.listPlugins()
+  } catch (e) {
+    console.error('[launcher] plugin folder lookup failed:', e && e.message)
+    return folders
+  }
+  for (const record of records) {
+    const contributed = (record.contributes && record.contributes.launcherFolders) || []
+    if (!contributed.length) continue
+    if (record.enabled !== false && record.loadable === true) continue
+    for (const entry of contributed) folders.add(String(entry.startMenuFolder).toLowerCase())
+  }
+  return folders
+}
+
+function isInDormantFolder(scPath, dormantFolders) {
+  if (dormantFolders.size === 0) return false
+  for (const dir of SCAN_DIRS) {
+    if (!dir) continue
+    const relative = path.relative(dir, scPath)
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue
+    const segments = relative.split(path.sep)
+    segments.pop()
+    if (segments.some((segment) => dormantFolders.has(segment.toLowerCase()))) return true
+  }
+  return false
+}
+
 function collectLnkItems() {
   const shortcutPaths = []
   for (const dir of SCAN_DIRS) walkShortcuts(dir, shortcutPaths)
 
+  const dormantFolders = dormantPluginFolders()
   const seenNames = new Set()
   const items = []
 
   for (const scPath of shortcutPaths) {
+    const name = path.basename(scPath, path.extname(scPath))
+    const dedupeKey = name.toLowerCase()
+    if (isInDormantFolder(scPath, dormantFolders)) {
+      seenNames.add(dedupeKey)
+      continue
+    }
+
     const isUrl = scPath.toLowerCase().endsWith('.url')
     const info = readShortcutInfoCached(scPath, isUrl)
     if (!info?.target) continue
     if (info.target.toLowerCase().startsWith('ms-settings:')) continue
 
-    const name = path.basename(scPath, path.extname(scPath))
-    const dedupeKey = name.toLowerCase()
     if (BLOCKED_NAMES.has(dedupeKey)) continue
     if (seenNames.has(dedupeKey)) continue
     seenNames.add(dedupeKey)
@@ -591,6 +629,7 @@ module.exports = {
     appActivator.warm()
     refreshStartApps().catch((e) => console.error('[launcher] start apps error:', e.message))
     watchScanDirs()
+    plugins.onPluginsChanged(scheduleRebuild)
     setInterval(() => {
       refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
     }, START_APPS_REFRESH_INTERVAL)
