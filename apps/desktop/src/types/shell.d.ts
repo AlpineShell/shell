@@ -454,6 +454,12 @@ declare global {
     useShallow: typeof import('zustand/react/shallow').useShallow
   }
 
+  interface PluginCommandResult<T = unknown> {
+    ok: boolean
+    value?: T
+    error?: string
+  }
+
   interface AlpinePluginRuntime {
     version: number
     React: typeof import('react')
@@ -481,6 +487,7 @@ declare global {
     useDarkText: () => boolean
     useTopbarBg: () => string
     usePluginData: <T>(channel: string, initial: T) => T
+    sendCommand: (pluginId: string, name: string, payload?: unknown) => Promise<PluginCommandResult>
     store: AlpineStoreRuntime
     PopupMenu: import('react').ComponentType<{
       trigger: import('react').ReactNode
@@ -558,6 +565,7 @@ declare global {
         openWeb: (id: string) => Promise<boolean>
       }
       onDeepInstall: (callback: (payload: DeepInstallRequest) => void) => () => void
+      command: <T = unknown>(id: string, name: string, payload?: unknown) => Promise<PluginCommandResult<T>>
       getData: <T = unknown>(channel: string) => Promise<T | null>
       onData: <T = unknown>(channel: string, callback: (data: T) => void) => () => void
       onReload: (callback: () => void) => () => void

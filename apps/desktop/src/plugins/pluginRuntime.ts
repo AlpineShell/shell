@@ -33,6 +33,10 @@ function usePluginData<T>(channel: string, initial: T): T {
   return value
 }
 
+function sendCommand(pluginId: string, name: string, payload?: unknown): Promise<PluginCommandResult> {
+  return window.plugins.command(pluginId, name, payload)
+}
+
 export function installPluginRuntime() {
   if (installed) return
   installed = true
@@ -63,6 +67,7 @@ export function installPluginRuntime() {
     useDarkText,
     useTopbarBg,
     usePluginData,
+    sendCommand,
     store: { createStore, useStore, useShallow },
     PopupMenu,
   }

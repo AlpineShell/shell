@@ -4,6 +4,7 @@
 // touches Electron main-process APIs, and a crash here cannot take down the shell.
 
 let stopHandler = null
+let commandHandler = null
 
 function post(message) {
   try {
@@ -32,6 +33,9 @@ function makeContext(init) {
     },
     onStop(handler) {
       if (typeof handler === 'function') stopHandler = handler
+    },
+    onCommand(handler) {
+      if (typeof handler === 'function') commandHandler = handler
     },
     poll(channel, fn, everyMs) {
       const tick = () => {
@@ -94,11 +98,26 @@ async function startBackend(init) {
   }
 }
 
+async function runCommand(msg) {
+  if (!commandHandler) {
+    post({ type: 'commandResult', callId: msg.callId, ok: false, error: 'backend does not accept commands' })
+    return
+  }
+  try {
+    const value = await commandHandler(msg.name, msg.payload)
+    post({ type: 'commandResult', callId: msg.callId, ok: true, value })
+  } catch (e) {
+    post({ type: 'commandResult', callId: msg.callId, ok: false, error: (e && e.message) || toText(e) })
+  }
+}
+
 process.parentPort.on('message', async (event) => {
   const msg = event && event.data
   if (!msg || typeof msg !== 'object') return
   if (msg.type === 'init') {
     await startBackend(msg)
+  } else if (msg.type === 'command') {
+    await runCommand(msg)
   } else if (msg.type === 'stop') {
     await runStop()
     post({ type: 'stopped' })

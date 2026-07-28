@@ -12,8 +12,10 @@ const { utilityProcess } = require('electron')
 const plugins = require('./modules/plugins')
 
 const RUNTIME_ENTRY = path.join(__dirname, 'pluginBackendRuntime.js')
+const COMMAND_TIMEOUT_MS = 30000
 
 let broadcastFn = null
+let nextCallId = 1
 const running = new Map() // id -> { proc, channels: Set<string> }
 const lastByChannel = new Map() // channel -> last published data
 
@@ -42,7 +44,7 @@ function startBackend(record) {
     console.error(`[plugin-backend] "${record.id}": fork failed:`, e && e.message)
     return
   }
-  const state = { proc, channels: new Set() }
+  const state = { proc, channels: new Set(), pending: new Map() }
   running.set(record.id, state)
 
   proc.on('message', (msg) => {
@@ -57,6 +59,13 @@ function startBackend(record) {
       }
       lastByChannel.set(channel, msg.data)
       if (broadcastFn) broadcastFn('plugins/data', { channel, data: msg.data })
+    } else if (msg.type === 'commandResult') {
+      const settle = state.pending.get(msg.callId)
+      if (settle) {
+        state.pending.delete(msg.callId)
+        clearTimeout(settle.timer)
+        settle.resolve(msg.ok ? { ok: true, value: msg.value } : { ok: false, error: msg.error || 'command failed' })
+      }
     } else if (msg.type === 'log') {
       console.log(`[plugin-backend:${record.id}]`, ...(Array.isArray(msg.args) ? msg.args : []))
     } else if (msg.type === 'error') {
@@ -66,6 +75,7 @@ function startBackend(record) {
 
   proc.on('exit', (code) => {
     if (code) console.error(`[plugin-backend] "${record.id}" exited with code ${code}`)
+    rejectPending(state, 'backend exited')
     forgetChannels(state)
     if (running.get(record.id) === state) running.delete(record.id)
   })
@@ -73,10 +83,40 @@ function startBackend(record) {
   proc.postMessage({ type: 'init', id: record.id, dir: path.dirname(entry), entry })
 }
 
+function rejectPending(state, reason) {
+  for (const [callId, settle] of state.pending) {
+    clearTimeout(settle.timer)
+    settle.resolve({ ok: false, error: reason })
+    state.pending.delete(callId)
+  }
+}
+
+function sendCommand(id, name, payload) {
+  const state = running.get(id)
+  if (!state) return Promise.resolve({ ok: false, error: 'backend not running' })
+  if (typeof name !== 'string' || !name) return Promise.resolve({ ok: false, error: 'invalid command' })
+  const callId = nextCallId++
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      state.pending.delete(callId)
+      resolve({ ok: false, error: 'command timed out' })
+    }, COMMAND_TIMEOUT_MS)
+    state.pending.set(callId, { resolve, timer })
+    try {
+      state.proc.postMessage({ type: 'command', callId, name, payload })
+    } catch (e) {
+      state.pending.delete(callId)
+      clearTimeout(timer)
+      resolve({ ok: false, error: (e && e.message) || 'postMessage failed' })
+    }
+  })
+}
+
 function stopBackend(id) {
   const state = running.get(id)
   if (!state) return
   running.delete(id)
+  rejectPending(state, 'backend stopped')
   forgetChannels(state)
   try {
     state.proc.postMessage({ type: 'stop' })
@@ -104,7 +144,10 @@ function sync() {
 }
 
 module.exports = {
-  handlers: {},
+  handlers: {
+    'plugins/command': (_event, payload) =>
+      sendCommand(payload && payload.id, payload && payload.name, payload && payload.payload),
+  },
   start(broadcast) {
     broadcastFn = broadcast
     plugins.onPluginsChanged(sync)
