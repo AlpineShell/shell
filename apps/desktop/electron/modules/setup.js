@@ -3,8 +3,11 @@ const path = require('path')
 const { execSync, execFileSync, spawn } = require('child_process')
 const fs = require('fs')
 const installer = require('./installer')
+const updater = require('./updater')
 
 const CURSOR_VARIANT = 'Bibata-Original-Ice'
+const REVERT_QUIT_DELAY_MS = 1200
+const XAML_START_MENU_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced'
 
 const CURSOR_REGISTRY_MAP = {
   'Arrow': 'Pointer.cur',
@@ -86,6 +89,7 @@ function getShellExePath() {
 }
 
 function setAsShell() {
+  installer.setShellOptOut(false)
   const shellValue = getShellExePath()
   regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', shellValue)
 
@@ -95,7 +99,7 @@ function setAsShell() {
     console.error('[setup] Could not set AutoRestartShell (may need admin):', e.message)
   }
 
-  regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu', '0', 'REG_DWORD')
+  regAdd(XAML_START_MENU_KEY, 'EnableXamlStartMenu', '0', 'REG_DWORD')
   regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'RestartApps', '0', 'REG_DWORD')
 
   try {
@@ -117,6 +121,7 @@ function setStartup() {
 
 function ensureShellRegistration() {
   if (!app.isPackaged) return null
+  if (installer.isShellOptedOut()) return null
   if (hasGpoShellOverride()) return null
 
   const desiredShell = getShellExePath()
@@ -132,6 +137,10 @@ function ensureShellRegistration() {
   const currentRun = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell')
   if (currentRun !== desiredRun) {
     try { regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', desiredRun) } catch {}
+  }
+
+  if (regQuery(XAML_START_MENU_KEY, 'EnableXamlStartMenu') === null) {
+    try { regAdd(XAML_START_MENU_KEY, 'EnableXamlStartMenu', '0', 'REG_DWORD') } catch {}
   }
 
   return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
@@ -200,6 +209,20 @@ const yield_ = () => new Promise(r => setTimeout(r, 50))
 
 function progress(step) {
   if (broadcast) broadcast('setup/progress', step)
+}
+
+function runRevert(action) {
+  if (!app.isPackaged) return { success: false, gpoBlocked: false, error: 'Unavailable in development.', leftBehind: [] }
+  if (updater.isUpdatePending()) return { success: false, gpoBlocked: false, error: 'An update is in progress. Try again once it has finished.', leftBehind: [] }
+
+  const result = action()
+  if (result.success) setTimeout(() => app.quit(), REVERT_QUIT_DELAY_MS)
+  return {
+    success: result.success,
+    gpoBlocked: hasGpoShellOverride(),
+    error: result.error,
+    leftBehind: result.leftBehind ?? [],
+  }
 }
 
 module.exports = {
@@ -288,18 +311,13 @@ module.exports = {
       execSync('shutdown /r /t 5 /c "Restarting to apply Alpine Shell"', { windowsHide: true })
       app.exit()
     },
-    'setup/revert-shell': () => {
-      installer.revertShell()
-      return { success: true }
-    },
+    'setup/revert-temporary': () => runRevert(() => installer.revertShellTemporarily()),
+    'setup/revert-permanent': () => runRevert(() => installer.revertShellPermanently()),
+    'setup/uninstall': () => runRevert(() => installer.uninstall()),
     'setup/set-shell': () => {
       setAsShell()
       setStartup()
       return { success: verifyShellWrite() }
-    },
-    'setup/uninstall': () => {
-      installer.uninstall()
-      return { success: true }
     },
   },
 

@@ -4,8 +4,14 @@ const { execSync, execFileSync, execFile, spawn } = require('child_process')
 const fs = require('fs')
 const originalFs = require('original-fs')
 const crypto = require('crypto')
+const os = require('os')
+const revertScript = require('./revertScript')
 
 const PRODUCT_NAME = 'Alpine Shell'
+const INSTALL_DIR_NAME = 'alpine-shell'
+const WINLOGON_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+const SHELL_OPT_OUT_FILE = '.shell-opt-out'
+const SHELL_REVERT_FAILED = 'Could not hand the Windows shell back to Explorer.'
 
 const CURSOR_REGISTRY_NAMES = [
   'Arrow', 'Help', 'AppStarting', 'Wait', 'Crosshair', 'IBeam',
@@ -13,8 +19,31 @@ const CURSOR_REGISTRY_NAMES = [
   'SizeAll', 'UpArrow', 'Hand', 'Pin', 'Person',
 ]
 
+function getCanonicalInstallDir() {
+  return path.join(process.env.LOCALAPPDATA || '', 'Programs', INSTALL_DIR_NAME)
+}
+
 function getInstallDir() {
-  return path.join(process.env.LOCALAPPDATA, 'Programs', PRODUCT_NAME)
+  if (app.isPackaged && !isPortableRun()) return path.dirname(process.execPath)
+  return getCanonicalInstallDir()
+}
+
+function getDeletableInstallDir() {
+  const installDir = getInstallDir()
+  const canonical = getCanonicalInstallDir()
+  if (!process.env.LOCALAPPDATA) return null
+  return path.resolve(installDir).toLowerCase() === path.resolve(canonical).toLowerCase() ? installDir : null
+}
+
+function getNsisUninstallerPath() {
+  return path.join(getInstallDir(), `Uninstall ${PRODUCT_NAME}.exe`)
+}
+
+function getUserDataDirs() {
+  const dirs = [app.getPath('userData')]
+  const legacyDir = path.join(process.env.APPDATA, PRODUCT_NAME)
+  if (!dirs.includes(legacyDir)) dirs.push(legacyDir)
+  return dirs
 }
 
 function getInstalledExePath() {
@@ -58,12 +87,92 @@ function getInstalledVersion() {
 }
 
 function revertShell() {
-  try { regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', 'explorer.exe') } catch {}
+  try { regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe') } catch {}
   try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell') } catch {}
   try { regAdd('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'AutoRestartShell', '1', 'REG_DWORD') } catch {}
-  try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'RestartApps') } catch {}
+  try { regDelete(WINLOGON_KEY, 'RestartApps') } catch {}
   try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
   try { execSync('schtasks /change /tn "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" /enable', { windowsHide: true }) } catch {}
+}
+
+function isShellRevertedToExplorer() {
+  const currentShell = regQuery(WINLOGON_KEY, 'Shell')
+  return currentShell !== null && currentShell.toLowerCase().includes('explorer.exe')
+}
+
+function getShellOptOutPath() {
+  return path.join(app.getPath('userData'), SHELL_OPT_OUT_FILE)
+}
+
+function isShellOptedOut() {
+  return fs.existsSync(getShellOptOutPath())
+}
+
+function setShellOptOut(optedOut) {
+  try {
+    if (optedOut) fs.writeFileSync(getShellOptOutPath(), new Date().toISOString())
+    else fs.rmSync(getShellOptOutPath(), { force: true })
+  } catch {}
+}
+
+function writeRevertHelper(scriptName, script) {
+  const scriptPath = path.join(process.env.TEMP || os.tmpdir(), scriptName)
+  fs.writeFileSync(scriptPath, script)
+  return scriptPath
+}
+
+function launchRevertHelper(scriptPath, env) {
+  const child = spawn('cmd', ['/c', scriptPath], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+    env: { ...process.env, ...env },
+  })
+  child.on('error', (e) => console.error('[installer] Revert helper failed to start:', e.message))
+  child.unref()
+}
+
+function getProcessImageName() {
+  return path.basename(process.execPath)
+}
+
+function revertShellTemporarily() {
+  try {
+    const helper = revertScript.buildTemporaryRevertScript({
+      processImageName: getProcessImageName(),
+      shellKeyPath: WINLOGON_KEY,
+      shellExePath: getInstalledExePath(),
+    })
+    const scriptPath = writeRevertHelper('alpine_revert_temporary.bat', helper.script)
+
+    regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
+    if (!isShellRevertedToExplorer()) return { success: false, error: SHELL_REVERT_FAILED }
+    try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
+
+    launchRevertHelper(scriptPath, helper.env)
+    return { success: true, error: null }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+}
+
+function revertShellPermanently() {
+  try {
+    const helper = revertScript.buildPermanentRevertScript({ processImageName: getProcessImageName() })
+    const scriptPath = writeRevertHelper('alpine_revert_permanent.bat', helper.script)
+
+    regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
+    if (!isShellRevertedToExplorer()) return { success: false, error: SHELL_REVERT_FAILED }
+
+    setShellOptOut(true)
+    revertShell()
+    restoreDefaultCursors()
+
+    launchRevertHelper(scriptPath, helper.env)
+    return { success: true, error: null }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
 }
 
 async function installFiles() {
@@ -117,9 +226,7 @@ function getDirSize(dirPath) {
   return total
 }
 
-function revertSystemChanges() {
-  revertShell()
-
+function restoreDefaultCursors() {
   const cursorKey = 'HKCU\\Control Panel\\Cursors'
   for (const name of CURSOR_REGISTRY_NAMES) {
     try { regDelete(cursorKey, name) } catch {}
@@ -129,26 +236,52 @@ function revertSystemChanges() {
 
   const cursorDir = path.join(app.getPath('userData'), 'cursors')
   if (fs.existsSync(cursorDir)) fs.rmSync(cursorDir, { recursive: true, force: true })
+}
 
+function clearSetupFlag() {
   const flagPath = path.join(app.getPath('userData'), '.setup-complete')
   if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath)
 }
 
-function uninstall() {
-  revertSystemChanges()
+function revertSystemChanges() {
+  revertShell()
+  restoreDefaultCursors()
+  clearSetupFlag()
+}
 
-  try { fs.rmdirSync(app.getPath('userData')) } catch {}
-
+function removeStartMenuShortcut() {
   const shortcutPath = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', `${PRODUCT_NAME}.lnk`)
   if (fs.existsSync(shortcutPath)) fs.unlinkSync(shortcutPath)
+}
 
-  try { regDeleteKey('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\AlpineShell') } catch {}
+function uninstall() {
+  try {
+    const nsisUninstaller = getNsisUninstallerPath()
+    const uninstallerPath = fs.existsSync(nsisUninstaller) ? nsisUninstaller : null
+    const helper = revertScript.buildUninstallScript({
+      processImageName: getProcessImageName(),
+      uninstallerPath,
+      installDir: getInstallDir(),
+      deletableInstallDir: getDeletableInstallDir(),
+      userDataDirs: getUserDataDirs(),
+    })
+    const scriptPath = writeRevertHelper('alpine_uninstall.bat', helper.script)
 
-  const installDir = getInstallDir()
-  const batchPath = path.join(process.env.TEMP, 'alpine_uninstall.bat')
-  const batch = `@echo off\r\n:retry\r\ntimeout /t 2 /nobreak >nul\r\nrd /s /q "${installDir}"\r\nif exist "${installDir}" goto retry\r\ndel "%~f0"\r\n`
-  fs.writeFileSync(batchPath, batch)
-  spawn('cmd', ['/c', batchPath], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
+    if (!isShellRevertedToExplorer()) return { success: false, error: SHELL_REVERT_FAILED, leftBehind: [] }
+
+    setShellOptOut(true)
+    revertSystemChanges()
+    try { removeStartMenuShortcut() } catch {}
+    if (!uninstallerPath) {
+      try { regDeleteKey('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\AlpineShell') } catch {}
+    }
+
+    launchRevertHelper(scriptPath, helper.env)
+    return { success: true, error: null, leftBehind: helper.skippedDirs }
+  } catch (e) {
+    return { success: false, error: e.message, leftBehind: [] }
+  }
 }
 
 function relaunchFromInstalled() {
@@ -276,6 +409,8 @@ function startBrandedUpdate(installerPath, version) {
 module.exports = {
   getInstallDir,
   getInstalledExePath,
+  getNsisUninstallerPath,
+  getUserDataDirs,
   isPortableRun,
   isInstalled,
   getInstalledVersion,
@@ -285,6 +420,10 @@ module.exports = {
   uninstall,
   revertSystemChanges,
   revertShell,
+  revertShellTemporarily,
+  revertShellPermanently,
+  isShellOptedOut,
+  setShellOptOut,
   relaunchFromInstalled,
   startBrandedUpdate,
   ensureUpdaterExe,

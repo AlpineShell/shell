@@ -136,7 +136,13 @@ autoUpdater.on('error', (err) => {
   if (allowRetryForCurrentCheck) scheduleRetry()
 })
 
+function isUpdatePending() {
+  return state.status === 'downloading' || state.status === 'downloaded'
+}
+
 module.exports = {
+  isUpdatePending,
+
   handlers: {
     'updates/get-state': () => state,
 

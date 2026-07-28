@@ -749,7 +749,7 @@ function startShellMode() {
   let isAlpineShell = null
   if (!setup.isFirstRun()) isAlpineShell = setup.ensureShellRegistration()
 
-  if (shouldTakeOverExplorer && !(isAlpineShell ?? setup.isDefaultShell())) {
+  if (shouldTakeOverExplorer && !installer.isShellOptedOut() && !(isAlpineShell ?? setup.isDefaultShell())) {
     killedExplorer = setup.killExplorer()
   }
 

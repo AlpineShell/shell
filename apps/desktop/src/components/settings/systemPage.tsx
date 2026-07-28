@@ -10,7 +10,7 @@ const ROWS = [
   {
     path: 'system/revert',
     label: 'Revert back to Windows',
-    description: 'Switch back to Windows Explorer or fully remove Alpine Shell',
+    description: 'Switch back to Windows Explorer temporarily or for good, or remove Alpine Shell',
     icon: RotateCcw,
   },
 ]

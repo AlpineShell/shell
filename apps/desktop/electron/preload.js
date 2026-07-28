@@ -229,7 +229,8 @@ contextBridge.exposeInMainWorld('setup', {
   testOut: () => ipcRenderer.invoke('setup/test-out'),
   relaunch: () => ipcRenderer.invoke('setup/relaunch'),
   restartWindows: () => ipcRenderer.invoke('setup/restart-windows'),
-  revertShell: () => ipcRenderer.invoke('setup/revert-shell'),
+  revertTemporary: () => ipcRenderer.invoke('setup/revert-temporary'),
+  revertPermanent: () => ipcRenderer.invoke('setup/revert-permanent'),
   setShell: () => ipcRenderer.invoke('setup/set-shell'),
   uninstall: () => ipcRenderer.invoke('setup/uninstall'),
   onProgress: (callback) => {
