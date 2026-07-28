@@ -686,6 +686,7 @@ app.whenReady().then(async () => {
 
   shellNotice.configure({ url: getURL('notice'), loadUrl: loadAppURL })
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
+  launcher.setPluginsPageOpener(() => openSettingsToPlugins())
 
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
 

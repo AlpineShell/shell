@@ -8,6 +8,7 @@ const appManager = require('./appManager')
 const appActivator = require('../appActivator')
 const frecency = require('./frecency')
 const plugins = require('./plugins')
+const notice = require('./shellNotice')
 
 const SCAN_DIRS = [
   path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -45,6 +46,22 @@ function setEmojiCapture(active, hwnd) {
 
 const LAUNCHER_WIDTH = 600
 const START_APPS_REFRESH_INTERVAL = 1800000
+const ACTIVATION_MEMORY_MS = 20000
+
+let openPluginsPage = null
+const recentActivations = new Map()
+
+function setPluginsPageOpener(fn) {
+  openPluginsPage = typeof fn === 'function' ? fn : null
+}
+
+function rememberActivation(item) {
+  const key = item.appId.toLowerCase()
+  recentActivations.set(key, item)
+  setTimeout(() => {
+    if (recentActivations.get(key) === item) recentActivations.delete(key)
+  }, ACTIVATION_MEMORY_MS)
+}
 
 function publishIndex() {
   if (!broadcast) return
@@ -504,18 +521,86 @@ function findItem(id) {
   return index.find((i) => i.id === id)
 }
 
+function owningPlugin(item) {
+  if (!item || !item.lnkPath) return null
+  let records = []
+  try {
+    records = plugins.listPlugins()
+  } catch {
+    return null
+  }
+  for (const record of records) {
+    const contributed = (record.contributes && record.contributes.launcherFolders) || []
+    for (const entry of contributed) {
+      const folders = new Set([String(entry.startMenuFolder).toLowerCase()])
+      if (isInDormantFolder(item.lnkPath, folders)) return record
+    }
+  }
+  return null
+}
+
+function removeShortcut(item) {
+  try {
+    fs.unlinkSync(item.lnkPath)
+  } catch (e) {
+    console.error('[launcher] shortcut removal failed:', e.message)
+    return
+  }
+  scheduleRebuild()
+}
+
+function repairAction(item) {
+  const plugin = owningPlugin(item)
+  if (plugin) return { label: `Open ${plugin.name} settings`, run: () => openPluginsPage && openPluginsPage() }
+  if (item.lnkPath && fs.existsSync(item.lnkPath)) return { label: 'Remove this shortcut', run: () => removeShortcut(item) }
+  return { label: 'Refresh the app list', run: () => scheduleRebuild() }
+}
+
+function reportLaunchFailure(item, message) {
+  notice.show({
+    id: 'launch-failure',
+    title: item.name,
+    message,
+    tone: 'error',
+    action: repairAction(item),
+    timeoutMs: 0,
+  })
+}
+
+function looksLikeFilesystemTarget(target) {
+  return typeof target === 'string' && /^[a-zA-Z]:[\\/]/.test(target)
+}
+
+function shortcutProblem(item) {
+  if (!fs.existsSync(item.lnkPath)) return `The shortcut for ${item.name} is gone.`
+  if (item.isUrl) return null
+  const target = appIcons.expandEnv(item.target || '')
+  if (!looksLikeFilesystemTarget(target)) return null
+  if (fs.existsSync(target)) return null
+  const plugin = owningPlugin(item)
+  if (plugin) return `${item.name} needs ${plugin.name}, and what it points at is not there.`
+  return `${item.name} is not installed any more.`
+}
+
 function launchItem(item) {
   if (!item) return { success: false }
   if (item.lnkPath) {
+    const problem = shortcutProblem(item)
+    if (problem) {
+      reportLaunchFailure(item, problem)
+      return { success: false }
+    }
     electronShell.openPath(item.lnkPath).then((err) => {
-      if (err) {
-        console.error('[launcher] openPath failed for', item.lnkPath, '-', err)
-        execFile('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${item.lnkPath.replace(/'/g, "''")}'`], { windowsHide: true }, (e) => {
-          if (e) console.error('[launcher] start-process fallback error:', e.message)
-        })
-      }
+      if (!err) return
+      console.error('[launcher] openPath failed for', item.lnkPath, '-', err)
+      execFile('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${item.lnkPath.replace(/'/g, "''")}'`], { windowsHide: true }, (e) => {
+        if (!e) return
+        console.error('[launcher] start-process fallback error:', e.message)
+        reportLaunchFailure(item, `Windows could not start ${item.name}: ${err}`)
+      })
     })
   } else if (item.appId) {
+    rememberActivation(item)
     appActivator.activate(item.appId)
   }
   frecency.record(item.target)
@@ -525,8 +610,14 @@ function launchItem(item) {
 function launchAdminItem(item) {
   if (!item) return { success: false }
   if (item.lnkPath) {
+    const problem = shortcutProblem(item)
+    if (problem) {
+      reportLaunchFailure(item, problem)
+      return { success: false }
+    }
     exec(`powershell -NoProfile -Command "Start-Process '${item.lnkPath.replace(/'/g, "''")}' -Verb RunAs"`, { windowsHide: true })
   } else if (item.appId) {
+    rememberActivation(item)
     appActivator.activate(item.appId)
   }
   frecency.record(item.target)
@@ -614,6 +705,7 @@ module.exports = {
     'apps/app-uninstall': (_event, id) => uninstallItem(findItem(id)),
   },
   setShells,
+  setPluginsPageOpener,
   showFromHotkey,
   showEmoji,
   forwardEmojiKey,
@@ -627,6 +719,12 @@ module.exports = {
   start(b) {
     broadcast = b
     appActivator.warm()
+    appActivator.onActivationFailure(({ appId }) => {
+      const item = recentActivations.get(String(appId).toLowerCase())
+      if (!item) return
+      recentActivations.delete(String(appId).toLowerCase())
+      reportLaunchFailure(item, `Windows could not start ${item.name}.`)
+    })
     refreshStartApps().catch((e) => console.error('[launcher] start apps error:', e.message))
     watchScanDirs()
     plugins.onPluginsChanged(scheduleRebuild)

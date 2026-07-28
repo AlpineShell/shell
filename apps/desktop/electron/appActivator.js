@@ -26,6 +26,27 @@ const FILE_EXPLORER_AUMID = 'Microsoft.Windows.Explorer'
 
 let ps = null
 let lineBuffer = ''
+const failureListeners = new Set()
+
+function onActivationFailure(listener) {
+  if (typeof listener === 'function') failureListeners.add(listener)
+  return () => failureListeners.delete(listener)
+}
+
+function reportActivationFailure(line) {
+  console.error('[appActivator]', line)
+  const rest = line.slice('ALPINE_ACT_FAIL'.length).trim()
+  const separator = rest.indexOf(' ')
+  const appId = separator === -1 ? rest : rest.slice(0, separator)
+  const detail = separator === -1 ? '' : rest.slice(separator + 1).trim()
+  for (const listener of failureListeners) {
+    try {
+      listener({ appId, detail })
+    } catch (e) {
+      console.error('[appActivator] failure listener error:', e && e.message)
+    }
+  }
+}
 
 function handleOutput(chunk) {
   lineBuffer += chunk.toString()
@@ -33,7 +54,7 @@ function handleOutput(chunk) {
   while ((newlineIndex = lineBuffer.indexOf('\n')) !== -1) {
     const line = lineBuffer.slice(0, newlineIndex).trim()
     lineBuffer = lineBuffer.slice(newlineIndex + 1)
-    if (line.startsWith('ALPINE_ACT_FAIL')) console.error('[appActivator]', line)
+    if (line.startsWith('ALPINE_ACT_FAIL')) reportActivationFailure(line)
   }
 }
 
@@ -83,4 +104,4 @@ function warm() {
   ensureProcess()
 }
 
-module.exports = { activate, openFileExplorer, warm }
+module.exports = { activate, openFileExplorer, warm, onActivationFailure }
