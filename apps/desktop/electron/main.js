@@ -69,6 +69,10 @@ const BASE_URL = isDev ? 'http://127.0.0.1:5173' : null
 const shouldTakeOverExplorer = !isDev || process.env.ALPINE_KILL_EXPLORER === '1'
 let killedExplorer = false
 
+const UPDATE_READY_TIMEOUT_MS = 10000
+const settledTopBars = new Set()
+let topBarSettleListener = null
+
 // ── Single instance + alpine-shell:// deep links ─────────────────────────────
 // A normal packaged run holds a single-instance lock, so the website "Install in
 // Alpine Shell" link (or any second launch) is forwarded to the already-running
@@ -371,6 +375,7 @@ function createTopBarWindow(display) {
   win.on('closed', () => {
     clearCloseGrace(state)
     ipcMain.removeListener('topbar/set-active-region', onSetActiveRegion)
+    settledTopBars.delete(win)
   })
 
   win.webContents.once('did-finish-load', () => {
@@ -383,6 +388,7 @@ function createTopBarWindow(display) {
     setTimeout(() => {
       const shell = [...shells.values()].find(s => s.topBar === win)
       if (shell) forceShellBounds(shell)
+      markTopBarSettled(win)
     }, 300)
   })
 
@@ -715,6 +721,20 @@ function getUpdateReadyMarkerPath() {
   return value && value.length > 0 ? value : null
 }
 
+function isUpdateRestart() {
+  return getUpdateReadyMarkerPath() !== null
+}
+
+function markTopBarSettled(win) {
+  settledTopBars.add(win)
+  if (topBarSettleListener) topBarSettleListener()
+}
+
+function areAllTopBarsSettled() {
+  const topBars = [...shells.values()].map(shell => shell.topBar)
+  return topBars.length > 0 && topBars.every(topBar => settledTopBars.has(topBar))
+}
+
 function signalShellReadyForUpdate() {
   const markerPath = getUpdateReadyMarkerPath()
   if (!markerPath) return
@@ -723,6 +743,7 @@ function signalShellReadyForUpdate() {
   const writeMarker = () => {
     if (written) return
     written = true
+    topBarSettleListener = null
     try {
       fs.writeFileSync(markerPath, String(Date.now()))
     } catch (e) {
@@ -730,19 +751,28 @@ function signalShellReadyForUpdate() {
     }
   }
 
+  setTimeout(writeMarker, UPDATE_READY_TIMEOUT_MS)
+
   const primaryShell = shells.get(screen.getPrimaryDisplay().id) || [...shells.values()][0]
   if (!primaryShell || primaryShell.desktop.isDestroyed()) {
     writeMarker()
     return
   }
 
-  const wc = primaryShell.desktop.webContents
-  if (wc.isLoading()) {
-    wc.once('did-finish-load', writeMarker)
-  } else {
-    writeMarker()
+  let desktopLoaded = !primaryShell.desktop.webContents.isLoading()
+  const writeMarkerWhenSettled = () => {
+    if (desktopLoaded && areAllTopBarsSettled()) writeMarker()
   }
-  setTimeout(writeMarker, 10000)
+
+  if (!desktopLoaded) {
+    primaryShell.desktop.webContents.once('did-finish-load', () => {
+      desktopLoaded = true
+      writeMarkerWhenSettled()
+    })
+  }
+
+  topBarSettleListener = writeMarkerWhenSettled
+  writeMarkerWhenSettled()
 }
 
 function startShellMode() {
@@ -822,7 +852,7 @@ function startShellMode() {
     }
   }
 
-  if (!isDev) setTimeout(() => { processAutostart().catch((e) => console.error('[autostart] processAutostart error:', e)) }, 1500)
+  if (!isDev && !isUpdateRestart()) setTimeout(() => { processAutostart().catch((e) => console.error('[autostart] processAutostart error:', e)) }, 1500)
 
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)

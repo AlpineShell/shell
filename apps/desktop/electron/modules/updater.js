@@ -4,6 +4,7 @@ const path = require('path')
 const fs = require('fs')
 const installer = require('./installer')
 const frecency = require('./frecency')
+const appIcons = require('./appIcons')
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const INITIAL_CHECK_DELAY_MS = 10000
@@ -168,6 +169,7 @@ module.exports = {
         pushLog('info', `Installing version ${state.availableVersion ?? ''} — Alpine Shell will restart…`)
         if (downloadedFile && installer.startBrandedUpdate(downloadedFile, state.availableVersion)) {
           try { frecency.flush() } catch {}
+          try { appIcons.flushDiskCache() } catch {}
           app.exit(0)
         } else {
           autoUpdater.quitAndInstall(true, true)
