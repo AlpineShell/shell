@@ -454,6 +454,7 @@ function getGenericIcon() {
 }
 
 module.exports = {
+  flushDiskCache,
   iconForFile,
   resolveIcons,
   resolveAppIcons,
