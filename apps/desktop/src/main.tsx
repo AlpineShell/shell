@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import { useWallpaper } from './hooks/useWallpaper'
 
-type Mode = 'topbar' | 'desktop' | 'screenshot' | 'setup' | 'settings' | 'notice'
+type Mode = 'topbar' | 'desktop' | 'screenshot' | 'setup' | 'settings'
 
 function getMode(): Mode {
   const mode = new URLSearchParams(window.location.search).get('mode')
@@ -12,7 +12,6 @@ function getMode(): Mode {
   if (mode === 'screenshot') return 'screenshot'
   if (mode === 'setup') return 'setup'
   if (mode === 'settings') return 'settings'
-  if (mode === 'notice') return 'notice'
   return 'desktop'
 }
 
@@ -47,10 +46,6 @@ async function resolveView(mode: Mode): Promise<ReactNode> {
   if (mode === 'setup') {
     const { default: SetupApp } = await import('./components/setup/setupApp')
     return <SetupApp />
-  }
-  if (mode === 'notice') {
-    const { default: NoticeOverlay } = await import('./components/notice/noticeOverlay')
-    return <NoticeOverlay />
   }
   const { default: SettingsApp } = await import('./components/settings/settingsApp')
   return <SettingsApp />

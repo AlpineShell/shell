@@ -551,11 +551,14 @@ declare global {
 
   interface ShellNotice {
     id: string
+    displayId: number | null
     title: string | null
     message: string
     tone: ShellNoticeTone
     busy: boolean
+    pill: boolean
     action: { label: string } | null
+    confirm: { label: string; cancelLabel: string } | null
   }
 
   interface FileHandlerState {
@@ -576,8 +579,8 @@ declare global {
       current: () => Promise<ShellNotice | null>
       onShow: (callback: (notice: ShellNotice) => void) => () => void
       onHide: (callback: () => void) => () => void
-      reportSize: (height: number) => Promise<{ ok: boolean }>
       runAction: () => Promise<{ ok: boolean }>
+      confirm: () => Promise<{ ok: boolean }>
       dismiss: () => Promise<{ ok: boolean }>
     }
     plugins: {

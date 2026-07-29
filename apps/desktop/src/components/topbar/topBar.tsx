@@ -14,6 +14,7 @@ import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
 import ChromeCanvas from "./chrome/ChromeCanvas";
 import PluginSlot from "./pluginSlot";
+import NoticeStrip from "./noticeStrip";
 import { loadTopbarPlugins } from "../../plugins/loadPlugins";
 
 const noop = () => {};
@@ -68,6 +69,7 @@ export default function TopBar() {
                 </div>
             </div>
             {launcherOpen && <LauncherPanel mode={launcherMode} />}
+            <NoticeStrip />
             <AltTabPanel />
         </ThemeProvider>
     );

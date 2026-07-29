@@ -141,8 +141,8 @@ contextBridge.exposeInMainWorld('notice', {
     ipcRenderer.on('notice/hide', handler)
     return () => ipcRenderer.removeListener('notice/hide', handler)
   },
-  reportSize: (height) => ipcRenderer.invoke('notice/size', height),
   runAction: () => ipcRenderer.invoke('notice/action'),
+  confirm: () => ipcRenderer.invoke('notice/confirm'),
   dismiss: () => ipcRenderer.invoke('notice/dismiss'),
 })
 
