@@ -167,22 +167,33 @@ function declineUnclaimed(filePath, extension) {
   return { ok: false, reason: 'no-handler' }
 }
 
+function askedQuestion(value) {
+  const question = value && value.needsConfirmation
+  if (!question || typeof question !== 'object') return null
+  if (typeof question.message !== 'string' || !question.message) return null
+  return question
+}
+
 async function openFile(filePath) {
   if (typeof filePath !== 'string' || !filePath) return { ok: false, reason: 'no-file' }
   const extension = path.extname(filePath).toLowerCase()
   const claim = claims.get(extension)
   if (!claim) return declineUnclaimed(filePath, extension)
+  return runHandler(claim, filePath, false, null)
+}
 
+async function runHandler(claim, filePath, confirmed, busyMessage) {
   const fileName = path.basename(filePath)
   notice.show({
     id: NOTICE_ID,
     title: claim.pluginName,
-    message: `Opening ${fileName}…`,
+    message: busyMessage || `Reading ${fileName}…`,
     busy: true,
+    pill: true,
     timeoutMs: 0,
   })
 
-  const result = await sendWithBackendRetry(claim, { file: filePath })
+  const result = await sendWithBackendRetry(claim, { file: filePath, confirmed })
   if (!result.ok) {
     notice.show({
       id: NOTICE_ID,
@@ -196,12 +207,32 @@ async function openFile(filePath) {
   }
 
   const value = result.value && typeof result.value === 'object' ? result.value : {}
+  const question = confirmed ? null : askedQuestion(value)
+  if (question) {
+    notice.show({
+      id: NOTICE_ID,
+      title: typeof question.title === 'string' && question.title ? question.title : claim.pluginName,
+      message: question.message,
+      confirm: {
+        label: question.confirmLabel,
+        cancelLabel: question.cancelLabel,
+        run: () =>
+          runHandler(claim, filePath, true, question.busyMessage).catch((e) =>
+            console.error('[file-handlers] confirmed open failed:', e && e.message),
+          ),
+      },
+      timeoutMs: 0,
+    })
+    return { ok: true, pending: true }
+  }
+
   const failed = value.ok === false
   notice.show({
     id: NOTICE_ID,
     title: claim.pluginName,
     message: value.message || (failed ? `${fileName} could not be opened.` : `${fileName} is ready.`),
     tone: failed ? 'error' : 'success',
+    pill: !failed,
     timeoutMs: failed ? 0 : 7000,
   })
   return { ok: !failed, value }
