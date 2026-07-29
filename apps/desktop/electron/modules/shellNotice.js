@@ -4,8 +4,6 @@
 // changes something. It renders inside the topbar window that already spans the display, so
 // there is no second always-on-top window and the reserved work area never moves.
 
-const { screen } = require('electron')
-
 const DEFAULT_TIMEOUT_MS = 7000
 
 let toTopbars = null
@@ -25,6 +23,7 @@ function send(channel, payload) {
 
 function cursorDisplayId() {
   try {
+    const { screen } = require('electron')
     return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
   } catch {
     return null
