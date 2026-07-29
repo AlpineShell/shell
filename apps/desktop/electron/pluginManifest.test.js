@@ -83,6 +83,22 @@ describe('contributes.launcherFolders', () => {
     expect(record.valid).toBe(false)
   })
 
+  it('defaults the uninstall command to null', () => {
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps' }] }))
+    expect(record.contributes.launcherFolders[0].uninstallCommand).toBeNull()
+  })
+
+  it('keeps an uninstall command', () => {
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps', uninstallCommand: 'uninstall' }] }))
+    expect(record.errors).toEqual([])
+    expect(record.contributes.launcherFolders[0].uninstallCommand).toBe('uninstall')
+  })
+
+  it('rejects an empty uninstall command', () => {
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps', uninstallCommand: '' }] }))
+    expect(record.valid).toBe(false)
+  })
+
   it('rejects a path instead of a folder name', () => {
     const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: '..\\Startup' }] }))
     expect(record.valid).toBe(false)

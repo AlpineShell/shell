@@ -8,6 +8,10 @@ const appManager = require('./appManager')
 const appActivator = require('../appActivator')
 const frecency = require('./frecency')
 const plugins = require('./plugins')
+const pluginBackendHost = require('../pluginBackendHost')
+const notice = require('./shellNotice')
+
+const PLUGIN_UNINSTALL_TIMEOUT_MS = 300000
 
 const SCAN_DIRS = [
   path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -144,27 +148,31 @@ function dormantPluginFolders() {
   return folders
 }
 
-function pluginFolderBadges() {
-  const badges = new Map()
+function pluginFolderOwners() {
+  const owners = new Map()
   let records = []
   try {
     records = plugins.listPlugins()
   } catch (e) {
-    console.error('[launcher] plugin badge lookup failed:', e && e.message)
-    return badges
+    console.error('[launcher] plugin folder lookup failed:', e && e.message)
+    return owners
   }
   for (const record of records) {
     if (record.enabled === false || record.loadable !== true) continue
     for (const entry of (record.contributes && record.contributes.launcherFolders) || []) {
-      if (!entry.badge) continue
-      badges.set(String(entry.startMenuFolder).toLowerCase(), `alpine-plugin://${record.id}/${entry.badge}`)
+      owners.set(String(entry.startMenuFolder).toLowerCase(), {
+        pluginId: record.id,
+        pluginName: record.name || record.id,
+        badge: entry.badge ? `alpine-plugin://${record.id}/${entry.badge}` : null,
+        uninstallCommand: entry.uninstallCommand || null,
+      })
     }
   }
-  return badges
+  return owners
 }
 
-function badgeForShortcut(scPath, badges) {
-  if (badges.size === 0) return null
+function ownerForShortcut(scPath, owners) {
+  if (owners.size === 0) return null
   for (const dir of SCAN_DIRS) {
     if (!dir) continue
     const relative = path.relative(dir, scPath)
@@ -172,8 +180,8 @@ function badgeForShortcut(scPath, badges) {
     const segments = relative.split(path.sep)
     segments.pop()
     for (const segment of segments) {
-      const badge = badges.get(segment.toLowerCase())
-      if (badge) return badge
+      const owner = owners.get(segment.toLowerCase())
+      if (owner) return owner
     }
   }
   return null
@@ -197,7 +205,7 @@ function collectLnkItems() {
   for (const dir of SCAN_DIRS) walkShortcuts(dir, shortcutPaths)
 
   const dormantFolders = dormantPluginFolders()
-  const badges = pluginFolderBadges()
+  const owners = pluginFolderOwners()
   const seenNames = new Set()
   const items = []
 
@@ -217,6 +225,7 @@ function collectLnkItems() {
     if (BLOCKED_NAMES.has(dedupeKey)) continue
     if (seenNames.has(dedupeKey)) continue
     seenNames.add(dedupeKey)
+    const owner = ownerForShortcut(scPath, owners)
 
     items.push({
       id: items.length,
@@ -226,7 +235,8 @@ function collectLnkItems() {
       iconSource: info.icon && info.icon.length > 0 ? info.icon : (isUrl ? null : info.target),
       iconIndex: info.iconIndex || 0,
       icon: null,
-      badge: badgeForShortcut(scPath, badges),
+      badge: owner ? owner.badge : null,
+      owner,
       isUrl,
     })
   }
@@ -570,8 +580,31 @@ function launchAdminItem(item) {
   return { success: true }
 }
 
+async function uninstallByOwningPlugin(item) {
+  const owner = item.owner
+  const reply = await pluginBackendHost.sendCommand(
+    owner.pluginId,
+    owner.uninstallCommand,
+    { file: item.lnkPath, name: item.name },
+    { timeoutMs: PLUGIN_UNINSTALL_TIMEOUT_MS },
+  )
+  const value = reply.ok && reply.value && typeof reply.value === 'object' ? reply.value : {}
+  const removed = reply.ok && value.ok !== false
+  notice.show({
+    id: 'launcher-uninstall',
+    title: owner.pluginName,
+    message: value.message || (removed ? `${item.name} was removed.` : `${item.name} could not be removed: ${reply.error || 'the plugin refused'}`),
+    tone: removed ? 'success' : 'error',
+    pill: removed,
+    timeoutMs: removed ? 7000 : 0,
+  })
+  if (removed) scheduleRebuild()
+  return { ok: removed, mode: 'plugin' }
+}
+
 async function uninstallItem(item) {
   if (!item) return { ok: false, mode: 'none' }
+  if (item.owner && item.owner.uninstallCommand) return uninstallByOwningPlugin(item)
   const result = await appManager.uninstallByLaunch({ appId: item.appId, target: item.target, name: item.name })
   scheduleStartAppsRefresh()
   return result
