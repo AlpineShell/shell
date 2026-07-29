@@ -59,6 +59,30 @@ describe('contributes.launcherFolders', () => {
     expect(record.contributes.launcherFolders[0].startMenuFolder).toBe('Android apps')
   })
 
+  it('defaults the badge to null', () => {
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps' }] }))
+    expect(record.contributes.launcherFolders[0].badge).toBeNull()
+  })
+
+  it('keeps a badge that exists inside the plugin folder', () => {
+    fs.mkdirSync(path.join(dir, 'assets'), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'assets', 'badge.png'), 'x')
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps', badge: 'assets/badge.png' }] }))
+    expect(record.errors).toEqual([])
+    expect(record.contributes.launcherFolders[0].badge).toBe('assets/badge.png')
+  })
+
+  it('rejects a badge that escapes the plugin folder', () => {
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps', badge: '../../evil.png' }] }))
+    expect(record.valid).toBe(false)
+    expect(record.contributes.launcherFolders).toBeUndefined()
+  })
+
+  it('rejects a badge that does not exist', () => {
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps', badge: 'assets/missing.png' }] }))
+    expect(record.valid).toBe(false)
+  })
+
   it('rejects a path instead of a folder name', () => {
     const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: '..\\Startup' }] }))
     expect(record.valid).toBe(false)

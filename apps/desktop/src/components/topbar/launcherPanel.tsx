@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom"
-import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Fragment, memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
@@ -1233,9 +1233,13 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                             ) : isAlpineSettings ? (
                               <img src={window.shell.settingsIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
                             ) : item.icon ? (
-                              <img src={item.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
+                              <PluginBadged badge={item.badge} darkText={darkText}>
+                                <img src={item.icon} alt="" className="w-7 h-7" draggable={false} />
+                              </PluginBadged>
                             ) : (
-                              <div className={`w-7 h-7 shrink-0 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+                              <PluginBadged badge={item.badge} darkText={darkText}>
+                                <div className={`w-7 h-7 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+                              </PluginBadged>
                             )}
                             {isBookmark ? (
                               <div className="flex flex-col min-w-0 flex-1">
@@ -1310,6 +1314,22 @@ function TabIcon({ favicon, windowIcon, darkText }: { favicon?: string; windowIc
           <img src={windowIcon} alt="" style={{ width: 9, height: 9 }} draggable={false} />
         </span>
       )}
+    </div>
+  )
+}
+
+function PluginBadged({ badge, darkText, children }: { badge?: string | null; darkText: boolean; children: ReactNode }) {
+  const [failed, setFailed] = useState(false)
+  if (!badge || failed) return <div className="w-7 h-7 shrink-0">{children}</div>
+  return (
+    <div className="relative w-7 h-7 shrink-0">
+      {children}
+      <span
+        className="absolute flex items-center justify-center rounded-full"
+        style={{ right: -3, bottom: -3, width: 13, height: 13, backgroundColor: darkText ? "rgba(255,255,255,0.95)" : "rgba(24,24,27,0.95)" }}
+      >
+        <img src={badge} alt="" style={{ width: 9, height: 9 }} draggable={false} onError={() => setFailed(true)} />
+      </span>
     </div>
   )
 }
