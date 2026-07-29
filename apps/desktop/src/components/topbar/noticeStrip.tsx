@@ -81,10 +81,9 @@ export default function NoticeStrip() {
         const body = bodyRef.current;
         if (!body) return null;
         body.style.width = "max-content";
-        const rect = body.getBoundingClientRect();
-        const bodyWidth = Math.round(rect.width);
-        const bodyHeight = Math.round(rect.height);
+        const bodyWidth = Math.ceil(body.getBoundingClientRect().width);
         body.style.width = `${bodyWidth}px`;
+        const bodyHeight = Math.ceil(body.getBoundingClientRect().height);
         const screenW = window.innerWidth;
         const half = bodyWidth / 2;
         let anchor: ChromeAnchor = "center";

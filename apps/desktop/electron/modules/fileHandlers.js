@@ -84,26 +84,12 @@ function readClaims() {
   return map
 }
 
-function nudgeToDefaultApps(extensions) {
-  const missing = extensions.filter((extension) => !fileAssociations.defaultState(extension).isDefault)
-  if (!missing.length) return
-  const claim = claims.get(missing[0])
-  notice.show({
-    id: 'file-handler-default',
-    title: claim ? claim.pluginName : 'Alpine Shell',
-    message: `Windows still opens ${missing.join(', ')} files with something else. Pick Alpine Shell to change that.`,
-    action: { label: 'Choose default apps', run: () => fileAssociations.openDefaultAppsSettings() },
-    timeoutMs: 12000,
-  })
-}
-
 function sync() {
   const next = readClaims()
   const stored = readState()
   const wanted = [...next.keys()].sort()
   const register = wanted.map((extension) => ({ extension, typeName: next.get(extension).typeName }))
   const gone = stored.extensions.filter((extension) => !next.has(extension))
-  const added = wanted.filter((extension) => !stored.extensions.includes(extension))
   const fingerprint = fileAssociations.fingerprint(register)
   claims = next
   if (!gone.length && fingerprint === stored.fingerprint) {
@@ -111,14 +97,12 @@ function sync() {
     return
   }
   const delay = synced ? 0 : FIRST_APPLY_DELAY_MS
-  const shouldNudge = synced && added.length > 0
   synced = true
   if (applyTimer) clearTimeout(applyTimer)
   applyTimer = setTimeout(() => {
     applyTimer = null
     fileAssociations.apply({ register, unregister: gone })
     writeState(wanted, fingerprint)
-    if (shouldNudge) nudgeToDefaultApps(added)
   }, delay)
 }
 

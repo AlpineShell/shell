@@ -12,6 +12,7 @@ let pendingAction = null
 let pendingConfirm = null
 let pendingCancel = null
 let dismissTimer = null
+let escapeHeld = false
 
 function start(_broadcast, broadcastToTopbars) {
   toTopbars = typeof broadcastToTopbars === 'function' ? broadcastToTopbars : null
@@ -27,6 +28,22 @@ function cursorDisplayId() {
     return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
   } catch {
     return null
+  }
+}
+
+// The topbar window is focusable: false, so a question on it can never receive a key press.
+// Escape is claimed only while one is waiting for an answer, and released the moment it is not.
+function holdEscape(wanted) {
+  if (wanted === escapeHeld) return
+  try {
+    const { globalShortcut } = require('electron')
+    if (wanted) escapeHeld = globalShortcut.register('Escape', () => hide())
+    else {
+      globalShortcut.unregister('Escape')
+      escapeHeld = false
+    }
+  } catch {
+    escapeHeld = false
   }
 }
 
@@ -59,6 +76,7 @@ function runCallback(label, fn) {
 
 function hide() {
   clearDismissTimer()
+  holdEscape(false)
   const abandoned = pendingConfirm ? pendingCancel : null
   current = null
   pendingAction = null
@@ -96,6 +114,7 @@ function show(request) {
       : null,
   }
   send('notice/show', current)
+  holdEscape(Boolean(confirm))
   scheduleDismiss(id, confirm ? 0 : request.timeoutMs)
   return id
 }
