@@ -1,16 +1,16 @@
-import type { ChromeAnchor } from "./chromeShape";
+import type { SurfaceAnchor } from "./surfaceShape";
 
-export interface ChromeSurface {
+export interface EngineSurface {
     id: number;
     centerX: number;
     bodyWidth: number;
     fullHeight: number;
     outline: boolean;
-    anchor: ChromeAnchor;
+    anchor: SurfaceAnchor;
     contentEl: HTMLElement | null;
 }
 
-let current: ChromeSurface | null = null;
+let current: EngineSurface | null = null;
 let nextId = 1;
 const listeners = new Set<() => void>();
 
@@ -18,22 +18,22 @@ export function nextSurfaceId(): number {
     return nextId++;
 }
 
-export function setChromeSurface(surface: ChromeSurface | null): void {
+export function setSurface(surface: EngineSurface | null): void {
     current = surface;
     listeners.forEach((l) => l());
 }
 
-export function clearChromeSurface(id: number): void {
+export function clearSurface(id: number): void {
     if (current && current.id === id) {
-        setChromeSurface(null);
+        setSurface(null);
     }
 }
 
-export function getChromeSurface(): ChromeSurface | null {
+export function getSurface(): EngineSurface | null {
     return current;
 }
 
-export function subscribeChromeSurface(listener: () => void): () => void {
+export function subscribeSurface(listener: () => void): () => void {
     listeners.add(listener);
     return () => {
         listeners.delete(listener);

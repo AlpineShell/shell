@@ -2,8 +2,8 @@ import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDarkText, useFullscreenWindow } from "../themeContext";
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded";
-import { SHOULDER, RADIUS, type ChromeAnchor } from "./chrome/chromeShape";
-import { setChromeSurface, clearChromeSurface, getChromeSurface, nextSurfaceId } from "./chrome/chromeStore";
+import { SHOULDER, RADIUS, type SurfaceAnchor } from "./engine/surfaceShape";
+import { setSurface, clearSurface, getSurface, nextSurfaceId } from "./engine/surfaceStore";
 
 const BAR_BOTTOM = 24;
 const SCREEN_PAD = 6;
@@ -11,7 +11,7 @@ const CLOSE_MS = 300;
 const MAX_BODY_WIDTH = 440;
 const MY_DISPLAY_ID = Number(new URLSearchParams(window.location.search).get("displayId"));
 
-type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number; anchor: ChromeAnchor };
+type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number; anchor: SurfaceAnchor };
 
 function Spinner({ darkText }: { darkText: boolean }) {
     return (
@@ -60,7 +60,7 @@ export default function NoticeStrip() {
             setShape(null);
         };
         const hide = () => {
-            clearChromeSurface(idRef.current);
+            clearSurface(idRef.current);
             releaseRegion();
             clearTimeout(closeTimer.current);
             closeTimer.current = setTimeout(() => {
@@ -87,7 +87,7 @@ export default function NoticeStrip() {
         body.style.width = `${bodyWidth}px`;
         const screenW = window.innerWidth;
         const half = bodyWidth / 2;
-        let anchor: ChromeAnchor = "center";
+        let anchor: SurfaceAnchor = "center";
         let centerX = Math.round(screenW / 2);
         if (centerX - half - SHOULDER < SCREEN_PAD) {
             anchor = "left";
@@ -111,12 +111,12 @@ export default function NoticeStrip() {
             releaseRegion();
             return;
         }
-        const alreadyOurs = getChromeSurface()?.id === idRef.current;
+        const alreadyOurs = getSurface()?.id === idRef.current;
         if (clipRef.current && !alreadyOurs) {
             clipRef.current.style.height = `${shape.bodyHeight}px`;
             clipRef.current.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
         }
-        setChromeSurface({
+        setSurface({
             id: idRef.current,
             centerX: shape.centerX,
             bodyWidth: shape.bodyWidth,
@@ -157,7 +157,7 @@ export default function NoticeStrip() {
     useEffect(
         () => () => {
             clearTimeout(closeTimer.current);
-            clearChromeSurface(idRef.current);
+            clearSurface(idRef.current);
             releaseRegion();
         },
         [],

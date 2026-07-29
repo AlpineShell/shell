@@ -1,15 +1,15 @@
 export const SHOULDER = 14;
 export const RADIUS = 14;
 
-export type ChromeAnchor = "center" | "left" | "right";
+export type SurfaceAnchor = "center" | "left" | "right";
 
-export interface ChromeGeometry {
+export interface SurfaceGeometry {
     centerX: number;
     bodyWidth: number;
     height: number;
     barBottom: number;
     screenWidth: number;
-    anchor: ChromeAnchor;
+    anchor: SurfaceAnchor;
 }
 
 interface ResolvedShape {
@@ -25,7 +25,7 @@ interface ResolvedShape {
     bottom: number;
 }
 
-function resolve(g: ChromeGeometry): ResolvedShape {
+function resolve(g: SurfaceGeometry): ResolvedShape {
     const halfBody = g.bodyWidth / 2;
     const radius = Math.min(RADIUS, halfBody, g.height / 2);
     const shoulder = Math.min(SHOULDER, Math.max(0, g.height - radius));
@@ -47,7 +47,7 @@ function resolve(g: ChromeGeometry): ResolvedShape {
     };
 }
 
-export function surfaceFillPath(g: ChromeGeometry): string {
+export function surfaceFillPath(g: SurfaceGeometry): string {
     const s = resolve(g);
     let d = `M${s.leftTip} ${s.top} L${s.rightTip} ${s.top}`;
     if (s.rightShoulder) d += ` A${s.shoulder} ${s.shoulder} 0 0 0 ${s.bodyRight} ${s.top + s.shoulder}`;
@@ -58,7 +58,7 @@ export function surfaceFillPath(g: ChromeGeometry): string {
     return d + " Z";
 }
 
-export function barBorderPath(g: ChromeGeometry, hasSurface: boolean, surfaceOutline: boolean): string {
+export function barBorderPath(g: SurfaceGeometry, hasSurface: boolean, surfaceOutline: boolean): string {
     const top = g.barBottom;
     if (!hasSurface) {
         return `M0 ${top} L${g.screenWidth} ${top}`;

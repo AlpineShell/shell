@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { surfaceFillPath, barBorderPath, RADIUS, type ChromeGeometry, type ChromeAnchor } from "./chromeShape";
-import { getChromeSurface, subscribeChromeSurface, type ChromeSurface } from "./chromeStore";
+import { surfaceFillPath, barBorderPath, RADIUS, type SurfaceGeometry, type SurfaceAnchor } from "./surfaceShape";
+import { getSurface, subscribeSurface, type EngineSurface } from "./surfaceStore";
 
 const OPEN_MS = 460;
 const CLOSE_MS = 300;
@@ -9,14 +9,14 @@ const MORPH_MS = 400;
 const easeOutExpo = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
 const easeInCubic = (t: number) => t * t * t;
 
-interface ChromeCanvasProps {
+interface TopbarEngineProps {
     barHeight: number;
     bg: string;
     barBorderColor: string;
     hovered: boolean;
 }
 
-export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }: ChromeCanvasProps) {
+export default function TopbarEngine({ barHeight, bg, barBorderColor, hovered }: TopbarEngineProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const kickRef = useRef<(() => void) | undefined>(undefined);
     const propsRef = useRef({ barHeight, bg, barBorderColor, hovered });
@@ -39,12 +39,12 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
         let halfBody = 0;
         let fullH = 0;
         let outline = false;
-        let anchor: ChromeAnchor = "center";
+        let anchor: SurfaceAnchor = "center";
         let lastClearH = 0;
         let morphFrom: { cx: number; halfBody: number; fullH: number } | null = null;
         let morphStart = -1;
         let contentEl: HTMLElement | null = null;
-        let lastSurface: ChromeSurface | null = null;
+        let lastSurface: EngineSurface | null = null;
         let running = false;
         let raf = 0;
 
@@ -64,7 +64,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
         };
 
         const syncSurface = () => {
-            const surface = getChromeSurface();
+            const surface = getSurface();
             if (surface === lastSurface) return;
             const previous = lastSurface;
             lastSurface = surface;
@@ -101,7 +101,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
             const screenW = window.innerWidth;
             const barBottom = p.barHeight;
 
-            const surface = getChromeSurface();
+            const surface = getSurface();
             if (surface && morphFrom) {
                 const mt = Math.min(1, (now() - morphStart) / MORPH_MS);
                 const me = easeOutExpo(mt);
@@ -125,7 +125,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
             ctx.clearRect(0, 0, screenW, clearH);
             lastClearH = need;
 
-            const geom: ChromeGeometry = { centerX: cx, bodyWidth: halfBody * 2, height, barBottom, screenWidth: screenW, anchor };
+            const geom: SurfaceGeometry = { centerX: cx, bodyWidth: halfBody * 2, height, barBottom, screenWidth: screenW, anchor };
             if (surfaceActive) {
                 ctx.fillStyle = p.bg;
                 ctx.fill(new Path2D(surfaceFillPath(geom)));
@@ -173,7 +173,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
 
         kickRef.current = kick;
         resize();
-        const unsubscribe = subscribeChromeSurface(syncSurface);
+        const unsubscribe = subscribeSurface(syncSurface);
         window.addEventListener("resize", resize);
         kick();
 
