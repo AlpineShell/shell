@@ -10,6 +10,7 @@
 const path = require('path')
 const { utilityProcess } = require('electron')
 const plugins = require('./modules/plugins')
+const pluginWindows = require('./pluginWindows')
 
 const RUNTIME_ENTRY = path.join(__dirname, 'pluginBackendRuntime.js')
 const COMMAND_TIMEOUT_MS = 30000
@@ -66,6 +67,13 @@ function startBackend(record) {
         clearTimeout(settle.timer)
         settle.resolve(msg.ok ? { ok: true, value: msg.value } : { ok: false, error: msg.error || 'command failed' })
       }
+    } else if (msg.type === 'window-open') {
+      const result = pluginWindows.open(record.id, msg.request)
+      if (!result.ok) console.error(`[plugin-backend:${record.id}] window open refused: ${result.error}`)
+    } else if (msg.type === 'window-close') {
+      pluginWindows.close(record.id, msg.id)
+    } else if (msg.type === 'window-send') {
+      pluginWindows.send(record.id, msg.id, msg.channel, msg.data)
     } else if (msg.type === 'log') {
       console.log(`[plugin-backend:${record.id}]`, ...(Array.isArray(msg.args) ? msg.args : []))
     } else if (msg.type === 'error') {
@@ -88,6 +96,18 @@ function rejectPending(state, reason) {
     clearTimeout(settle.timer)
     settle.resolve({ ok: false, error: reason })
     state.pending.delete(callId)
+  }
+}
+
+// Window lifecycle events go to the backend as plain messages rather than commands: they are
+// notifications, and a closed window must not be able to hold a pending call open.
+function sendToBackend(pluginId, message) {
+  const state = running.get(pluginId)
+  if (!state || !state.proc) return
+  try {
+    state.proc.postMessage(message)
+  } catch (e) {
+    console.error(`[plugin-backend:${pluginId}] window event failed:`, e && e.message)
   }
 }
 
@@ -148,9 +168,20 @@ module.exports = {
   handlers: {
     'plugins/command': (_event, payload) =>
       sendCommand(payload && payload.id, payload && payload.name, payload && payload.payload),
+    // A plugin window may only reach its own backend: the ids come from the window it was
+    // created with, never from the page.
+    'plugin-window/command': (_event, payload) =>
+      sendCommand(payload && payload.pluginId, payload && payload.name, {
+        ...(payload && payload.payload),
+        window: payload && payload.windowId,
+      }),
+    'plugin-window/close': (_event, payload) =>
+      pluginWindows.close(payload && payload.pluginId, payload && payload.windowId),
   },
   start(broadcast) {
     broadcastFn = broadcast
+    pluginWindows.configure({ send: sendToBackend })
+    pluginWindows.start()
     plugins.onPluginsChanged(sync)
     sync()
   },

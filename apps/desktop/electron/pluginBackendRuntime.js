@@ -5,6 +5,7 @@
 
 let stopHandler = null
 let commandHandler = null
+let windowEventHandler = null
 
 function post(message) {
   try {
@@ -36,6 +37,23 @@ function makeContext(init) {
     },
     onCommand(handler) {
       if (typeof handler === 'function') commandHandler = handler
+    },
+    // Asking the shell for a window, not being handed one. The backend names a page inside its
+    // own folder and an opaque session blob; the shell creates the window and forwards the blob
+    // to it unread. Frames never come back through here.
+    windows: {
+      open(request) {
+        post({ type: 'window-open', request })
+      },
+      close(id) {
+        post({ type: 'window-close', id })
+      },
+      send(id, channel, data) {
+        post({ type: 'window-send', id, channel, data })
+      },
+      onEvent(handler) {
+        if (typeof handler === 'function') windowEventHandler = handler
+      },
     },
     poll(channel, fn, everyMs) {
       const tick = () => {
@@ -118,6 +136,14 @@ process.parentPort.on('message', async (event) => {
     await startBackend(msg)
   } else if (msg.type === 'command') {
     await runCommand(msg)
+  } else if (msg.type === 'window-event') {
+    if (windowEventHandler) {
+      try {
+        await windowEventHandler(msg.event, msg)
+      } catch (e) {
+        post({ type: 'log', args: ['window event handler threw: ' + (e && e.message)] })
+      }
+    }
   } else if (msg.type === 'stop') {
     await runStop()
     post({ type: 'stopped' })
