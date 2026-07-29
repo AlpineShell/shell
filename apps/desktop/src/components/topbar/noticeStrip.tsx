@@ -1,111 +1,221 @@
+import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useDarkText, useFullscreenWindow } from "../themeContext";
+import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded";
+import { SHOULDER, RADIUS, type ChromeAnchor } from "./chrome/chromeShape";
+import { setChromeSurface, clearChromeSurface, getChromeSurface, nextSurfaceId } from "./chrome/chromeStore";
 
 const BAR_BOTTOM = 24;
+const SCREEN_PAD = 6;
+const CLOSE_MS = 300;
+const MAX_BODY_WIDTH = 440;
 const MY_DISPLAY_ID = Number(new URLSearchParams(window.location.search).get("displayId"));
 
-const TONE_ACCENT: Record<ShellNoticeTone, string> = {
-    info: "bg-white/45",
-    success: "bg-emerald-400/80",
-    error: "bg-rose-400/80",
-};
+type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number; anchor: ChromeAnchor };
 
-function Spinner() {
+function Spinner({ darkText }: { darkText: boolean }) {
     return (
-        <span className="block size-3 shrink-0 rounded-full border-[1.5px] border-white/25 border-t-white/80 animate-spin" />
+        <span
+            className={`block size-3 shrink-0 rounded-full border-[1.5px] animate-spin ${
+                darkText ? "border-black/15 border-t-black/60" : "border-white/25 border-t-white/80"
+            }`}
+        />
     );
 }
 
-function isForThisDisplay(notice: ShellNotice) {
-    return notice.displayId == null || notice.displayId === MY_DISPLAY_ID;
+function accentClass(tone: ShellNoticeTone, darkText: boolean) {
+    if (tone === "success") return "bg-emerald-500";
+    if (tone === "error") return "bg-rose-500";
+    return darkText ? "bg-black/30" : "bg-white/45";
 }
 
 export default function NoticeStrip() {
+    const darkText = useDarkText();
+    const outline = useFullscreenWindow();
+
     const [notice, setNotice] = useState<ShellNotice | null>(null);
-    const cardRef = useRef<HTMLDivElement>(null);
-    const claimedRef = useRef(false);
+    const [shape, setShape] = useState<Shape | null>(null);
+
+    const clipRef = useRef<HTMLDivElement>(null);
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const idRef = useRef(0);
+    if (!idRef.current) idRef.current = nextSurfaceId();
+    const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const holdsRegion = useRef(false);
+
+    const superseded = useSurfaceSuperseded(idRef.current);
+
+    function releaseRegion() {
+        if (!holdsRegion.current) return;
+        holdsRegion.current = false;
+        window.topbar.setActiveRegion(null);
+    }
 
     useEffect(() => {
-        window.notice.current().then((initial) => {
-            if (initial && isForThisDisplay(initial)) setNotice(initial);
-        });
-        const stopShow = window.notice.onShow((next) => setNotice(isForThisDisplay(next) ? next : null));
-        const stopHide = window.notice.onHide(() => setNotice(null));
+        const show = (next: ShellNotice | null) => {
+            if (!next) return;
+            if (next.displayId != null && next.displayId !== MY_DISPLAY_ID) return;
+            clearTimeout(closeTimer.current);
+            setNotice(next);
+            setShape(null);
+        };
+        const hide = () => {
+            clearChromeSurface(idRef.current);
+            releaseRegion();
+            clearTimeout(closeTimer.current);
+            closeTimer.current = setTimeout(() => {
+                setNotice(null);
+                setShape(null);
+            }, CLOSE_MS);
+        };
+        window.notice.current().then(show);
+        const stopShow = window.notice.onShow(show);
+        const stopHide = window.notice.onHide(hide);
         return () => {
             stopShow();
             stopHide();
         };
     }, []);
 
-    const interactive = Boolean(notice && !notice.pill);
+    function measureShape(): Shape | null {
+        const body = bodyRef.current;
+        if (!body) return null;
+        body.style.width = "max-content";
+        const rect = body.getBoundingClientRect();
+        const bodyWidth = Math.round(rect.width);
+        const bodyHeight = Math.round(rect.height);
+        body.style.width = `${bodyWidth}px`;
+        const screenW = window.innerWidth;
+        const half = bodyWidth / 2;
+        let anchor: ChromeAnchor = "center";
+        let centerX = Math.round(screenW / 2);
+        if (centerX - half - SHOULDER < SCREEN_PAD) {
+            anchor = "left";
+            centerX = Math.round(half);
+        } else if (centerX + half + SHOULDER > screenW - SCREEN_PAD) {
+            anchor = "right";
+            centerX = Math.round(screenW - half);
+        }
+        return { centerX, bodyWidth, bodyHeight, left: centerX - bodyWidth / 2, anchor };
+    }
 
     useLayoutEffect(() => {
-        const card = cardRef.current;
-        if (!interactive || !card) {
-            if (claimedRef.current) {
-                window.topbar.setActiveRegion(null);
-                claimedRef.current = false;
-            }
+        if (!notice || shape) return;
+        const next = measureShape();
+        if (next) setShape(next);
+    }, [notice, shape]);
+
+    useLayoutEffect(() => {
+        if (!notice || !shape) return;
+        if (superseded) {
+            releaseRegion();
             return;
         }
-        const claim = () => {
-            const box = card.getBoundingClientRect();
-            claimedRef.current = true;
-            window.topbar.setActiveRegion({
-                top: BAR_BOTTOM,
-                bottom: Math.ceil(box.bottom),
-                left: Math.floor(box.left),
-                right: Math.ceil(box.right),
-            });
-        };
-        claim();
-        const observer = new ResizeObserver(claim);
-        observer.observe(card);
+        const alreadyOurs = getChromeSurface()?.id === idRef.current;
+        if (clipRef.current && !alreadyOurs) {
+            clipRef.current.style.height = `${shape.bodyHeight}px`;
+            clipRef.current.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
+        }
+        setChromeSurface({
+            id: idRef.current,
+            centerX: shape.centerX,
+            bodyWidth: shape.bodyWidth,
+            fullHeight: shape.bodyHeight,
+            outline,
+            anchor: shape.anchor,
+            contentEl: clipRef.current,
+        });
+        if (notice.pill) {
+            releaseRegion();
+            return;
+        }
+        const sideL = shape.anchor === "left" ? 0 : SHOULDER;
+        const sideR = shape.anchor === "right" ? 0 : SHOULDER;
+        holdsRegion.current = true;
+        window.topbar.setActiveRegion({
+            top: BAR_BOTTOM,
+            bottom: BAR_BOTTOM + shape.bodyHeight,
+            left: shape.left - sideL,
+            right: shape.left + shape.bodyWidth + sideR,
+        });
+    }, [notice, shape, outline, superseded]);
+
+    useEffect(() => {
+        if (!notice || !shape) return;
+        const body = bodyRef.current;
+        if (!body) return;
+        const observer = new ResizeObserver(() => {
+            const next = measureShape();
+            if (!next) return;
+            if (Math.abs(next.bodyHeight - shape.bodyHeight) < 1 && Math.abs(next.bodyWidth - shape.bodyWidth) < 1) return;
+            setShape(next);
+        });
+        observer.observe(body);
         return () => observer.disconnect();
-    }, [interactive, notice]);
+    }, [notice, shape]);
 
     useEffect(
         () => () => {
-            if (claimedRef.current) window.topbar.setActiveRegion(null);
+            clearTimeout(closeTimer.current);
+            clearChromeSurface(idRef.current);
+            releaseRegion();
         },
         [],
     );
 
     if (!notice) return null;
 
-    return (
-        <div className="pointer-events-none absolute inset-x-0 top-6 z-20 flex justify-center px-2 pt-1.5">
+    const interactive = !notice.pill && !superseded && Boolean(shape);
+    const titleClass = darkText ? "text-black/90" : "text-white/95";
+    const messageClass = darkText ? "text-black/60" : "text-white/70";
+    const quietButton = darkText
+        ? "text-black/55 hover:bg-black/5 hover:text-black/85"
+        : "text-white/60 hover:bg-white/10 hover:text-white/90";
+    const strongButton = darkText
+        ? "bg-black/10 text-black/90 hover:bg-black/15"
+        : "bg-white/15 text-white hover:bg-white/25";
+
+    return createPortal(
+        <div
+            ref={clipRef}
+            style={{
+                position: "fixed",
+                left: shape ? shape.left : -9999,
+                top: BAR_BOTTOM,
+                width: shape ? shape.bodyWidth : undefined,
+                zIndex: 5,
+                pointerEvents: interactive ? "auto" : "none",
+                visibility: superseded ? "hidden" : undefined,
+                willChange: "clip-path",
+            }}
+        >
             <div
-                ref={cardRef}
-                className={`flex items-start gap-2.5 rounded-b-xl rounded-t-md bg-[#1f2020]/95 text-white shadow-[0_10px_30px_rgba(0,0,0,0.45)] ring-1 ring-white/10 backdrop-blur ${
-                    notice.pill ? "max-w-[420px] px-3 py-1.5" : "pointer-events-auto w-[380px] px-3.5 py-3"
-                }`}
+                ref={bodyRef}
+                style={{ maxWidth: MAX_BODY_WIDTH }}
+                className={`flex items-start gap-2.5 ${notice.pill ? "px-3 py-1.5" : "px-3.5 py-2.5"}`}
             >
                 {notice.busy ? (
                     <span className="mt-0.5">
-                        <Spinner />
+                        <Spinner darkText={darkText} />
                     </span>
                 ) : (
-                    <span className={`mt-1.5 block size-2 shrink-0 rounded-full ${TONE_ACCENT[notice.tone]}`} />
+                    <span className={`mt-1.5 block size-2 shrink-0 rounded-full ${accentClass(notice.tone, darkText)}`} />
                 )}
                 <div className="min-w-0 flex-1">
-                    {notice.title && (
-                        <div className="truncate text-[12px] font-medium leading-4 text-white/95">{notice.title}</div>
-                    )}
-                    <div className={`text-[12px] leading-4 text-white/70 ${notice.pill ? "truncate" : ""}`}>
-                        {notice.message}
-                    </div>
+                    {notice.title && <div className={`text-[12px] font-medium leading-4 ${titleClass}`}>{notice.title}</div>}
+                    <div className={`text-[12px] leading-4 ${messageClass}`}>{notice.message}</div>
                     {notice.confirm && (
-                        <div className="mt-2.5 flex justify-end gap-2">
+                        <div className="mt-2 flex justify-end gap-1.5">
                             <button
                                 type="button"
-                                className="rounded-md px-2 py-1 text-[11px] leading-4 text-white/60 hover:bg-white/10 hover:text-white/90"
+                                className={`rounded-md px-2 py-1 text-[11px] leading-4 ${quietButton}`}
                                 onClick={() => window.notice.dismiss()}
                             >
                                 {notice.confirm.cancelLabel}
                             </button>
                             <button
                                 type="button"
-                                className="rounded-md bg-white/15 px-2.5 py-1 text-[11px] font-medium leading-4 text-white hover:bg-white/25"
+                                className={`rounded-md px-2.5 py-1 text-[11px] font-medium leading-4 ${strongButton}`}
                                 onClick={() => window.notice.confirm()}
                             >
                                 {notice.confirm.label}
@@ -115,7 +225,7 @@ export default function NoticeStrip() {
                     {notice.action && !notice.confirm && !notice.pill && (
                         <button
                             type="button"
-                            className="mt-2 rounded-md bg-white/10 px-2 py-1 text-[11px] leading-4 text-white/90 hover:bg-white/20"
+                            className={`mt-2 rounded-md px-2 py-1 text-[11px] leading-4 ${strongButton}`}
                             onClick={() => window.notice.runAction()}
                         >
                             {notice.action.label}
@@ -126,13 +236,14 @@ export default function NoticeStrip() {
                     <button
                         type="button"
                         aria-label="Dismiss"
-                        className="-mr-1 -mt-0.5 rounded-md px-1.5 py-0.5 text-[13px] leading-4 text-white/40 hover:bg-white/10 hover:text-white/80"
+                        className={`-mr-1 -mt-0.5 rounded-md px-1.5 py-0.5 text-[13px] leading-4 ${quietButton}`}
                         onClick={() => window.notice.dismiss()}
                     >
                         ×
                     </button>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
