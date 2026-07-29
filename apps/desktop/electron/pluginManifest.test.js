@@ -105,3 +105,21 @@ describe('contributes.launcherFolders', () => {
     expect(record.contributes.launcherFolders).toBeUndefined()
   })
 })
+
+describe('contributes.launcherFolders openCommand', () => {
+  it('defaults to null', () => {
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps' }] }))
+    expect(record.contributes.launcherFolders[0].openCommand).toBeNull()
+  })
+
+  it('keeps a declared open command', () => {
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps', openCommand: 'open' }] }))
+    expect(record.errors).toEqual([])
+    expect(record.contributes.launcherFolders[0].openCommand).toBe('open')
+  })
+
+  it('rejects an empty open command', () => {
+    const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps', openCommand: '' }] }))
+    expect(record.valid).toBe(false)
+  })
+})

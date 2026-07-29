@@ -122,11 +122,16 @@ function validateContributions(raw, apiVersion, realBase, push) {
           push("contributes.launcherFolders: 'uninstallCommand' must be a non-empty string")
           continue
         }
+        if (c.openCommand != null && (typeof c.openCommand !== 'string' || !c.openCommand)) {
+          push("contributes.launcherFolders: 'openCommand' must be a non-empty string")
+          continue
+        }
         kept.push({
           ...c,
           startMenuFolder: folder,
           badge,
           uninstallCommand: c.uninstallCommand || null,
+          openCommand: c.openCommand || null,
           export: c.export || 'default',
         })
         continue
