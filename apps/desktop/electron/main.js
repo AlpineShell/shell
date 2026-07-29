@@ -36,6 +36,8 @@ const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const plugins = require('./modules/plugins')
 const pluginBackendHost = require('./pluginBackendHost')
 const shellNotice = require('./modules/shellNotice')
+
+const OPEN_APP_TIMEOUT_MS = 300000
 const fileHandlers = require('./modules/fileHandlers')
 const displayConfig = require('./modules/displayConfig')
 const clockPrefs = require('./modules/clockPrefs')
@@ -590,7 +592,48 @@ function handleDeepLink(rawUrl) {
     const id = parsed.searchParams.get('id')
     if (!id) return
     openSettingsToPlugins({ id, version: parsed.searchParams.get('version') || '' })
+    return
   }
+  if (action === 'open-app') {
+    openPluginApp(parsed.searchParams.get('plugin'), parsed.searchParams.get('app'))
+  }
+}
+
+// A shortcut in a plugin's launcher folder points here rather than at anything the plugin
+// ships, so launching an app goes through the shell like opening a file does. Any local
+// process can invoke a URL scheme, so the command is not taken from the URL: only the
+// openCommand the plugin declared for that folder is ever sent, and only while it is on.
+function openPluginApp(pluginId, app) {
+  if (!pluginId || !app) return
+  const record = plugins.listPlugins().find((entry) => entry.id === pluginId)
+  if (!record || record.enabled === false || record.loadable !== true) {
+    shellNotice.show({
+      title: 'Alpine Shell',
+      message: `${app} needs the ${pluginId} plugin, which is not enabled.`,
+      tone: 'error',
+      action: { label: 'Open plugins', run: () => openSettingsToPlugins() },
+      timeoutMs: 0,
+    })
+    return
+  }
+  const folder = ((record.contributes && record.contributes.launcherFolders) || []).find((entry) => entry.openCommand)
+  if (!folder) return
+  shellNotice.show({ id: 'open-app', title: record.name || pluginId, message: `Opening ${app}…`, busy: true, pill: true, timeoutMs: 0 })
+  pluginBackendHost
+    .sendCommand(pluginId, folder.openCommand, { app }, { timeoutMs: OPEN_APP_TIMEOUT_MS })
+    .then((reply) => {
+      const value = reply.ok && reply.value && typeof reply.value === 'object' ? reply.value : {}
+      const failed = !reply.ok || value.ok === false
+      shellNotice.show({
+        id: 'open-app',
+        title: record.name || pluginId,
+        message: value.message || (failed ? `${app} could not be opened: ${reply.error || 'the plugin refused'}` : `${app} is open.`),
+        tone: failed ? 'error' : 'success',
+        pill: !failed,
+        timeoutMs: failed ? 0 : 5000,
+      })
+    })
+    .catch((e) => console.error('[deeplink] open-app failed:', e && e.message))
 }
 
 ipcMain.handle('windows/open-settings', (_event, page) => {
