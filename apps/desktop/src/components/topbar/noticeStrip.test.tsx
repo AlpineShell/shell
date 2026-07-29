@@ -13,8 +13,8 @@ const notice = (over: Partial<ShellNotice> = {}): ShellNotice => ({
     title: "Android",
     message: "Reading IG.apk…",
     tone: "info",
-    busy: true,
-    pill: true,
+    busy: false,
+    pill: false,
     action: null,
     confirm: null,
     ...over,
@@ -58,28 +58,37 @@ async function emit(next: ShellNotice) {
 describe("NoticeStrip as a chrome surface", () => {
     it("claims the topbar chrome instead of drawing its own card", async () => {
         render(<NoticeStrip />);
-        await emit(notice());
+        await emit(notice({ confirm: { label: "Install", cancelLabel: "Cancel" } }));
         await waitFor(() => expect(getChromeSurface()).not.toBeNull());
         expect(getChromeSurface()).toMatchObject({ anchor: "center" });
         expect(getChromeSurface()?.contentEl).toBeTruthy();
     });
 
-    it("takes no mouse region for a pill, so a long install stays click-through", async () => {
+    it("ignores a pill entirely: progress belongs in the bar, not in a surface", async () => {
         render(<NoticeStrip />);
-        await emit(notice({ pill: true }));
-        await waitFor(() => expect(getChromeSurface()).not.toBeNull());
+        await emit(notice({ pill: true, busy: true }));
+        expect(getChromeSurface()).toBeNull();
         expect(setActiveRegion).not.toHaveBeenCalledWith(expect.objectContaining({ top: 24 }));
+    });
+
+    it("gives the chrome back when a question is replaced by a pill", async () => {
+        render(<NoticeStrip />);
+        await emit(notice({ confirm: { label: "Install", cancelLabel: "Cancel" } }));
+        await waitFor(() => expect(getChromeSurface()).not.toBeNull());
+        await emit(notice({ pill: true, busy: true, confirm: null }));
+        expect(getChromeSurface()).toBeNull();
+        expect(setActiveRegion).toHaveBeenLastCalledWith(null);
     });
 
     it("claims a mouse region for a question", async () => {
         render(<NoticeStrip />);
-        await emit(notice({ pill: false, busy: false, confirm: { label: "Update", cancelLabel: "Cancel" } }));
+        await emit(notice({ confirm: { label: "Update", cancelLabel: "Cancel" } }));
         await waitFor(() => expect(setActiveRegion).toHaveBeenCalledWith(expect.objectContaining({ top: 24 })));
     });
 
     it("releases chrome and region when the notice hides", async () => {
         render(<NoticeStrip />);
-        await emit(notice({ pill: false, busy: false, confirm: { label: "Go", cancelLabel: "No" } }));
+        await emit(notice({ confirm: { label: "Go", cancelLabel: "No" } }));
         await waitFor(() => expect(getChromeSurface()).not.toBeNull());
         await act(async () => {
             hideListener?.();
@@ -90,7 +99,7 @@ describe("NoticeStrip as a chrome surface", () => {
 
     it("yields the chrome when another surface supersedes it, and takes it back after", async () => {
         render(<NoticeStrip />);
-        await emit(notice({ pill: false, busy: false, confirm: { label: "Go", cancelLabel: "No" } }));
+        await emit(notice({ confirm: { label: "Go", cancelLabel: "No" } }));
         await waitFor(() => expect(getChromeSurface()).not.toBeNull());
         const mine = getChromeSurface()?.id;
 
