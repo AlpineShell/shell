@@ -124,6 +124,28 @@ contextBridge.exposeInMainWorld('plugins', {
   },
 })
 
+contextBridge.exposeInMainWorld('fileHandlers', {
+  state: () => ipcRenderer.invoke('file-handlers/state'),
+  chooseDefault: () => ipcRenderer.invoke('file-handlers/choose-default'),
+})
+
+contextBridge.exposeInMainWorld('notice', {
+  current: () => ipcRenderer.invoke('notice/current'),
+  onShow: (callback) => {
+    const handler = (_event, payload) => callback(payload)
+    ipcRenderer.on('notice/show', handler)
+    return () => ipcRenderer.removeListener('notice/show', handler)
+  },
+  onHide: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('notice/hide', handler)
+    return () => ipcRenderer.removeListener('notice/hide', handler)
+  },
+  reportSize: (height) => ipcRenderer.invoke('notice/size', height),
+  runAction: () => ipcRenderer.invoke('notice/action'),
+  dismiss: () => ipcRenderer.invoke('notice/dismiss'),
+})
+
 contextBridge.exposeInMainWorld('screenshot', {
   onShow: (callback) => {
     ipcRenderer.on('screenshot/show', (_, data) => callback(data))

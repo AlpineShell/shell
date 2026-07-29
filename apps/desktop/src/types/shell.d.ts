@@ -547,7 +547,39 @@ declare global {
     dayCount: number
   }
 
+  type ShellNoticeTone = 'info' | 'success' | 'error'
+
+  interface ShellNotice {
+    id: string
+    title: string | null
+    message: string
+    tone: ShellNoticeTone
+    busy: boolean
+    action: { label: string } | null
+  }
+
+  interface FileHandlerState {
+    extension: string
+    pluginId: string
+    pluginName: string
+    progId: string
+    holder: string | null
+    isDefault: boolean
+  }
+
   interface Window {
+    fileHandlers: {
+      state: () => Promise<FileHandlerState[]>
+      chooseDefault: () => Promise<void>
+    }
+    notice: {
+      current: () => Promise<ShellNotice | null>
+      onShow: (callback: (notice: ShellNotice) => void) => () => void
+      onHide: (callback: () => void) => () => void
+      reportSize: (height: number) => Promise<{ ok: boolean }>
+      runAction: () => Promise<{ ok: boolean }>
+      dismiss: () => Promise<{ ok: boolean }>
+    }
     plugins: {
       list: () => Promise<PluginRecord[]>
       dir: () => Promise<string>
