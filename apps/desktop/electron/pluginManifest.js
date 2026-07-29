@@ -118,7 +118,17 @@ function validateContributions(raw, apiVersion, realBase, push) {
           }
           badge = c.badge
         }
-        kept.push({ ...c, startMenuFolder: folder, badge, export: c.export || 'default' })
+        if (c.uninstallCommand != null && (typeof c.uninstallCommand !== 'string' || !c.uninstallCommand)) {
+          push("contributes.launcherFolders: 'uninstallCommand' must be a non-empty string")
+          continue
+        }
+        kept.push({
+          ...c,
+          startMenuFolder: folder,
+          badge,
+          uninstallCommand: c.uninstallCommand || null,
+          export: c.export || 'default',
+        })
         continue
       }
       kept.push({ ...c, export: c.export || 'default' })
