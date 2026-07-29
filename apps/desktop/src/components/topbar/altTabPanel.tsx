@@ -2,8 +2,8 @@ import { createPortal } from "react-dom"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
-import { RADIUS } from "./chrome/chromeShape"
-import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
+import { RADIUS } from "./engine/surfaceShape"
+import { setSurface, clearSurface, nextSurfaceId } from "./engine/surfaceStore"
 
 const BAR_BOTTOM = 24
 const CLOSE_MS = 300
@@ -78,7 +78,7 @@ export default function AltTabPanel() {
       setShowId((n) => n + 1)
     })
     window.alttab.onHide(() => {
-      clearChromeSurface(idRef.current)
+      clearSurface(idRef.current)
       closeTimer.current = setTimeout(() => {
         setVisible(false)
         setShape(null)
@@ -122,7 +122,7 @@ export default function AltTabPanel() {
       clip.style.height = `${shape.bodyHeight}px`
       clip.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`
     }
-    setChromeSurface({
+    setSurface({
       id: idRef.current,
       centerX: Math.round(window.innerWidth / 2),
       bodyWidth: shape.bodyWidth,
@@ -158,7 +158,7 @@ export default function AltTabPanel() {
     }
   }, [visible, showId])
 
-  useEffect(() => () => clearChromeSurface(idRef.current), [])
+  useEffect(() => () => clearSurface(idRef.current), [])
 
   const superseded = useSurfaceSuperseded(idRef.current)
 

@@ -1,53 +1,53 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import {
   nextSurfaceId,
-  setChromeSurface,
-  clearChromeSurface,
-  getChromeSurface,
-  subscribeChromeSurface,
-} from './chromeStore'
+  setSurface,
+  clearSurface,
+  getSurface,
+  subscribeSurface,
+} from './surfaceStore'
 
 function surface(id: number) {
   return { id, centerX: 0, bodyWidth: 0, fullHeight: 0, outline: false, anchor: 'center' as const, contentEl: null }
 }
 
 afterEach(() => {
-  setChromeSurface(null)
+  setSurface(null)
 })
 
-describe('chromeStore', () => {
+describe('surfaceStore', () => {
   it('hands out strictly increasing surface ids', () => {
     expect(nextSurfaceId()).toBeLessThan(nextSurfaceId())
   })
 
   it('stores and returns the current surface', () => {
     const s = surface(nextSurfaceId())
-    setChromeSurface(s)
-    expect(getChromeSurface()).toBe(s)
+    setSurface(s)
+    expect(getSurface()).toBe(s)
   })
 
   it('notifies subscribers when the surface changes', () => {
     const listener = vi.fn()
-    const unsubscribe = subscribeChromeSurface(listener)
-    setChromeSurface(surface(nextSurfaceId()))
+    const unsubscribe = subscribeSurface(listener)
+    setSurface(surface(nextSurfaceId()))
     expect(listener).toHaveBeenCalledTimes(1)
     unsubscribe()
   })
 
   it('stops notifying after unsubscribe', () => {
     const listener = vi.fn()
-    const unsubscribe = subscribeChromeSurface(listener)
+    const unsubscribe = subscribeSurface(listener)
     unsubscribe()
-    setChromeSurface(surface(nextSurfaceId()))
+    setSurface(surface(nextSurfaceId()))
     expect(listener).not.toHaveBeenCalled()
   })
 
   it('clears the surface only when the id matches the current one', () => {
     const s = surface(nextSurfaceId())
-    setChromeSurface(s)
-    clearChromeSurface(s.id + 999)
-    expect(getChromeSurface()).toBe(s)
-    clearChromeSurface(s.id)
-    expect(getChromeSurface()).toBeNull()
+    setSurface(s)
+    clearSurface(s.id + 999)
+    expect(getSurface()).toBe(s)
+    clearSurface(s.id)
+    expect(getSurface()).toBeNull()
   })
 })

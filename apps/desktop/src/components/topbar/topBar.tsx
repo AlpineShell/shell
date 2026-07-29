@@ -12,7 +12,7 @@ import AltTabPanel from "./altTabPanel";
 import { warmRenderableEmojis } from "../../lib/emojiRenderable";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
-import ChromeCanvas from "./chrome/ChromeCanvas";
+import TopbarEngine from "./engine/topbarEngine";
 import PluginSlot from "./pluginSlot";
 import NoticeStrip from "./noticeStrip";
 import { loadTopbarPlugins } from "../../plugins/loadPlugins";
@@ -45,7 +45,7 @@ export default function TopBar() {
 
     return (
         <ThemeProvider value={{ darkText, bg, fullscreenWindow, onMenuOpenChange: noop }}>
-            <ChromeCanvas barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} />
+            <TopbarEngine barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} />
             <div
                 className="w-full flex justify-between items-center h-6 relative z-10 transition-colors duration-300"
                 style={{ backgroundColor: bg }}

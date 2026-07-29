@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { render, act, waitFor } from "@testing-library/react";
 import NoticeStrip from "./noticeStrip";
-import { getChromeSurface, setChromeSurface, nextSurfaceId } from "./chrome/chromeStore";
+import { getSurface, setSurface, nextSurfaceId } from "./engine/surfaceStore";
 
 let showListener: ((n: ShellNotice) => void) | null = null;
 let hideListener: (() => void) | null = null;
@@ -21,7 +21,7 @@ const notice = (over: Partial<ShellNotice> = {}): ShellNotice => ({
 });
 
 beforeEach(() => {
-    setChromeSurface(null);
+    setSurface(null);
     setActiveRegion = vi.fn();
     (window as unknown as { notice: unknown }).notice = {
         current: () => Promise.resolve(null),
@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-    setChromeSurface(null);
+    setSurface(null);
     vi.useRealTimers();
 });
 
@@ -59,15 +59,15 @@ describe("NoticeStrip as a chrome surface", () => {
     it("claims the topbar chrome instead of drawing its own card", async () => {
         render(<NoticeStrip />);
         await emit(notice());
-        await waitFor(() => expect(getChromeSurface()).not.toBeNull());
-        expect(getChromeSurface()).toMatchObject({ anchor: "center" });
-        expect(getChromeSurface()?.contentEl).toBeTruthy();
+        await waitFor(() => expect(getSurface()).not.toBeNull());
+        expect(getSurface()).toMatchObject({ anchor: "center" });
+        expect(getSurface()?.contentEl).toBeTruthy();
     });
 
     it("takes no mouse region for a pill, so a long install stays click-through", async () => {
         render(<NoticeStrip />);
         await emit(notice({ pill: true }));
-        await waitFor(() => expect(getChromeSurface()).not.toBeNull());
+        await waitFor(() => expect(getSurface()).not.toBeNull());
         expect(setActiveRegion).not.toHaveBeenCalledWith(expect.objectContaining({ top: 24 }));
     });
 
@@ -80,23 +80,23 @@ describe("NoticeStrip as a chrome surface", () => {
     it("releases chrome and region when the notice hides", async () => {
         render(<NoticeStrip />);
         await emit(notice({ pill: false, busy: false, confirm: { label: "Go", cancelLabel: "No" } }));
-        await waitFor(() => expect(getChromeSurface()).not.toBeNull());
+        await waitFor(() => expect(getSurface()).not.toBeNull());
         await act(async () => {
             hideListener?.();
         });
-        expect(getChromeSurface()).toBeNull();
+        expect(getSurface()).toBeNull();
         expect(setActiveRegion).toHaveBeenLastCalledWith(null);
     });
 
     it("yields the chrome when another surface supersedes it, and takes it back after", async () => {
         render(<NoticeStrip />);
         await emit(notice({ pill: false, busy: false, confirm: { label: "Go", cancelLabel: "No" } }));
-        await waitFor(() => expect(getChromeSurface()).not.toBeNull());
-        const mine = getChromeSurface()?.id;
+        await waitFor(() => expect(getSurface()).not.toBeNull());
+        const mine = getSurface()?.id;
 
         const other = nextSurfaceId();
         await act(async () => {
-            setChromeSurface({
+            setSurface({
                 id: other,
                 centerX: 100,
                 bodyWidth: 100,
@@ -106,18 +106,18 @@ describe("NoticeStrip as a chrome surface", () => {
                 contentEl: null,
             });
         });
-        expect(getChromeSurface()?.id).toBe(other);
+        expect(getSurface()?.id).toBe(other);
         expect(setActiveRegion).toHaveBeenLastCalledWith(null);
 
         await act(async () => {
-            setChromeSurface(null);
+            setSurface(null);
         });
-        await waitFor(() => expect(getChromeSurface()?.id).toBe(mine));
+        await waitFor(() => expect(getSurface()?.id).toBe(mine));
     });
 
     it("ignores a notice aimed at another display", async () => {
         render(<NoticeStrip />);
         await emit(notice({ displayId: 4242 }));
-        expect(getChromeSurface()).toBeNull();
+        expect(getSurface()).toBeNull();
     });
 });

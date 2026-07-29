@@ -2,8 +2,8 @@ import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTopbarBg, useFullscreenWindow } from "../../themeContext";
 import { useSurfaceSuperseded } from "../../../hooks/useSurfaceSuperseded";
-import { SHOULDER, RADIUS, type ChromeAnchor } from "../chrome/chromeShape";
-import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "../chrome/chromeStore";
+import { SHOULDER, RADIUS, type SurfaceAnchor } from "../engine/surfaceShape";
+import { setSurface, clearSurface, nextSurfaceId } from "../engine/surfaceStore";
 
 const SCREEN_PAD = 6;
 const EDGE_PAD = 0;
@@ -11,7 +11,7 @@ const BAR_BOTTOM = 24;
 const CLOSE_MS = 300;
 const REGION_SHRINK_DELAY_MS = 260;
 
-type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number; anchor: ChromeAnchor };
+type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number; anchor: SurfaceAnchor };
 
 let activeMenu: { close: () => void } | null = null;
 
@@ -76,7 +76,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         const center = triggerRect.left + triggerRect.width / 2;
         const screenW = window.innerWidth;
         const half = bodyWidth / 2;
-        let anchor: ChromeAnchor = "center";
+        let anchor: SurfaceAnchor = "center";
         let centerX = Math.round(center);
         if (center - half - SHOULDER < SCREEN_PAD) {
             anchor = "left";
@@ -100,7 +100,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             clipRef.current.style.height = `${shape.bodyHeight}px`;
             clipRef.current.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
         }
-        setChromeSurface({
+        setSurface({
             id: idRef.current,
             centerX: shape.centerX,
             bodyWidth: shape.bodyWidth,
@@ -151,7 +151,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     useEffect(() => () => {
         clearTimeout(closeTimer.current);
         clearTimeout(shrinkTimer.current);
-        clearChromeSurface(idRef.current);
+        clearSurface(idRef.current);
         if (activeMenu === selfRef.current) {
             activeMenu = null;
             window.topbar.setActiveRegion(null);
@@ -161,7 +161,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
     function triggerClose() {
         pendingClose.current = true;
         if (activeMenu === selfRef.current) activeMenu = null;
-        clearChromeSurface(idRef.current);
+        clearSurface(idRef.current);
         clearTimeout(shrinkTimer.current);
         regionBottomRef.current = 0;
         window.topbar.setActiveRegion(null);

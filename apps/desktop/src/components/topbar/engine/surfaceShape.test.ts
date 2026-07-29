@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { surfaceFillPath, barBorderPath } from './chromeShape'
+import { surfaceFillPath, barBorderPath } from './surfaceShape'
 
 const centered = {
   centerX: 500,

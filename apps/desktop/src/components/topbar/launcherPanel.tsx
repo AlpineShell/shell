@@ -5,8 +5,8 @@ import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
 import { useMonitors } from "../../hooks/useMonitors"
-import { RADIUS } from "./chrome/chromeShape"
-import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
+import { RADIUS } from "./engine/surfaceShape"
+import { setSurface, clearSurface, nextSurfaceId } from "./engine/surfaceStore"
 import { SETTING_COMMANDS, type SettingCommand } from "./launcherSettings"
 import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type SearchFields } from "../../lib/launcherSearch"
 import { useFrecencyScores } from "../../hooks/useFrecencyScores"
@@ -472,7 +472,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       panel.style.clipPath = `inset(0 0 ${h}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`
       firstRef.current = false
     }
-    setChromeSurface({
+    setSurface({
       id: idRef.current,
       centerX: Math.round(window.innerWidth / 2),
       bodyWidth: panelWidth,
@@ -503,10 +503,10 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelWidth, outline])
 
-  useEffect(() => () => clearChromeSurface(idRef.current), [])
+  useEffect(() => () => clearSurface(idRef.current), [])
 
   useEffect(() => {
-    const offStartClose = window.launcher.onStartClose(() => clearChromeSurface(idRef.current))
+    const offStartClose = window.launcher.onStartClose(() => clearSurface(idRef.current))
     const offHide = window.launcher.onHide(() => setNotice(null))
     return () => {
       offStartClose()
