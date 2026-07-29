@@ -61,7 +61,7 @@ function confinedFile(realBase, rel) {
   return st.isFile() ? real : null
 }
 
-function validateContributions(raw, apiVersion, push) {
+function validateContributions(raw, apiVersion, realBase, push) {
   const out = {}
   if (!raw || typeof raw !== 'object') return out
   for (const key of CONTRIBUTION_KEYS) {
@@ -110,7 +110,15 @@ function validateContributions(raw, apiVersion, push) {
           push("contributes.launcherFolders: 'startMenuFolder' must be a plain folder name")
           continue
         }
-        kept.push({ ...c, startMenuFolder: folder, export: c.export || 'default' })
+        let badge = null
+        if (c.badge != null) {
+          if (!confinedFile(realBase, c.badge)) {
+            push("contributes.launcherFolders: 'badge' must be a file inside the plugin folder")
+            continue
+          }
+          badge = c.badge
+        }
+        kept.push({ ...c, startMenuFolder: folder, badge, export: c.export || 'default' })
         continue
       }
       kept.push({ ...c, export: c.export || 'default' })
@@ -239,7 +247,7 @@ function parseManifest(pluginDir, folderName, options) {
     else push('icon: missing/escapes plugin dir')
   }
 
-  const contributes = validateContributions(raw.contributes, apiVersion, push)
+  const contributes = validateContributions(raw.contributes, apiVersion, realBase, push)
   const marketplace = validateMarketplace(raw.marketplace, realBase, push)
 
   const record = {

@@ -144,6 +144,41 @@ function dormantPluginFolders() {
   return folders
 }
 
+function pluginFolderBadges() {
+  const badges = new Map()
+  let records = []
+  try {
+    records = plugins.listPlugins()
+  } catch (e) {
+    console.error('[launcher] plugin badge lookup failed:', e && e.message)
+    return badges
+  }
+  for (const record of records) {
+    if (record.enabled === false || record.loadable !== true) continue
+    for (const entry of (record.contributes && record.contributes.launcherFolders) || []) {
+      if (!entry.badge) continue
+      badges.set(String(entry.startMenuFolder).toLowerCase(), `alpine-plugin://${record.id}/${entry.badge}`)
+    }
+  }
+  return badges
+}
+
+function badgeForShortcut(scPath, badges) {
+  if (badges.size === 0) return null
+  for (const dir of SCAN_DIRS) {
+    if (!dir) continue
+    const relative = path.relative(dir, scPath)
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue
+    const segments = relative.split(path.sep)
+    segments.pop()
+    for (const segment of segments) {
+      const badge = badges.get(segment.toLowerCase())
+      if (badge) return badge
+    }
+  }
+  return null
+}
+
 function isInDormantFolder(scPath, dormantFolders) {
   if (dormantFolders.size === 0) return false
   for (const dir of SCAN_DIRS) {
@@ -162,6 +197,7 @@ function collectLnkItems() {
   for (const dir of SCAN_DIRS) walkShortcuts(dir, shortcutPaths)
 
   const dormantFolders = dormantPluginFolders()
+  const badges = pluginFolderBadges()
   const seenNames = new Set()
   const items = []
 
@@ -190,6 +226,7 @@ function collectLnkItems() {
       iconSource: info.icon && info.icon.length > 0 ? info.icon : (isUrl ? null : info.target),
       iconIndex: info.iconIndex || 0,
       icon: null,
+      badge: badgeForShortcut(scPath, badges),
       isUrl,
     })
   }

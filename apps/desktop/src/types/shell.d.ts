@@ -282,6 +282,7 @@ declare global {
     lnkPath: string | null
     target: string
     icon: string | null
+    badge?: string | null
     appId?: string
     url?: string
     isBookmark?: boolean
