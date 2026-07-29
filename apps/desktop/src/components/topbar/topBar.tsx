@@ -15,6 +15,7 @@ import { useForegroundColor } from "../../hooks/useForegroundColor";
 import ChromeCanvas from "./chrome/ChromeCanvas";
 import PluginSlot from "./pluginSlot";
 import NoticeStrip from "./noticeStrip";
+import NoticeStatus from "./noticeStatus";
 import { loadTopbarPlugins } from "../../plugins/loadPlugins";
 
 const noop = () => {};
@@ -52,9 +53,10 @@ export default function TopBar() {
                 onMouseEnter={() => setHovered(true)}
                 onMouseLeave={() => setHovered(false)}
             >
-                <div className="flex items-center gap-1 relative z-1 self-stretch">
+                <div className="flex items-center gap-1 relative z-1 self-stretch min-w-0">
                     <SystemMenu />
                     <PluginSlot slot="left" />
+                    <NoticeStatus />
                 </div>
                 <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center z-1">
                     <LauncherTrigger />

@@ -13,6 +13,7 @@ let pendingConfirm = null
 let pendingCancel = null
 let dismissTimer = null
 let escapeHeld = false
+let topbarsRaised = false
 
 function start(_broadcast, broadcastToTopbars) {
   toTopbars = typeof broadcastToTopbars === 'function' ? broadcastToTopbars : null
@@ -28,6 +29,33 @@ function cursorDisplayId() {
     return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id
   } catch {
     return null
+  }
+}
+
+// A notice is drawn by the topbar, which sits at normal z-order, so anything the user has
+// open can cover it. Raise the bars that carry one and put them back afterwards -- the
+// restore is the same one the launcher uses, so it declines to lower a bar the launcher or
+// alt-tab is still holding up.
+function raiseTopbars(raised) {
+  if (raised === topbarsRaised) return
+  try {
+    const { BrowserWindow } = require('electron')
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue
+      let mode = null
+      try {
+        mode = new URL(win.webContents.getURL()).searchParams.get('mode')
+      } catch {
+        continue
+      }
+      if (mode !== 'topbar') continue
+      if (raised) win.setAlwaysOnTop(true, 'screen-saver')
+      else if (typeof win.restorePassiveTopBar === 'function') win.restorePassiveTopBar()
+      else win.setAlwaysOnTop(false)
+    }
+    topbarsRaised = raised
+  } catch {
+    topbarsRaised = false
   }
 }
 
@@ -77,6 +105,7 @@ function runCallback(label, fn) {
 function hide() {
   clearDismissTimer()
   holdEscape(false)
+  raiseTopbars(false)
   const abandoned = pendingConfirm ? pendingCancel : null
   current = null
   pendingAction = null
@@ -114,6 +143,7 @@ function show(request) {
       : null,
   }
   send('notice/show', current)
+  raiseTopbars(true)
   holdEscape(Boolean(confirm))
   scheduleDismiss(id, confirm ? 0 : request.timeoutMs)
   return id

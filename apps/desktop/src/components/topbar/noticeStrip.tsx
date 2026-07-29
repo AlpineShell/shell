@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDarkText, useFullscreenWindow } from "../themeContext";
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded";
+import { useShellNotice } from "../../hooks/useShellNotice";
 import { SHOULDER, RADIUS, type ChromeAnchor } from "./chrome/chromeShape";
 import { setChromeSurface, clearChromeSurface, getChromeSurface, nextSurfaceId } from "./chrome/chromeStore";
 
@@ -9,7 +10,6 @@ const BAR_BOTTOM = 24;
 const SCREEN_PAD = 6;
 const CLOSE_MS = 300;
 const MAX_BODY_WIDTH = 440;
-const MY_DISPLAY_ID = Number(new URLSearchParams(window.location.search).get("displayId"));
 
 type Shape = { centerX: number; bodyWidth: number; bodyHeight: number; left: number; anchor: ChromeAnchor };
 
@@ -33,6 +33,7 @@ export default function NoticeStrip() {
     const darkText = useDarkText();
     const outline = useFullscreenWindow();
 
+    const live = useShellNotice();
     const [notice, setNotice] = useState<ShellNotice | null>(null);
     const [shape, setShape] = useState<Shape | null>(null);
 
@@ -52,30 +53,20 @@ export default function NoticeStrip() {
     }
 
     useEffect(() => {
-        const show = (next: ShellNotice | null) => {
-            if (!next) return;
-            if (next.displayId != null && next.displayId !== MY_DISPLAY_ID) return;
+        if (live && !live.pill) {
             clearTimeout(closeTimer.current);
-            setNotice(next);
+            setNotice(live);
             setShape(null);
-        };
-        const hide = () => {
-            clearChromeSurface(idRef.current);
-            releaseRegion();
-            clearTimeout(closeTimer.current);
-            closeTimer.current = setTimeout(() => {
-                setNotice(null);
-                setShape(null);
-            }, CLOSE_MS);
-        };
-        window.notice.current().then(show);
-        const stopShow = window.notice.onShow(show);
-        const stopHide = window.notice.onHide(hide);
-        return () => {
-            stopShow();
-            stopHide();
-        };
-    }, []);
+            return;
+        }
+        clearChromeSurface(idRef.current);
+        releaseRegion();
+        clearTimeout(closeTimer.current);
+        closeTimer.current = setTimeout(() => {
+            setNotice(null);
+            setShape(null);
+        }, CLOSE_MS);
+    }, [live]);
 
     function measureShape(): Shape | null {
         const body = bodyRef.current;
@@ -124,10 +115,6 @@ export default function NoticeStrip() {
             anchor: shape.anchor,
             contentEl: clipRef.current,
         });
-        if (notice.pill) {
-            releaseRegion();
-            return;
-        }
         const sideL = shape.anchor === "left" ? 0 : SHOULDER;
         const sideR = shape.anchor === "right" ? 0 : SHOULDER;
         holdsRegion.current = true;
@@ -164,7 +151,7 @@ export default function NoticeStrip() {
 
     if (!notice) return null;
 
-    const interactive = !notice.pill && !superseded && Boolean(shape);
+    const interactive = !superseded && Boolean(shape);
     const titleClass = darkText ? "text-black/90" : "text-white/95";
     const messageClass = darkText ? "text-black/60" : "text-white/70";
     const quietButton = darkText
@@ -191,7 +178,7 @@ export default function NoticeStrip() {
             <div
                 ref={bodyRef}
                 style={{ maxWidth: MAX_BODY_WIDTH }}
-                className={`flex items-start gap-2.5 ${notice.pill ? "px-3 py-1.5" : "px-3.5 py-2.5"}`}
+                className="flex items-start gap-2.5 px-3.5 py-2.5"
             >
                 {notice.busy ? (
                     <span className="mt-0.5">
@@ -221,7 +208,7 @@ export default function NoticeStrip() {
                             </button>
                         </div>
                     )}
-                    {notice.action && !notice.confirm && !notice.pill && (
+                    {notice.action && !notice.confirm && (
                         <button
                             type="button"
                             className={`mt-2 rounded-md px-2 py-1 text-[11px] leading-4 ${strongButton}`}
@@ -231,7 +218,7 @@ export default function NoticeStrip() {
                         </button>
                     )}
                 </div>
-                {!notice.busy && !notice.confirm && !notice.pill && (
+                {!notice.busy && !notice.confirm && (
                     <button
                         type="button"
                         aria-label="Dismiss"
