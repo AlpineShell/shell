@@ -50,12 +50,13 @@ Desktop-only iteration: `bun --filter alpine-shell dev` (Vite server only), `bun
 
 ## Code Conventions
 
-- **No code comments.** Name functions, variables, and types descriptively instead.
+- **No code comments. None.** Name functions, variables, and types descriptively instead. This covers every kind: file headers, block comments explaining a design decision, `//` notes above a tricky line, and comments in tests. If a decision needs explaining, it belongs in the commit message or the pull request, where it is read once by a reviewer — not in the file, where it is read forever and rots. If a line needs explaining, rename something until it does not.
 - **Single responsibility.** Each function does one thing.
 - **DRY.** Use `useShellState` for read-only hooks. Use `runPowerShell` from `electron/powershell.js` for one-shot PowerShell commands.
 - **No default exports** except for React components (React convention).
 - **Type definitions** go in `src/types/shell.d.ts`, not inline in components or hooks.
 - **File naming**: camelCase for all source files. Hook files are named after their exported function (e.g., `useMonitors.ts` exports `useMonitors`).
+- **Require `electron` inside the function that uses it**, never at module scope, in any `electron/` module that has a test. CI builds with `ELECTRON_SKIP_BINARY_DOWNLOAD`, so a module-scope `require('electron')` throws there and the test file fails to import before a single case runs. `shellNotice.js` and `pluginWindows.js` both learned this the same way.
 
 ## Key Technical Details
 
