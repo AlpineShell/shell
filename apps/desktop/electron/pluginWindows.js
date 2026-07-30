@@ -8,6 +8,7 @@ const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 640
 
 const byPlugin = new Map()
+const iconByHandle = new Map()
 let sendToBackend = null
 
 function configure(options) {
@@ -87,6 +88,8 @@ function open(pluginId, pluginDir, request) {
   })
 
   windows.set(id, win)
+  const handle = handleOf(win)
+  if (handle !== null && pluginIcon) iconByHandle.set(handle, pluginIcon)
   if (typeof win.removeMenu === 'function') win.removeMenu()
   win.on('page-title-updated', (event) => event.preventDefault())
   win.webContents.on('console-message', (...args) => {
@@ -111,10 +114,19 @@ function open(pluginId, pluginDir, request) {
   win.on('closed', () => {
     const live = byPlugin.get(pluginId)
     if (live && live.get(id) === win) live.delete(id)
+    if (handle !== null) iconByHandle.delete(handle)
     notify(pluginId, 'closed', { id })
   })
   win.loadURL(url)
   return { ok: true, reused: false }
+}
+
+function handleOf(win) {
+  try {
+    return win.getNativeWindowHandle().readUInt32LE(0)
+  } catch {
+    return null
+  }
 }
 
 function nativeHandles() {
@@ -122,12 +134,15 @@ function nativeHandles() {
   for (const windows of byPlugin.values()) {
     for (const win of windows.values()) {
       if (win.isDestroyed()) continue
-      try {
-        handles.push(win.getNativeWindowHandle().readUInt32LE(0))
-      } catch {}
+      const handle = handleOf(win)
+      if (handle !== null) handles.push(handle)
     }
   }
   return handles
+}
+
+function iconForHandle(handle) {
+  return iconByHandle.get(handle) || null
 }
 
 function close(pluginId, id) {
@@ -178,4 +193,4 @@ function start() {
   require('./modules/plugins').onPluginsChanged(closeWindowsOfGonePlugins)
 }
 
-module.exports = { configure, open, close, send, closeAll, start, nativeHandles }
+module.exports = { configure, open, close, send, closeAll, start, nativeHandles, iconForHandle }

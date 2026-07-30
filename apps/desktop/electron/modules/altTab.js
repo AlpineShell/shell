@@ -316,6 +316,23 @@ async function getIcon(exePath) {
 const SHELL_PROCESS_NAMES = new Set(['electron', 'alpine-shell', 'alpine shell'])
 
 const { SETTINGS_ICON_DATA_URL } = require('../settingsIcon')
+const pluginWindows = require('../pluginWindows')
+
+const pluginIconCache = new Map()
+
+function iconFromFile(iconPath) {
+  if (pluginIconCache.has(iconPath)) return pluginIconCache.get(iconPath)
+  let dataUrl = ''
+  try {
+    const { nativeImage } = require('electron')
+    const image = nativeImage.createFromPath(iconPath)
+    if (!image.isEmpty()) dataUrl = image.toDataURL()
+  } catch (e) {
+    console.error('[altTab] plugin icon read failed:', iconPath, '-', e && e.message)
+  }
+  pluginIconCache.set(iconPath, dataUrl)
+  return dataUrl
+}
 
 async function buildWindowList() {
   const hwnds = enumTaskWindows()
@@ -330,9 +347,12 @@ async function buildWindowList() {
     const rawProcessName = exePath ? exePath.split('\\').pop().replace(/\.exe$/i, '') : 'Unknown'
     const isAlpineShell = SHELL_PROCESS_NAMES.has(rawProcessName.toLowerCase())
     const processName = isAlpineShell ? title : friendlyAppName({ path: exePath, processName: rawProcessName })
-    const icon = isAlpineShell && title === 'Settings'
-      ? SETTINGS_ICON_DATA_URL
-      : await getIcon(exePath)
+    const pluginIconPath = pluginWindows.iconForHandle(hwnd)
+    const icon = pluginIconPath
+      ? iconFromFile(pluginIconPath)
+      : isAlpineShell && title === 'Settings'
+        ? SETTINGS_ICON_DATA_URL
+        : await getIcon(exePath)
     const thumbnail = captureWindowThumbnail(hwnd)
     results.push({ hwnd, title, processName, icon, thumbnail: thumbnail || '' })
   }
