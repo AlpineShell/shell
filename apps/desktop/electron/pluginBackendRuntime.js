@@ -1,3 +1,5 @@
+const { openCommand } = require('./shellLaunch')
+
 let stopHandler = null
 let commandHandler = null
 let windowEventHandler = null
@@ -32,6 +34,11 @@ function makeContext(init) {
     },
     onCommand(handler) {
       if (typeof handler === 'function') commandHandler = handler
+    },
+    shell: {
+      openCommand(url) {
+        return openCommand(init.launch || { target: process.execPath, args: [] }, url)
+      },
     },
     windows: {
       open(request) {

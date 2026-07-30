@@ -35,6 +35,7 @@ const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const plugins = require('./modules/plugins')
 const pluginBackendHost = require('./pluginBackendHost')
+const { launchCommand } = require('./shellLaunch')
 const shellNotice = require('./modules/shellNotice')
 
 const OPEN_APP_TIMEOUT_MS = 300000
@@ -83,6 +84,14 @@ let topBarSettleListener = null
 // shell instead of spawning a second one. Portable bootstrap runs, uninstall /
 // cleanup launches and dev bypass the lock — they legitimately hand off to, or
 // coexist with, another process and must never be blocked by it.
+function shellLaunchCommand() {
+  return launchCommand({
+    execPath: process.execPath,
+    argv: process.argv,
+    runsFromSource: Boolean(process.defaultApp),
+  })
+}
+
 const bypassSingleInstance =
   process.argv.includes('--uninstall') ||
   process.argv.includes('--uninstall-cleanup') ||
@@ -90,11 +99,9 @@ const bypassSingleInstance =
 const gotSingleInstanceLock = bypassSingleInstance ? true : app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) app.quit()
 if (!bypassSingleInstance) {
-  // Claim alpine-shell:// for THIS running instance. In dev (`electron .`) the
-  // handler command must include the app path, or the OS launches a bare Electron
-  // with no app; packaged builds register their own exe.
-  if (process.defaultApp && process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('alpine-shell', process.execPath, [path.resolve(process.argv[1])])
+  const launch = shellLaunchCommand()
+  if (launch.args.length) {
+    app.setAsDefaultProtocolClient('alpine-shell', launch.target, launch.args)
   } else {
     app.setAsDefaultProtocolClient('alpine-shell')
   }
