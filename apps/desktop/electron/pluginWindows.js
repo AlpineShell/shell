@@ -1,18 +1,3 @@
-// Windows a plugin asks for and the shell creates. The plugin never gets a BrowserWindow: it
-// names a page inside its own folder and the shell opens it, so the same brokering that
-// governs every other plugin capability governs this one.
-//
-// Each window is an ordinary top-level window rather than something embedded in the shell.
-// That is the point, not a compromise — it gets the taskbar, Alt-Tab, Win+Arrow snap,
-// per-monitor DPI and tiling.js for free, none of which a child surface would.
-//
-// Pixels are deliberately absent from this file. A plugin that streams video hands its window
-// an opaque `session` blob and the window's own renderer reads the frames, in the same process
-// and the same event-loop turn as whatever announces them. Routing frames through here would
-// put a hundreds-of-megabytes-per-second copy on the thread that draws the desktop, and would
-// split a read from its notification — which is how a single-buffered source tears.
-
-const { BrowserWindow } = require('electron')
 const path = require('path')
 const plugins = require('./modules/plugins')
 
@@ -34,9 +19,6 @@ function clampDimension(value, fallback) {
   return Math.min(MAX_DIMENSION, Math.max(MIN_DIMENSION, Math.round(number)))
 }
 
-// A page is a file inside the plugin's own folder, served by alpine-plugin://. Anything that
-// escapes the folder, names another plugin, or is an absolute URL is refused here rather than
-// relied on being refused by the protocol handler.
 function pageUrl(pluginId, page) {
   if (typeof page !== 'string' || !page) return null
   if (/^[a-z-]+:/i.test(page)) return null
@@ -76,6 +58,7 @@ function open(pluginId, request) {
     return { ok: true, reused: true }
   }
 
+  const { BrowserWindow } = require('electron')
   const win = new BrowserWindow({
     width: clampDimension(options.width, DEFAULT_WIDTH),
     height: clampDimension(options.height, DEFAULT_HEIGHT),
@@ -141,8 +124,6 @@ function closeAll(pluginId) {
   byPlugin.delete(pluginId)
 }
 
-// A window outliving the plugin that drew it would be a frame that never updates again, with
-// no way to close it from the plugin side.
 function closeWindowsOfGonePlugins() {
   let live
   try {

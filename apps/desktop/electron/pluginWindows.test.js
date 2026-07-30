@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 const { pageUrl } = await import('./pluginWindows.js')
 
-// The guard between "a plugin named a page" and "the shell opened a URL". A plugin backend
-// already runs full Node, so this is not a containment boundary — it is what stops a window
-// silently pointing somewhere other than the plugin the user thinks they are looking at.
 describe('plugin window page resolution', () => {
   it('serves a page from the plugin that asked for it', () => {
     expect(pageUrl('com.alpine.android', 'window.html')).toBe('alpine-plugin://com.alpine.android/window.html')

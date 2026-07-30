@@ -1,8 +1,3 @@
-// Runs inside an Electron utilityProcess — one per plugin backend, isolated from the
-// main process. It requires the plugin's declared `main` entry, hands it a small
-// capability context, and relays whatever the backend publishes back to main. It never
-// touches Electron main-process APIs, and a crash here cannot take down the shell.
-
 let stopHandler = null
 let commandHandler = null
 let windowEventHandler = null
@@ -38,9 +33,6 @@ function makeContext(init) {
     onCommand(handler) {
       if (typeof handler === 'function') commandHandler = handler
     },
-    // Asking the shell for a window, not being handed one. The backend names a page inside its
-    // own folder and an opaque session blob; the shell creates the window and forwards the blob
-    // to it unread. Frames never come back through here.
     windows: {
       open(request) {
         post({ type: 'window-open', request })

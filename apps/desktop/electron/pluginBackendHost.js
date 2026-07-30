@@ -1,12 +1,3 @@
-// Supervisor for plugin backends. Each eligible plugin — one that declares a `main`
-// entry and is enabled + loadable —
-// runs in its own isolated Electron utilityProcess (pluginBackendRuntime.js). Whatever a
-// backend publishes is registered as a plugin data channel and broadcast to the
-// renderers, the same contract renderer plugins already read via usePluginData().
-//
-// Backends start only when their plugin is installed + enabled, and stop when it is
-// disabled or uninstalled — nothing plugin-specific runs in the core shell.
-
 const path = require('path')
 const { utilityProcess } = require('electron')
 const plugins = require('./modules/plugins')
@@ -99,8 +90,6 @@ function rejectPending(state, reason) {
   }
 }
 
-// Window lifecycle events go to the backend as plain messages rather than commands: they are
-// notifications, and a closed window must not be able to hold a pending call open.
 function sendToBackend(pluginId, message) {
   const state = running.get(pluginId)
   if (!state || !state.proc) return
@@ -168,8 +157,6 @@ module.exports = {
   handlers: {
     'plugins/command': (_event, payload) =>
       sendCommand(payload && payload.id, payload && payload.name, payload && payload.payload),
-    // A plugin window may only reach its own backend: the ids come from the window it was
-    // created with, never from the page.
     'plugin-window/command': (_event, payload) =>
       sendCommand(payload && payload.pluginId, payload && payload.name, {
         ...(payload && payload.payload),
