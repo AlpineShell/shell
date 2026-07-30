@@ -59,7 +59,7 @@ function startBackend(record) {
         settle.resolve(msg.ok ? { ok: true, value: msg.value } : { ok: false, error: msg.error || 'command failed' })
       }
     } else if (msg.type === 'window-open') {
-      const result = pluginWindows.open(record.id, msg.request)
+      const result = pluginWindows.open(record.id, path.dirname(entry), msg.request)
       if (!result.ok) console.error(`[plugin-backend:${record.id}] window open refused: ${result.error}`)
     } else if (msg.type === 'window-close') {
       pluginWindows.close(record.id, msg.id)
