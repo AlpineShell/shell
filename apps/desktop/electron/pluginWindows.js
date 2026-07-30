@@ -63,6 +63,7 @@ function open(pluginId, pluginDir, request) {
 
   const { BrowserWindow } = require('electron')
   const win = new BrowserWindow({
+    useContentSize: true,
     width: clampDimension(options.width, DEFAULT_WIDTH),
     height: clampDimension(options.height, DEFAULT_HEIGHT),
     minWidth: clampDimension(options.minWidth, MIN_DIMENSION),
