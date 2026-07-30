@@ -6,6 +6,7 @@ const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, cl
 const appIcons = require('./appIcons')
 const appManager = require('./appManager')
 const appActivator = require('../appActivator')
+const { shellLinkInShortcut } = require('../launcherDeepLink')
 const frecency = require('./frecency')
 const plugins = require('./plugins')
 const pluginBackendHost = require('../pluginBackendHost')
@@ -34,6 +35,7 @@ let hideTimeoutTopBar = null
 let lastUserForeground = 0
 let switcherCloser = null
 let emojiCaptureControl = null
+let shellLinkOpener = null
 const lastPanelBottom = new Map()
 
 function applyPanelBounds(topBar, displayId) {
@@ -237,6 +239,7 @@ function collectLnkItems() {
       icon: null,
       badge: owner ? owner.badge : null,
       owner,
+      shellLink: shellLinkInShortcut(info),
       isUrl,
     })
   }
@@ -542,6 +545,10 @@ function setEmojiCaptureControl(fn) {
   emojiCaptureControl = typeof fn === 'function' ? fn : null
 }
 
+function setShellLinkOpener(fn) {
+  shellLinkOpener = typeof fn === 'function' ? fn : null
+}
+
 function handleBlur(topBar) {
   if (activeTopBar !== topBar) return
   animatedHide()
@@ -553,6 +560,11 @@ function findItem(id) {
 
 function launchItem(item) {
   if (!item) return { success: false }
+  if (item.shellLink && shellLinkOpener) {
+    shellLinkOpener(item.shellLink)
+    frecency.record(item.target)
+    return { success: true }
+  }
   if (item.lnkPath) {
     electronShell.openPath(item.lnkPath).then((err) => {
       if (err) {
@@ -571,6 +583,7 @@ function launchItem(item) {
 
 function launchAdminItem(item) {
   if (!item) return { success: false }
+  if (item.shellLink) return launchItem(item)
   if (item.lnkPath) {
     exec(`powershell -NoProfile -Command "Start-Process '${item.lnkPath.replace(/'/g, "''")}' -Verb RunAs"`, { windowsHide: true })
   } else if (item.appId) {
@@ -688,6 +701,7 @@ module.exports = {
   showEmoji,
   forwardEmojiKey,
   setEmojiCaptureControl,
+  setShellLinkOpener,
   closeEmoji: animatedHide,
   hideForOverlay,
   setSwitcherCloser,
