@@ -31,3 +31,23 @@ contextBridge.exposeInMainWorld('alpineWindow', {
   },
   close: () => ipcRenderer.invoke('plugin-window/close', { pluginId, windowId }),
 })
+
+const pluginPreload = argument('alpine-plugin-preload')
+if (pluginPreload) {
+  try {
+    const extend = require(pluginPreload)
+    const run = typeof extend === 'function' ? extend : extend && extend.default
+    if (typeof run === 'function') {
+      run({
+        pluginId,
+        windowId,
+        session: decodeSession(),
+        expose: (key, api) => contextBridge.exposeInMainWorld(key, api),
+      })
+    } else {
+      console.error('[plugin-window] preload has no default export', pluginPreload)
+    }
+  } catch (e) {
+    console.error('[plugin-window] preload failed:', e && e.message)
+  }
+}

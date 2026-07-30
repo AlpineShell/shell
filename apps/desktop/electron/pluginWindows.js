@@ -1,5 +1,5 @@
 const path = require('path')
-const { pageUrl } = require('./pluginWindowPage')
+const { pageUrl, preloadPath } = require('./pluginWindowPage')
 
 const MIN_DIMENSION = 120
 const MAX_DIMENSION = 16384
@@ -33,13 +33,18 @@ function notify(pluginId, event, payload) {
   sendToBackend(pluginId, { type: 'window-event', event, ...payload })
 }
 
-function open(pluginId, request) {
+function open(pluginId, pluginDir, request) {
   const options = request && typeof request === 'object' ? request : {}
   const id = typeof options.id === 'string' && options.id ? options.id : null
   if (!id) return { ok: false, error: 'a window needs an id' }
 
   const url = pageUrl(pluginId, options.page)
   if (!url) return { ok: false, error: 'page must be an .html file inside the plugin folder' }
+
+  const pluginPreload = options.preload ? preloadPath(pluginDir, options.preload) : null
+  if (options.preload && !pluginPreload) {
+    return { ok: false, error: 'preload must be a .js file inside the plugin folder' }
+  }
 
   const windows = record(pluginId)
   const existing = windows.get(id)
@@ -68,6 +73,7 @@ function open(pluginId, request) {
         `--alpine-plugin-id=${pluginId}`,
         `--alpine-window-id=${id}`,
         `--alpine-session=${Buffer.from(JSON.stringify(options.session ?? null)).toString('base64')}`,
+        ...(pluginPreload ? [`--alpine-plugin-preload=${pluginPreload}`] : []),
       ],
     },
   })
