@@ -5,7 +5,7 @@ const { launchCommand, openCommand } = await import('./shellLaunch.js')
 
 const PACKAGED_EXE = path.join('C:', 'Program Files', 'Alpine Shell', 'Alpine Shell.exe')
 const DEV_EXE = path.join('C:', 'repo', 'node_modules', 'electron', 'dist', 'electron.exe')
-const APP_DIR = path.join('C:', 'repo', 'apps', 'desktop')
+const APP_DIR = path.resolve(path.join('repo', 'apps', 'desktop'))
 
 describe('shell launch command', () => {
   it('is just the exe for a packaged run', () => {
