@@ -2,6 +2,7 @@ const path = require('path')
 const { utilityProcess } = require('electron')
 const plugins = require('./modules/plugins')
 const pluginWindows = require('./pluginWindows')
+const { launchCommand } = require('./shellLaunch')
 
 const RUNTIME_ENTRY = path.join(__dirname, 'pluginBackendRuntime.js')
 const COMMAND_TIMEOUT_MS = 30000
@@ -79,7 +80,17 @@ function startBackend(record) {
     if (running.get(record.id) === state) running.delete(record.id)
   })
 
-  proc.postMessage({ type: 'init', id: record.id, dir: path.dirname(entry), entry })
+  proc.postMessage({
+    type: 'init',
+    id: record.id,
+    dir: path.dirname(entry),
+    entry,
+    launch: launchCommand({
+      execPath: process.execPath,
+      argv: process.argv,
+      runsFromSource: Boolean(process.defaultApp),
+    }),
+  })
 }
 
 function rejectPending(state, reason) {
