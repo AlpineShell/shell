@@ -56,7 +56,7 @@ Desktop-only iteration: `bun --filter alpine-shell dev` (Vite server only), `bun
 - **No default exports** except for React components (React convention).
 - **Type definitions** go in `src/types/shell.d.ts`, not inline in components or hooks.
 - **File naming**: camelCase for all source files. Hook files are named after their exported function (e.g., `useMonitors.ts` exports `useMonitors`).
-- **Never assert a Windows path literal in a test.** The shell is Windows-only but CI runs on Linux, where `C:\...` is a relative path — so `path.resolve` prepends the runner's working directory and the assertion fails only in CI, after passing locally. Build expected paths with `path.resolve`/`path.join` and compare against the same expression, never against a hardcoded `C:` string.
+- **Never assert a Windows path literal in a test.** The shell is Windows-only but CI runs on Linux, where `C:\...` is a *relative* path — so `path.resolve` prepends the runner's working directory and the assertion fails only in CI, after passing locally. For an absolute fixture directory write `path.resolve(path.join(path.sep, 'plugins', 'com.example'))`, which is absolute on both platforms, and build expected values from that same constant. A `C:` literal is only safe for a value the code under test passes through without resolving.
 - **Require `electron` inside the function that uses it**, never at module scope, in any `electron/` module that has a test. CI builds with `ELECTRON_SKIP_BINARY_DOWNLOAD`, so a module-scope `require('electron')` throws there and the test file fails to import before a single case runs. `shellNotice.js` and `pluginWindows.js` both learned this the same way.
 
 ## Key Technical Details

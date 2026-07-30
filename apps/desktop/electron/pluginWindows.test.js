@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import path from 'path'
 
-const { pageUrl, preloadPath } = await import('./pluginWindowPage.js')
+const { pageUrl, preloadPath, iconPath } = await import('./pluginWindowPage.js')
 
 describe('plugin window page resolution', () => {
   it('serves a page from the plugin that asked for it', () => {
@@ -66,5 +66,33 @@ describe('plugin window preload resolution', () => {
   it('refuses when there is no plugin directory to resolve against', () => {
     expect(preloadPath('', 'preload.js')).toBeNull()
     expect(preloadPath(null, 'preload.js')).toBeNull()
+  })
+})
+
+describe('plugin window icon resolution', () => {
+  const pluginDir = path.resolve(path.join(path.sep, 'plugins', 'com.alpine.android'))
+
+  it('accepts an icon the plugin generated inside its own folder', () => {
+    expect(iconPath(pluginDir, '.icons/com.supercell.brawlstars.ico')).toBe(
+      path.join(pluginDir, '.icons', 'com.supercell.brawlstars.ico'),
+    )
+    expect(iconPath(pluginDir, 'assets/badge.png')).toBe(path.join(pluginDir, 'assets', 'badge.png'))
+  })
+
+  it('refuses to escape the plugin folder', () => {
+    expect(iconPath(pluginDir, '../other/icon.ico')).toBeNull()
+    expect(iconPath(pluginDir, 'a/../../icon.ico')).toBeNull()
+    expect(iconPath(pluginDir, path.join('C:', 'Windows', 'icon.ico'))).toBeNull()
+  })
+
+  it('takes only image formats a window title bar can use', () => {
+    expect(iconPath(pluginDir, 'icon.svg')).toBeNull()
+    expect(iconPath(pluginDir, 'icon.exe')).toBeNull()
+    expect(iconPath(pluginDir, 'preload.js')).toBeNull()
+  })
+
+  it('has no icon when none was asked for', () => {
+    expect(iconPath(pluginDir, '')).toBeNull()
+    expect(iconPath(pluginDir, null)).toBeNull()
   })
 })

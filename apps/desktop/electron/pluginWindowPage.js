@@ -14,8 +14,8 @@ function pageUrl(pluginId, page) {
   return normalized ? `alpine-plugin://${pluginId}/${normalized}` : null
 }
 
-function preloadPath(pluginDir, preload) {
-  const normalized = relativeInsidePlugin(preload, /\.(c?js)$/i)
+function fileInsidePlugin(pluginDir, value, extensionPattern) {
+  const normalized = relativeInsidePlugin(value, extensionPattern)
   if (!normalized || typeof pluginDir !== 'string' || !pluginDir) return null
   const base = path.resolve(pluginDir)
   const resolved = path.resolve(base, normalized)
@@ -23,4 +23,12 @@ function preloadPath(pluginDir, preload) {
   return resolved.startsWith(withSeparator) ? resolved : null
 }
 
-module.exports = { pageUrl, preloadPath }
+function preloadPath(pluginDir, preload) {
+  return fileInsidePlugin(pluginDir, preload, /\.(c?js)$/i)
+}
+
+function iconPath(pluginDir, icon) {
+  return fileInsidePlugin(pluginDir, icon, /\.(ico|png)$/i)
+}
+
+module.exports = { pageUrl, preloadPath, iconPath }

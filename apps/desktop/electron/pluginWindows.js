@@ -1,5 +1,5 @@
 const path = require('path')
-const { pageUrl, preloadPath } = require('./pluginWindowPage')
+const { pageUrl, preloadPath, iconPath } = require('./pluginWindowPage')
 
 const MIN_DIMENSION = 120
 const MAX_DIMENSION = 16384
@@ -46,6 +46,11 @@ function open(pluginId, pluginDir, request) {
     return { ok: false, error: 'preload must be a .js file inside the plugin folder' }
   }
 
+  const pluginIcon = options.icon ? iconPath(pluginDir, options.icon) : null
+  if (options.icon && !pluginIcon) {
+    return { ok: false, error: 'icon must be an .ico or .png file inside the plugin folder' }
+  }
+
   const windows = record(pluginId)
   const existing = windows.get(id)
   if (existing && !existing.isDestroyed()) {
@@ -63,6 +68,8 @@ function open(pluginId, pluginDir, request) {
     title: typeof options.title === 'string' && options.title ? options.title : pluginId,
     backgroundColor: '#000000',
     show: false,
+    autoHideMenuBar: true,
+    ...(pluginIcon ? { icon: pluginIcon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'pluginWindowPreload.js'),
       contextIsolation: true,
@@ -79,6 +86,8 @@ function open(pluginId, pluginDir, request) {
   })
 
   windows.set(id, win)
+  if (typeof win.removeMenu === 'function') win.removeMenu()
+  win.on('page-title-updated', (event) => event.preventDefault())
   win.once('ready-to-show', () => {
     if (!win.isDestroyed()) win.show()
   })
