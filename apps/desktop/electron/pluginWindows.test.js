@@ -70,7 +70,7 @@ describe('plugin window preload resolution', () => {
 })
 
 describe('plugin window icon resolution', () => {
-  const pluginDir = path.join('C:', 'plugins', 'com.alpine.android')
+  const pluginDir = path.resolve(path.join(path.sep, 'plugins', 'com.alpine.android'))
 
   it('accepts an icon the plugin generated inside its own folder', () => {
     expect(iconPath(pluginDir, '.icons/com.supercell.brawlstars.ico')).toBe(
