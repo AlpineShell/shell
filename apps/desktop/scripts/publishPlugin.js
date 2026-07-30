@@ -192,8 +192,6 @@ async function publishPlugin(pluginDir) {
       }
     }
 
-    // latest.json is the full per-plugin detail document (install metadata + display
-    // fields the website /plugins/[id] page renders).
     const latest = {
       schemaVersion: CATALOG_SCHEMA_VERSION,
       id,

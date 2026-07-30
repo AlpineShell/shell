@@ -1,8 +1,3 @@
-// Routes a file the OS handed to Alpine Shell to the enabled plugin that claims its
-// extension, via the plugin command channel. Claims come from contributes.fileHandlers, so a
-// disabled plugin claims nothing: its extensions are unregistered from Windows and a file
-// that still reaches the shell is declined with a reason instead of being opened.
-
 const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')

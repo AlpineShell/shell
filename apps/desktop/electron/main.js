@@ -77,12 +77,6 @@ const UPDATE_READY_TIMEOUT_MS = 10000
 const settledTopBars = new Set()
 let topBarSettleListener = null
 
-// ── Single instance + alpine-shell:// deep links ─────────────────────────────
-// A normal packaged run holds a single-instance lock, so the website "Install in
-// Alpine Shell" link (or any second launch) is forwarded to the already-running
-// shell instead of spawning a second one. Portable bootstrap runs, uninstall /
-// cleanup launches and dev bypass the lock — they legitimately hand off to, or
-// coexist with, another process and must never be blocked by it.
 const bypassSingleInstance =
   process.argv.includes('--uninstall') ||
   process.argv.includes('--uninstall-cleanup') ||
@@ -90,9 +84,6 @@ const bypassSingleInstance =
 const gotSingleInstanceLock = bypassSingleInstance ? true : app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) app.quit()
 if (!bypassSingleInstance) {
-  // Claim alpine-shell:// for THIS running instance. In dev (`electron .`) the
-  // handler command must include the app path, or the OS launches a bare Electron
-  // with no app; packaged builds register their own exe.
   if (process.defaultApp && process.argv.length >= 2) {
     app.setAsDefaultProtocolClient('alpine-shell', process.execPath, [path.resolve(process.argv[1])])
   } else {
@@ -118,7 +109,6 @@ app.on('second-instance', (_event, argv) => {
   }
 })
 
-// macOS delivers deep links via open-url rather than argv; harmless on Windows.
 app.on('open-url', (event, url) => {
   event.preventDefault()
   handleDeepLink(url)
@@ -422,7 +412,7 @@ function destroyShellForDisplay(displayId) {
 
   console.log(`[main] Destroying shell for display ${displayId}`)
 
-  try { unregisterAppBar(shell.topBar) } catch (e) { /* ignore */ }
+  try { unregisterAppBar(shell.topBar) } catch (e) { }
   if (!shell.topBar.isDestroyed()) shell.topBar.destroy()
   if (!shell.desktop.isDestroyed()) shell.desktop.destroy()
 
@@ -452,7 +442,6 @@ function repositionShell(display) {
 
   shell.display = display
 }
-
 
 function createScreenshotWindow() {
   const win = new BrowserWindow({
@@ -486,7 +475,6 @@ function createScreenshotWindow() {
 
   return win
 }
-
 
 let setupWin = null
 function createSetupWindow() {
@@ -599,10 +587,6 @@ function handleDeepLink(rawUrl) {
   }
 }
 
-// A shortcut in a plugin's launcher folder points here rather than at anything the plugin
-// ships, so launching an app goes through the shell like opening a file does. Any local
-// process can invoke a URL scheme, so the command is not taken from the URL: only the
-// openCommand the plugin declared for that folder is ever sent, and only while it is on.
 function openPluginApp(pluginId, app) {
   if (!pluginId || !app) return
   const record = plugins.listPlugins().find((entry) => entry.id === pluginId)

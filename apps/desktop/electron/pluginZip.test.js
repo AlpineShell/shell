@@ -5,7 +5,6 @@ import path from 'path'
 import zlib from 'zlib'
 import { extractZip } from './pluginZip.js'
 
-// Minimal ZIP writer for tests. Supports STORE (method 0) and DEFLATE (method 8).
 function makeZip(entries) {
   const chunks = []
   const central = []
@@ -20,7 +19,7 @@ function makeZip(entries) {
     lfh.writeUInt32LE(0x04034b50, 0)
     lfh.writeUInt16LE(20, 4)
     lfh.writeUInt16LE(method, 8)
-    lfh.writeUInt32LE(0, 14) // crc (extractor ignores)
+    lfh.writeUInt32LE(0, 14)
     lfh.writeUInt32LE(body.length, 18)
     lfh.writeUInt32LE(raw.length, 22)
     lfh.writeUInt16LE(nameBuf.length, 26)

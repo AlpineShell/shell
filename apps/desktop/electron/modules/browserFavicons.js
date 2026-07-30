@@ -36,8 +36,6 @@ function toPngDataUrl(data) {
   return 'data:image/png;base64,' + data.toString('base64')
 }
 
-// Chromium's Favicons DB stores every icon as a PNG blob in favicon_bitmaps,
-// mapped to page URLs via icon_mapping.
 function readFaviconMap(faviconsDbPath, neededHosts) {
   if (!faviconsDbPath || (neededHosts && neededHosts.size === 0)) return new Map()
 

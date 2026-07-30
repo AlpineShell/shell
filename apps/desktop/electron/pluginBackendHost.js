@@ -8,8 +8,8 @@ const COMMAND_TIMEOUT_MS = 30000
 
 let broadcastFn = null
 let nextCallId = 1
-const running = new Map() // id -> { proc, channels: Set<string> }
-const lastByChannel = new Map() // channel -> last published data
+const running = new Map()
+const lastByChannel = new Map()
 
 function isEligible(record) {
   return record.enabled !== false && record.loadable === true && record.hasBackend === true

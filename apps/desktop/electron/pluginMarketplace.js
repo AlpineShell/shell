@@ -7,15 +7,12 @@ const { verifyPackage } = require('./pluginSignature')
 
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/
 const FETCH_TIMEOUT_MS = 20000
-const MAX_BUNDLE_BYTES = 25 * 1024 * 1024 // 25 MB — plugins are small; refuse anything huge
+const MAX_BUNDLE_BYTES = 25 * 1024 * 1024
 
 function base() {
   return getPluginsBase()
 }
 
-// Run one async fetch (headers AND body read) under a single abort timer, clearing
-// it only after the body has been consumed — so a stalled response body can't hang
-// the call forever (clearing after fetch() alone would leave the read untimed).
 async function withTimeout(run) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
@@ -35,8 +32,6 @@ async function fetchJson(url) {
   })
 }
 
-// Resolve a possibly-relative catalog asset key against the public base. Only
-// https is allowed; lucide:* icons and http are dropped (rendered as fallback).
 function assetUrl(id, rel) {
   if (!rel || typeof rel !== 'string') return null
   if (/^https:\/\//i.test(rel)) return rel
@@ -74,8 +69,6 @@ function toCard(raw) {
     category: typeof raw.category === 'string' ? raw.category : null,
     iconUrl: assetUrl(id, iconRel),
     author,
-    // Trust comes from the Ed25519 signature verified against the baked marketplace
-    // key — NOT from a `verified` boolean the (untrusted) catalog can self-assert.
     verified:
       verifyPackage(
         typeof raw.sha256 === 'string' ? raw.sha256 : '',
@@ -122,8 +115,6 @@ async function detail(id) {
   }
 }
 
-// latest.json is the authoritative full document (carries url/sha256/signature);
-// fall back to the index card if it's missing for some reason.
 async function fetchInstallSource(id) {
   const latest = await fetchJson(`${base()}/plugins/${id}/latest.json`)
   if (latest && typeof latest === 'object') return latest
@@ -193,8 +184,6 @@ async function install(payload, { pluginsDir, onChange } = {}) {
     }
     if (manifest.id !== id) return { ok: false, error: 'id-mismatch' }
 
-    // Swap in without ever leaving the existing install half-deleted: move the old
-    // copy aside atomically, put the new one in place, restore the old on failure.
     fs.rmSync(backup, { recursive: true, force: true })
     let movedAside = false
     if (fs.existsSync(finalDir)) {

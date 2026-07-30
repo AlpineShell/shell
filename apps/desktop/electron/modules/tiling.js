@@ -446,7 +446,7 @@ function correctSnapOversize(hwnd, zoneName, display) {
         h: overH > OVERSIZE_TOLERANCE ? Math.round(content.height) : min.h,
       })
       alignOversizedInZone(hwnd, zoneName, display, content)
-    } catch (e) { /* skip */ }
+    } catch (e) { }
   }, SNAP_CORRECT_DELAY)
 }
 
@@ -764,7 +764,7 @@ function layoutDisplay(display, ordered) {
     const fitRects = computeLayout(fits.length, fitStore)
     for (let i = 0; i < fits.length; i++) applyTile(fits[i], fitRects[i], display, i, fits.length)
     for (const hwnd of oversized) {
-      try { placeFloating(hwnd, display) } catch (e) { /* skip */ }
+      try { placeFloating(hwnd, display) } catch (e) { }
     }
   } else {
     for (let i = 0; i < ordered.length; i++) applyTile(ordered[i], rects[i], display, i, ordered.length)
@@ -1167,9 +1167,9 @@ function liveResizeTick() {
     const rects = computeLayout(ctx.ordered.length, live)
     for (let i = 0; i < ctx.ordered.length; i++) {
       if (ctx.ordered[i] === ctx.hwnd) continue
-      try { liveTile(ctx.ordered[i], rects[i], ctx.display) } catch (e) { /* skip */ }
+      try { liveTile(ctx.ordered[i], rects[i], ctx.display) } catch (e) { }
     }
-  } catch (e) { /* skip */ }
+  } catch (e) { }
 }
 
 function startLiveResize(hwnd) {

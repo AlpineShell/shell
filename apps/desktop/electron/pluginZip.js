@@ -2,13 +2,6 @@ const fs = require('fs')
 const path = require('path')
 const zlib = require('zlib')
 
-// Minimal, dependency-free ZIP extractor for .alpineplugin bundles.
-// Reads the central directory (authoritative for sizes + offsets), inflates
-// DEFLATE / copies STORE, and writes entries under `destDir` with strict path
-// containment. Zip64 and unknown compression methods are rejected rather than
-// guessed. This is on the plugin-install trust path, so every entry name is
-// validated before it touches the filesystem.
-
 const EOCD_SIG = 0x06054b50
 const CDH_SIG = 0x02014b50
 const LFH_SIG = 0x04034b50
@@ -29,14 +22,11 @@ function safeEntryName(name) {
   if (name.includes('\0')) return null
   const norm = name.replace(/\\/g, '/')
   if (norm.startsWith('/')) return null
-  if (/^[a-zA-Z]:/.test(norm)) return null // drive-letter absolute
+  if (/^[a-zA-Z]:/.test(norm)) return null
   if (norm.split('/').some((seg) => seg === '..')) return null
   return norm
 }
 
-// Extract `buffer` (a whole ZIP archive) into the existing directory `destDir`.
-// Returns the list of written file paths (relative to destDir). Throws on any
-// malformed/unsafe archive.
 function extractZip(buffer, destDir) {
   if (!Buffer.isBuffer(buffer)) throw new Error('extractZip: buffer required')
   const eocd = findEOCD(buffer)

@@ -31,7 +31,6 @@ function resolveProfileDir() {
     try { return parseIniSections(fs.readFileSync(path.join(base, file), 'utf8')) } catch { return [] }
   }
 
-  // 1. installs.ini Default= (per-install default profile)
   for (const section of readSections('installs.ini')) {
     const def = section.keys.get('Default')
     if (def) { const dir = toAbs(def); if (hasPlaces(dir)) return dir }
@@ -39,14 +38,12 @@ function resolveProfileDir() {
 
   const profiles = readSections('profiles.ini')
 
-  // 2. profiles.ini [Install*] Default= (authoritative for modern Firefox)
   for (const section of profiles) {
     if (!/^Install/i.test(section.name)) continue
     const def = section.keys.get('Default')
     if (def) { const dir = toAbs(def); if (hasPlaces(dir)) return dir }
   }
 
-  // 3. profiles.ini [Profile*] Default=1 (legacy)
   for (const section of profiles) {
     if (!/^Profile/i.test(section.name)) continue
     if (section.keys.get('Default') !== '1') continue
@@ -56,7 +53,6 @@ function resolveProfileDir() {
     if (hasPlaces(dir)) return dir
   }
 
-  // 4. any profile that actually has data, preferring default-release
   let fallback = null
   for (const section of profiles) {
     if (!/^Profile/i.test(section.name)) continue

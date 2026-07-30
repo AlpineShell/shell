@@ -1,9 +1,3 @@
-// A single shell-owned surface for "this happened", "this could not happen" and "may I?".
-// Anything in the main process can raise one: a file the shell could not hand to a plugin,
-// a shortcut that no longer starts anything, a plugin that is off, a plugin asking before it
-// changes something. It renders inside the topbar window that already spans the display, so
-// there is no second always-on-top window and the reserved work area never moves.
-
 const DEFAULT_TIMEOUT_MS = 7000
 
 let toTopbars = null
@@ -32,10 +26,6 @@ function cursorDisplayId() {
   }
 }
 
-// A notice is drawn by the topbar, which sits at normal z-order, so anything the user has
-// open can cover it. Raise the bars that carry one and put them back afterwards -- the
-// restore is the same one the launcher uses, so it declines to lower a bar the launcher or
-// alt-tab is still holding up.
 function raiseTopbars(raised) {
   if (raised === topbarsRaised) return
   try {
@@ -59,8 +49,6 @@ function raiseTopbars(raised) {
   }
 }
 
-// The topbar window is focusable: false, so a question on it can never receive a key press.
-// Escape is claimed only while one is waiting for an answer, and released the moment it is not.
 function holdEscape(wanted) {
   if (wanted === escapeHeld) return
   try {

@@ -18,8 +18,6 @@ function assetUrl(id: string, rel?: string | null): string | null {
   return `alpine-plugin://${id}/${rel}`
 }
 
-// Only report an update when the catalog version is strictly newer, so a
-// rolled-back / mis-published catalog can't advertise a downgrade as an "Update".
 function semverGt(a: string, b: string): boolean {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0)
   const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0)
@@ -29,8 +27,6 @@ function semverGt(a: string, b: string): boolean {
   }
   return false
 }
-
-/* ─────────────────────────── Installed tab ─────────────────────────── */
 
 function InstalledCard({
   plugin,
@@ -103,8 +99,6 @@ function InstalledCard({
   )
 }
 
-/* ─────────────────────────── Browse tab ─────────────────────────── */
-
 type BrowseState =
   | { status: 'loading' }
   | { status: 'error'; message: string; base: string }
@@ -171,8 +165,6 @@ function BrowseCard({
   )
 }
 
-/* ─────────────────────────── Page ─────────────────────────── */
-
 export default function PluginsPage() {
   const [tab, setTab] = useState<'installed' | 'browse'>('installed')
   const [plugins, setPlugins] = useState<PluginRecord[]>([])
@@ -187,7 +179,6 @@ export default function PluginsPage() {
     try {
       setPlugins(await window.plugins.list())
     } catch {
-      /* ignore */
     }
   }, [])
 
@@ -201,7 +192,6 @@ export default function PluginsPage() {
       try {
         base = await window.plugins.marketplace.base()
       } catch {
-        /* ignore */
       }
       setBrowse({ status: 'error', message: e instanceof Error ? e.message : 'Unknown error', base })
     }
@@ -226,7 +216,6 @@ export default function PluginsPage() {
     [installingId, refreshInstalled],
   )
 
-  // Forward-compat seam for the website "Install in Alpine Shell" deep link.
   const installRef = useRef(install)
   installRef.current = install
   const browseRef = useRef(browse)

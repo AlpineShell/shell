@@ -1,9 +1,3 @@
-// Alpine Shell owns the file types its plugins claim. One ProgID per extension points at
-// Alpine Shell itself, carries Alpine's icon, and is registered/unregistered by the shell —
-// the same ownership model as the alpine-shell:// protocol. A UserChoice written by Windows
-// is never touched: it is hash-protected and forging it is both blocked and hostile, so when
-// Alpine is not the default the honest move is to send the user to the Default apps page.
-
 const { app, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
