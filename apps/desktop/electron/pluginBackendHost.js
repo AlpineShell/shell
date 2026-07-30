@@ -30,6 +30,7 @@ function startBackend(record) {
     console.error(`[plugin-backend] "${record.id}": backend entry missing or escapes plugin dir`)
     return
   }
+  pluginWindows.closeAll(record.id)
   let proc
   try {
     proc = utilityProcess.fork(RUNTIME_ENTRY, [], { serviceName: `alpine-plugin-${record.id}` })
