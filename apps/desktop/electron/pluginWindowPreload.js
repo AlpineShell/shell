@@ -19,7 +19,7 @@ function decodeSession() {
 const pluginId = argument('alpine-plugin-id')
 const windowId = argument('alpine-window-id')
 
-contextBridge.exposeInMainWorld('alpineWindow', {
+const bridge = {
   pluginId,
   windowId,
   session: decodeSession(),
@@ -30,7 +30,9 @@ contextBridge.exposeInMainWorld('alpineWindow', {
     return () => ipcRenderer.removeListener('plugin-window/message', handler)
   },
   close: () => ipcRenderer.invoke('plugin-window/close', { pluginId, windowId }),
-})
+}
+
+contextBridge.exposeInMainWorld('alpineWindow', bridge)
 
 const pluginPreload = argument('alpine-plugin-preload')
 if (pluginPreload) {
@@ -39,15 +41,13 @@ if (pluginPreload) {
     const run = typeof extend === 'function' ? extend : extend && extend.default
     if (typeof run === 'function') {
       run({
-        pluginId,
-        windowId,
-        session: decodeSession(),
+        ...bridge,
         expose: (key, api) => contextBridge.exposeInMainWorld(key, api),
       })
     } else {
       console.error('[plugin-window] preload has no default export', pluginPreload)
     }
   } catch (e) {
-    console.error('[plugin-window] preload failed:', e && e.message)
+    console.error('[plugin-window] preload failed:', e && e.stack ? e.stack : e)
   }
 }
