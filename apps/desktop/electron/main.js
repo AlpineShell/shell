@@ -35,6 +35,7 @@ const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const plugins = require('./modules/plugins')
 const pluginBackendHost = require('./pluginBackendHost')
+const pluginWindows = require('./pluginWindows')
 const { launchCommand } = require('./shellLaunch')
 const shellNotice = require('./modules/shellNotice')
 
@@ -858,8 +859,11 @@ function startShellMode() {
   if (altTab) altTab.setShells(shells)
   if (altTab && altTab.setExposedOwnWindows) {
     altTab.setExposedOwnWindows(() => {
-      if (!settingsWin || settingsWin.isDestroyed()) return []
-      try { return [settingsWin.getNativeWindowHandle().readUInt32LE(0)] } catch { return [] }
+      const handles = pluginWindows.nativeHandles()
+      if (settingsWin && !settingsWin.isDestroyed()) {
+        try { handles.push(settingsWin.getNativeWindowHandle().readUInt32LE(0)) } catch {}
+      }
+      return handles
     })
   }
 
