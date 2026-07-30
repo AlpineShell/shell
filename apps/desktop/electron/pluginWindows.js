@@ -1,5 +1,5 @@
 const path = require('path')
-const plugins = require('./modules/plugins')
+const { pageUrl } = require('./pluginWindowPage')
 
 const MIN_DIMENSION = 120
 const MAX_DIMENSION = 16384
@@ -17,15 +17,6 @@ function clampDimension(value, fallback) {
   const number = Number(value)
   if (!Number.isFinite(number)) return fallback
   return Math.min(MAX_DIMENSION, Math.max(MIN_DIMENSION, Math.round(number)))
-}
-
-function pageUrl(pluginId, page) {
-  if (typeof page !== 'string' || !page) return null
-  if (/^[a-z-]+:/i.test(page)) return null
-  const normalized = page.replace(/\\/g, '/').replace(/^\/+/, '')
-  if (!normalized || normalized.split('/').includes('..')) return null
-  if (!/\.html?$/i.test(normalized)) return null
-  return `alpine-plugin://${pluginId}/${normalized}`
 }
 
 function record(pluginId) {
@@ -125,6 +116,7 @@ function closeAll(pluginId) {
 }
 
 function closeWindowsOfGonePlugins() {
+  const plugins = require('./modules/plugins')
   let live
   try {
     live = new Set(
@@ -143,7 +135,7 @@ function closeWindowsOfGonePlugins() {
 }
 
 function start() {
-  plugins.onPluginsChanged(closeWindowsOfGonePlugins)
+  require('./modules/plugins').onPluginsChanged(closeWindowsOfGonePlugins)
 }
 
-module.exports = { configure, open, close, send, closeAll, start, pageUrl }
+module.exports = { configure, open, close, send, closeAll, start }

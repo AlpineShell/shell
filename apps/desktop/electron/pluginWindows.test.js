@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-const { pageUrl } = await import('./pluginWindows.js')
+const { pageUrl } = await import('./pluginWindowPage.js')
 
 describe('plugin window page resolution', () => {
   it('serves a page from the plugin that asked for it', () => {
