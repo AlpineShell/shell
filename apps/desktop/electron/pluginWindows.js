@@ -1,5 +1,6 @@
 const path = require('path')
 const { pageUrl, preloadPath, iconPath } = require('./pluginWindowPage')
+const { consoleReport } = require('./pluginWindowConsole')
 
 const MIN_DIMENSION = 120
 const MAX_DIMENSION = 16384
@@ -88,6 +89,17 @@ function open(pluginId, pluginDir, request) {
   windows.set(id, win)
   if (typeof win.removeMenu === 'function') win.removeMenu()
   win.on('page-title-updated', (event) => event.preventDefault())
+  win.webContents.on('console-message', (...args) => {
+    const report = consoleReport(args)
+    if (report) console.log(`[plugin-window:${pluginId}/${id}] ${report}`)
+  })
+  win.webContents.on('preload-error', (_event, preloadFile, error) => {
+    console.error(`[plugin-window:${pluginId}/${id}] preload failed: ${preloadFile}`)
+    console.error(error && error.stack ? error.stack : error)
+  })
+  win.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[plugin-window:${pluginId}/${id}] renderer gone:`, details && details.reason)
+  })
   win.once('ready-to-show', () => {
     if (!win.isDestroyed()) win.show()
   })
@@ -103,6 +115,19 @@ function open(pluginId, pluginDir, request) {
   })
   win.loadURL(url)
   return { ok: true, reused: false }
+}
+
+function nativeHandles() {
+  const handles = []
+  for (const windows of byPlugin.values()) {
+    for (const win of windows.values()) {
+      if (win.isDestroyed()) continue
+      try {
+        handles.push(win.getNativeWindowHandle().readUInt32LE(0))
+      } catch {}
+    }
+  }
+  return handles
 }
 
 function close(pluginId, id) {
@@ -153,4 +178,4 @@ function start() {
   require('./modules/plugins').onPluginsChanged(closeWindowsOfGonePlugins)
 }
 
-module.exports = { configure, open, close, send, closeAll, start }
+module.exports = { configure, open, close, send, closeAll, start, nativeHandles }
