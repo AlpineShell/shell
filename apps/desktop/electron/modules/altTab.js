@@ -70,6 +70,7 @@ const VK_RMENU = 0xA5
 const VK_SHIFT = 0x10
 const VK_S = 0x53
 const VK_E = 0x45
+const VK_I = 0x49
 const VK_LWIN = 0x5B
 const VK_RWIN = 0x5C
 const VK_LEFT = 0x25
@@ -122,6 +123,7 @@ let winTapped = false
 
 let tilingKeyCallback = null
 let explorerKeyCallback = null
+let settingsKeyCallback = null
 let emojiKeyCallback = null
 let launcherCloser = null
 let overlayDisplayProvider = null
@@ -735,6 +737,17 @@ function hookCallback(nCode, wParam, lParam) {
       }
     }
 
+    if (isKeyDown && vkCode === VK_I && settingsKeyCallback) {
+      const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      if (winHeld) {
+        winTapped = false
+        setImmediate(() => {
+          try { settingsKeyCallback() } catch (e) { console.error('[altTab] settings key error:', e.message) }
+        })
+        return 1
+      }
+    }
+
     if (isKeyDown && vkCode === VK_OEM_PERIOD && emojiKeyCallback) {
       const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
       if (winHeld) {
@@ -889,6 +902,10 @@ module.exports = {
 
   onExplorerKey(callback) {
     explorerKeyCallback = callback
+  },
+
+  onSettingsKey(callback) {
+    settingsKeyCallback = callback
   },
 
   onEmojiKey(callback) {

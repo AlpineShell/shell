@@ -586,6 +586,14 @@ function openSettingsToPlugins(deepInstall) {
   else send()
 }
 
+function openSettingsFromHotkey() {
+  if (!settingsWin || settingsWin.isDestroyed()) pendingSettingsPage = null
+  const win = createSettingsWindow()
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.focus()
+}
+
 function handleDeepLink(rawUrl) {
   console.log('[deeplink] received:', rawUrl)
   let parsed
@@ -873,6 +881,9 @@ function startShellMode() {
   }
   if (altTab && altTab.onExplorerKey) {
     altTab.onExplorerKey(() => appActivator.openFileExplorer())
+  }
+  if (altTab && altTab.onSettingsKey) {
+    altTab.onSettingsKey(() => openSettingsFromHotkey())
   }
   if (altTab && altTab.onEmojiKey) {
     altTab.onEmojiKey(() => launcher.showEmoji())
