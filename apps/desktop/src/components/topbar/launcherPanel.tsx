@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
+import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, Languages, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
@@ -434,7 +434,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     const c = cmd.control
     if (c.kind === "brightness") { if (brightnessIsSubmenu) enterCommand(cmd.id) }
     else if (c.kind === "emoji") { emojiInsertRef.current = false; enterCommand(cmd.id) }
-    else if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power" || c.kind === "tray") enterCommand(cmd.id)
+    else if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power" || c.kind === "tray" || c.kind === "keyboardLayout") enterCommand(cmd.id)
     else if (c.kind === "toggle") toggleSetting(cmd)
     else if (c.kind === "navigate") {
       window.shell.windows.openSettings(c.path)
@@ -947,6 +947,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                       <LauncherStartup darkText={darkText} onBack={exitCommand} />
                     ) : activeCommand === "tray" ? (
                       <LauncherTray darkText={darkText} onBack={exitCommand} onSubView={setSubView} />
+                    ) : activeCommand === "keyboardLayout" ? (
+                      <LauncherKeyboardLayout darkText={darkText} onBack={exitCommand} />
                     ) : activeCommand === "brightness" ? (
                       <LauncherBrightness darkText={darkText} onBack={exitCommand} monitors={monitors} setBrightness={setBrightness} />
                     ) : (
@@ -2003,6 +2005,72 @@ function LauncherTiling({ darkText, onBack }: { darkText: boolean; onBack: () =>
   }
 
   return <LauncherMenu items={items} darkText={darkText} onBack={onBack} />
+}
+
+function LauncherKeyboardLayout({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
+  const [state, setState] = useState<LanguageState | null>(null)
+  const [active, setActive] = useState<ActiveInputMethod | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const apply = (next: LanguageState) => { if (alive) setState(next) }
+    window.shell?.language?.state?.().then(apply).catch(() => {})
+    window.shell?.language?.active?.().then((next) => { if (alive) setActive(next) }).catch(() => {})
+    const off = window.shell?.language?.onStateChanged?.(apply)
+    return () => { alive = false; off?.() }
+  }, [])
+
+  const methods = (state?.languages ?? []).flatMap((language) => language.inputMethods.map((method) => ({ language, method })))
+
+  const items: LauncherMenuItem[] = methods.map(({ language, method }): LauncherMenuItem => ({
+    id: method.tip,
+    kind: "toggle",
+    label: `${language.autonym} - ${method.name}`,
+    icon: Languages,
+    value: active?.tip === method.tip,
+    onToggle: () => {
+      if (method.kind !== "layout") return
+      window.shell?.language?.activateInput?.(method.tip)
+        .then(() => window.shell?.language?.active?.().then(setActive).catch(() => {}))
+        .catch(() => {})
+    },
+  }))
+
+  if (state && methods.length > 0) {
+    items[items.length - 1].dividerAfter = true
+    items.push({
+      id: "default-input",
+      kind: "select",
+      label: "Default for new apps",
+      icon: Languages,
+      value: state.defaultInputMethod ?? methods[0].method.tip,
+      options: methods.map(({ language, method }) => ({ value: method.tip, label: `${language.autonym} - ${method.name}` })),
+      onChange: (v) => { window.shell?.language?.setDefaultInput?.(v).then(setState).catch(() => {}) },
+    })
+    if (state.installedDisplayLanguages.length > 1) {
+      items.push({
+        id: "display-language",
+        kind: "select",
+        label: "Display language",
+        icon: Languages,
+        value: state.displayLanguageOverride ?? "",
+        options: [
+          { value: "", label: "Follow list" },
+          ...state.installedDisplayLanguages.map((tag) => ({ value: tag, label: tag })),
+        ],
+        onChange: (v) => { window.shell?.language?.setDisplayLanguage?.(v || null).then(setState).catch(() => {}) },
+      })
+    }
+  }
+
+  return (
+    <LauncherMenu
+      items={items}
+      darkText={darkText}
+      onBack={onBack}
+      emptyText={state ? "No keyboard layouts configured" : "Reading your keyboard layouts…"}
+    />
+  )
 }
 
 function LauncherStartup({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {

@@ -517,6 +517,24 @@ contextBridge.exposeInMainWorld('shell', {
     },
     initial: bootClockPrefs,
   },
+  language: {
+    state: () => ipcRenderer.invoke('language/state-get'),
+    refresh: () => ipcRenderer.invoke('language/state-refresh'),
+    catalog: (force) => ipcRenderer.invoke('language/catalog-get', force),
+    active: () => ipcRenderer.invoke('language/active-get'),
+    setLanguages: (tags) => ipcRenderer.invoke('language/languages-set', tags),
+    setInputMethods: (tag, tips) => ipcRenderer.invoke('language/input-methods-set', { tag, tips }),
+    setDefaultInput: (tip) => ipcRenderer.invoke('language/default-input-set', tip),
+    setDisplayLanguage: (tag) => ipcRenderer.invoke('language/display-set', tag),
+    setRegionalFormat: (tag) => ipcRenderer.invoke('language/regional-format-set', tag),
+    setHomeLocation: (geoId) => ipcRenderer.invoke('language/home-location-set', geoId),
+    activateInput: (tip) => ipcRenderer.invoke('language/activate-input', tip),
+    onStateChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('language/state-changed', handler)
+      return () => ipcRenderer.removeListener('language/state-changed', handler)
+    },
+  },
   calendar: {
     state: () => ipcRenderer.invoke('calendar/state-get'),
     onStateChanged: (callback) => {

@@ -21,6 +21,7 @@ import AppsStartupPage from './appsStartupPage'
 import UpdatesPage from './updatesPage'
 import PluginsPage from './pluginsPage'
 import DisplaysPage from './displaysPage'
+import LanguagePage from './languagePage'
 
 interface NavItem {
   path: string
@@ -208,6 +209,7 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'apps/installed') return <AppsInstalledPage />
   if (path === 'apps/startup') return <AppsStartupPage />
   if (path === 'system') return <SystemPage onNavigate={navigate} />
+  if (path === 'system/language') return <LanguagePage />
   if (path === 'system/revert') return <SystemRevertPage />
   if (path === 'plugins') return <PluginsPage />
   if (path === 'updates') return <UpdatesPage />
@@ -233,6 +235,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   bluetooth: 'Bluetooth',
   wifi: 'Wi-Fi',
   system: 'System',
+  language: 'Language & Keyboard',
   revert: 'Revert back to Windows',
   plugins: 'Plugins',
   updates: 'Updates',

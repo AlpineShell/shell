@@ -708,6 +708,9 @@ module.exports = {
   getActiveDisplayId,
   isLauncherActive,
   handleBlur,
+  getLastUserForeground() {
+    return lastUserForeground
+  },
   start(b) {
     broadcast = b
     appActivator.warm()

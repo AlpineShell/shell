@@ -508,6 +508,75 @@ declare global {
     showTasks: boolean
   }
 
+  type LanguageAvailability = 'ready' | 'module-missing' | 'error'
+  type InputMethodKind = 'layout' | 'ime'
+  type LayoutSwitchHotkey = 'default' | 'alt-shift' | 'ctrl-shift' | 'grave' | 'none'
+
+  interface InputMethod {
+    tip: string
+    kind: InputMethodKind
+    klid: string | null
+    langId: string
+    name: string
+  }
+
+  interface PreferredLanguage {
+    tag: string
+    langId: string
+    autonym: string
+    englishName: string
+    localizedName: string
+    script: string
+    inputMethods: InputMethod[]
+  }
+
+  interface LanguageState {
+    availability: LanguageAvailability
+    languages: PreferredLanguage[]
+    displayLanguageOverride: string | null
+    effectiveDisplayLanguage: string
+    installedDisplayLanguages: string[]
+    defaultInputMethod: string | null
+    regionalFormat: { tag: string; englishName: string; nativeName: string }
+    systemLocale: { tag: string; englishName: string }
+    homeLocation: { geoId: number; name: string }
+    switchHotkey: { language: LayoutSwitchHotkey; layout: LayoutSwitchHotkey }
+    pendingSignOut: boolean
+  }
+
+  interface LanguageCandidate {
+    tag: string
+    autonym: string
+    englishName: string
+    localizedName: string
+    defaultTips: string[]
+  }
+
+  interface KeyboardLayoutOption {
+    klid: string
+    name: string
+  }
+
+  interface RegionCandidate {
+    geoId: number
+    iso: string
+    englishName: string
+    displayName: string
+  }
+
+  interface LanguageCatalog {
+    languages: LanguageCandidate[]
+    layouts: KeyboardLayoutOption[]
+    regions: RegionCandidate[]
+  }
+
+  interface ActiveInputMethod {
+    tip: string
+    langId: string
+    klid: string | null
+    name: string
+  }
+
   interface CalendarConnection {
     connected: boolean
     email: string | null
@@ -849,6 +918,20 @@ declare global {
         data: () => Promise<CalendarData>
         onDataChanged: (callback: (data: CalendarData) => void) => () => void
         refresh: (range?: CalendarRange) => Promise<CalendarData>
+      }
+      language: {
+        state: () => Promise<LanguageState>
+        refresh: () => Promise<LanguageState>
+        catalog: (force?: boolean) => Promise<LanguageCatalog>
+        active: () => Promise<ActiveInputMethod | null>
+        setLanguages: (tags: string[]) => Promise<LanguageState>
+        setInputMethods: (tag: string, tips: string[]) => Promise<LanguageState>
+        setDefaultInput: (tip: string) => Promise<LanguageState>
+        setDisplayLanguage: (tag: string | null) => Promise<LanguageState>
+        setRegionalFormat: (tag: string) => Promise<LanguageState>
+        setHomeLocation: (geoId: number) => Promise<LanguageState>
+        activateInput: (tip: string) => Promise<boolean>
+        onStateChanged: (callback: (state: LanguageState) => void) => () => void
       }
     }
   }

@@ -6,6 +6,7 @@ import {
   Bookmark,
   History,
   Keyboard,
+  Languages,
   LayoutDashboard,
   LayoutGrid,
   MonitorCog,
@@ -36,6 +37,7 @@ export type SettingControl =
   | { kind: "startup" }
   | { kind: "power" }
   | { kind: "tray" }
+  | { kind: "keyboardLayout" }
   | { kind: "emoji" }
 
 export interface SettingCommand {
@@ -119,6 +121,14 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     icon: LayoutGrid,
     keywords: ["tray", "system tray", "notification area", "icons", "overflow"],
     control: { kind: "tray" },
+  },
+  {
+    id: "keyboardLayout",
+    label: "Keyboard layout",
+    hint: "Switch keyboard, default input and display language",
+    icon: Languages,
+    keywords: ["keyboard layout", "input language", "language", "layout", "qwerty", "qwertz", "azerty", "input method", "display language", "region"],
+    control: { kind: "keyboardLayout" },
   },
   {
     id: "tiling",

@@ -1,4 +1,28 @@
-const { exec, spawn } = require('child_process')
+const { exec, execFile, spawn } = require('child_process')
+
+const DEFAULT_SCRIPT_TIMEOUT_MS = 20000
+
+function runPowerShellScript(scriptPath, args = [], timeoutMs = DEFAULT_SCRIPT_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args],
+      { windowsHide: true, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 },
+      (err, stdout, stderr) => {
+        if (err) {
+          const reason = err.killed ? `timed out after ${timeoutMs}ms` : err.message
+          console.error(`[powershell] Script failed: ${scriptPath} — ${reason}`)
+          return resolve({ ok: false, stdout: '', stderr: typeof stderr === 'string' ? stderr.trim() : '' })
+        }
+        resolve({
+          ok: true,
+          stdout: typeof stdout === 'string' ? stdout.trim() : '',
+          stderr: typeof stderr === 'string' ? stderr.trim() : '',
+        })
+      }
+    )
+  })
+}
 
 function runPowerShell(command) {
   return new Promise((resolve) => {
@@ -130,4 +154,4 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
   return { run, warm, dispose }
 }
 
-module.exports = { runPowerShell, createPersistentRunner }
+module.exports = { runPowerShell, runPowerShellScript, createPersistentRunner }

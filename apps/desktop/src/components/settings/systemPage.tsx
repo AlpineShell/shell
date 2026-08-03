@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, MonitorCog, RotateCcw } from 'lucide-react'
+import { Check, Languages, MonitorCog, RotateCcw } from 'lucide-react'
 import { NavRow } from './appsShared'
 
 interface SystemPageProps {
@@ -7,6 +7,12 @@ interface SystemPageProps {
 }
 
 const ROWS = [
+  {
+    path: 'system/language',
+    label: 'Language & Keyboard',
+    description: 'Display language, keyboard layouts, regional format and country',
+    icon: Languages,
+  },
   {
     path: 'system/revert',
     label: 'Revert back to Windows',
