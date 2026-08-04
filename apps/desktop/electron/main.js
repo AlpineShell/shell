@@ -67,6 +67,7 @@ const {
   registerAppBar,
   unregisterAppBar,
   unregisterAll,
+  scheduleReassert,
   isSettingWorkArea,
 } = require('./modules/appbar')
 
@@ -450,7 +451,6 @@ function repositionShell(display) {
   if (shell.topBar.refreshBarBounds) shell.topBar.refreshBarBounds()
 
   try {
-    unregisterAppBar(shell.topBar)
     registerAppBar(shell.topBar, display, TOP_BAR_HEIGHT)
   } catch (err) {
     console.error(`[main] Failed to re-register appbar on display ${display.id}:`, err)
@@ -941,6 +941,7 @@ function startShellMode() {
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)
     createShellForDisplay(newDisplay)
+    scheduleReassert()
     if (powerThrottling) {
       setTimeout(() => powerThrottling.disableEcoQosForAllProcesses(), 1500)
     }
@@ -949,6 +950,7 @@ function startShellMode() {
   screen.on('display-removed', (_event, oldDisplay) => {
     console.log(`[main] Display removed: ${oldDisplay.id}`)
     destroyShellForDisplay(oldDisplay.id)
+    scheduleReassert()
   })
 
   screen.on('display-metrics-changed', (_event, display, changedMetrics) => {
@@ -957,6 +959,7 @@ function startShellMode() {
     if (changedMetrics.length === 1 && changedMetrics[0] === 'workArea') {
       const shell = shells.get(display.id)
       if (shell) forceShellBounds(shell)
+      scheduleReassert()
       return
     }
 
@@ -964,6 +967,7 @@ function startShellMode() {
     if (changedMetrics.includes('bounds') || changedMetrics.includes('scaleFactor')) {
       repositionShell(display)
     }
+    scheduleReassert()
   })
 }
 
