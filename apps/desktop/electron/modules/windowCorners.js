@@ -1,7 +1,7 @@
 const koffi = require('koffi')
 const {
-  DWMWCP_ROUND,
-  shouldRequestRounding,
+  DWMWCP_ROUNDSMALL,
+  shouldApplyCornerPreference,
   deadTrackedWindows,
   restorableTrackedWindows,
 } = require('./windowCornerPolicy')
@@ -52,6 +52,7 @@ const E_INVALIDARG = -2147024809
 const MONITOR_DEFAULTTONEAREST = 2
 const MONITORINFO_SIZE = 40
 const MAX_TRACKED_WINDOWS = 256
+const CORNER_TARGET = DWMWCP_ROUNDSMALL
 
 const originalPreferences = new Map()
 let winEventHookHandle = null
@@ -147,10 +148,10 @@ function roundWindow(hwndRaw) {
     bounds: getWindowBounds(hwnd),
     monitorBounds: getMonitorBounds(hwnd),
   }
-  if (!shouldRequestRounding(candidate)) return
+  if (!shouldApplyCornerPreference(candidate, CORNER_TARGET)) return
 
   pruneClosedWindows()
-  if (!writeCornerPreference(hwnd, DWMWCP_ROUND)) return
+  if (!writeCornerPreference(hwnd, CORNER_TARGET)) return
   originalPreferences.set(hwnd, preference)
 }
 

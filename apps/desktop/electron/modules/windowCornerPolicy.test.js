@@ -6,12 +6,13 @@ const {
   DWMWCP_DONOTROUND,
   DWMWCP_ROUND,
   DWMWCP_ROUNDSMALL,
-  isRoundedPreference,
   coversMonitor,
-  shouldRequestRounding,
+  shouldApplyCornerPreference,
   deadTrackedWindows,
   restorableTrackedWindows,
 } = windowCornerPolicy
+
+const TARGET = DWMWCP_ROUNDSMALL
 
 const MONITOR = { left: 0, top: 0, right: 1920, bottom: 1080 }
 const WORK_AREA_FILL = { left: 0, top: 40, right: 1920, bottom: 1080 }
@@ -27,18 +28,6 @@ function candidate(overrides) {
     ...overrides,
   }
 }
-
-describe('isRoundedPreference', () => {
-  it('recognises both rounded preferences', () => {
-    expect(isRoundedPreference(DWMWCP_ROUND)).toBe(true)
-    expect(isRoundedPreference(DWMWCP_ROUNDSMALL)).toBe(true)
-  })
-
-  it('does not treat default as an explicit rounding request', () => {
-    expect(isRoundedPreference(DWMWCP_DEFAULT)).toBe(false)
-    expect(isRoundedPreference(DWMWCP_DONOTROUND)).toBe(false)
-  })
-})
 
 describe('coversMonitor', () => {
   it('detects a window filling the whole monitor', () => {
@@ -63,35 +52,38 @@ describe('coversMonitor', () => {
   })
 })
 
-describe('shouldRequestRounding', () => {
-  it('rounds an unmaximized window that opted out', () => {
-    expect(shouldRequestRounding(candidate())).toBe(true)
+describe('shouldApplyCornerPreference', () => {
+  it('normalises an unmaximized window that opted out', () => {
+    expect(shouldApplyCornerPreference(candidate(), TARGET)).toBe(true)
   })
 
-  it('rounds an unmaximized window left on the default preference', () => {
-    expect(shouldRequestRounding(candidate({ preference: DWMWCP_DEFAULT }))).toBe(true)
+  it('normalises an unmaximized window left on the default preference', () => {
+    expect(shouldApplyCornerPreference(candidate({ preference: DWMWCP_DEFAULT }), TARGET)).toBe(true)
+  })
+
+  it('normalises a window already rounded at the larger radius', () => {
+    expect(shouldApplyCornerPreference(candidate({ preference: DWMWCP_ROUND }), TARGET)).toBe(true)
   })
 
   it('leaves a maximized window alone', () => {
-    expect(shouldRequestRounding(candidate({ maximized: true }))).toBe(false)
+    expect(shouldApplyCornerPreference(candidate({ maximized: true }), TARGET)).toBe(false)
   })
 
   it('leaves a borderless fullscreen window alone', () => {
-    expect(shouldRequestRounding(candidate({ bounds: MONITOR }))).toBe(false)
+    expect(shouldApplyCornerPreference(candidate({ bounds: MONITOR }), TARGET)).toBe(false)
   })
 
   it('rounds a window tiled to fill the work area', () => {
-    expect(shouldRequestRounding(candidate({ bounds: WORK_AREA_FILL }))).toBe(true)
+    expect(shouldApplyCornerPreference(candidate({ bounds: WORK_AREA_FILL }), TARGET)).toBe(true)
   })
 
-  it('skips a window that already asks to be rounded', () => {
-    expect(shouldRequestRounding(candidate({ preference: DWMWCP_ROUND }))).toBe(false)
-    expect(shouldRequestRounding(candidate({ preference: DWMWCP_ROUNDSMALL }))).toBe(false)
+  it('skips a window already at the target radius', () => {
+    expect(shouldApplyCornerPreference(candidate({ preference: TARGET }), TARGET)).toBe(false)
   })
 
   it('skips unmanageable windows', () => {
-    expect(shouldRequestRounding(candidate({ manageable: false }))).toBe(false)
-    expect(shouldRequestRounding(null)).toBe(false)
+    expect(shouldApplyCornerPreference(candidate({ manageable: false }), TARGET)).toBe(false)
+    expect(shouldApplyCornerPreference(null, TARGET)).toBe(false)
   })
 })
 

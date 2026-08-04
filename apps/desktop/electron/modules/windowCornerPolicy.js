@@ -3,10 +3,6 @@ const DWMWCP_DONOTROUND = 1
 const DWMWCP_ROUND = 2
 const DWMWCP_ROUNDSMALL = 3
 
-function isRoundedPreference(preference) {
-  return preference === DWMWCP_ROUND || preference === DWMWCP_ROUNDSMALL
-}
-
 function coversMonitor(windowBounds, monitorBounds) {
   if (!windowBounds || !monitorBounds) return false
   return windowBounds.left <= monitorBounds.left
@@ -15,11 +11,11 @@ function coversMonitor(windowBounds, monitorBounds) {
     && windowBounds.bottom >= monitorBounds.bottom
 }
 
-function shouldRequestRounding(window) {
+function shouldApplyCornerPreference(window, target) {
   if (!window || !window.manageable) return false
   if (window.maximized) return false
   if (coversMonitor(window.bounds, window.monitorBounds)) return false
-  return !isRoundedPreference(window.preference)
+  return window.preference !== target
 }
 
 function deadTrackedWindows(tracked, isAlive) {
@@ -43,9 +39,8 @@ module.exports = {
   DWMWCP_DONOTROUND,
   DWMWCP_ROUND,
   DWMWCP_ROUNDSMALL,
-  isRoundedPreference,
   coversMonitor,
-  shouldRequestRounding,
+  shouldApplyCornerPreference,
   deadTrackedWindows,
   restorableTrackedWindows,
 }
