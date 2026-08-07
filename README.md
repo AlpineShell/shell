@@ -21,6 +21,6 @@ This project values clean, readable code over documentation:
 
 - **No comments.** Code should be self-documenting through clear naming. If something needs a comment, rename it instead.
 - **Single responsibility.** Each function does one thing. If a function name needs "and" in it, split it.
-- **DRY.** Shared patterns are extracted into utilities (`useShellState` for hooks, `runPowerShell` for shell commands). Don't over-abstract — if two things look similar but serve different purposes, duplication is fine.
+- **DRY.** Shared patterns are extracted into utilities (`useShellState` for hooks, `runPowerShell` for shell commands). Don't over-abstract — if two things look similar but serve different purposes, duplication is fine. 
 - **Small files.** Each module, hook, and component lives in its own file.
 - **Descriptive names.** `getNetworkStatus` not `getData`. `isRadioEnabled` not `check`.
