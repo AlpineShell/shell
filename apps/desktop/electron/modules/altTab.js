@@ -52,6 +52,9 @@ const DeleteObject = gdi32.func('__stdcall', 'DeleteObject', 'int', ['uintptr_t'
 const DeleteDC = gdi32.func('__stdcall', 'DeleteDC', 'int', ['uintptr_t'])
 const GetDIBits = gdi32.func('__stdcall', 'GetDIBits', 'int', ['uintptr_t', 'uintptr_t', 'uint32', 'uint32', 'void *', 'void *', 'uint32'])
 const BitBlt = gdi32.func('__stdcall', 'BitBlt', 'int', ['uintptr_t', 'int', 'int', 'int', 'int', 'uintptr_t', 'int', 'int', 'uint32'])
+const StretchBlt = gdi32.func('__stdcall', 'StretchBlt', 'int', ['uintptr_t', 'int', 'int', 'int', 'int', 'uintptr_t', 'int', 'int', 'int', 'int', 'uint32'])
+const SetStretchBltMode = gdi32.func('__stdcall', 'SetStretchBltMode', 'int', ['uintptr_t', 'int'])
+const SetBrushOrgEx = gdi32.func('__stdcall', 'SetBrushOrgEx', 'int', ['uintptr_t', 'int', 'int', 'void *'])
 
 const RtlMoveMemory = kernel32.func('__stdcall', 'RtlMoveMemory', 'void', ['void *', 'uintptr_t', 'uintptr_t'])
 const OpenProcess = kernel32.func('__stdcall', 'OpenProcess', 'uintptr_t', ['uint32', 'int', 'uint32'])
@@ -85,6 +88,7 @@ const VK_MENU = 0x12
 const VK_CAPITAL = 0x14
 const SW_RESTORE = 9
 const SRCCOPY = 0x00CC0020
+const HALFTONE = 4
 const PW_RENDERFULLCONTENT = 2
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 const DWMWA_CLOAKED = 14
@@ -252,40 +256,54 @@ function captureWindowThumbnail(hwnd) {
   const srcHeight = rectBuf.readInt32LE(12) - top
   if (srcWidth <= 0 || srcHeight <= 0) return getCachedThumbnail(hwnd)
 
+  const scale = Math.min(THUMBNAIL_MAX_WIDTH / srcWidth, THUMBNAIL_MAX_HEIGHT / srcHeight, 1.0)
+  const thumbWidth = Math.max(1, Math.round(srcWidth * scale))
+  const thumbHeight = Math.max(1, Math.round(srcHeight * scale))
+
   const screenDC = GetDC(0)
   if (!screenDC) return getCachedThumbnail(hwnd)
   const memDC = CreateCompatibleDC(screenDC)
   const bmp = CreateCompatibleBitmap(screenDC, srcWidth, srcHeight)
   const oldBmp = SelectObject(memDC, bmp)
+  const thumbDC = CreateCompatibleDC(screenDC)
+  const thumbBmp = CreateCompatibleBitmap(screenDC, thumbWidth, thumbHeight)
+  const oldThumbBmp = SelectObject(thumbDC, thumbBmp)
 
   try {
     let captured = PrintWindow(hwnd, memDC, PW_RENDERFULLCONTENT)
     if (!captured) captured = PrintWindow(hwnd, memDC, 0)
     if (!captured) BitBlt(memDC, 0, 0, srcWidth, srcHeight, screenDC, left, top, SRCCOPY)
 
+    SetStretchBltMode(thumbDC, HALFTONE)
+    SetBrushOrgEx(thumbDC, 0, 0, null)
+    if (!StretchBlt(thumbDC, 0, 0, thumbWidth, thumbHeight, memDC, 0, 0, srcWidth, srcHeight, SRCCOPY)) {
+      return getCachedThumbnail(hwnd)
+    }
+    SelectObject(thumbDC, oldThumbBmp)
+
     const biHeader = Buffer.alloc(40)
     biHeader.writeUInt32LE(40, 0)
-    biHeader.writeInt32LE(srcWidth, 4)
-    biHeader.writeInt32LE(-srcHeight, 8)
+    biHeader.writeInt32LE(thumbWidth, 4)
+    biHeader.writeInt32LE(-thumbHeight, 8)
     biHeader.writeUInt16LE(1, 12)
     biHeader.writeUInt16LE(32, 14)
 
-    const pixelData = Buffer.alloc(srcWidth * srcHeight * 4)
-    if (!GetDIBits(memDC, bmp, 0, srcHeight, pixelData, biHeader, 0)) return getCachedThumbnail(hwnd)
+    const pixelData = Buffer.alloc(thumbWidth * thumbHeight * 4)
+    if (!GetDIBits(screenDC, thumbBmp, 0, thumbHeight, pixelData, biHeader, 0)) return getCachedThumbnail(hwnd)
 
     for (let i = 3; i < pixelData.length; i += 4) {
       pixelData[i] = 255
     }
 
-    const img = nativeImage.createFromBitmap(pixelData, { width: srcWidth, height: srcHeight })
-    const scale = Math.min(THUMBNAIL_MAX_WIDTH / srcWidth, THUMBNAIL_MAX_HEIGHT / srcHeight, 1.0)
-    const resized = img.resize({ width: Math.round(srcWidth * scale), height: Math.round(srcHeight * scale), quality: 'good' })
-    const dataUrl = resized.toDataURL()
+    const dataUrl = nativeImage.createFromBitmap(pixelData, { width: thumbWidth, height: thumbHeight }).toDataURL()
     thumbnailCache.set(hwnd, { url: dataUrl, ts: Date.now() })
     return dataUrl
   } catch (_) {
     return getCachedThumbnail(hwnd)
   } finally {
+    SelectObject(thumbDC, oldThumbBmp)
+    DeleteObject(thumbBmp)
+    DeleteDC(thumbDC)
     SelectObject(memDC, oldBmp)
     DeleteObject(bmp)
     DeleteDC(memDC)
@@ -424,7 +442,7 @@ function installForegroundHook() {
       0,
       WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
     )
-    if (!toHwndNum(foregroundHookHandle)) {
+    if (!foregroundHookHandle) {
       console.error('[altTab] Failed to install foreground win event hook')
       foregroundHookHandle = null
       try { koffi.unregister(foregroundHookCallback) } catch (_) {}
@@ -837,11 +855,13 @@ function hookCallback(nCode, wParam, lParam) {
 function installHook() {
   hookCallbackPointer = koffi.register(hookCallback, koffi.pointer(LowLevelKeyboardProc))
   hookHandle = SetWindowsHookExW(WH_KEYBOARD_LL, hookCallbackPointer, 0, 0)
-  const h = typeof hookHandle === 'bigint' ? Number(hookHandle) : hookHandle
-  if (!h) {
+  if (!hookHandle) {
     console.error('[altTab] Failed to install keyboard hook')
+    try { koffi.unregister(hookCallbackPointer) } catch (_) {}
+    hookCallbackPointer = null
+    hookHandle = null
   } else {
-    console.log('[altTab] Keyboard hook installed, handle:', h)
+    console.log('[altTab] Keyboard hook installed')
   }
 }
 
