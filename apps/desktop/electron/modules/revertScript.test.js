@@ -4,7 +4,8 @@ import revertScript from './revertScript.js'
 const {
   buildDelaySeconds,
   buildWaitForProcessExit,
-  buildEnsureExplorerRunning,
+  buildForceProcessExit,
+  buildStartExplorer,
   isSafeDeletablePath,
   buildRemoveDirectory,
   buildTemporaryRevertScript,
@@ -64,12 +65,69 @@ describe('buildWaitForProcessExit', () => {
   })
 })
 
-describe('buildEnsureExplorerRunning', () => {
-  it('starts Explorer only when it is absent', () => {
-    const lines = buildEnsureExplorerRunning()
-    expect(lines.indexOf('if not errorlevel 1 goto alpine_explorer_running')).toBeLessThan(
-      lines.indexOf('start "" explorer.exe'),
-    )
+describe('buildForceProcessExit', () => {
+  const lines = buildForceProcessExit().join('\n')
+
+  it('only forces an exit when the wait timed out', () => {
+    expect(buildForceProcessExit()[0]).toBe('if not defined ALPINE_REVERT_STILL_RUNNING goto alpine_force_done')
+    expect(lines).toContain('taskkill /f /im "%ALPINE_REVERT_IMAGE%"')
+  })
+
+  it('clears the still-running flag once the process is gone', () => {
+    expect(lines).toContain('if errorlevel 1 set "ALPINE_REVERT_STILL_RUNNING="')
+  })
+})
+
+describe('buildHandBackToExplorer ordering', () => {
+  it('forces the exit before starting Explorer', () => {
+    const lines = buildPermanentRevertScript({ processImageName: IMAGE }).script
+    expect(lines.indexOf('taskkill /f /im')).toBeLessThan(lines.indexOf('start "" explorer.exe'))
+  })
+
+  it('waits for a voluntary exit before forcing one', () => {
+    const lines = buildPermanentRevertScript({ processImageName: IMAGE }).script
+    expect(lines.indexOf(':alpine_wait_loop')).toBeLessThan(lines.indexOf('taskkill /f /im'))
+  })
+})
+
+describe('buildTemporaryRevertScript', () => {
+  const temporary = buildTemporaryRevertScript({ processImageName: IMAGE, shellKeyPath: WINLOGON_KEY, shellExePath: ALPINE_EXE })
+
+  it('lets Explorer settle before restoring the shell registration', () => {
+    expect(temporary.script.indexOf('start "" explorer.exe')).toBeLessThan(temporary.script.indexOf('reg add'))
+  })
+
+  it('waits after Explorer has started so a relaunched Alpine Shell reads the reverted registration', () => {
+    const afterExplorer = temporary.script.slice(temporary.script.indexOf('start "" explorer.exe'))
+    expect(afterExplorer.indexOf(buildDelaySeconds(3))).toBeLessThan(afterExplorer.indexOf('reg add'))
+  })
+})
+
+describe('buildStartExplorer', () => {
+  const lines = buildStartExplorer()
+
+  it('starts Explorer unconditionally, because a batch file cannot see who owns Shell_TrayWnd', () => {
+    expect(lines[0]).toBe('start "" explorer.exe')
+  })
+
+  it('never predicates the start on an explorer.exe process existing', () => {
+    expect(lines.join('\n')).not.toContain('tasklist')
+    expect(lines.join('\n')).not.toContain('errorlevel')
+  })
+
+  it('lets the new Explorer settle', () => {
+    expect(lines[1]).toBe(buildDelaySeconds(3))
+  })
+})
+
+describe('every hand-back helper starts Explorer unconditionally', () => {
+  it.each([
+    ['temporary', buildTemporaryRevertScript({ processImageName: IMAGE, shellKeyPath: WINLOGON_KEY, shellExePath: ALPINE_EXE }).script],
+    ['permanent', buildPermanentRevertScript({ processImageName: IMAGE }).script],
+    ['uninstall', uninstallHelper().script],
+  ])('%s', (_name, script) => {
+    expect(script).toContain('start "" explorer.exe')
+    expect(script).not.toContain('imagename eq explorer.exe')
   })
 })
 
