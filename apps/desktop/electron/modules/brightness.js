@@ -59,6 +59,8 @@ const MONINFO_SIZE = 104
 let monitors = []
 let lastStateJson = null
 let hasInternalDisplay = null
+let brightnessWriteCount = 0
+const brightnessWritesByMonitorId = new Map()
 
 
 function readWideString(buf, offset, maxChars) {
@@ -67,10 +69,6 @@ function readWideString(buf, offset, maxChars) {
       return buf.slice(offset, offset + i * 2).toString('utf16le')
   }
   return buf.slice(offset, offset + maxChars * 2).toString('utf16le')
-}
-
-function toNum(h) {
-  return typeof h === 'bigint' ? Number(h) : h
 }
 
 function cleanName(physName, deviceName, index) {
@@ -122,7 +120,7 @@ function enumLogicalMonitors() {
     rect.writeInt32LE(d.bounds.y, 4)
     rect.writeInt32LE(d.bounds.x + d.bounds.width, 8)
     rect.writeInt32LE(d.bounds.y + d.bounds.height, 12)
-    const h = toNum(MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST))
+    const h = MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST)
     if (h && !seen.has(h)) {
       seen.add(h)
       results.push(h)
@@ -138,55 +136,89 @@ function getDeviceName(hMon) {
   return readWideString(buf, 40, 32)
 }
 
-function getPhysicalMonitors(hMon) {
+const DDC_CALL_TIMEOUT_MS = 4000
+
+function offMainThread(api, args) {
+  return new Promise((resolve) => {
+    let timeout = null
+    let settled = false
+    const settle = (value) => {
+      if (settled) return
+      settled = true
+      if (timeout) clearTimeout(timeout)
+      resolve(value)
+    }
+    timeout = setTimeout(() => {
+      console.error(`[brightness] DDC/CI call did not answer within ${DDC_CALL_TIMEOUT_MS} ms`)
+      settle(0)
+    }, DDC_CALL_TIMEOUT_MS)
+    try {
+      api.async(...args, (err, result) => settle(err ? 0 : result))
+    } catch (_) {
+      settle(0)
+    }
+  })
+}
+
+async function getPhysicalMonitors(hMon) {
   if (!dxva2) return []
   const countBuf = Buffer.alloc(4)
-  if (!GetNumberOfPhysicalMonitorsFromHMONITOR(hMon, countBuf)) return []
+  if (!await offMainThread(GetNumberOfPhysicalMonitorsFromHMONITOR, [hMon, countBuf])) return []
   const count = countBuf.readUInt32LE(0)
   if (!count) return []
 
   const buf = Buffer.alloc(PHYS_MON_SIZE * count)
-  if (!GetPhysicalMonitorsFromHMONITOR(hMon, count, buf)) return []
+  if (!await offMainThread(GetPhysicalMonitorsFromHMONITOR, [hMon, count, buf])) return []
 
   const result = []
   for (let i = 0; i < count; i++) {
     const off = i * PHYS_MON_SIZE
     result.push({
-      handle: Number(buf.readBigUInt64LE(off)),
+      handle: buf.readBigUInt64LE(off),
       name: readWideString(buf, off + HANDLE_SIZE, 128),
     })
   }
   return result
 }
 
-function destroyPhysicalHandle(handle) {
+async function destroyPhysicalHandle(handle) {
   if (!dxva2 || !handle) return
   const buf = Buffer.alloc(PHYS_MON_SIZE)
-  buf.writeBigUInt64LE(BigInt(handle), 0)
-  try { DestroyPhysicalMonitorsAPI(1, buf) } catch (_) {}
+  buf.writeBigUInt64LE(handle, 0)
+  await offMainThread(DestroyPhysicalMonitorsAPI, [1, buf])
 }
 
+
+let pendingDdcWork = Promise.resolve()
+
+function queueDdcWork(task) {
+  const result = pendingDdcWork.then(task, task)
+  pendingDdcWork = result.then(() => undefined, () => undefined)
+  return result
+}
 
 function withPhysicalMonitor(hMon, fn) {
-  const physMonitors = getPhysicalMonitors(hMon)
-  try {
-    return fn(physMonitors)
-  } finally {
-    for (const p of physMonitors) destroyPhysicalHandle(p.handle)
-  }
+  return queueDdcWork(async () => {
+    const physMonitors = await getPhysicalMonitors(hMon)
+    try {
+      return await fn(physMonitors)
+    } finally {
+      for (const p of physMonitors) await destroyPhysicalHandle(p.handle)
+    }
+  })
 }
 
-function ddcGetBrightness(hPhysical) {
+async function ddcGetBrightness(hPhysical) {
   const min = Buffer.alloc(4), cur = Buffer.alloc(4), max = Buffer.alloc(4)
-  if (!GetMonitorBrightnessAPI(hPhysical, min, cur, max)) return null
+  if (!await offMainThread(GetMonitorBrightnessAPI, [hPhysical, min, cur, max])) return null
   return {
     current: cur.readUInt32LE(0),
     max: max.readUInt32LE(0),
   }
 }
 
-function ddcSetBrightness(hPhysical, rawValue) {
-  return !!SetMonitorBrightnessAPI(hPhysical, rawValue)
+async function ddcSetBrightness(hPhysical, rawValue) {
+  return !!await offMainThread(SetMonitorBrightnessAPI, [hPhysical, rawValue])
 }
 
 
@@ -207,16 +239,37 @@ function wmiSetBrightness(value) {
 }
 
 
+function recordBrightnessWrite(id, brightness) {
+  brightnessWriteCount++
+  brightnessWritesByMonitorId.set(id, { brightness, writeCount: brightnessWriteCount })
+  const live = monitors.find(m => m.id === id)
+  if (live) live.brightness = brightness
+}
+
+function adoptBrightnessWritesSince(newMonitors, writeCount) {
+  for (const m of newMonitors) {
+    const write = brightnessWritesByMonitorId.get(m.id)
+    if (write && write.writeCount > writeCount) m.brightness = write.brightness
+  }
+}
+
+function forgetBrightnessWritesForAbsentMonitors() {
+  for (const id of brightnessWritesByMonitorId.keys()) {
+    if (!monitors.some(m => m.id === id)) brightnessWritesByMonitorId.delete(id)
+  }
+}
+
 async function enumerate() {
+  const writeCountAtStart = brightnessWriteCount
   const newMonitors = []
 
   if (dxva2) {
     for (const hMon of enumLogicalMonitors()) {
       const deviceName = getDeviceName(hMon)
-      withPhysicalMonitor(hMon, (physMonitors) => {
+      await withPhysicalMonitor(hMon, async (physMonitors) => {
         for (const phys of physMonitors) {
           try {
-            const b = ddcGetBrightness(phys.handle)
+            const b = await ddcGetBrightness(phys.handle)
             if (b) {
               const brightness = b.max > 0
                 ? Math.round((b.current / b.max) * 100)
@@ -256,33 +309,36 @@ async function enumerate() {
     })
   }
 
+  adoptBrightnessWritesSince(newMonitors, writeCountAtStart)
   monitors = newMonitors
+  forgetBrightnessWritesForAbsentMonitors()
   return publicState()
 }
 
 
 async function refresh() {
+  const sweptMonitors = monitors
   let changed = false
 
-  for (const m of monitors) {
-    if (m.type === 'external' && m.hMon) {
-      withPhysicalMonitor(m.hMon, (physMonitors) => {
-        for (const phys of physMonitors) {
-          try {
-            const b = ddcGetBrightness(phys.handle)
-            if (b) {
-              const val = b.max > 0
-                ? Math.round((b.current / b.max) * 100)
-                : b.current
-              if (val !== m.brightness) { m.brightness = val; changed = true }
-            }
-          } catch (_) {}
-        }
-      })
-    }
+  for (const m of sweptMonitors) {
+    if (monitors !== sweptMonitors) return false
+    if (m.type !== 'external' || !m.hMon) continue
+    await withPhysicalMonitor(m.hMon, async (physMonitors) => {
+      for (const phys of physMonitors) {
+        try {
+          const b = await ddcGetBrightness(phys.handle)
+          if (b) {
+            const val = b.max > 0
+              ? Math.round((b.current / b.max) * 100)
+              : b.current
+            if (val !== m.brightness) { m.brightness = val; changed = true }
+          }
+        } catch (_) {}
+      }
+    })
   }
 
-  const internal = monitors.find(m => m.type === 'internal')
+  const internal = sweptMonitors.find(m => m.type === 'internal')
   if (internal) {
     const val = await wmiGetBrightness()
     if (val !== null && val !== internal.brightness) {
@@ -291,7 +347,7 @@ async function refresh() {
     }
   }
 
-  return changed
+  return changed && monitors === sweptMonitors
 }
 
 
@@ -304,13 +360,28 @@ async function setMonitorBrightness(id, value) {
     await wmiSetBrightness(clamped)
   } else if (m.hMon) {
     const rawValue = Math.round((clamped / 100) * (m.ddcMax || 100))
-    withPhysicalMonitor(m.hMon, (physMonitors) => {
-      for (const phys of physMonitors) ddcSetBrightness(phys.handle, rawValue)
+    await withPhysicalMonitor(m.hMon, async (physMonitors) => {
+      for (const phys of physMonitors) await ddcSetBrightness(phys.handle, rawValue)
     })
   }
 
-  m.brightness = clamped
+  recordBrightnessWrite(id, clamped)
   return clamped
+}
+
+function skippedWhileStillRunning(task) {
+  let running = false
+  return async () => {
+    if (running) return
+    running = true
+    try {
+      await task()
+    } catch (e) {
+      console.error('[brightness] periodic sweep failed:', e?.message ?? e)
+    } finally {
+      running = false
+    }
+  }
 }
 
 function publicState() {
@@ -341,29 +412,20 @@ module.exports = {
   },
 
   start(broadcast) {
-    setImmediate(() => {
-      enumerate().then(state => {
-        lastStateJson = JSON.stringify(state)
-        broadcast('system/monitors-changed', state)
-      })
-    })
+    const publish = (state) => {
+      lastStateJson = JSON.stringify(state)
+      broadcast('system/monitors-changed', state)
+    }
 
-    setInterval(async () => {
-      if (await refresh()) {
-        const state = publicState()
-        lastStateJson = JSON.stringify(state)
-        broadcast('system/monitors-changed', state)
-      }
-    }, 15000)
+    setImmediate(() => { enumerate().then(publish) })
 
-    setInterval(() => {
-      enumerate().then(state => {
-        const json = JSON.stringify(state)
-        if (json !== lastStateJson) {
-          lastStateJson = json
-          broadcast('system/monitors-changed', state)
-        }
-      })
-    }, 60000)
+    setInterval(skippedWhileStillRunning(async () => {
+      if (await refresh()) publish(publicState())
+    }), 15000)
+
+    setInterval(skippedWhileStillRunning(async () => {
+      const state = await enumerate()
+      if (JSON.stringify(state) !== lastStateJson) publish(state)
+    }), 60000)
   },
 }
