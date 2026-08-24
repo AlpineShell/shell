@@ -17,7 +17,7 @@ function warnIfTruncated(label, truncated) {
   if (truncated) console.error(`[browserFavicons] ${label} hit the ${ICON_MAPPING_ROW_LIMIT} row limit; the oldest mappings were not read`)
 }
 
-function preferredIconIdsByHost(rows, neededHosts) {
+function rankedIconIdsByHost(rows, neededHosts) {
   const countsByHost = new Map()
   for (const [pageUrl, iconId] of rows) {
     if (!pageUrl || !Number.isInteger(iconId) || iconId <= 0) continue
@@ -30,19 +30,26 @@ function preferredIconIdsByHost(rows, neededHosts) {
   }
   const byHost = new Map()
   for (const [host, counts] of countsByHost) {
-    const ranked = [...counts]
-      .sort((a, b) => b[1] - a[1] || b[0] - a[0])
-      .slice(0, ICON_CANDIDATES_PER_HOST)
-      .map(([iconId]) => iconId)
-    byHost.set(host, ranked)
+    byHost.set(host, [...counts].sort((a, b) => b[1] - a[1] || b[0] - a[0]).map(([iconId]) => iconId))
   }
   return byHost
 }
 
-function candidateIds(iconIdsByHost) {
+function candidateIds(iconIdsByHost, perHost = ICON_CANDIDATES_PER_HOST) {
   const ids = new Set()
   for (const ranked of iconIdsByHost.values()) {
-    for (const iconId of ranked) ids.add(iconId)
+    for (const iconId of ranked.slice(0, perHost)) ids.add(iconId)
+  }
+  return [...ids]
+}
+
+function remainingCandidateIds(iconIdsByHost, resolvedHosts, alreadyAsked = new Set()) {
+  const ids = new Set()
+  for (const [host, ranked] of iconIdsByHost) {
+    if (resolvedHosts.has(host)) continue
+    for (const iconId of ranked) {
+      if (!alreadyAsked.has(iconId)) ids.add(iconId)
+    }
   }
   return [...ids]
 }
@@ -60,10 +67,9 @@ function collectBlobs(rows, blobById) {
   return blobById
 }
 
-async function readIconBlobs(dbPath, iconIds, buildSql) {
-  const blobById = new Map()
+async function readIconBlobs(query, iconIds, buildSql, blobById = new Map()) {
   for (const batch of idBatches(iconIds)) {
-    const { rows } = await sqliteWorker.readRows(dbPath, buildSql(batch), ['int', 'blob'])
+    const { rows } = await query(buildSql(batch), ['int', 'blob'])
     collectBlobs(rows, blobById)
   }
   return blobById
@@ -80,30 +86,49 @@ function iconMapFromBlobs(iconIdsByHost, blobById, toIcon) {
   return map
 }
 
+async function faviconMapFromSnapshot(query, neededHosts, dialect) {
+  const { rows, truncated } = await query(dialect.mappingSql, ['text', 'int'], ICON_MAPPING_ROW_LIMIT)
+  warnIfTruncated(dialect.mappingLabel, truncated)
+  const iconIdsByHost = rankedIconIdsByHost(rows, neededHosts)
+  if (iconIdsByHost.size === 0) return new Map()
+  const asked = candidateIds(iconIdsByHost)
+  const blobById = await readIconBlobs(query, asked, dialect.bitmapSql)
+  const map = iconMapFromBlobs(iconIdsByHost, blobById, dialect.toIcon)
+  const remaining = remainingCandidateIds(iconIdsByHost, new Set(map.keys()), new Set(asked))
+  if (remaining.length === 0) return map
+  await readIconBlobs(query, remaining, dialect.bitmapSql, blobById)
+  return iconMapFromBlobs(iconIdsByHost, blobById, dialect.toIcon)
+}
+
 function toPngDataUrl(data) {
   if (!data || data.length === 0) return null
   return 'data:image/png;base64,' + data.toString('base64')
 }
 
+const CHROMIUM_DIALECT = {
+  mappingSql: CHROMIUM_ICON_MAPPING_SQL,
+  mappingLabel: 'icon_mapping',
+  bitmapSql: chromiumBitmapSql,
+  toIcon: toPngDataUrl,
+}
+
 async function readFaviconMap(faviconsDbPath, neededHosts) {
   if (!faviconsDbPath || !neededHosts || neededHosts.size === 0) return new Map()
-  const { rows, truncated } = await sqliteWorker.readRows(faviconsDbPath, CHROMIUM_ICON_MAPPING_SQL, ['text', 'int'], ICON_MAPPING_ROW_LIMIT)
-  warnIfTruncated('icon_mapping', truncated)
-  const iconIdsByHost = preferredIconIdsByHost(rows, neededHosts)
-  if (iconIdsByHost.size === 0) return new Map()
-  const blobById = await readIconBlobs(faviconsDbPath, candidateIds(iconIdsByHost), chromiumBitmapSql)
-  return iconMapFromBlobs(iconIdsByHost, blobById, toPngDataUrl)
+  return sqliteWorker.withSnapshot(faviconsDbPath, (query) => faviconMapFromSnapshot(query, neededHosts, CHROMIUM_DIALECT))
 }
 
 module.exports = {
   readFaviconMap,
-  preferredIconIdsByHost,
+  faviconMapFromSnapshot,
+  rankedIconIdsByHost,
   candidateIds,
+  remainingCandidateIds,
   readIconBlobs,
   iconMapFromBlobs,
   idBatches,
   collectBlobs,
   warnIfTruncated,
+  ICON_CANDIDATES_PER_HOST,
   ICON_MAPPING_ROW_LIMIT,
   PREFERRED_ICON_PX,
 }

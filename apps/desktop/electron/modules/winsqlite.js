@@ -85,27 +85,51 @@ function collectRows(f, db, sql, columnTypes, rowLimit) {
   return { rows, truncated }
 }
 
-function readRows(dbPath, sql, columnTypes, rowLimit = 100000) {
+function openSnapshot(dbPath) {
   const f = ensureLib()
-  if (!f || !dbPath || !fs.existsSync(dbPath)) return emptyResult()
+  if (!f || !dbPath || !fs.existsSync(dbPath)) return null
   let tmp = null
   try {
     tmp = snapshot(dbPath)
     const dbOut = [null]
     const opened = f.open(tmp, dbOut, SQLITE_OPEN_READWRITE, null)
-    if (!dbOut[0]) return emptyResult()
-    try {
-      if (opened !== SQLITE_OK) return emptyResult()
-      return collectRows(f, dbOut[0], sql, columnTypes, rowLimit)
-    } finally {
-      f.close(dbOut[0])
+    if (opened !== SQLITE_OK || !dbOut[0]) {
+      if (dbOut[0]) f.close(dbOut[0])
+      cleanup(tmp)
+      return null
     }
+    return { db: dbOut[0], tmp }
   } catch (e) {
-    console.error('[winsqlite] query error:', e.message)
-    return emptyResult()
-  } finally {
+    console.error('[winsqlite] snapshot error:', e.message)
     if (tmp) cleanup(tmp)
+    return null
   }
 }
 
-module.exports = { readRows, available }
+function closeSnapshot(session) {
+  if (!session) return
+  const f = ensureLib()
+  try { if (f) f.close(session.db) } catch (e) { console.error('[winsqlite] close error:', e.message) }
+  cleanup(session.tmp)
+}
+
+function querySnapshot(session, sql, columnTypes, rowLimit = 100000) {
+  if (!session) return emptyResult()
+  try {
+    return collectRows(ensureLib(), session.db, sql, columnTypes, rowLimit)
+  } catch (e) {
+    console.error('[winsqlite] query error:', e.message)
+    return emptyResult()
+  }
+}
+
+function readRows(dbPath, sql, columnTypes, rowLimit) {
+  const session = openSnapshot(dbPath)
+  try {
+    return querySnapshot(session, sql, columnTypes, rowLimit)
+  } finally {
+    closeSnapshot(session)
+  }
+}
+
+module.exports = { readRows, openSnapshot, querySnapshot, closeSnapshot, available }

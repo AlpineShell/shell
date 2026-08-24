@@ -51,9 +51,9 @@ function handleMessage(message) {
   if (!entry) return
   pending.delete(message.id)
   clearTimeout(entry.timer)
-  if (message.ok && Array.isArray(message.rows)) {
+  if (message.ok) {
     consecutiveExits = 0
-    entry.resolve({ rows: toBuffers(message.rows), truncated: !!message.truncated })
+    entry.resolve(message)
   } else {
     entry.reject(new Error(message.reason || 'sqlite worker request failed'))
   }
@@ -112,11 +112,55 @@ function request(proc, payload) {
   })
 }
 
+function toRowsResult(message) {
+  if (!Array.isArray(message.rows)) throw new Error('sqlite worker returned no rows')
+  return { rows: toBuffers(message.rows), truncated: !!message.truncated }
+}
+
+function workerQuery(proc, sessionId) {
+  return async (sql, columnTypes, rowLimit) => toRowsResult(await request(proc, { op: 'query', sessionId, sql, columnTypes, rowLimit }))
+}
+
+function localQuery(session) {
+  return async (sql, columnTypes, rowLimit) => winsqlite.querySnapshot(session, sql, columnTypes, rowLimit)
+}
+
+async function runOnWorkerSnapshot(proc, dbPath, run) {
+  const opened = await request(proc, { op: 'open', dbPath })
+  if (typeof opened.sessionId !== 'number') throw new Error('sqlite worker opened no snapshot')
+  try {
+    return await run(workerQuery(proc, opened.sessionId))
+  } finally {
+    request(proc, { op: 'close', sessionId: opened.sessionId }).catch(() => {})
+  }
+}
+
+async function runOnLocalSnapshot(dbPath, run) {
+  const session = winsqlite.openSnapshot(dbPath)
+  try {
+    return await run(localQuery(session))
+  } finally {
+    winsqlite.closeSnapshot(session)
+  }
+}
+
+async function withSnapshot(dbPath, run) {
+  const proc = ensureWorker()
+  if (proc) {
+    try {
+      return await runOnWorkerSnapshot(proc, dbPath, run)
+    } catch (e) {
+      console.error('[sqliteWorker] falling back to an in-process snapshot:', (e && e.message) || e)
+    }
+  }
+  return runOnLocalSnapshot(dbPath, run)
+}
+
 async function readRows(dbPath, sql, columnTypes, rowLimit) {
   const proc = ensureWorker()
   if (proc) {
     try {
-      return await request(proc, { dbPath, sql, columnTypes, rowLimit })
+      return toRowsResult(await request(proc, { op: 'readRows', dbPath, sql, columnTypes, rowLimit }))
     } catch (e) {
       console.error('[sqliteWorker] falling back to an in-process read:', (e && e.message) || e)
     }
@@ -128,4 +172,4 @@ function warm() {
   ensureWorker()
 }
 
-module.exports = { readRows, warm, dispose: () => dropWorker('disposed') }
+module.exports = { readRows, withSnapshot, warm, dispose: () => dropWorker('disposed') }

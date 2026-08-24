@@ -1,7 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const sqliteWorker = require('./sqliteWorker')
-const { preferredIconIdsByHost, candidateIds, readIconBlobs, iconMapFromBlobs, warnIfTruncated, ICON_MAPPING_ROW_LIMIT, PREFERRED_ICON_PX } = require('./browserFavicons')
+const { faviconMapFromSnapshot, PREFERRED_ICON_PX } = require('./browserFavicons')
 
 const MAX_BOOKMARKS = 3000
 
@@ -110,16 +110,18 @@ function toDataUrl(buf) {
   return null
 }
 
+const FIREFOX_DIALECT = {
+  mappingSql: FIREFOX_ICON_MAPPING_SQL,
+  mappingLabel: 'moz_icons_to_pages',
+  bitmapSql: firefoxIconSql,
+  toIcon: toDataUrl,
+}
+
 async function readFaviconMap(profileDir, neededHosts) {
   if (!neededHosts || neededHosts.size === 0) return new Map()
   const faviconsDb = path.join(profileDir, 'favicons.sqlite')
   if (!fs.existsSync(faviconsDb)) return new Map()
-  const { rows, truncated } = await sqliteWorker.readRows(faviconsDb, FIREFOX_ICON_MAPPING_SQL, ['text', 'int'], ICON_MAPPING_ROW_LIMIT)
-  warnIfTruncated('moz_icons_to_pages', truncated)
-  const iconIdsByHost = preferredIconIdsByHost(rows, neededHosts)
-  if (iconIdsByHost.size === 0) return new Map()
-  const blobById = await readIconBlobs(faviconsDb, candidateIds(iconIdsByHost), firefoxIconSql)
-  return iconMapFromBlobs(iconIdsByHost, blobById, toDataUrl)
+  return sqliteWorker.withSnapshot(faviconsDb, (query) => faviconMapFromSnapshot(query, neededHosts, FIREFOX_DIALECT))
 }
 
 module.exports = { resolveProfileDir, readBookmarks, readFaviconMap }
