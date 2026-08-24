@@ -1,12 +1,18 @@
 const { app } = require('electron')
 const path = require('path')
-const { execSync, execFileSync, spawn } = require('child_process')
+const { execSync, execFileSync } = require('child_process')
 const fs = require('fs')
 const installer = require('./installer')
 const updater = require('./updater')
+const explorerShell = require('./explorerShell')
+const shellExclusivity = require('./shellExclusivity')
 
 const CURSOR_VARIANT = 'Bibata-Original-Ice'
 const REVERT_QUIT_DELAY_MS = 1200
+const REVERT_BLOCKED_MESSAGES = {
+  [shellExclusivity.REVERT_BLOCKED_IN_DEVELOPMENT]: 'Unavailable in development.',
+  [shellExclusivity.REVERT_BLOCKED_BY_UPDATE]: 'An update is in progress. Try again once it has finished.',
+}
 const XAML_START_MENU_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced'
 
 const CURSOR_REGISTRY_MAP = {
@@ -90,6 +96,7 @@ function getShellExePath() {
 
 function setAsShell() {
   installer.setShellOptOut(false)
+  installer.clearShellHandoff()
   const shellValue = getShellExePath()
   regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', shellValue)
 
@@ -119,18 +126,14 @@ function setStartup() {
   }
 }
 
-function ensureShellRegistration() {
-  if (!app.isPackaged) return null
-  if (installer.isShellOptedOut()) return null
-  if (hasGpoShellOverride()) return null
+function ensureShellRegistration(gpoBlocked) {
+  if (!app.isPackaged) return
+  if (installer.isShellOptedOut()) return
+  if (gpoBlocked) return
 
   const desiredShell = getShellExePath()
-  let currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
-  if (currentShell !== desiredShell) {
-    try {
-      regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', desiredShell)
-      currentShell = desiredShell
-    } catch {}
+  if (regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell') !== desiredShell) {
+    regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', desiredShell)
   }
 
   const desiredRun = `"${installer.getInstalledExePath()}"`
@@ -142,8 +145,6 @@ function ensureShellRegistration() {
   if (regQuery(XAML_START_MENU_KEY, 'EnableXamlStartMenu') === null) {
     try { regAdd(XAML_START_MENU_KEY, 'EnableXamlStartMenu', '0', 'REG_DWORD') } catch {}
   }
-
-  return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
 }
 
 function hasGpoShellOverride() {
@@ -151,29 +152,68 @@ function hasGpoShellOverride() {
   return policyShell !== null
 }
 
-function verifyShellWrite() {
+function isShellRegisteredToAlpine() {
   const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
   return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
 }
 
-function isDefaultShell() {
-  const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
-  return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
+function lazyContext(sources) {
+  const context = {}
+  for (const [key, compute] of Object.entries(sources)) {
+    let cached = null
+    let evaluated = false
+    Object.defineProperty(context, key, {
+      enumerable: true,
+      get() {
+        if (!evaluated) {
+          cached = compute()
+          evaluated = true
+        }
+        return cached
+      },
+    })
+  }
+  return context
 }
 
-function killExplorer() {
-  try {
-    execSync('taskkill /f /im explorer.exe', { windowsHide: true })
-    return true
-  } catch {
+function isShellHandoffInEffect() {
+  if (!installer.hasShellHandoff()) return false
+  if (explorerShell.shellHostedByExplorer() === false) {
+    installer.clearShellHandoff()
     return false
   }
+  return true
 }
 
-function restartExplorer() {
+function shellActivationContext() {
+  return lazyContext({
+    packaged: () => app.isPackaged,
+    forceTakeover: () => process.env.ALPINE_PREVIEW_SHELL === '1',
+    firstRun: isFirstRun,
+    optedOut: () => installer.isShellOptedOut(),
+    updateInProgress: () => installer.isUpdateHandoffActive(),
+    handedToExplorer: isShellHandoffInEffect,
+    gpoBlocked: hasGpoShellOverride,
+    shellRegisteredToAlpine: isShellRegisteredToAlpine,
+  })
+}
+
+function applyShellRegistration(context) {
   try {
-    spawn('explorer.exe', [], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
-  } catch (e) {}
+    ensureShellRegistration(context.gpoBlocked)
+  } catch (e) {
+    console.error('[setup] Could not register Alpine Shell as the Windows shell:', e.message)
+    return false
+  }
+  return context.shellRegisteredToAlpine || isShellRegisteredToAlpine()
+}
+
+function takeOverFromExplorer() {
+  const context = shellActivationContext()
+  const plan = shellExclusivity.planShellActivation(context)
+  const registrationVerified = shellExclusivity.requiresShellRegistration(plan) && applyShellRegistration(context)
+
+  return { actingAsShell: plan.actingAsShell && shellExclusivity.isRegistrationSatisfied(plan, registrationVerified) }
 }
 
 function getSetupStatus() {
@@ -205,18 +245,49 @@ function markSetupComplete() {
 }
 
 let broadcast = null
+let shellShutdown = null
 const yield_ = () => new Promise(r => setTimeout(r, 50))
+
+function setShellShutdown(shutdown) {
+  shellShutdown = shutdown
+}
+
+function exitShell() {
+  if (shellShutdown) shellShutdown()
+  else app.exit(0)
+}
 
 function progress(step) {
   if (broadcast) broadcast('setup/progress', step)
 }
 
-function runRevert(action) {
-  if (!app.isPackaged) return { success: false, gpoBlocked: false, error: 'Unavailable in development.', leftBehind: [] }
-  if (updater.isUpdatePending()) return { success: false, gpoBlocked: false, error: 'An update is in progress. Try again once it has finished.', leftBehind: [] }
+function confirmHandoffStillRunning(handoff) {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(installer.isRevertHelperRunning(handoff)), REVERT_QUIT_DELAY_MS)
+  })
+}
 
-  const result = action()
-  if (result.success) setTimeout(() => app.quit(), REVERT_QUIT_DELAY_MS)
+function exitShellAfterReply() {
+  setTimeout(exitShell, 0)
+}
+
+async function runRevert(action) {
+  const blockedReason = shellExclusivity.revertBlockedReason({
+    packaged: app.isPackaged,
+    updatePending: updater.isUpdatePending() || installer.isUpdateHandoffActive(),
+  })
+  if (blockedReason) return { success: false, gpoBlocked: false, error: REVERT_BLOCKED_MESSAGES[blockedReason], leftBehind: [] }
+
+  const started = action()
+  const replacementConfirmed = started.success && await confirmHandoffStillRunning(started.handoff)
+  const plan = shellExclusivity.planShellRevert({
+    shellHandedToExplorer: started.success,
+    replacementConfirmed,
+  })
+  if (plan.steps.includes(shellExclusivity.EXIT_ALPINE)) exitShellAfterReply()
+  else if (started.success) console.error('[setup] The hand-back helper is no longer running — keeping Alpine Shell on screen')
+
+  const result = shellExclusivity.settleShellRevert(started, replacementConfirmed)
   return {
     success: result.success,
     gpoBlocked: hasGpoShellOverride(),
@@ -261,7 +332,7 @@ module.exports = {
           }
           setAsShell()
           setStartup()
-          results.shell = verifyShellWrite()
+          results.shell = isShellRegisteredToAlpine()
           results.startup = true
           if (!results.shell) {
             console.error('[setup] Shell registry write did not persist — possible policy or permission issue')
@@ -317,15 +388,13 @@ module.exports = {
     'setup/set-shell': () => {
       setAsShell()
       setStartup()
-      return { success: verifyShellWrite() }
+      return { success: isShellRegisteredToAlpine() }
     },
   },
 
   isFirstRun,
-  isDefaultShell,
-  ensureShellRegistration,
-  killExplorer,
-  restartExplorer,
+  takeOverFromExplorer,
+  setShellShutdown,
 
   start(b) {
     broadcast = b

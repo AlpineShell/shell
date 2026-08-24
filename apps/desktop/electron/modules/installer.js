@@ -6,12 +6,19 @@ const originalFs = require('original-fs')
 const crypto = require('crypto')
 const os = require('os')
 const revertScript = require('./revertScript')
+const shellExclusivity = require('./shellExclusivity')
 
 const PRODUCT_NAME = 'Alpine Shell'
 const INSTALL_DIR_NAME = 'alpine-shell'
 const WINLOGON_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
 const SHELL_OPT_OUT_FILE = '.shell-opt-out'
+const SHELL_HANDOFF_FILE = '.shell-handoff'
+const UPDATE_HANDOFF_FILE = '.update-in-progress'
+const UPDATE_HANDOFF_MAX_AGE_MS = 15 * 60 * 1000
+const SHELL_HANDOFF_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const SHELL_REVERT_FAILED = 'Could not hand the Windows shell back to Explorer.'
+const SHELL_HANDOFF_HELPER_FAILED = 'Windows Explorer could not be brought back, so nothing was changed.'
+const SHELL_HANDOFF_HELPER_MISSING = 'Windows Explorer is registered as your shell, but Alpine Shell could not close itself. Restart Windows to finish.'
 
 const CURSOR_REGISTRY_NAMES = [
   'Arrow', 'Help', 'AppStarting', 'Wait', 'Crosshair', 'IBeam',
@@ -100,19 +107,69 @@ function isShellRevertedToExplorer() {
   return currentShell !== null && currentShell.toLowerCase().includes('explorer.exe')
 }
 
-function getShellOptOutPath() {
-  return path.join(app.getPath('userData'), SHELL_OPT_OUT_FILE)
+function userDataFile(name) {
+  return path.join(app.getPath('userData'), name)
+}
+
+function writeMarker(markerPath) {
+  try {
+    fs.writeFileSync(markerPath, new Date().toISOString())
+    return true
+  } catch (e) {
+    console.error('[installer] Could not write marker:', e.message)
+    return false
+  }
+}
+
+function clearMarker(markerPath) {
+  try { fs.rmSync(markerPath, { force: true }) } catch {}
+}
+
+function markerAgeMs(markerPath) {
+  try {
+    return Date.now() - fs.statSync(markerPath).mtimeMs
+  } catch {
+    return null
+  }
+}
+
+function isMarkerActive(markerPath, maxAgeMs, systemUptimeMs = null) {
+  const plan = shellExclusivity.planMarkerAge({ ageMs: markerAgeMs(markerPath), maxAgeMs, systemUptimeMs })
+  if (plan.restamp) writeMarker(markerPath)
+  return plan.active
 }
 
 function isShellOptedOut() {
-  return fs.existsSync(getShellOptOutPath())
+  return fs.existsSync(userDataFile(SHELL_OPT_OUT_FILE))
 }
 
 function setShellOptOut(optedOut) {
-  try {
-    if (optedOut) fs.writeFileSync(getShellOptOutPath(), new Date().toISOString())
-    else fs.rmSync(getShellOptOutPath(), { force: true })
-  } catch {}
+  if (optedOut) writeMarker(userDataFile(SHELL_OPT_OUT_FILE))
+  else clearMarker(userDataFile(SHELL_OPT_OUT_FILE))
+}
+
+function hasShellHandoff() {
+  return isMarkerActive(userDataFile(SHELL_HANDOFF_FILE), SHELL_HANDOFF_MAX_AGE_MS)
+}
+
+function beginShellHandoff() {
+  return writeMarker(userDataFile(SHELL_HANDOFF_FILE))
+}
+
+function clearShellHandoff() {
+  clearMarker(userDataFile(SHELL_HANDOFF_FILE))
+}
+
+function beginUpdateHandoff() {
+  return writeMarker(userDataFile(UPDATE_HANDOFF_FILE))
+}
+
+function clearUpdateHandoff() {
+  clearMarker(userDataFile(UPDATE_HANDOFF_FILE))
+}
+
+function isUpdateHandoffActive() {
+  return isMarkerActive(userDataFile(UPDATE_HANDOFF_FILE), UPDATE_HANDOFF_MAX_AGE_MS, os.uptime() * 1000)
 }
 
 function writeRevertHelper(scriptName, script) {
@@ -122,18 +179,45 @@ function writeRevertHelper(scriptName, script) {
 }
 
 function launchRevertHelper(scriptPath, env) {
+  const helper = { pid: null, running: false }
   const child = spawn('cmd', ['/c', scriptPath], {
     detached: true,
     stdio: 'ignore',
     windowsHide: true,
     env: { ...process.env, ...env },
   })
-  child.on('error', (e) => console.error('[installer] Revert helper failed to start:', e.message))
+  child.on('error', (e) => {
+    helper.running = false
+    console.error('[installer] Revert helper failed to start:', e.message)
+  })
+  child.on('exit', () => { helper.running = false })
   child.unref()
+  if (!child.pid) return null
+  helper.pid = child.pid
+  helper.running = true
+  return helper
+}
+
+function isRevertHelperRunning(helper) {
+  return Boolean(helper && helper.running)
 }
 
 function getProcessImageName() {
   return path.basename(process.execPath)
+}
+
+function restoreShellRegistration() {
+  try { regAdd(WINLOGON_KEY, 'Shell', getInstalledExePath()) } catch {}
+}
+
+function undoShellHandoff() {
+  restoreShellRegistration()
+  clearShellHandoff()
+  return { success: false, error: SHELL_HANDOFF_HELPER_FAILED }
+}
+
+function reportShellStillOnScreen() {
+  return { success: false, error: SHELL_HANDOFF_HELPER_MISSING }
 }
 
 function revertShellTemporarily() {
@@ -145,12 +229,20 @@ function revertShellTemporarily() {
     })
     const scriptPath = writeRevertHelper('alpine_revert_temporary.bat', helper.script)
 
+    if (!beginShellHandoff()) {
+      console.error('[installer] Could not mark the shell hand-off — leaving the shell registration alone')
+      return { success: false, error: SHELL_REVERT_FAILED }
+    }
     regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
-    if (!isShellRevertedToExplorer()) return { success: false, error: SHELL_REVERT_FAILED }
+    if (!isShellRevertedToExplorer()) {
+      clearShellHandoff()
+      return { success: false, error: SHELL_REVERT_FAILED }
+    }
     try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
 
-    launchRevertHelper(scriptPath, helper.env)
-    return { success: true, error: null }
+    const handoff = launchRevertHelper(scriptPath, helper.env)
+    if (!handoff) return undoShellHandoff()
+    return { success: true, error: null, handoff, abandonHandoff: undoShellHandoff }
   } catch (e) {
     return { success: false, error: e.message }
   }
@@ -168,8 +260,9 @@ function revertShellPermanently() {
     revertShell()
     restoreDefaultCursors()
 
-    launchRevertHelper(scriptPath, helper.env)
-    return { success: true, error: null }
+    const handoff = launchRevertHelper(scriptPath, helper.env)
+    if (!handoff) return reportShellStillOnScreen()
+    return { success: true, error: null, handoff, abandonHandoff: reportShellStillOnScreen }
   } catch (e) {
     return { success: false, error: e.message }
   }
@@ -277,8 +370,9 @@ function uninstall() {
       try { regDeleteKey('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\AlpineShell') } catch {}
     }
 
-    launchRevertHelper(scriptPath, helper.env)
-    return { success: true, error: null, leftBehind: helper.skippedDirs }
+    const handoff = launchRevertHelper(scriptPath, helper.env)
+    if (!handoff) return { ...reportShellStillOnScreen(), leftBehind: helper.skippedDirs }
+    return { success: true, error: null, leftBehind: helper.skippedDirs, handoff, abandonHandoff: reportShellStillOnScreen }
   } catch (e) {
     return { success: false, error: e.message, leftBehind: [] }
   }
@@ -396,11 +490,16 @@ function startBrandedUpdate(installerPath, version) {
   const updaterExe = ensureUpdaterExe()
   if (!updaterExe) return false
   const logoPath = path.join(path.dirname(getUpdaterSourcePath()), 'alpineWordmark.png')
+  if (!beginUpdateHandoff()) {
+    console.error('[installer] Could not mark the update in progress — leaving the shell registration alone')
+    return false
+  }
   try {
-    regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', 'explorer.exe')
+    regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
     spawn(updaterExe, [installerPath, getInstalledExePath(), version || '', fs.existsSync(logoPath) ? logoPath : ''], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
     return true
   } catch (e) {
+    clearUpdateHandoff()
     console.error('[installer] Failed to start branded update:', e.message)
     return false
   }
@@ -424,6 +523,11 @@ module.exports = {
   revertShellPermanently,
   isShellOptedOut,
   setShellOptOut,
+  hasShellHandoff,
+  clearShellHandoff,
+  isUpdateHandoffActive,
+  clearUpdateHandoff,
+  isRevertHelperRunning,
   relaunchFromInstalled,
   startBrandedUpdate,
   ensureUpdaterExe,

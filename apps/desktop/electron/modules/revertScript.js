@@ -35,13 +35,21 @@ function buildWaitForProcessExit() {
   ]
 }
 
-function buildEnsureExplorerRunning() {
+function buildForceProcessExit() {
   return [
-    'tasklist /nh /fi "imagename eq explorer.exe" | find /i "explorer.exe" >nul',
-    'if not errorlevel 1 goto alpine_explorer_running',
+    `if not defined ${STILL_RUNNING_VAR} goto alpine_force_done`,
+    `taskkill /f /im "%${IMAGE_VAR}%" >nul 2>&1`,
+    buildDelaySeconds(PROCESS_EXIT_SETTLE_SECONDS),
+    `tasklist /nh /fi "imagename eq %${IMAGE_VAR}%" | find /i "%${IMAGE_VAR}%" >nul`,
+    `if errorlevel 1 set "${STILL_RUNNING_VAR}="`,
+    ':alpine_force_done',
+  ]
+}
+
+function buildStartExplorer() {
+  return [
     'start "" explorer.exe',
     buildDelaySeconds(EXPLORER_START_SETTLE_SECONDS),
-    ':alpine_explorer_running',
   ]
 }
 
@@ -85,8 +93,9 @@ function buildScript(lines) {
 function buildHandBackToExplorer() {
   return [
     ...buildWaitForProcessExit(),
+    ...buildForceProcessExit(),
     buildDelaySeconds(PROCESS_EXIT_SETTLE_SECONDS),
-    ...buildEnsureExplorerRunning(),
+    ...buildStartExplorer(),
   ]
 }
 
@@ -94,6 +103,7 @@ function buildTemporaryRevertScript({ processImageName, shellKeyPath, shellExePa
   return {
     script: buildScript([
       ...buildHandBackToExplorer(),
+      buildDelaySeconds(EXPLORER_START_SETTLE_SECONDS),
       `reg add "%${SHELL_KEY_VAR}%" /v Shell /t REG_SZ /d "%${SHELL_EXE_VAR}%" /f >nul`,
     ]),
     env: {
@@ -143,7 +153,8 @@ function buildUninstallScript({ processImageName, uninstallerPath, installDir, d
 module.exports = {
   buildDelaySeconds,
   buildWaitForProcessExit,
-  buildEnsureExplorerRunning,
+  buildForceProcessExit,
+  buildStartExplorer,
   isSafeDeletablePath,
   buildRemoveDirectory,
   buildTemporaryRevertScript,

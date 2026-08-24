@@ -75,8 +75,6 @@ const {
 
 const isDev = !app.isPackaged
 const BASE_URL = isDev ? 'http://127.0.0.1:5173' : null
-const shouldTakeOverExplorer = !isDev || process.env.ALPINE_KILL_EXPLORER === '1'
-let killedExplorer = false
 
 const UPDATE_READY_TIMEOUT_MS = 10000
 const settledTopBars = new Set()
@@ -764,6 +762,8 @@ app.whenReady().then(async () => {
 
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
 
+  setup.setShellShutdown(gracefulShutdown)
+
   launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
 
@@ -871,15 +871,11 @@ function signalShellReadyForUpdate() {
 }
 
 function startShellMode() {
-  let isAlpineShell = null
-  if (!setup.isFirstRun()) isAlpineShell = setup.ensureShellRegistration()
+  if (isUpdateRestart()) installer.clearUpdateHandoff()
 
-  if (shouldTakeOverExplorer && !installer.isShellOptedOut() && !(isAlpineShell ?? setup.isDefaultShell())) {
-    killedExplorer = setup.killExplorer()
-  }
+  const takeover = setup.takeOverFromExplorer()
 
-  const actingAsShell = killedExplorer || (isAlpineShell ?? setup.isDefaultShell())
-  if (shellWindow && actingAsShell) shellWindow.register()
+  if (shellWindow && takeover.actingAsShell) shellWindow.register()
 
   if (altTab) altTab.setShells(shells)
   if (altTab && altTab.setExposedOwnWindows) {
@@ -991,20 +987,12 @@ function startShellMode() {
 app.on('will-quit', () => {
   unregisterAll()
   if (shellWindow) shellWindow.destroy()
-  restoreExplorerIfKilled()
 })
-
-function restoreExplorerIfKilled() {
-  if (!killedExplorer) return
-  killedExplorer = false
-  try { setup.restartExplorer() } catch {}
-}
 
 function gracefulShutdown() {
   try { unregisterAll() } catch {}
   try { if (shellWindow) shellWindow.destroy() } catch {}
   try { frecency.flush() } catch {}
-  restoreExplorerIfKilled()
   app.exit(0)
 }
 
@@ -1015,10 +1003,8 @@ process.on('SIGHUP', gracefulShutdown)
 
 process.on('uncaughtException', (err) => {
   console.error('[main] Uncaught exception:', err)
-  restoreExplorerIfKilled()
 })
 
 process.on('unhandledRejection', (err) => {
   console.error('[main] Unhandled rejection:', err)
-  restoreExplorerIfKilled()
 })
