@@ -52,6 +52,9 @@ const DeleteObject = gdi32.func('__stdcall', 'DeleteObject', 'int', ['uintptr_t'
 const DeleteDC = gdi32.func('__stdcall', 'DeleteDC', 'int', ['uintptr_t'])
 const GetDIBits = gdi32.func('__stdcall', 'GetDIBits', 'int', ['uintptr_t', 'uintptr_t', 'uint32', 'uint32', 'void *', 'void *', 'uint32'])
 const BitBlt = gdi32.func('__stdcall', 'BitBlt', 'int', ['uintptr_t', 'int', 'int', 'int', 'int', 'uintptr_t', 'int', 'int', 'uint32'])
+const StretchBlt = gdi32.func('__stdcall', 'StretchBlt', 'int', ['uintptr_t', 'int', 'int', 'int', 'int', 'uintptr_t', 'int', 'int', 'int', 'int', 'uint32'])
+const SetStretchBltMode = gdi32.func('__stdcall', 'SetStretchBltMode', 'int', ['uintptr_t', 'int'])
+const SetBrushOrgEx = gdi32.func('__stdcall', 'SetBrushOrgEx', 'int', ['uintptr_t', 'int', 'int', 'void *'])
 
 const RtlMoveMemory = kernel32.func('__stdcall', 'RtlMoveMemory', 'void', ['void *', 'uintptr_t', 'uintptr_t'])
 const OpenProcess = kernel32.func('__stdcall', 'OpenProcess', 'uintptr_t', ['uint32', 'int', 'uint32'])
@@ -85,12 +88,14 @@ const VK_MENU = 0x12
 const VK_CAPITAL = 0x14
 const SW_RESTORE = 9
 const SRCCOPY = 0x00CC0020
+const HALFTONE = 4
 const PW_RENDERFULLCONTENT = 2
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 const DWMWA_CLOAKED = 14
 const GWL_EXSTYLE = -20
 const WS_EX_TOOLWINDOW = 0x80
 const EVENT_SYSTEM_FOREGROUND = 0x0003
+const EVENT_SYSTEM_MINIMIZESTART = 0x0016
 const WINEVENT_OUTOFCONTEXT = 0x0000
 const WINEVENT_SKIPOWNPROCESS = 0x0002
 const OBJID_WINDOW = 0
@@ -105,6 +110,13 @@ let shellsRef = null
 let exposedOwnWindowsProvider = null
 let hookHandle = null
 let hookCallbackPointer = null
+
+const LOW_LEVEL_HOOKS_TIMEOUT_MS = 300
+const HOOK_SLOW_RETURN_MS = 200
+const HOOK_REINSTALL_MIN_INTERVAL_MS = 5000
+let loggedWorstHookReturnMs = 0
+let hookReinstallScheduled = false
+let lastHookReinstallAt = 0
 let screenshotCallback = null
 let screenshotCancelCallback = null
 
@@ -252,40 +264,53 @@ function captureWindowThumbnail(hwnd) {
   const srcHeight = rectBuf.readInt32LE(12) - top
   if (srcWidth <= 0 || srcHeight <= 0) return getCachedThumbnail(hwnd)
 
+  const scale = Math.min(THUMBNAIL_MAX_WIDTH / srcWidth, THUMBNAIL_MAX_HEIGHT / srcHeight, 1.0)
+  const thumbWidth = Math.max(1, Math.round(srcWidth * scale))
+  const thumbHeight = Math.max(1, Math.round(srcHeight * scale))
+
   const screenDC = GetDC(0)
   if (!screenDC) return getCachedThumbnail(hwnd)
   const memDC = CreateCompatibleDC(screenDC)
   const bmp = CreateCompatibleBitmap(screenDC, srcWidth, srcHeight)
   const oldBmp = SelectObject(memDC, bmp)
+  const thumbDC = CreateCompatibleDC(screenDC)
+  const thumbBmp = CreateCompatibleBitmap(screenDC, thumbWidth, thumbHeight)
+  const oldThumbBmp = SelectObject(thumbDC, thumbBmp)
 
   try {
     let captured = PrintWindow(hwnd, memDC, PW_RENDERFULLCONTENT)
     if (!captured) captured = PrintWindow(hwnd, memDC, 0)
     if (!captured) BitBlt(memDC, 0, 0, srcWidth, srcHeight, screenDC, left, top, SRCCOPY)
 
+    SetStretchBltMode(thumbDC, HALFTONE)
+    SetBrushOrgEx(thumbDC, 0, 0, null)
+    if (!StretchBlt(thumbDC, 0, 0, thumbWidth, thumbHeight, memDC, 0, 0, srcWidth, srcHeight, SRCCOPY)) {
+      return getCachedThumbnail(hwnd)
+    }
+
     const biHeader = Buffer.alloc(40)
     biHeader.writeUInt32LE(40, 0)
-    biHeader.writeInt32LE(srcWidth, 4)
-    biHeader.writeInt32LE(-srcHeight, 8)
+    biHeader.writeInt32LE(thumbWidth, 4)
+    biHeader.writeInt32LE(-thumbHeight, 8)
     biHeader.writeUInt16LE(1, 12)
     biHeader.writeUInt16LE(32, 14)
 
-    const pixelData = Buffer.alloc(srcWidth * srcHeight * 4)
-    if (!GetDIBits(memDC, bmp, 0, srcHeight, pixelData, biHeader, 0)) return getCachedThumbnail(hwnd)
+    const pixelData = Buffer.alloc(thumbWidth * thumbHeight * 4)
+    if (!GetDIBits(thumbDC, thumbBmp, 0, thumbHeight, pixelData, biHeader, 0)) return getCachedThumbnail(hwnd)
 
     for (let i = 3; i < pixelData.length; i += 4) {
       pixelData[i] = 255
     }
 
-    const img = nativeImage.createFromBitmap(pixelData, { width: srcWidth, height: srcHeight })
-    const scale = Math.min(THUMBNAIL_MAX_WIDTH / srcWidth, THUMBNAIL_MAX_HEIGHT / srcHeight, 1.0)
-    const resized = img.resize({ width: Math.round(srcWidth * scale), height: Math.round(srcHeight * scale), quality: 'good' })
-    const dataUrl = resized.toDataURL()
+    const dataUrl = nativeImage.createFromBitmap(pixelData, { width: thumbWidth, height: thumbHeight }).toDataURL()
     thumbnailCache.set(hwnd, { url: dataUrl, ts: Date.now() })
     return dataUrl
   } catch (_) {
     return getCachedThumbnail(hwnd)
   } finally {
+    SelectObject(thumbDC, oldThumbBmp)
+    DeleteObject(thumbBmp)
+    DeleteDC(thumbDC)
     SelectObject(memDC, oldBmp)
     DeleteObject(bmp)
     DeleteDC(memDC)
@@ -371,7 +396,8 @@ let lastForegroundHwnd = 0
 let warmSweepTimer = null
 let foregroundCaptureTimer = null
 let foregroundHookHandle = null
-let foregroundHookCallback = null
+let minimizeHookHandle = null
+let windowStateHookCallback = null
 
 function toHwndNum(value) {
   return typeof value === 'bigint' ? Number(value) : value
@@ -388,9 +414,13 @@ function warmCapture(hwnd) {
   }
 }
 
-function onForegroundEvent(_hook, _event, _hwnd, idObject, idChild) {
+function onWindowStateEvent(_hook, event, hwnd, idObject, idChild) {
   try {
     if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
+    if (event === EVENT_SYSTEM_MINIMIZESTART) {
+      warmCapture(toHwndNum(hwnd))
+      return
+    }
     if (emojiCaptureActive) {
       if (emojiCaptureForeground) {
         const current = toHwndNum(GetForegroundWindow())
@@ -403,46 +433,57 @@ function onForegroundEvent(_hook, _event, _hwnd, idObject, idChild) {
     if (switcherActive) return
     const fg = toHwndNum(GetForegroundWindow())
     if (!fg || fg === lastForegroundHwnd) return
+    const outgoing = lastForegroundHwnd
     lastForegroundHwnd = fg
     if (foregroundCaptureTimer) clearTimeout(foregroundCaptureTimer)
-    foregroundCaptureTimer = setTimeout(() => warmCapture(fg), 250)
+    foregroundCaptureTimer = setTimeout(() => warmCapture(outgoing), 250)
   } catch (e) {
-    console.error('[altTab] foreground event error:', e.message)
+    console.error('[altTab] window state event error:', e.message)
   }
 }
 
-function installForegroundHook() {
-  if (foregroundHookHandle) return
+function installWindowStateHooks() {
+  if (windowStateHookCallback) return
   try {
-    foregroundHookCallback = koffi.register(onForegroundEvent, koffi.pointer(ALTTAB_WIN_EVENT_PROC))
+    windowStateHookCallback = koffi.register(onWindowStateEvent, koffi.pointer(ALTTAB_WIN_EVENT_PROC))
     foregroundHookHandle = SetWinEventHook(
       EVENT_SYSTEM_FOREGROUND,
       EVENT_SYSTEM_FOREGROUND,
       0,
-      foregroundHookCallback,
+      windowStateHookCallback,
       0,
       0,
       WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
     )
-    if (!toHwndNum(foregroundHookHandle)) {
-      console.error('[altTab] Failed to install foreground win event hook')
-      foregroundHookHandle = null
-      try { koffi.unregister(foregroundHookCallback) } catch (_) {}
-      foregroundHookCallback = null
-    }
+    minimizeHookHandle = SetWinEventHook(
+      EVENT_SYSTEM_MINIMIZESTART,
+      EVENT_SYSTEM_MINIMIZESTART,
+      0,
+      windowStateHookCallback,
+      0,
+      0,
+      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+    )
+    if (!foregroundHookHandle) console.error('[altTab] Failed to install foreground win event hook')
+    if (!minimizeHookHandle) console.error('[altTab] Failed to install minimize win event hook')
+    if (!foregroundHookHandle && !minimizeHookHandle) uninstallWindowStateHooks()
   } catch (e) {
-    console.error('[altTab] foreground hook install error:', e.message)
+    console.error('[altTab] window state hook install error:', e.message)
   }
 }
 
-function uninstallForegroundHook() {
+function uninstallWindowStateHooks() {
   if (foregroundHookHandle) {
     try { UnhookWinEvent(foregroundHookHandle) } catch (_) {}
     foregroundHookHandle = null
   }
-  if (foregroundHookCallback) {
-    try { koffi.unregister(foregroundHookCallback) } catch (_) {}
-    foregroundHookCallback = null
+  if (minimizeHookHandle) {
+    try { UnhookWinEvent(minimizeHookHandle) } catch (_) {}
+    minimizeHookHandle = null
+  }
+  if (windowStateHookCallback) {
+    try { koffi.unregister(windowStateHookCallback) } catch (_) {}
+    windowStateHookCallback = null
   }
 }
 
@@ -462,20 +503,19 @@ function warmSweep() {
       captureWindowThumbnail(hwnd)
       if (++fills >= MAX_FILLS_PER_SWEEP) break
     }
-    warmCapture(toHwndNum(GetForegroundWindow()))
   } catch (e) {
     console.error('[altTab] warm sweep error:', e.message)
   }
 }
 
 function startThumbnailWarmer() {
-  installForegroundHook()
+  installWindowStateHooks()
   warmSweepTimer = setInterval(warmSweep, THUMBNAIL_REFRESH_MS)
   setTimeout(warmSweep, 1500)
 }
 
 function stopThumbnailWarmer() {
-  uninstallForegroundHook()
+  uninstallWindowStateHooks()
   if (warmSweepTimer) clearInterval(warmSweepTimer)
   if (foregroundCaptureTimer) clearTimeout(foregroundCaptureTimer)
   warmSweepTimer = null
@@ -696,7 +736,7 @@ function handleEmojiCaptureKey(vkCode, scanCode, isKeyDown, isKeyUp) {
 const LLKHF_INJECTED = 0x10
 const KEYEVENTF_KEYUP = 0x0002
 
-function hookCallback(nCode, wParam, lParam) {
+function dispatchKeyEvent(nCode, wParam, lParam) {
   try {
     if (nCode < 0) return CallNextHookEx(hookHandle, nCode, wParam, lParam)
 
@@ -834,26 +874,75 @@ function hookCallback(nCode, wParam, lParam) {
   return CallNextHookEx(hookHandle, nCode, wParam, lParam)
 }
 
-function installHook() {
-  hookCallbackPointer = koffi.register(hookCallback, koffi.pointer(LowLevelKeyboardProc))
-  hookHandle = SetWindowsHookExW(WH_KEYBOARD_LL, hookCallbackPointer, 0, 0)
-  const h = typeof hookHandle === 'bigint' ? Number(hookHandle) : hookHandle
-  if (!h) {
-    console.error('[altTab] Failed to install keyboard hook')
-  } else {
-    console.log('[altTab] Keyboard hook installed, handle:', h)
+function hookCallback(nCode, wParam, lParam) {
+  const startedAt = process.hrtime.bigint()
+  try {
+    return dispatchKeyEvent(nCode, wParam, lParam)
+  } catch (e) {
+    console.error('[altTab] keyboard hook dispatch error:', e && e.message)
+    return 0
+  } finally {
+    recordHookReturnTime(startedAt)
   }
 }
 
+function recordHookReturnTime(startedAt) {
+  const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1e6
+  if (elapsedMs < HOOK_SLOW_RETURN_MS) return
+  if (elapsedMs > loggedWorstHookReturnMs) {
+    loggedWorstHookReturnMs = elapsedMs
+    console.warn(`[altTab] keyboard hook took ${elapsedMs.toFixed(1)} ms to return (LowLevelHooksTimeout default is ${LOW_LEVEL_HOOKS_TIMEOUT_MS} ms)`)
+  }
+  if (elapsedMs >= LOW_LEVEL_HOOKS_TIMEOUT_MS) scheduleHookReinstall()
+}
+
+function scheduleHookReinstall() {
+  if (hookReinstallScheduled) return
+  if (Date.now() - lastHookReinstallAt < HOOK_REINSTALL_MIN_INTERVAL_MS) return
+  hookReinstallScheduled = true
+  setImmediate(() => {
+    hookReinstallScheduled = false
+    if (!hookHandle) return
+    lastHookReinstallAt = Date.now()
+    if (swapKeyboardHook()) console.warn('[altTab] keyboard hook reinstalled after a timeout-length return')
+    else console.error('[altTab] keyboard hook reinstall failed, keeping the existing hook')
+  })
+}
+
+function releaseKeyboardHook(handle, callbackPointer) {
+  if (handle) {
+    try { UnhookWindowsHookEx(handle) } catch (_) {}
+  }
+  if (callbackPointer) {
+    try { koffi.unregister(callbackPointer) } catch (_) {}
+  }
+}
+
+function swapKeyboardHook() {
+  const retiredHandle = hookHandle
+  const retiredCallbackPointer = hookCallbackPointer
+  hookCallbackPointer = koffi.register(hookCallback, koffi.pointer(LowLevelKeyboardProc))
+  hookHandle = SetWindowsHookExW(WH_KEYBOARD_LL, hookCallbackPointer, 0, 0)
+  if (!hookHandle) {
+    releaseKeyboardHook(null, hookCallbackPointer)
+    hookHandle = retiredHandle
+    hookCallbackPointer = retiredCallbackPointer
+    return false
+  }
+  releaseKeyboardHook(retiredHandle, retiredCallbackPointer)
+  loggedWorstHookReturnMs = 0
+  return true
+}
+
+function installHook() {
+  if (swapKeyboardHook()) console.log('[altTab] Keyboard hook installed')
+  else console.error('[altTab] Failed to install keyboard hook')
+}
+
 function uninstallHook() {
-  if (hookHandle) {
-    UnhookWindowsHookEx(hookHandle)
-    hookHandle = null
-  }
-  if (hookCallbackPointer) {
-    koffi.unregister(hookCallbackPointer)
-    hookCallbackPointer = null
-  }
+  releaseKeyboardHook(hookHandle, hookCallbackPointer)
+  hookHandle = null
+  hookCallbackPointer = null
 }
 
 module.exports = {
