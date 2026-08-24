@@ -73,6 +73,10 @@
       "!electron/**/*.test.js",
       "!electron/scripts/**"
     ],
+    "asarUnpack": [
+      "electron/shellExecuteWorker.js",
+      "electron/waitForHandleWorker.js"
+    ],
     "extraResources": [
       {
         "from": "public/cursor",

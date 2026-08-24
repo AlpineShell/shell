@@ -164,7 +164,7 @@ function launchEntry(entry) {
     if (entry.isShortcut) {
       shell.openPath(entry.command)
     } else {
-      shellExecuteCommandLine(entry.command)
+      shellExecuteCommandLine(entry.command).catch(() => {})
     }
 
     console.log(`[autostart] Launched: ${entry.name}`)

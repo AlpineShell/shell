@@ -1,75 +1,118 @@
 const fs = require('fs')
+const path = require('path')
+const { execFile } = require('child_process')
 
-const SEE_MASK_FLAG_NO_UI = 0x00000400
-const SW_SHOWNORMAL = 1
+const WORKER_ENTRY = path.join(__dirname, 'shellExecuteWorker.js')
+const REQUEST_TIMEOUT_MS = 15000
 
-let bindings = null
-let bindingsUnavailable = false
+let worker = null
+let workerReady = false
+let workerUnavailable = false
+let nextRequestId = 0
+const pendingRequests = new Map()
 
-function loadBindings() {
-  if (bindings || bindingsUnavailable) return bindings
-  try {
-    const koffi = require('koffi')
-    const shell32 = koffi.load('shell32.dll')
-    const kernel32 = koffi.load('kernel32.dll')
-    const execInfo = koffi.struct('AlpineShellExecuteInfoW', {
-      cbSize: 'uint32',
-      fMask: 'uint32',
-      hwnd: 'uintptr_t',
-      lpVerb: 'str16',
-      lpFile: 'str16',
-      lpParameters: 'str16',
-      lpDirectory: 'str16',
-      nShow: 'int32',
-      hInstApp: 'uintptr_t',
-      lpIDList: 'void *',
-      lpClass: 'str16',
-      hkeyClass: 'uintptr_t',
-      dwHotKey: 'uint32',
-      hIcon: 'uintptr_t',
-      hProcess: 'uintptr_t',
-    })
-    bindings = {
-      infoSize: koffi.sizeof(execInfo),
-      shellExecuteEx: shell32.func('__stdcall', 'ShellExecuteExW', 'int', [koffi.pointer(execInfo)]),
-      getLastError: kernel32.func('__stdcall', 'GetLastError', 'uint32', []),
-    }
-  } catch (e) {
-    bindingsUnavailable = true
-    console.error('[shellExecute] shell32 binding unavailable:', e.message)
-  }
-  return bindings
+function takeRequest(id) {
+  const request = pendingRequests.get(id)
+  if (!request) return null
+  pendingRequests.delete(id)
+  clearTimeout(request.timer)
+  return request
 }
 
-function shellExecute(file, args, verb) {
-  const target = String(file || '').trim()
-  if (!target) return false
-  const api = loadBindings()
-  if (!api) return false
-  try {
-    const ok = api.shellExecuteEx({
-      cbSize: api.infoSize,
-      fMask: SEE_MASK_FLAG_NO_UI,
-      hwnd: 0,
-      lpVerb: verb || null,
-      lpFile: target,
-      lpParameters: args ? String(args) : null,
-      lpDirectory: null,
-      nShow: SW_SHOWNORMAL,
-      hInstApp: 0,
-      lpIDList: null,
-      lpClass: null,
-      hkeyClass: 0,
-      dwHotKey: 0,
-      hIcon: 0,
-      hProcess: 0,
-    })
-    if (!ok) console.error('[shellExecute] failed for', target, 'error', api.getLastError())
-    return !!ok
-  } catch (e) {
-    console.error('[shellExecute] threw for', target, '-', e.message)
-    return false
+function settle(id, ok) {
+  const request = takeRequest(id)
+  if (request) request.resolve(ok)
+}
+
+function settleAll(ok) {
+  for (const id of Array.from(pendingRequests.keys())) settle(id, ok)
+}
+
+function retryAllThroughFallback() {
+  for (const id of Array.from(pendingRequests.keys())) {
+    const request = takeRequest(id)
+    if (request) request.resolve(fallbackExecute(request.file, request.args))
   }
+}
+
+function dropWorker(reason) {
+  if (!worker) return
+  const dropped = worker
+  worker = null
+  workerReady = false
+  dropped.removeAllListeners()
+  dropped.on('error', () => {})
+  dropped.terminate().catch(() => {})
+  settleAll(false)
+  console.error('[shellExecute] dropped worker:', reason)
+}
+
+function ensureWorker() {
+  if (worker || workerUnavailable) return worker
+  try {
+    const { Worker } = require('worker_threads')
+    const started = new Worker(WORKER_ENTRY)
+    started.unref()
+    started.on('message', (message) => {
+      if (message.ready) { workerReady = true; return }
+      if (!message.ok) console.error('[shellExecute] failed, detail', message.detail)
+      settle(message.id, !!message.ok)
+    })
+    started.on('error', (e) => {
+      if (worker !== started) return
+      workerUnavailable = true
+      worker = null
+      console.error('[shellExecute] worker error, falling back to Start-Process:', e.message)
+      if (workerReady) settleAll(false)
+      else retryAllThroughFallback()
+    })
+    started.on('exit', () => {
+      if (worker !== started) return
+      worker = null
+      settleAll(false)
+    })
+    workerReady = false
+    worker = started
+  } catch (e) {
+    workerUnavailable = true
+    console.error('[shellExecute] worker unavailable, falling back to Start-Process:', e.message)
+  }
+  return worker
+}
+
+function quotePowerShell(text) {
+  return `'${String(text).replace(/'/g, "''")}'`
+}
+
+function fallbackExecute(file, args) {
+  const command = args
+    ? `Start-Process -FilePath ${quotePowerShell(file)} -ArgumentList ${quotePowerShell(args)}`
+    : `Start-Process -FilePath ${quotePowerShell(file)}`
+  return new Promise((resolve) => {
+    execFile('powershell', ['-NoProfile', '-Command', command], { windowsHide: true }, (err) => {
+      if (err) console.error('[shellExecute] fallback failed for', file, '-', err.message)
+      resolve(!err)
+    })
+  })
+}
+
+function shellExecute(file, args) {
+  const target = String(file || '').trim()
+  if (!target) return Promise.resolve(false)
+  const parameters = args ? String(args) : null
+  const active = ensureWorker()
+  if (!active) return fallbackExecute(target, parameters)
+  const id = ++nextRequestId
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pendingRequests.delete(id)
+      dropWorker(`no reply for ${target} within ${REQUEST_TIMEOUT_MS} ms`)
+      resolve(false)
+    }, REQUEST_TIMEOUT_MS)
+    if (typeof timer.unref === 'function') timer.unref()
+    pendingRequests.set(id, { resolve, timer, file: target, args: parameters })
+    active.postMessage({ id, file: target, args: parameters })
+  })
 }
 
 function existsLoose(candidate) {
@@ -98,12 +141,8 @@ function splitCommandLine(commandLine) {
 
 function shellExecuteCommandLine(commandLine) {
   const { file, args } = splitCommandLine(commandLine)
-  if (!file) return false
+  if (!file) return Promise.resolve(false)
   return shellExecute(file, args)
 }
 
-function warm() {
-  loadBindings()
-}
-
-module.exports = { shellExecute, shellExecuteCommandLine, splitCommandLine, warm }
+module.exports = { shellExecute, shellExecuteCommandLine, splitCommandLine }

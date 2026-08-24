@@ -26,6 +26,7 @@ let index = []
 let startApps = []
 let startAppsRefreshDebounce = null
 let lastStartAppsRefresh = 0
+let fallbackRefreshTimer = null
 const shortcutInfoCache = new Map()
 const lnkIconCache = new Map()
 const startAppIconCache = new Map()
@@ -363,6 +364,13 @@ function scheduleStartAppsRefresh() {
   }, 1000)
 }
 
+function startFallbackStartAppsRefresh() {
+  if (fallbackRefreshTimer) return
+  fallbackRefreshTimer = setInterval(() => {
+    refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
+  }, START_APPS_FALLBACK_REFRESH_INTERVAL)
+}
+
 function onInstalledPackagesChanged() {
   const sinceLastRefresh = Date.now() - lastStartAppsRefresh
   if (startAppsRefreshDebounce) return
@@ -590,7 +598,7 @@ function launchItem(item) {
     electronShell.openPath(item.lnkPath).then((err) => {
       if (err) {
         console.error('[launcher] openPath failed for', item.lnkPath, '-', err)
-        shellExecute(item.lnkPath, null)
+        shellExecute(item.lnkPath, null).catch(() => {})
       }
     })
   } else if (item.appId) {
@@ -734,11 +742,9 @@ module.exports = {
     refreshStartApps().catch((e) => console.error('[launcher] start apps error:', e.message))
     watchScanDirs()
     plugins.onPluginsChanged(scheduleRebuild)
-    if (!appxPackages.watchPackages(onInstalledPackagesChanged)) {
+    if (!appxPackages.watchPackages(onInstalledPackagesChanged, startFallbackStartAppsRefresh)) {
       console.error('[launcher] package watch unavailable, falling back to periodic start apps refresh')
-      setInterval(() => {
-        refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
-      }, START_APPS_FALLBACK_REFRESH_INTERVAL)
+      startFallbackStartAppsRefresh()
     }
   },
 }

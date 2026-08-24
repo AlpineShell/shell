@@ -1,5 +1,5 @@
 const { spawn } = require('child_process')
-const { shellExecute, warm: warmShellExecute } = require('./shellExecute')
+const { shellExecute } = require('./shellExecute')
 
 const TYPE_DEFINITION = [
   'Add-Type -TypeDefinition @\'',
@@ -67,7 +67,7 @@ function activatePackaged(aumid) {
 }
 
 function activateViaAppsFolder(appId) {
-  shellExecute(`shell:AppsFolder\\${appId}`, null)
+  shellExecute(`shell:AppsFolder\\${appId}`, null).catch(() => {})
 }
 
 function activate(appId) {
@@ -82,7 +82,6 @@ function openFileExplorer() {
 
 function warm() {
   ensureProcess()
-  warmShellExecute()
 }
 
 module.exports = { activate, openFileExplorer, warm }

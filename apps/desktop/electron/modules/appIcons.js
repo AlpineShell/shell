@@ -40,6 +40,8 @@ const CACHE_VERSION = 2
 const CACHE_MAX_ENTRIES = 4000
 const CACHE_MAX_ENTRY_LENGTH = 512 * 1024
 const CACHE_WRITE_DEBOUNCE = 1500
+const ASYNC_TMP_SUFFIX = '.tmp'
+const QUIT_TMP_SUFFIX = '.tmp-quit'
 
 let diskCache = null
 let diskCacheLoaded = false
@@ -47,8 +49,9 @@ let diskCachePath = null
 let diskCacheWriteTimer = null
 let diskCacheDirty = false
 let quitFlushRegistered = false
-let asyncWriteSeq = 0
 let asyncWriteInFlight = false
+let asyncWriteChain = Promise.resolve()
+let quitting = false
 
 function getDiskCachePath() {
   if (!diskCachePath) diskCachePath = path.join(app.getPath('userData'), CACHE_FILE)
@@ -108,10 +111,11 @@ function serializeDiskCache() {
 }
 
 function flushDiskCache() {
+  quitting = true
   if (diskCacheWriteTimer) { clearTimeout(diskCacheWriteTimer); diskCacheWriteTimer = null }
   if (!diskCacheLoaded || (!diskCacheDirty && !asyncWriteInFlight)) return
   diskCacheDirty = false
-  const tmp = `${getDiskCachePath()}.tmp`
+  const tmp = `${getDiskCachePath()}${QUIT_TMP_SUFFIX}`
   try {
     fs.writeFileSync(tmp, serializeDiskCache())
     fs.renameSync(tmp, getDiskCachePath())
@@ -121,13 +125,14 @@ function flushDiskCache() {
 }
 
 async function writeDiskCacheAsync() {
-  if (!diskCacheLoaded || !diskCacheDirty) return
+  if (!diskCacheLoaded || !diskCacheDirty || quitting) return
   diskCacheDirty = false
   asyncWriteInFlight = true
-  const tmp = `${getDiskCachePath()}.tmp-${++asyncWriteSeq}`
+  const tmp = `${getDiskCachePath()}${ASYNC_TMP_SUFFIX}`
   try {
     await fs.promises.writeFile(tmp, serializeDiskCache())
-    await fs.promises.rename(tmp, getDiskCachePath())
+    if (quitting) await fs.promises.unlink(tmp)
+    else await fs.promises.rename(tmp, getDiskCachePath())
   } catch (e) {
     console.error('[appIcons] cache write error:', e.message)
     try { await fs.promises.unlink(tmp) } catch { void 0 }
@@ -141,7 +146,7 @@ function scheduleDiskCacheWrite() {
   if (diskCacheWriteTimer) clearTimeout(diskCacheWriteTimer)
   diskCacheWriteTimer = setTimeout(() => {
     diskCacheWriteTimer = null
-    writeDiskCacheAsync()
+    asyncWriteChain = asyncWriteChain.then(writeDiskCacheAsync)
   }, CACHE_WRITE_DEBOUNCE)
 }
 
@@ -342,7 +347,7 @@ function readShortcutLinkCached(lnkPath) {
   const cached = shortcutLinkCache.get(key)
   if (cached && cached.stamp === stamp) return cached.info
   let info
-  try { info = shell.readShortcutLink(lnkPath) } catch { info = null }
+  try { info = shell.readShortcutLink(lnkPath) } catch { shortcutLinkCache.delete(key); return null }
   shortcutLinkCache.set(key, { stamp, info })
   return info
 }

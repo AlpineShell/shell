@@ -2,9 +2,9 @@ const { shell } = require('electron')
 const { execFile, spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
-const { shellExecute, warm: warmShellExecute } = require('../shellExecute')
+const { shellExecute } = require('../shellExecute')
 
-const PATH_WARM_DELAY_MS = 4000
+const DIR_LISTING_TTL_MS = 30000
 
 const PATH_EXTS = (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
   .split(';')
@@ -85,19 +85,15 @@ function pathDirs() {
 }
 
 const dirListingCache = new Map()
-async function dirListing(dir) {
+function dirListing(dir) {
   const key = dir.toLowerCase()
   const cached = dirListingCache.get(key)
-  if (cached) return cached
-  const pending = fs.promises.readdir(dir)
-    .then((names) => new Set(names.map((name) => name.toLowerCase())))
+  if (cached && Date.now() - cached.readAt < DIR_LISTING_TTL_MS) return cached.names
+  const names = fs.promises.readdir(dir)
+    .then((entries) => new Set(entries.map((name) => name.toLowerCase())))
     .catch(() => new Set())
-  dirListingCache.set(key, pending)
-  return pending
-}
-
-function warmPathDirs() {
-  return Promise.all(pathDirs().map((dir) => dirListing(dir))).catch(() => {})
+  dirListingCache.set(key, { readAt: Date.now(), names })
+  return names
 }
 
 function existsLoose(filePath) {
@@ -186,7 +182,7 @@ async function runDirect(raw) {
   }
 
   const { file, args } = splitCommand(expandEnv(query))
-  shellExecute(file, args)
+  shellExecute(file, args).catch(() => {})
   return { ok: true }
 }
 
@@ -216,11 +212,5 @@ module.exports = {
     'run/resolve': (_event, query) => resolve(query),
     'run/exec': (_event, query) => runDirect(query),
     'run/exec-terminal': (_event, query) => runInTerminal(query),
-  },
-  start() {
-    setTimeout(() => {
-      warmShellExecute()
-      warmPathDirs()
-    }, PATH_WARM_DELAY_MS)
   },
 }

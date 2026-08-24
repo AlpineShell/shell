@@ -1,12 +1,16 @@
+const path = require('path')
+
 const HKEY_CURRENT_USER = 0x80000001
 const KEY_READ = 0x20019
 const KEY_NOTIFY = 0x0010
 const REG_NOTIFY_CHANGE_NAME = 0x00000001
 const REG_NOTIFY_CHANGE_LAST_SET = 0x00000004
-const WAIT_OBJECT_0 = 0
 const ERROR_SUCCESS = 0
+const ERROR_MORE_DATA = 234
 const MAX_KEY_NAME_CHARS = 512
-const PACKAGE_POLL_INTERVAL = 5000
+const FAMILY_MAP_TTL_MS = 300000
+
+const WAIT_WORKER_ENTRY = path.join(__dirname, '..', 'waitForHandleWorker.js')
 
 const PACKAGE_REPOSITORY_KEY =
   'Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\Repository\\Packages'
@@ -27,7 +31,6 @@ function loadBindings() {
       closeKey: advapi32.func('__stdcall', 'RegCloseKey', 'long', ['uintptr_t']),
       createEvent: kernel32.func('__stdcall', 'CreateEventW', 'uintptr_t', ['void *', 'int', 'int', 'void *']),
       resetEvent: kernel32.func('__stdcall', 'ResetEvent', 'int', ['uintptr_t']),
-      waitForObject: kernel32.func('__stdcall', 'WaitForSingleObject', 'uint32', ['uintptr_t', 'uint32']),
       closeHandle: kernel32.func('__stdcall', 'CloseHandle', 'int', ['uintptr_t']),
     }
   } catch (e) {
@@ -55,6 +58,7 @@ function readPackageFullNames(keyHandle) {
   for (let subkeyIndex = 0; ; subkeyIndex++) {
     lengthBuffer.writeUInt32LE(MAX_KEY_NAME_CHARS, 0)
     const rc = api.enumKey(keyHandle, subkeyIndex, nameBuffer, lengthBuffer, null, null, null, null)
+    if (rc === ERROR_MORE_DATA) continue
     if (rc !== ERROR_SUCCESS) break
     names.push(nameBuffer.toString('utf16le', 0, lengthBuffer.readUInt32LE(0) * 2))
   }
@@ -68,15 +72,21 @@ function familyNameOfPackage(fullName) {
 }
 
 let fullNameByFamily = null
+let familyMapBuiltAt = 0
 let watchedKey = null
 let changeEvent = null
-let pollTimer = null
+let waitWorker = null
+let watchGeneration = 0
+let packagesChangedCallback = null
+let watchLostCallback = null
 let quitCleanupRegistered = false
 
 function armChangeNotification() {
   const api = loadBindings()
-  if (!api || watchedKey === null || changeEvent === null) return
-  api.notifyKey(watchedKey, 1, REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET, changeEvent, 1)
+  if (!api || watchedKey === null || changeEvent === null) return false
+  const rc = api.notifyKey(watchedKey, 1, REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET, changeEvent, 1)
+  if (rc !== ERROR_SUCCESS) console.error('[appxPackages] RegNotifyChangeKeyValue failed, code', rc)
+  return rc === ERROR_SUCCESS
 }
 
 function buildFamilyMap() {
@@ -97,18 +107,43 @@ function buildFamilyMap() {
   return map
 }
 
+function familyMapIsStale() {
+  if (!fullNameByFamily) return true
+  if (waitWorker) return false
+  return Date.now() - familyMapBuiltAt > FAMILY_MAP_TTL_MS
+}
+
 function packageFullNameForFamily(familyName) {
   if (!familyName) return null
-  if (!fullNameByFamily) fullNameByFamily = buildFamilyMap()
+  if (familyMapIsStale()) {
+    fullNameByFamily = buildFamilyMap()
+    familyMapBuiltAt = Date.now()
+  }
   return fullNameByFamily.get(String(familyName).toLowerCase()) || null
 }
 
 function releaseWatch() {
+  watchGeneration++
+  packagesChangedCallback = null
+  if (waitWorker) {
+    const stopped = waitWorker
+    waitWorker = null
+    stopped.removeAllListeners()
+    stopped.on('error', () => {})
+    stopped.terminate().catch(() => {})
+  }
   const api = loadBindings()
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
   if (!api) return
   if (changeEvent !== null) { try { api.closeHandle(changeEvent) } catch { void 0 } changeEvent = null }
   if (watchedKey !== null) { try { api.closeKey(watchedKey) } catch { void 0 } watchedKey = null }
+}
+
+function loseWatch(reason) {
+  console.error('[appxPackages] package watch lost:', reason)
+  const notify = watchLostCallback
+  watchLostCallback = null
+  releaseWatch()
+  if (notify) notify()
 }
 
 function registerQuitCleanup() {
@@ -117,27 +152,44 @@ function registerQuitCleanup() {
   try { require('electron').app.on('will-quit', releaseWatch) } catch { void 0 }
 }
 
-function watchPackages(onPackagesChanged) {
-  if (pollTimer) return true
+function beginWait() {
+  if (waitWorker && changeEvent !== null) waitWorker.postMessage({ handle: changeEvent })
+}
+
+function watchPackages(onPackagesChanged, onWatchLost) {
+  if (waitWorker) return true
   const api = loadBindings()
   if (!api) return false
   watchedKey = openRepositoryKey()
-  if (watchedKey === null) return false
+  if (watchedKey === null) { releaseWatch(); return false }
   changeEvent = api.createEvent(null, 1, 0, null)
   if (!changeEvent) { releaseWatch(); return false }
-  armChangeNotification()
+  if (!armChangeNotification()) { releaseWatch(); return false }
+  const generation = ++watchGeneration
+  try {
+    const { Worker } = require('worker_threads')
+    waitWorker = new Worker(WAIT_WORKER_ENTRY)
+  } catch (e) {
+    console.error('[appxPackages] wait worker unavailable:', e.message)
+    releaseWatch()
+    return false
+  }
+  packagesChangedCallback = onPackagesChanged
+  watchLostCallback = onWatchLost
+  waitWorker.unref()
+  waitWorker.on('error', (e) => { if (generation === watchGeneration) loseWatch(e.message) })
+  waitWorker.on('exit', () => { if (generation === watchGeneration) loseWatch('wait worker exited') })
+  waitWorker.on('message', (message) => {
+    if (generation !== watchGeneration) return
+    if (!message.signalled) { loseWatch(`wait returned ${message.detail}`); return }
+    api.resetEvent(changeEvent)
+    if (!armChangeNotification()) { loseWatch('re-arm failed'); return }
+    fullNameByFamily = null
+    beginWait()
+    try { packagesChangedCallback() } catch (e) { console.error('[appxPackages] change callback error:', e.message) }
+  })
   registerQuitCleanup()
-  pollTimer = setInterval(() => {
-    try {
-      if (api.waitForObject(changeEvent, 0) !== WAIT_OBJECT_0) return
-      api.resetEvent(changeEvent)
-      armChangeNotification()
-      fullNameByFamily = null
-      onPackagesChanged()
-    } catch (e) {
-      console.error('[appxPackages] change poll error:', e.message)
-    }
-  }, PACKAGE_POLL_INTERVAL)
+  beginWait()
   return true
 }
 
