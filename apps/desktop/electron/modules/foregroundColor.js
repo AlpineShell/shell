@@ -1,7 +1,7 @@
 const koffi = require('koffi')
 const { screen } = require('electron')
 const winEvents = require('./winEvents')
-const { claimSample } = require('./foregroundSampleBudget')
+const { createSampleBudget } = require('./foregroundSampleBudget')
 
 const user32 = koffi.load('user32.dll')
 const gdi32 = koffi.load('gdi32.dll')
@@ -44,8 +44,11 @@ const perDisplay = new Map()
 const pendingDisplay = new Map()
 const hwndPerDisplay = new Map()
 const sampledHwndPerDisplay = new Map()
-const sampleBudgetPerDisplay = new Map()
+const sampleBudget = createSampleBudget()
 let startupIgnoreHwnd = null
+let unsubscribeWinEvents = null
+let displayRemovedListener = null
+let pollTimer = null
 
 function colorEqual(a, b) {
   if (a === b) return true
@@ -133,11 +136,6 @@ function clearDisplay(displayId, broadcast) {
   clearColor(displayId, broadcast)
 }
 
-function forgetDisplay(displayId, broadcast) {
-  sampleBudgetPerDisplay.delete(displayId)
-  clearDisplay(displayId, broadcast)
-}
-
 function update(broadcast) {
   if (altTab && altTab.isSwitcherActive()) return
 
@@ -163,7 +161,7 @@ function update(broadcast) {
   hwndPerDisplay.set(displayId, hwnd)
 
   if (sampledHwndPerDisplay.get(displayId) === hwnd && perDisplay.has(displayId)) return
-  if (!claimSample(sampleBudgetPerDisplay, displayId, Date.now())) return
+  if (!sampleBudget.claim(Date.now())) return
 
   const rgb = sampleTitleBarColor(hwnd)
   if (!rgb) {
@@ -191,6 +189,21 @@ function commitColor(displayId, hwnd, color, broadcast) {
   broadcast('topbar/fg-color-changed', { ...color, displayId })
 }
 
+function stop() {
+  if (unsubscribeWinEvents) {
+    unsubscribeWinEvents()
+    unsubscribeWinEvents = null
+  }
+  if (displayRemovedListener) {
+    screen.removeListener('display-removed', displayRemovedListener)
+    displayRemovedListener = null
+  }
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
 module.exports = {
   handlers: {
     'topbar/fg-color': () => {
@@ -202,10 +215,13 @@ module.exports = {
     },
   },
   start(broadcast) {
+    const { app } = require('electron')
     const initial = GetForegroundWindow()
     if (initial && IsZoomed(initial)) startupIgnoreHwnd = initial
-    winEvents.subscribe('foregroundColor', FOREGROUND_COLOR_EVENTS, () => update(broadcast))
-    screen.on('display-removed', (_event, removed) => forgetDisplay(removed.id, broadcast))
-    setInterval(() => update(broadcast), POLL_INTERVAL_MS)
+    unsubscribeWinEvents = winEvents.subscribe('foregroundColor', FOREGROUND_COLOR_EVENTS, () => update(broadcast))
+    displayRemovedListener = (_event, removed) => clearDisplay(removed.id, broadcast)
+    screen.on('display-removed', displayRemovedListener)
+    pollTimer = setInterval(() => update(broadcast), POLL_INTERVAL_MS)
+    app.on('will-quit', stop)
   },
 }
