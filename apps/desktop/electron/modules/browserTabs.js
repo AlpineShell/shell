@@ -4,6 +4,7 @@ const fs = require('fs')
 const { createPersistentRunner } = require('../powershell')
 const launcherPrefs = require('./launcherPrefs')
 const browserTabFavicons = require('./browserTabFavicons')
+const sqliteWorker = require('./sqliteWorker')
 const { parseTabs } = require('./browserTabsParser')
 
 const COMMAND_TIMEOUT_MS = 30000
@@ -75,7 +76,9 @@ module.exports = {
   start(broadcast) {
     broadcastFn = broadcast
     setTimeout(() => {
-      if (launcherPrefs.getShowBrowserTabs()) ensureRunner().warm()
+      if (!launcherPrefs.getShowBrowserTabs()) return
+      ensureRunner().warm()
+      sqliteWorker.warm()
     }, WARM_DELAY_MS)
   },
 }

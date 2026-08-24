@@ -1,9 +1,19 @@
 const fs = require('fs')
 const path = require('path')
-const winsqlite = require('./winsqlite')
-const { hostRangeClauses, collectByHost } = require('./browserFavicons')
+const sqliteWorker = require('./sqliteWorker')
+const { faviconMapFromSnapshot, PREFERRED_ICON_PX } = require('./browserFavicons')
 
 const MAX_BOOKMARKS = 3000
+
+const FIREFOX_ICON_MAPPING_SQL = `SELECT pg.page_url, ip.icon_id
+    FROM moz_pages_w_icons pg JOIN moz_icons_to_pages ip ON ip.page_id = pg.id
+    ORDER BY pg.id DESC`
+
+function firefoxIconSql(iconIds) {
+  return `SELECT id, data FROM moz_icons
+    WHERE id IN (${iconIds.join(',')}) AND data IS NOT NULL AND length(data) > 0
+    ORDER BY (width >= ${PREFERRED_ICON_PX}) DESC, ABS(width - ${PREFERRED_ICON_PX}) ASC`
+}
 
 function firefoxBase() {
   return path.join(process.env.APPDATA || '', 'Mozilla', 'Firefox')
@@ -70,13 +80,13 @@ function resolveProfileDir() {
   return fallback
 }
 
-function readBookmarks(profileDir) {
+async function readBookmarks(profileDir) {
   const placesDb = path.join(profileDir, 'places.sqlite')
   const sql = `SELECT p.url, b.title
     FROM moz_bookmarks b JOIN moz_places p ON p.id = b.fk
     WHERE b.type = 1 AND p.url LIKE 'http%'
     ORDER BY b.dateAdded DESC`
-  const rows = winsqlite.readRows(placesDb, sql, ['text', 'text'], MAX_BOOKMARKS)
+  const { rows } = await sqliteWorker.readRows(placesDb, sql, ['text', 'text'], MAX_BOOKMARKS)
   const seen = new Set()
   const out = []
   for (const [url, title] of rows) {
@@ -100,35 +110,18 @@ function toDataUrl(buf) {
   return null
 }
 
-function readFaviconMap(profileDir, neededHosts) {
-  if (neededHosts && neededHosts.size === 0) return new Map()
-  const faviconsDb = path.join(profileDir, 'favicons.sqlite')
-  if (!fs.existsSync(faviconsDb)) return new Map()
-  const sql = `SELECT pg.page_url, i.data
-    FROM moz_pages_w_icons pg
-    JOIN moz_icons_to_pages ip ON ip.page_id = pg.id
-    JOIN moz_icons i ON i.id = ip.icon_id
-    WHERE i.data IS NOT NULL AND length(i.data) > 0
-    ORDER BY i.width DESC`
-  const rows = winsqlite.readRows(faviconsDb, sql, ['text', 'blob'])
-  return collectByHost(rows, neededHosts, toDataUrl)
+const FIREFOX_DIALECT = {
+  mappingSql: FIREFOX_ICON_MAPPING_SQL,
+  mappingLabel: 'moz_icons_to_pages',
+  bitmapSql: firefoxIconSql,
+  toIcon: toDataUrl,
 }
 
-function readFaviconMapForHosts(profileDir, neededHosts) {
+async function readFaviconMap(profileDir, neededHosts) {
   if (!neededHosts || neededHosts.size === 0) return new Map()
   const faviconsDb = path.join(profileDir, 'favicons.sqlite')
   if (!fs.existsSync(faviconsDb)) return new Map()
-  const clauses = hostRangeClauses(neededHosts, 'pg.page_url')
-  if (clauses.length === 0) return new Map()
-  const sql = `SELECT MIN(pg.page_url), i.data
-    FROM moz_pages_w_icons pg
-    JOIN moz_icons_to_pages ip ON ip.page_id = pg.id
-    JOIN moz_icons i ON i.id = ip.icon_id
-    WHERE i.data IS NOT NULL AND (${clauses.join(' OR ')})
-    GROUP BY i.id
-    ORDER BY COUNT(*) DESC, i.width DESC`
-  const rows = winsqlite.readRows(faviconsDb, sql, ['text', 'blob'])
-  return collectByHost(rows, neededHosts, toDataUrl)
+  return sqliteWorker.withSnapshot(faviconsDb, (query) => faviconMapFromSnapshot(query, neededHosts, FIREFOX_DIALECT))
 }
 
-module.exports = { resolveProfileDir, readBookmarks, readFaviconMap, readFaviconMapForHosts }
+module.exports = { resolveProfileDir, readBookmarks, readFaviconMap }

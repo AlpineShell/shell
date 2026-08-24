@@ -37,6 +37,10 @@ function available() {
   return !!ensureLib()
 }
 
+function emptyResult() {
+  return { rows: [], truncated: false }
+}
+
 function snapshot(dbPath) {
   const tmp = path.join(os.tmpdir(), `alpine-sqlite-${process.pid}-${Date.now()}-${Math.round(process.hrtime()[1])}.db`)
   fs.copyFileSync(dbPath, tmp)
@@ -54,46 +58,78 @@ function cleanup(tmp) {
   }
 }
 
-function readRows(dbPath, sql, columnTypes, rowLimit = 100000) {
-  const f = ensureLib()
-  const rows = []
-  if (!f || !dbPath || !fs.existsSync(dbPath)) return rows
+function decodeColumn(f, stmt, index, type) {
+  if (type === 'text') return f.colText(stmt, index)
+  if (type === 'int') return f.colInt(stmt, index)
+  const n = f.colBytes(stmt, index)
+  if (n <= 0 || n > MAX_BLOB_BYTES) return null
+  return Buffer.from(koffi.decode(f.colBlob(stmt, index), koffi.array('uint8_t', n)))
+}
 
+function collectRows(f, db, sql, columnTypes, rowLimit) {
+  const stmtOut = [null]
+  if (f.prepare(db, sql, -1, stmtOut, [null]) !== SQLITE_OK) return emptyResult()
+  const stmt = stmtOut[0]
+  const rows = []
+  let truncated = false
+  try {
+    while (f.step(stmt) === SQLITE_ROW) {
+      if (rows.length >= rowLimit) { truncated = true; break }
+      const row = []
+      for (let i = 0; i < columnTypes.length; i++) row.push(decodeColumn(f, stmt, i, columnTypes[i]))
+      rows.push(row)
+    }
+  } finally {
+    f.finalize(stmt)
+  }
+  return { rows, truncated }
+}
+
+function openSnapshot(dbPath) {
+  const f = ensureLib()
+  if (!f || !dbPath || !fs.existsSync(dbPath)) return null
   let tmp = null
   try {
     tmp = snapshot(dbPath)
     const dbOut = [null]
-    if (f.open(tmp, dbOut, SQLITE_OPEN_READWRITE, null) !== SQLITE_OK) return rows
-    const db = dbOut[0]
-    const stmtOut = [null]
-    if (f.prepare(db, sql, -1, stmtOut, [null]) !== SQLITE_OK) { f.close(db); return rows }
-    const stmt = stmtOut[0]
-
-    while (rows.length < rowLimit && f.step(stmt) === SQLITE_ROW) {
-      const row = []
-      for (let i = 0; i < columnTypes.length; i++) {
-        const type = columnTypes[i]
-        if (type === 'text') {
-          row.push(f.colText(stmt, i))
-        } else if (type === 'int') {
-          row.push(f.colInt(stmt, i))
-        } else {
-          const n = f.colBytes(stmt, i)
-          if (n <= 0 || n > MAX_BLOB_BYTES) { row.push(null); continue }
-          row.push(Buffer.from(koffi.decode(f.colBlob(stmt, i), koffi.array('uint8_t', n))))
-        }
-      }
-      rows.push(row)
+    const opened = f.open(tmp, dbOut, SQLITE_OPEN_READWRITE, null)
+    if (opened !== SQLITE_OK || !dbOut[0]) {
+      if (dbOut[0]) f.close(dbOut[0])
+      cleanup(tmp)
+      return null
     }
-
-    f.finalize(stmt)
-    f.close(db)
+    return { db: dbOut[0], tmp }
   } catch (e) {
-    console.error('[winsqlite] query error:', e.message)
-  } finally {
+    console.error('[winsqlite] snapshot error:', e.message)
     if (tmp) cleanup(tmp)
+    return null
   }
-  return rows
 }
 
-module.exports = { readRows, available }
+function closeSnapshot(session) {
+  if (!session) return
+  const f = ensureLib()
+  try { if (f) f.close(session.db) } catch (e) { console.error('[winsqlite] close error:', e.message) }
+  cleanup(session.tmp)
+}
+
+function querySnapshot(session, sql, columnTypes, rowLimit = 100000) {
+  if (!session) return emptyResult()
+  try {
+    return collectRows(ensureLib(), session.db, sql, columnTypes, rowLimit)
+  } catch (e) {
+    console.error('[winsqlite] query error:', e.message)
+    return emptyResult()
+  }
+}
+
+function readRows(dbPath, sql, columnTypes, rowLimit) {
+  const session = openSnapshot(dbPath)
+  try {
+    return querySnapshot(session, sql, columnTypes, rowLimit)
+  } finally {
+    closeSnapshot(session)
+  }
+}
+
+module.exports = { readRows, openSnapshot, querySnapshot, closeSnapshot, available }
