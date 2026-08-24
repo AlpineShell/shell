@@ -95,7 +95,6 @@ const DWMWA_CLOAKED = 14
 const GWL_EXSTYLE = -20
 const WS_EX_TOOLWINDOW = 0x80
 const EVENT_SYSTEM_FOREGROUND = 0x0003
-const EVENT_SYSTEM_MINIMIZESTART = 0x0016
 const WINEVENT_OUTOFCONTEXT = 0x0000
 const WINEVENT_SKIPOWNPROCESS = 0x0002
 const OBJID_WINDOW = 0
@@ -110,13 +109,6 @@ let shellsRef = null
 let exposedOwnWindowsProvider = null
 let hookHandle = null
 let hookCallbackPointer = null
-
-const LOW_LEVEL_HOOKS_TIMEOUT_MS = 300
-const HOOK_SLOW_RETURN_MS = 200
-const HOOK_REINSTALL_MIN_INTERVAL_MS = 5000
-let loggedWorstHookReturnMs = 0
-let hookReinstallScheduled = false
-let lastHookReinstallAt = 0
 let screenshotCallback = null
 let screenshotCancelCallback = null
 
@@ -287,6 +279,7 @@ function captureWindowThumbnail(hwnd) {
     if (!StretchBlt(thumbDC, 0, 0, thumbWidth, thumbHeight, memDC, 0, 0, srcWidth, srcHeight, SRCCOPY)) {
       return getCachedThumbnail(hwnd)
     }
+    SelectObject(thumbDC, oldThumbBmp)
 
     const biHeader = Buffer.alloc(40)
     biHeader.writeUInt32LE(40, 0)
@@ -296,7 +289,7 @@ function captureWindowThumbnail(hwnd) {
     biHeader.writeUInt16LE(32, 14)
 
     const pixelData = Buffer.alloc(thumbWidth * thumbHeight * 4)
-    if (!GetDIBits(thumbDC, thumbBmp, 0, thumbHeight, pixelData, biHeader, 0)) return getCachedThumbnail(hwnd)
+    if (!GetDIBits(screenDC, thumbBmp, 0, thumbHeight, pixelData, biHeader, 0)) return getCachedThumbnail(hwnd)
 
     for (let i = 3; i < pixelData.length; i += 4) {
       pixelData[i] = 255
@@ -396,8 +389,7 @@ let lastForegroundHwnd = 0
 let warmSweepTimer = null
 let foregroundCaptureTimer = null
 let foregroundHookHandle = null
-let minimizeHookHandle = null
-let windowStateHookCallback = null
+let foregroundHookCallback = null
 
 function toHwndNum(value) {
   return typeof value === 'bigint' ? Number(value) : value
@@ -414,13 +406,9 @@ function warmCapture(hwnd) {
   }
 }
 
-function onWindowStateEvent(_hook, event, hwnd, idObject, idChild) {
+function onForegroundEvent(_hook, _event, _hwnd, idObject, idChild) {
   try {
     if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
-    if (event === EVENT_SYSTEM_MINIMIZESTART) {
-      warmCapture(toHwndNum(hwnd))
-      return
-    }
     if (emojiCaptureActive) {
       if (emojiCaptureForeground) {
         const current = toHwndNum(GetForegroundWindow())
@@ -433,57 +421,46 @@ function onWindowStateEvent(_hook, event, hwnd, idObject, idChild) {
     if (switcherActive) return
     const fg = toHwndNum(GetForegroundWindow())
     if (!fg || fg === lastForegroundHwnd) return
-    const outgoing = lastForegroundHwnd
     lastForegroundHwnd = fg
     if (foregroundCaptureTimer) clearTimeout(foregroundCaptureTimer)
-    foregroundCaptureTimer = setTimeout(() => warmCapture(outgoing), 250)
+    foregroundCaptureTimer = setTimeout(() => warmCapture(fg), 250)
   } catch (e) {
-    console.error('[altTab] window state event error:', e.message)
+    console.error('[altTab] foreground event error:', e.message)
   }
 }
 
-function installWindowStateHooks() {
-  if (windowStateHookCallback) return
+function installForegroundHook() {
+  if (foregroundHookHandle) return
   try {
-    windowStateHookCallback = koffi.register(onWindowStateEvent, koffi.pointer(ALTTAB_WIN_EVENT_PROC))
+    foregroundHookCallback = koffi.register(onForegroundEvent, koffi.pointer(ALTTAB_WIN_EVENT_PROC))
     foregroundHookHandle = SetWinEventHook(
       EVENT_SYSTEM_FOREGROUND,
       EVENT_SYSTEM_FOREGROUND,
       0,
-      windowStateHookCallback,
+      foregroundHookCallback,
       0,
       0,
       WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
     )
-    minimizeHookHandle = SetWinEventHook(
-      EVENT_SYSTEM_MINIMIZESTART,
-      EVENT_SYSTEM_MINIMIZESTART,
-      0,
-      windowStateHookCallback,
-      0,
-      0,
-      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
-    )
-    if (!foregroundHookHandle) console.error('[altTab] Failed to install foreground win event hook')
-    if (!minimizeHookHandle) console.error('[altTab] Failed to install minimize win event hook')
-    if (!foregroundHookHandle && !minimizeHookHandle) uninstallWindowStateHooks()
+    if (!foregroundHookHandle) {
+      console.error('[altTab] Failed to install foreground win event hook')
+      foregroundHookHandle = null
+      try { koffi.unregister(foregroundHookCallback) } catch (_) {}
+      foregroundHookCallback = null
+    }
   } catch (e) {
-    console.error('[altTab] window state hook install error:', e.message)
+    console.error('[altTab] foreground hook install error:', e.message)
   }
 }
 
-function uninstallWindowStateHooks() {
+function uninstallForegroundHook() {
   if (foregroundHookHandle) {
     try { UnhookWinEvent(foregroundHookHandle) } catch (_) {}
     foregroundHookHandle = null
   }
-  if (minimizeHookHandle) {
-    try { UnhookWinEvent(minimizeHookHandle) } catch (_) {}
-    minimizeHookHandle = null
-  }
-  if (windowStateHookCallback) {
-    try { koffi.unregister(windowStateHookCallback) } catch (_) {}
-    windowStateHookCallback = null
+  if (foregroundHookCallback) {
+    try { koffi.unregister(foregroundHookCallback) } catch (_) {}
+    foregroundHookCallback = null
   }
 }
 
@@ -503,19 +480,20 @@ function warmSweep() {
       captureWindowThumbnail(hwnd)
       if (++fills >= MAX_FILLS_PER_SWEEP) break
     }
+    warmCapture(toHwndNum(GetForegroundWindow()))
   } catch (e) {
     console.error('[altTab] warm sweep error:', e.message)
   }
 }
 
 function startThumbnailWarmer() {
-  installWindowStateHooks()
+  installForegroundHook()
   warmSweepTimer = setInterval(warmSweep, THUMBNAIL_REFRESH_MS)
   setTimeout(warmSweep, 1500)
 }
 
 function stopThumbnailWarmer() {
-  uninstallWindowStateHooks()
+  uninstallForegroundHook()
   if (warmSweepTimer) clearInterval(warmSweepTimer)
   if (foregroundCaptureTimer) clearTimeout(foregroundCaptureTimer)
   warmSweepTimer = null
@@ -736,7 +714,7 @@ function handleEmojiCaptureKey(vkCode, scanCode, isKeyDown, isKeyUp) {
 const LLKHF_INJECTED = 0x10
 const KEYEVENTF_KEYUP = 0x0002
 
-function dispatchKeyEvent(nCode, wParam, lParam) {
+function hookCallback(nCode, wParam, lParam) {
   try {
     if (nCode < 0) return CallNextHookEx(hookHandle, nCode, wParam, lParam)
 
@@ -874,75 +852,28 @@ function dispatchKeyEvent(nCode, wParam, lParam) {
   return CallNextHookEx(hookHandle, nCode, wParam, lParam)
 }
 
-function hookCallback(nCode, wParam, lParam) {
-  const startedAt = process.hrtime.bigint()
-  try {
-    return dispatchKeyEvent(nCode, wParam, lParam)
-  } catch (e) {
-    console.error('[altTab] keyboard hook dispatch error:', e && e.message)
-    return 0
-  } finally {
-    recordHookReturnTime(startedAt)
-  }
-}
-
-function recordHookReturnTime(startedAt) {
-  const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1e6
-  if (elapsedMs < HOOK_SLOW_RETURN_MS) return
-  if (elapsedMs > loggedWorstHookReturnMs) {
-    loggedWorstHookReturnMs = elapsedMs
-    console.warn(`[altTab] keyboard hook took ${elapsedMs.toFixed(1)} ms to return (LowLevelHooksTimeout default is ${LOW_LEVEL_HOOKS_TIMEOUT_MS} ms)`)
-  }
-  if (elapsedMs >= LOW_LEVEL_HOOKS_TIMEOUT_MS) scheduleHookReinstall()
-}
-
-function scheduleHookReinstall() {
-  if (hookReinstallScheduled) return
-  if (Date.now() - lastHookReinstallAt < HOOK_REINSTALL_MIN_INTERVAL_MS) return
-  hookReinstallScheduled = true
-  setImmediate(() => {
-    hookReinstallScheduled = false
-    if (!hookHandle) return
-    lastHookReinstallAt = Date.now()
-    if (swapKeyboardHook()) console.warn('[altTab] keyboard hook reinstalled after a timeout-length return')
-    else console.error('[altTab] keyboard hook reinstall failed, keeping the existing hook')
-  })
-}
-
-function releaseKeyboardHook(handle, callbackPointer) {
-  if (handle) {
-    try { UnhookWindowsHookEx(handle) } catch (_) {}
-  }
-  if (callbackPointer) {
-    try { koffi.unregister(callbackPointer) } catch (_) {}
-  }
-}
-
-function swapKeyboardHook() {
-  const retiredHandle = hookHandle
-  const retiredCallbackPointer = hookCallbackPointer
+function installHook() {
   hookCallbackPointer = koffi.register(hookCallback, koffi.pointer(LowLevelKeyboardProc))
   hookHandle = SetWindowsHookExW(WH_KEYBOARD_LL, hookCallbackPointer, 0, 0)
   if (!hookHandle) {
-    releaseKeyboardHook(null, hookCallbackPointer)
-    hookHandle = retiredHandle
-    hookCallbackPointer = retiredCallbackPointer
-    return false
+    console.error('[altTab] Failed to install keyboard hook')
+    try { koffi.unregister(hookCallbackPointer) } catch (_) {}
+    hookCallbackPointer = null
+    hookHandle = null
+  } else {
+    console.log('[altTab] Keyboard hook installed')
   }
-  releaseKeyboardHook(retiredHandle, retiredCallbackPointer)
-  loggedWorstHookReturnMs = 0
-  return true
-}
-
-function installHook() {
-  if (swapKeyboardHook()) console.log('[altTab] Keyboard hook installed')
-  else console.error('[altTab] Failed to install keyboard hook')
 }
 
 function uninstallHook() {
-  releaseKeyboardHook(hookHandle, hookCallbackPointer)
-  hookHandle = null
-  hookCallbackPointer = null
+  if (hookHandle) {
+    UnhookWindowsHookEx(hookHandle)
+    hookHandle = null
+  }
+  if (hookCallbackPointer) {
+    koffi.unregister(hookCallbackPointer)
+    hookCallbackPointer = null
+  }
 }
 
 module.exports = {
