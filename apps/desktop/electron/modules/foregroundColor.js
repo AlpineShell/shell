@@ -130,8 +130,12 @@ function clearColor(displayId, broadcast) {
 
 function clearDisplay(displayId, broadcast) {
   hwndPerDisplay.delete(displayId)
-  sampleBudgetPerDisplay.delete(displayId)
   clearColor(displayId, broadcast)
+}
+
+function forgetDisplay(displayId, broadcast) {
+  sampleBudgetPerDisplay.delete(displayId)
+  clearDisplay(displayId, broadcast)
 }
 
 function update(broadcast) {
@@ -159,7 +163,7 @@ function update(broadcast) {
   hwndPerDisplay.set(displayId, hwnd)
 
   if (sampledHwndPerDisplay.get(displayId) === hwnd && perDisplay.has(displayId)) return
-  if (!claimSample(sampleBudgetPerDisplay, displayId, hwnd, Date.now())) return
+  if (!claimSample(sampleBudgetPerDisplay, displayId, Date.now())) return
 
   const rgb = sampleTitleBarColor(hwnd)
   if (!rgb) {
@@ -201,7 +205,7 @@ module.exports = {
     const initial = GetForegroundWindow()
     if (initial && IsZoomed(initial)) startupIgnoreHwnd = initial
     winEvents.subscribe('foregroundColor', FOREGROUND_COLOR_EVENTS, () => update(broadcast))
-    screen.on('display-removed', (_event, removed) => clearDisplay(removed.id, broadcast))
+    screen.on('display-removed', (_event, removed) => forgetDisplay(removed.id, broadcast))
     setInterval(() => update(broadcast), POLL_INTERVAL_MS)
   },
 }

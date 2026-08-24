@@ -21,8 +21,10 @@ let procPointer = null
 let systemRangeHook = null
 let objectShowHook = null
 
-function toHandleNumber(value) {
-  return typeof value === 'bigint' ? Number(value) : value
+function toExactHandle(value) {
+  if (typeof value !== 'bigint') return value
+  const asNumber = Number(value)
+  return BigInt(asNumber) === value ? asNumber : value
 }
 
 function loadNative() {
@@ -40,7 +42,7 @@ function loadNative() {
 }
 
 function onWinEvent(_hook, event, hwndRaw, idObject, idChild) {
-  dispatchWinEvent(subscribers, event, toHandleNumber(hwndRaw), idObject, idChild)
+  dispatchWinEvent(subscribers, event, toExactHandle(hwndRaw), idObject, idChild)
 }
 
 function ensureProcPointer() {
@@ -51,7 +53,7 @@ function ensureProcPointer() {
 
 function installHook(firstEvent, lastEvent) {
   const handle = loadNative().setWinEventHook(firstEvent, lastEvent, 0, procPointer, 0, 0, HOOK_FLAGS)
-  if (!toHandleNumber(handle)) {
+  if (!handle) {
     console.error(`[winEvents] Failed to install hook for events ${firstEvent}-${lastEvent}`)
     return null
   }

@@ -108,8 +108,9 @@ const RESIZE_THRESHOLD = 6
 const MIN_FRACTION = 0.05
 const OVERSIZE_TOLERANCE = 8
 const SNAP_CORRECT_DELAY = 60
-const MIN_SIZE_QUERY_ATTEMPTS = 5
+const MIN_SIZE_BACKOFF_ATTEMPTS = 5
 const MIN_SIZE_RETRY_BASE_MS = 1500
+const MIN_SIZE_RETRY_SETTLED_MS = 60000
 const LIVE_RESIZE_INTERVAL = 16
 
 function toNum(v) {
@@ -348,10 +349,14 @@ function queryMinTrackDip(hwnd, display) {
   return { w: Math.round(trackX / scale), h: Math.round(trackY / scale) }
 }
 
+function minSizeRetryDelayMs(attempts) {
+  if (attempts >= MIN_SIZE_BACKOFF_ATTEMPTS) return MIN_SIZE_RETRY_SETTLED_MS
+  return MIN_SIZE_RETRY_BASE_MS * attempts
+}
+
 function minSizeQueryAllowed(hwnd) {
   const failure = minSizeQueryFailures.get(hwnd)
   if (!failure) return true
-  if (failure.attempts >= MIN_SIZE_QUERY_ATTEMPTS) return false
   return Date.now() >= failure.retryAt
 }
 
@@ -366,7 +371,7 @@ function ensureMinSize(hwnd, display) {
   }
   const failure = minSizeQueryFailures.get(hwnd)
   const attempts = (failure ? failure.attempts : 0) + 1
-  minSizeQueryFailures.set(hwnd, { attempts, retryAt: Date.now() + MIN_SIZE_RETRY_BASE_MS * attempts })
+  minSizeQueryFailures.set(hwnd, { attempts, retryAt: Date.now() + minSizeRetryDelayMs(attempts) })
 }
 
 function positionPhysical(hwnd, dipRect) {
