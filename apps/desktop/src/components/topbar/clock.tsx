@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
 import { useDarkText } from "../themeContext";
 import { useClockPrefs } from "../../hooks/useClockPrefs";
 import { useCalendar } from "../../hooks/useCalendar";
+import { useMinuteTick } from "../../hooks/useMinuteTick";
 import PopupMenu from "./shared/popupMenu";
 import CalendarFlyout from "./calendar/calendarFlyout";
 import { resolveTimeFormat, formatClock } from "./calendar/calendarLayout";
@@ -10,12 +10,7 @@ export default function Clock() {
     const darkText = useDarkText();
     const { prefs } = useClockPrefs();
     const { state } = useCalendar();
-    const [now, setNow] = useState(new Date());
-
-    useEffect(() => {
-        const timer = setInterval(() => setNow(new Date()), 1000);
-        return () => clearInterval(timer);
-    }, []);
+    const now = useMinuteTick();
 
     const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const time = formatClock(now, resolveTimeFormat(prefs));

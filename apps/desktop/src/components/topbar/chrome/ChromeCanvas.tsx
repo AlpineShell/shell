@@ -47,6 +47,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
         let lastSurface: ChromeSurface | null = null;
         let running = false;
         let raf = 0;
+        let allocatedHeight = 0;
 
         const now = () => performance.now();
         const sampleOpen = () => {
@@ -62,6 +63,25 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
             oDur = dur;
             oEase = ease;
         };
+
+        const restingHeight = () => propsRef.current.barHeight + 4;
+        const surfaceHeight = (fullHeight: number) => propsRef.current.barHeight + fullHeight + 60;
+
+        const allocate = (heightCss: number) => {
+            const deviceWidth = Math.round(window.innerWidth * dpr);
+            const deviceHeight = Math.round(heightCss * dpr);
+            if (canvas.width !== deviceWidth || canvas.height !== deviceHeight) {
+                canvas.width = deviceWidth;
+                canvas.height = deviceHeight;
+                lastClearH = 0;
+            }
+            if (allocatedHeight !== heightCss) {
+                allocatedHeight = heightCss;
+                canvas.style.height = `${heightCss}px`;
+            }
+        };
+
+        const growFor = (fullHeight: number) => allocate(Math.max(allocatedHeight, surfaceHeight(fullHeight)));
 
         const syncSurface = () => {
             const surface = getChromeSurface();
@@ -87,12 +107,12 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                 morphFrom = null;
                 animateOpen(0, CLOSE_MS, "in");
             }
+            if (surface) growFor(surface.fullHeight);
             kick();
         };
 
         const resize = () => {
-            canvas.width = Math.round(window.innerWidth * dpr);
-            canvas.height = Math.round(window.innerHeight * dpr);
+            allocate(Math.max(allocatedHeight, restingHeight()));
             kick();
         };
 
@@ -119,8 +139,10 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
             const height = fullH * openValue;
             const surfaceActive = openValue > 0.004;
 
+            const need = surfaceActive ? surfaceHeight(fullH) : restingHeight();
+            if (need > allocatedHeight) allocate(need);
+
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            const need = surfaceActive ? barBottom + fullH + 60 : barBottom + 4;
             const clearH = Math.max(need, lastClearH);
             ctx.clearRect(0, 0, screenW, clearH);
             lastClearH = need;
@@ -159,8 +181,12 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
             const animating = draw();
             if (animating) {
                 raf = requestAnimationFrame(tick);
-            } else {
-                running = false;
+                return;
+            }
+            running = false;
+            if (!getChromeSurface() && allocatedHeight !== restingHeight()) {
+                allocate(restingHeight());
+                draw();
             }
         };
 
@@ -191,7 +217,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
     return (
         <canvas
             ref={canvasRef}
-            style={{ position: "fixed", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }}
+            style={{ position: "fixed", top: 0, left: 0, width: "100%", pointerEvents: "none", zIndex: 0 }}
         />
     );
 }

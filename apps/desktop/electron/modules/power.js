@@ -14,8 +14,21 @@ function powerAction(action) {
   }
 }
 
+function announceResume(broadcast) {
+  const { powerMonitor } = require('electron')
+  const notify = () => broadcast('system/resume')
+  for (const event of ['resume', 'unlock-screen']) {
+    try {
+      powerMonitor.on(event, notify)
+    } catch (e) {
+      console.error(`[power] cannot subscribe to '${event}':`, e?.message ?? e)
+    }
+  }
+}
+
 module.exports = {
   handlers: {
     'system/power-action': (_event, action) => powerAction(action),
   },
+  start: announceResume,
 }
