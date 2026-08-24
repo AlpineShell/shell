@@ -21,6 +21,7 @@ export function useBrowserTabs(enabled: boolean): { tabs: BrowserTab[]; meta: Ma
       .catch(() => {})
     const unsubscribe = window.shell.browserTabs.onChanged((data) => {
       if (!alive) return
+      setTabs(data)
       const next = new Map<string, BrowserTabMeta>()
       for (const tab of data) {
         if (tab.favicon || tab.host) next.set(tabKey(tab), { favicon: tab.favicon, host: tab.host })

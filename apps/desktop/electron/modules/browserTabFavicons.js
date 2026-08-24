@@ -1,6 +1,6 @@
 const fs = require('fs')
 const path = require('path')
-const winsqlite = require('./winsqlite')
+const sqliteWorker = require('./sqliteWorker')
 const browserFavicons = require('./browserFavicons')
 const firefoxData = require('./firefoxData')
 const chromiumPaths = require('./chromiumPaths')
@@ -68,7 +68,7 @@ async function chromiumMaps(browser, tabs) {
 
   const titleHost = new Map()
   for (const dir of profileDirs) {
-    const rows = winsqlite.readRows(path.join(dir, 'History'), CHROMIUM_HISTORY_SQL, ['text', 'text'], HISTORY_ROW_LIMIT)
+    const rows = await sqliteWorker.readRows(path.join(dir, 'History'), CHROMIUM_HISTORY_SQL, ['text', 'text'], HISTORY_ROW_LIMIT)
     mergeFirstWins(titleHost, titleHostMapFromRows(rows))
     await yieldToEventLoop()
   }
@@ -79,7 +79,7 @@ async function chromiumMaps(browser, tabs) {
     if (hosts.size === 0) break
     const faviconsDb = path.join(dir, 'Favicons')
     if (!fs.existsSync(faviconsDb)) continue
-    mergeFirstWins(iconByHost, browserFavicons.readFaviconMapForHosts(faviconsDb, hosts))
+    mergeFirstWins(iconByHost, await browserFavicons.readFaviconMap(faviconsDb, hosts))
     await yieldToEventLoop()
   }
   return { titleHost, iconByHost }
@@ -89,12 +89,12 @@ async function firefoxMaps(tabs) {
   const profileDir = firefoxData.resolveProfileDir()
   if (!profileDir) return null
 
-  const rows = winsqlite.readRows(path.join(profileDir, 'places.sqlite'), FIREFOX_HISTORY_SQL, ['text', 'text'], HISTORY_ROW_LIMIT)
+  const rows = await sqliteWorker.readRows(path.join(profileDir, 'places.sqlite'), FIREFOX_HISTORY_SQL, ['text', 'text'], HISTORY_ROW_LIMIT)
   const titleHost = titleHostMapFromRows(rows)
   await yieldToEventLoop()
 
   const hosts = neededHosts(tabs, titleHost)
-  const iconByHost = hosts.size > 0 ? firefoxData.readFaviconMapForHosts(profileDir, hosts) : new Map()
+  const iconByHost = hosts.size > 0 ? await firefoxData.readFaviconMap(profileDir, hosts) : new Map()
   return { titleHost, iconByHost }
 }
 

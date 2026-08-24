@@ -1,31 +1,64 @@
-const winsqlite = require('./winsqlite')
+const sqliteWorker = require('./sqliteWorker')
 
-const MAX_FILTERED_HOSTS = 100
-const SAFE_HOST = /^[a-z0-9.\-:[\]]+$/i
+const ICON_ID_BATCH = 500
+const PREFERRED_ICON_PX = 64
 
-function hostRangeClauses(hosts, column) {
-  const clauses = []
-  let count = 0
-  for (const host of hosts) {
-    if (!SAFE_HOST.test(host)) continue
-    if (++count > MAX_FILTERED_HOSTS) break
-    for (const scheme of ['http://', 'https://']) {
-      clauses.push(`(${column} >= '${scheme}${host}/' AND ${column} < '${scheme}${host}0')`)
-      clauses.push(`(${column} >= '${scheme}${host}:' AND ${column} < '${scheme}${host};')`)
-    }
-  }
-  return clauses
+const CHROMIUM_ICON_MAPPING_SQL = 'SELECT page_url, icon_id FROM icon_mapping'
+
+function chromiumBitmapSql(iconIds) {
+  return `SELECT icon_id, image_data FROM favicon_bitmaps
+    WHERE icon_id IN (${iconIds.join(',')}) AND image_data IS NOT NULL AND length(image_data) > 0
+    ORDER BY (width >= ${PREFERRED_ICON_PX}) DESC, ABS(width - ${PREFERRED_ICON_PX}) ASC`
 }
 
-function collectByHost(rows, neededHosts, toIcon) {
-  const map = new Map()
-  for (const [pageUrl, data] of rows) {
-    if (!pageUrl || !data) continue
+function preferredIconIdByHost(rows, neededHosts) {
+  const countsByHost = new Map()
+  for (const [pageUrl, iconId] of rows) {
+    if (!pageUrl || !Number.isInteger(iconId) || iconId <= 0) continue
     let host
     try { host = new URL(pageUrl).host } catch { continue }
-    if (!host || map.has(host)) continue
-    if (neededHosts && !neededHosts.has(host)) continue
-    const icon = toIcon(data)
+    if (!host || !neededHosts.has(host)) continue
+    let counts = countsByHost.get(host)
+    if (!counts) { counts = new Map(); countsByHost.set(host, counts) }
+    counts.set(iconId, (counts.get(iconId) || 0) + 1)
+  }
+  const byHost = new Map()
+  for (const [host, counts] of countsByHost) {
+    let bestId = 0
+    let bestCount = 0
+    for (const [iconId, count] of counts) {
+      if (count > bestCount || (count === bestCount && iconId > bestId)) { bestId = iconId; bestCount = count }
+    }
+    byHost.set(host, bestId)
+  }
+  return byHost
+}
+
+function idBatches(iconIds) {
+  const out = []
+  for (let i = 0; i < iconIds.length; i += ICON_ID_BATCH) out.push(iconIds.slice(i, i + ICON_ID_BATCH))
+  return out
+}
+
+function collectBlobs(rows, blobById) {
+  for (const [id, data] of rows) {
+    if (data && data.length > 0 && !blobById.has(id)) blobById.set(id, data)
+  }
+  return blobById
+}
+
+async function readIconBlobs(dbPath, iconIds, buildSql) {
+  const blobById = new Map()
+  for (const batch of idBatches(iconIds)) {
+    collectBlobs(await sqliteWorker.readRows(dbPath, buildSql(batch), ['int', 'blob']), blobById)
+  }
+  return blobById
+}
+
+function iconMapFromBlobs(iconIdByHost, blobById, toIcon) {
+  const map = new Map()
+  for (const [host, iconId] of iconIdByHost) {
+    const icon = toIcon(blobById.get(iconId))
     if (icon) map.set(host, icon)
   }
   return map
@@ -36,31 +69,21 @@ function toPngDataUrl(data) {
   return 'data:image/png;base64,' + data.toString('base64')
 }
 
-// Chromium's Favicons DB stores every icon as a PNG blob in favicon_bitmaps,
-// mapped to page URLs via icon_mapping.
-function readFaviconMap(faviconsDbPath, neededHosts) {
-  if (!faviconsDbPath || (neededHosts && neededHosts.size === 0)) return new Map()
-
-  const sql = `SELECT im.page_url, fb.image_data
-    FROM icon_mapping im JOIN favicon_bitmaps fb ON fb.icon_id = im.icon_id
-    WHERE fb.image_data IS NOT NULL AND length(fb.image_data) > 0
-    ORDER BY fb.width DESC`
-  const rows = winsqlite.readRows(faviconsDbPath, sql, ['text', 'blob'])
-  return collectByHost(rows, neededHosts, toPngDataUrl)
-}
-
-function readFaviconMapForHosts(faviconsDbPath, neededHosts) {
+async function readFaviconMap(faviconsDbPath, neededHosts) {
   if (!faviconsDbPath || !neededHosts || neededHosts.size === 0) return new Map()
-  const clauses = hostRangeClauses(neededHosts, 'im.page_url')
-  if (clauses.length === 0) return new Map()
-
-  const sql = `SELECT MIN(im.page_url), fb.image_data
-    FROM icon_mapping im JOIN favicon_bitmaps fb ON fb.icon_id = im.icon_id
-    WHERE fb.image_data IS NOT NULL AND (${clauses.join(' OR ')})
-    GROUP BY fb.id
-    ORDER BY COUNT(*) DESC, fb.width DESC`
-  const rows = winsqlite.readRows(faviconsDbPath, sql, ['text', 'blob'])
-  return collectByHost(rows, neededHosts, toPngDataUrl)
+  const mappings = await sqliteWorker.readRows(faviconsDbPath, CHROMIUM_ICON_MAPPING_SQL, ['text', 'int'])
+  const iconIdByHost = preferredIconIdByHost(mappings, neededHosts)
+  if (iconIdByHost.size === 0) return new Map()
+  const blobById = await readIconBlobs(faviconsDbPath, [...new Set(iconIdByHost.values())], chromiumBitmapSql)
+  return iconMapFromBlobs(iconIdByHost, blobById, toPngDataUrl)
 }
 
-module.exports = { readFaviconMap, readFaviconMapForHosts, hostRangeClauses, collectByHost }
+module.exports = {
+  readFaviconMap,
+  preferredIconIdByHost,
+  readIconBlobs,
+  iconMapFromBlobs,
+  idBatches,
+  collectBlobs,
+  PREFERRED_ICON_PX,
+}
