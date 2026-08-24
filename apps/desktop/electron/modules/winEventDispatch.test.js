@@ -118,6 +118,26 @@ describe('dispatchWinEvent', () => {
     expect(later).toHaveBeenCalledTimes(1)
     expect(subscribers).toHaveLength(1)
   })
+
+  it('still reaches the remaining subscribers when a listener removes an earlier one', () => {
+    const subscribers = []
+    const last = vi.fn()
+    const first = addSubscriber(subscribers, 'tiling', [EVENT_SYSTEM_FOREGROUND], vi.fn())
+    addSubscriber(subscribers, 'windowCorners', [EVENT_SYSTEM_FOREGROUND], () => removeSubscriber(subscribers, first))
+    addSubscriber(subscribers, 'minimizeToTopbar', [EVENT_SYSTEM_FOREGROUND], last)
+    dispatchWinEvent(subscribers, EVENT_SYSTEM_FOREGROUND, HWND, OBJID_WINDOW, CHILDID_SELF)
+    expect(last).toHaveBeenCalledTimes(1)
+    expect(subscribers.map((s) => s.name)).toEqual(['windowCorners', 'minimizeToTopbar'])
+  })
+
+  it('does not call a subscriber a listener removed before it ran', () => {
+    const subscribers = []
+    const removed = vi.fn()
+    const later = addSubscriber(subscribers, 'minimizeToTopbar', [EVENT_SYSTEM_FOREGROUND], removed)
+    addSubscriber(subscribers, 'tiling', [EVENT_SYSTEM_FOREGROUND], () => removeSubscriber(subscribers, later))
+    dispatchWinEvent(subscribers, EVENT_SYSTEM_FOREGROUND, HWND, OBJID_WINDOW, CHILDID_SELF)
+    expect(removed).not.toHaveBeenCalled()
+  })
 })
 
 describe('hook requirements', () => {

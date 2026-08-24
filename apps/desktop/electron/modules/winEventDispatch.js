@@ -39,13 +39,15 @@ function isWindowItself(idObject, idChild) {
 function dispatchWinEvent(subscribers, event, hwnd, idObject, idChild) {
   if (!isWindowItself(idObject, idChild)) return
   if (!hwnd) return
-  for (const subscriber of subscribers.slice()) {
+  for (let index = 0; index < subscribers.length; index++) {
+    const subscriber = subscribers[index]
     if (!subscriber.events.has(event)) continue
     try {
       subscriber.listener(hwnd, event)
     } catch (e) {
       console.error(`[winEvents] ${subscriber.name} listener error:`, e.message)
     }
+    if (subscribers[index] !== subscriber) index--
   }
 }
 

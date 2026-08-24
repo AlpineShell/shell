@@ -1,6 +1,7 @@
 const koffi = require('koffi')
 const { screen } = require('electron')
 const winEvents = require('./winEvents')
+const { claimSample } = require('./foregroundSampleBudget')
 
 const user32 = koffi.load('user32.dll')
 const gdi32 = koffi.load('gdi32.dll')
@@ -21,22 +22,20 @@ const GetDpiForWindow = user32.func('__stdcall', 'GetDpiForWindow', 'uint32', ['
 
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
+const IsIconic = user32.func('__stdcall', 'IsIconic', 'int', ['uintptr_t'])
 
 const SRCCOPY = 0x00CC0020
 
 const EVENT_SYSTEM_FOREGROUND = 0x0003
 const EVENT_SYSTEM_MOVESIZEEND = 0x000b
-const EVENT_SYSTEM_MINIMIZESTART = 0x0016
 const EVENT_SYSTEM_MINIMIZEEND = 0x0017
 const FOREGROUND_COLOR_EVENTS = [
   EVENT_SYSTEM_FOREGROUND,
   EVENT_SYSTEM_MOVESIZEEND,
-  EVENT_SYSTEM_MINIMIZESTART,
   EVENT_SYSTEM_MINIMIZEEND,
 ]
 
 const POLL_INTERVAL_MS = 300
-const MAX_SAMPLE_ATTEMPTS = 8
 
 let altTab = null
 try { altTab = require('./altTab') } catch (_) {}
@@ -45,7 +44,7 @@ const perDisplay = new Map()
 const pendingDisplay = new Map()
 const hwndPerDisplay = new Map()
 const sampledHwndPerDisplay = new Map()
-const sampleAttemptsPerDisplay = new Map()
+const sampleBudgetPerDisplay = new Map()
 let startupIgnoreHwnd = null
 
 function colorEqual(a, b) {
@@ -121,22 +120,25 @@ function getDisplayIdForWindow(hwnd) {
   return display.id
 }
 
-function clearDisplay(displayId, broadcast) {
-  hwndPerDisplay.delete(displayId)
+function clearColor(displayId, broadcast) {
   pendingDisplay.delete(displayId)
   sampledHwndPerDisplay.delete(displayId)
-  sampleAttemptsPerDisplay.delete(displayId)
-  if (perDisplay.has(displayId)) {
-    perDisplay.delete(displayId)
-    broadcast('topbar/fg-color-changed', { displayId })
-  }
+  if (!perDisplay.has(displayId)) return
+  perDisplay.delete(displayId)
+  broadcast('topbar/fg-color-changed', { displayId })
+}
+
+function clearDisplay(displayId, broadcast) {
+  hwndPerDisplay.delete(displayId)
+  sampleBudgetPerDisplay.delete(displayId)
+  clearColor(displayId, broadcast)
 }
 
 function update(broadcast) {
   if (altTab && altTab.isSwitcherActive()) return
 
   for (const [displayId, trackedHwnd] of [...hwndPerDisplay.entries()]) {
-    if (!trackedHwnd || !IsZoomed(trackedHwnd)) {
+    if (!trackedHwnd || !IsZoomed(trackedHwnd) || IsIconic(trackedHwnd)) {
       clearDisplay(displayId, broadcast)
     }
   }
@@ -154,25 +156,21 @@ function update(broadcast) {
   const displayId = getDisplayIdForWindow(hwnd)
   if (displayId == null) return
 
-  if (hwndPerDisplay.get(displayId) !== hwnd) sampleAttemptsPerDisplay.delete(displayId)
   hwndPerDisplay.set(displayId, hwnd)
 
   if (sampledHwndPerDisplay.get(displayId) === hwnd && perDisplay.has(displayId)) return
-
-  const attempt = (sampleAttemptsPerDisplay.get(displayId) || 0) + 1
-  if (attempt > MAX_SAMPLE_ATTEMPTS) return
-  sampleAttemptsPerDisplay.set(displayId, attempt)
+  if (!claimSample(sampleBudgetPerDisplay, displayId, hwnd, Date.now())) return
 
   const rgb = sampleTitleBarColor(hwnd)
   if (!rgb) {
-    clearDisplay(displayId, broadcast)
+    clearColor(displayId, broadcast)
     return
   }
 
   const lum = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b
   const color = { r: rgb.r, g: rgb.g, b: rgb.b, darkText: lum > 128 }
 
-  if (!colorEqual(pendingDisplay.get(displayId), color) && attempt < MAX_SAMPLE_ATTEMPTS) {
+  if (!colorEqual(pendingDisplay.get(displayId), color)) {
     pendingDisplay.set(displayId, color)
     return
   }

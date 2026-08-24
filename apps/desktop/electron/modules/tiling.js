@@ -86,7 +86,7 @@ let lastDynamicSnapshot = ''
 const snapStateByHwnd = new Map()
 const lastAppliedDipByHwnd = new Map()
 const minSizeByHwnd = new Map()
-const minSizeUnavailableHwnds = new Set()
+const minSizeQueryFailures = new Map()
 
 let windowOrder = []
 let unsubscribeWinEvents = null
@@ -108,6 +108,8 @@ const RESIZE_THRESHOLD = 6
 const MIN_FRACTION = 0.05
 const OVERSIZE_TOLERANCE = 8
 const SNAP_CORRECT_DELAY = 60
+const MIN_SIZE_QUERY_ATTEMPTS = 5
+const MIN_SIZE_RETRY_BASE_MS = 1500
 const LIVE_RESIZE_INTERVAL = 16
 
 function toNum(v) {
@@ -346,11 +348,25 @@ function queryMinTrackDip(hwnd, display) {
   return { w: Math.round(trackX / scale), h: Math.round(trackY / scale) }
 }
 
+function minSizeQueryAllowed(hwnd) {
+  const failure = minSizeQueryFailures.get(hwnd)
+  if (!failure) return true
+  if (failure.attempts >= MIN_SIZE_QUERY_ATTEMPTS) return false
+  return Date.now() >= failure.retryAt
+}
+
 function ensureMinSize(hwnd, display) {
-  if (minSizeByHwnd.has(hwnd) || minSizeUnavailableHwnds.has(hwnd)) return
+  if (minSizeByHwnd.has(hwnd)) return
+  if (!minSizeQueryAllowed(hwnd)) return
   const min = queryMinTrackDip(hwnd, display)
-  if (min) minSizeByHwnd.set(hwnd, min)
-  else minSizeUnavailableHwnds.add(hwnd)
+  if (min) {
+    minSizeByHwnd.set(hwnd, min)
+    minSizeQueryFailures.delete(hwnd)
+    return
+  }
+  const failure = minSizeQueryFailures.get(hwnd)
+  const attempts = (failure ? failure.attempts : 0) + 1
+  minSizeQueryFailures.set(hwnd, { attempts, retryAt: Date.now() + MIN_SIZE_RETRY_BASE_MS * attempts })
 }
 
 function positionPhysical(hwnd, dipRect) {
@@ -403,7 +419,7 @@ function pruneRuntimeMaps(windows) {
   const present = new Set(windows)
   for (const hwnd of [...lastAppliedDipByHwnd.keys()]) if (!present.has(hwnd)) lastAppliedDipByHwnd.delete(hwnd)
   for (const hwnd of [...minSizeByHwnd.keys()]) if (!present.has(hwnd)) minSizeByHwnd.delete(hwnd)
-  for (const hwnd of [...minSizeUnavailableHwnds]) if (!present.has(hwnd)) minSizeUnavailableHwnds.delete(hwnd)
+  for (const hwnd of [...minSizeQueryFailures.keys()]) if (!present.has(hwnd)) minSizeQueryFailures.delete(hwnd)
 }
 
 function alignOversizedInZone(hwnd, zoneName, display, content) {
@@ -442,7 +458,6 @@ function correctSnapOversize(hwnd, zoneName, display) {
       const overH = content.height - cell.height
       if (overW <= OVERSIZE_TOLERANCE && overH <= OVERSIZE_TOLERANCE) return
       const min = minSizeByHwnd.get(hwnd) || { w: 0, h: 0 }
-      minSizeUnavailableHwnds.delete(hwnd)
       minSizeByHwnd.set(hwnd, {
         w: overW > OVERSIZE_TOLERANCE ? Math.round(content.width) : min.w,
         h: overH > OVERSIZE_TOLERANCE ? Math.round(content.height) : min.h,
@@ -1310,7 +1325,10 @@ function onWindowEvent(hwnd, event) {
     return
   }
 
-  scheduleDynamicApply()
+  if (event === EVENT_SYSTEM_FOREGROUND || event === EVENT_SYSTEM_MINIMIZESTART ||
+      event === EVENT_SYSTEM_MINIMIZEEND || event === EVENT_OBJECT_SHOW) {
+    scheduleDynamicApply()
+  }
 }
 
 function installWinEventHook() {
