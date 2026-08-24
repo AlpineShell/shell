@@ -136,7 +136,6 @@ export default function StatusIndicator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         scanAll();
-        refreshWifiRadio();
         window.shell.network.onWifiScanUpdated((data) => {
             setWifiNetworks(data);
             setWifiScanning(false);

@@ -1,6 +1,8 @@
 const { exec } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
+const { createPersistentRunner } = require('../powershell')
+const { singleFlight } = require('../singleFlight')
 
 let lastSignal = undefined
 let lastType = undefined
@@ -8,6 +10,7 @@ let lastSsid = undefined
 let cachedStatus = { signal: null, connected: false, type: 'wifi', ssid: null }
 let cachedNetworks = []
 let cachedRadio = true
+let wifiRescanPending = false
 
 const scriptsDir = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts')
@@ -16,75 +19,99 @@ const scriptPath = path.join(scriptsDir, 'networkStatus.ps1')
 const scanScriptPath = path.join(scriptsDir, 'wifiScan.ps1')
 const radioScriptPath = path.join(scriptsDir, 'wifiRadio.ps1')
 
-function getNetworkStatusAndRadio() {
-  return new Promise((resolve) => {
-    exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
-      (err, stdout) => {
-        if (err || !stdout) {
-          return resolve({
-            status: { signal: null, connected: false, type: 'wifi', ssid: null },
-            radio: { success: false, state: 'unknown' },
-          })
-        }
-        try {
-          const parsed = JSON.parse(stdout.trim())
-          resolve({
-            status: {
-              signal: parsed.signal ?? null,
-              connected: !!parsed.connected,
-              type: parsed.type || 'wifi',
-              ssid: parsed.ssid || null,
-            },
-            radio: {
-              success: !!parsed.radioSuccess,
-              state: parsed.radioState || 'unknown',
-            },
-          })
-        } catch {
-          resolve({
-            status: { signal: null, connected: false, type: 'wifi', ssid: null },
-            radio: { success: false, state: 'unknown' },
-          })
-        }
-      }
-    )
-  })
-}
+const NETWORK_SCRIPT_TIMEOUT_MS = 15000
+const NETWORK_REFRESH_INTERVAL_MS = 10000
+const WIFI_RESCAN_SETTLE_MS = 3000
 
-function getNetworkStatus() {
-  return getNetworkStatusAndRadio().then((result) => result.status)
-}
+const runner = createPersistentRunner(undefined, NETWORK_SCRIPT_TIMEOUT_MS)
 
 let broadcastFn = null
 
-function fetchWifiList() {
-  return new Promise((resolve) => {
-    exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}"`,
-      { timeout: 10000 },
-      (err, stdout) => {
-        if (err || !stdout) return resolve(null)
-        try {
-          const parsed = JSON.parse(stdout.trim())
-          cachedNetworks = Array.isArray(parsed) ? parsed : [parsed]
-          resolve(cachedNetworks)
-        } catch {
-          resolve(null)
-        }
-      }
-    )
+function runNetworkScript(scriptFile, args = '') {
+  return runner.run(`& "${scriptFile}" ${args}`)
+}
+
+function parseJsonOutput(output, fallback) {
+  if (!output) return fallback
+  try {
+    return JSON.parse(output.trim())
+  } catch {
+    return fallback
+  }
+}
+
+const EMPTY_STATUS = { signal: null, connected: false, type: 'wifi', ssid: null }
+const UNKNOWN_RADIO = { success: false, state: 'unknown' }
+
+async function fetchNetworkStatusAndRadio() {
+  const parsed = parseJsonOutput(await runNetworkScript(scriptPath), null)
+  if (!parsed) return { status: { ...EMPTY_STATUS }, radio: { ...UNKNOWN_RADIO } }
+  return {
+    status: {
+      signal: parsed.signal ?? null,
+      connected: !!parsed.connected,
+      type: parsed.type || 'wifi',
+      ssid: parsed.ssid || null,
+    },
+    radio: {
+      success: !!parsed.radioSuccess,
+      state: parsed.radioState || 'unknown',
+    },
+  }
+}
+
+function applyWifiRadioState(enabled) {
+  if (enabled === cachedRadio) return
+  cachedRadio = enabled
+  if (broadcastFn) broadcastFn('network/wifi-radio-changed', cachedRadio)
+}
+
+function publishNetworkStatus() {
+  if (
+    cachedStatus.signal === lastSignal &&
+    cachedStatus.type === lastType &&
+    cachedStatus.ssid === lastSsid
+  ) {
+    return
+  }
+  lastSignal = cachedStatus.signal
+  lastType = cachedStatus.type
+  lastSsid = cachedStatus.ssid
+  if (broadcastFn) broadcastFn('network/wifi-signal-changed', cachedStatus)
+}
+
+const refreshNetworkStatus = singleFlight(async () => {
+  const { status, radio } = await fetchNetworkStatusAndRadio()
+  cachedStatus = status
+  if (radio.success) applyWifiRadioState(radio.state === 'on')
+  publishNetworkStatus()
+  return cachedStatus
+})
+
+const refreshWifiList = singleFlight(async () => {
+  const parsed = parseJsonOutput(await runNetworkScript(scanScriptPath), null)
+  if (!parsed) return null
+  cachedNetworks = Array.isArray(parsed) ? parsed : [parsed]
+  return cachedNetworks
+})
+
+async function publishFreshWifiList() {
+  wifiRescanPending = false
+  const fresh = await refreshWifiList()
+  if (fresh && broadcastFn) broadcastFn('network/wifi-scan-updated', fresh)
+}
+
+function requestWifiRescan() {
+  if (wifiRescanPending) return
+  wifiRescanPending = true
+  runner.run('netsh wlan scan').then(() => {
+    setTimeout(publishFreshWifiList, WIFI_RESCAN_SETTLE_MS)
   })
 }
 
 function scanWifiNetworks() {
-  exec('netsh wlan scan', () => {
-    setTimeout(async () => {
-      const fresh = await fetchWifiList()
-      if (fresh && broadcastFn) broadcastFn('network/wifi-scan-updated', fresh)
-    }, 3000)
-  })
-  return fetchWifiList()
+  requestWifiRescan()
+  return refreshWifiList()
 }
 
 function wifiConnect(ssid, password) {
@@ -125,16 +152,16 @@ function wifiDisconnect() {
   })
 }
 
-function wifiRadio(action) {
-  return new Promise((resolve) => {
-    exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -File "${radioScriptPath}" -Action "${action}"`,
-      (err, stdout) => {
-        if (err || !stdout) return resolve({ success: false, state: 'unknown' })
-        try { resolve(JSON.parse(stdout.trim())) } catch { resolve({ success: false, state: 'unknown' }) }
-      }
-    )
-  })
+async function runWifiRadioScript(action) {
+  const output = await runNetworkScript(radioScriptPath, `-Action "${action}"`)
+  return parseJsonOutput(output, { success: false, state: 'unknown' })
+}
+
+const getWifiRadio = singleFlight(() => runWifiRadioScript('get'))
+
+function adoptRadioResult(result) {
+  if (result.success) applyWifiRadioState(result.state === 'on')
+  return result
 }
 
 module.exports = {
@@ -144,59 +171,21 @@ module.exports = {
     'network/wifi-scan': () => scanWifiNetworks(),
     'network/wifi-connect': (_event, { ssid, password }) => wifiConnect(ssid, password),
     'network/wifi-disconnect': () => wifiDisconnect(),
-    'network/wifi-radio-get': async () => {
-      const result = await wifiRadio('get')
-      if (result.success) {
-        const newRadio = result.state === 'on'
-        if (newRadio !== cachedRadio) {
-          cachedRadio = newRadio
-          if (broadcastFn) broadcastFn('network/wifi-radio-changed', cachedRadio)
-        }
-      }
-      return result
-    },
+    'network/wifi-radio-get': async () => adoptRadioResult(await getWifiRadio()),
     'network/wifi-radio-set': async (_event, enabled) => {
-      const result = await wifiRadio(enabled ? 'on' : 'off')
-      if (result.success) {
-        const newRadio = result.state === 'on'
-        if (newRadio !== cachedRadio) {
-          cachedRadio = newRadio
-          if (broadcastFn) broadcastFn('network/wifi-radio-changed', cachedRadio)
-        }
-      }
-      setTimeout(async () => {
-        const current = await getNetworkStatus()
-        cachedStatus = current
-        if (broadcastFn) broadcastFn('network/wifi-signal-changed', current)
-      }, 1500)
+      const result = adoptRadioResult(await runWifiRadioScript(enabled ? 'on' : 'off'))
+      setTimeout(refreshNetworkStatus, 1500)
       return result
     },
   },
 
   start(broadcast) {
-    broadcastFn = broadcast;
+    broadcastFn = broadcast
     const { ipcMain } = require('electron')
     ipcMain.on('network/wifi-init', (event) => {
       event.returnValue = { status: cachedStatus, radio: cachedRadio }
     })
-    async function poll() {
-      const { status: current, radio } = await getNetworkStatusAndRadio()
-      cachedStatus = current
-      if (radio.success) {
-        const newRadio = radio.state === 'on'
-        if (newRadio !== cachedRadio) {
-          cachedRadio = newRadio
-          broadcast('network/wifi-radio-changed', cachedRadio)
-        }
-      }
-      if (current.signal !== lastSignal || current.type !== lastType || current.ssid !== lastSsid) {
-        lastSignal = current.signal
-        lastType = current.type
-        lastSsid = current.ssid
-        broadcast('network/wifi-signal-changed', current)
-      }
-    }
-    poll()
-    setInterval(poll, 10000)
+    refreshNetworkStatus()
+    setInterval(refreshNetworkStatus, NETWORK_REFRESH_INTERVAL_MS)
   },
 }
