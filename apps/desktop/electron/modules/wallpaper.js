@@ -1,8 +1,12 @@
-const { exec } = require('child_process')
 const { dialog, app, ipcMain, nativeImage } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const koffi = require('koffi')
+const { readCurrentUserStringValue, watchCurrentUserStringValue } = require('../registryWatch')
+
+const DESKTOP_REGISTRY_KEY = 'Control Panel\\Desktop'
+const WALLPAPER_REGISTRY_VALUE = 'Wallpaper'
+const WALLPAPER_CHANGE_CHECK_MS = 1000
 
 const THUMBNAIL_WIDTH = 400
 const thumbnailCache = new Map()
@@ -94,21 +98,12 @@ function persistAsync(filePath) {
   }, 800)
 }
 
-function getPath() {
-  return new Promise((resolve) => {
-    exec(
-      `reg query "HKCU\\Control Panel\\Desktop" /v Wallpaper`,
-      (err, stdout) => {
-        const match = stdout.match(/Wallpaper\s+REG_SZ\s+(.+)/)
-        resolve(match ? match[1].trim() : null)
-      }
-    )
-  })
+function readDesktopWallpaperPath() {
+  return readCurrentUserStringValue(DESKTOP_REGISTRY_KEY, WALLPAPER_REGISTRY_VALUE)
 }
 
 function resolveWallpaperPath() {
-  if (lastPath) return Promise.resolve(lastPath)
-  return getPath()
+  return Promise.resolve(lastPath || readDesktopWallpaperPath())
 }
 
 function encode(filePath) {
@@ -247,15 +242,21 @@ module.exports = {
       SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, saved, SPIF_SENDCHANGE)
     }
 
+    const desktopWallpaperWatch = watchCurrentUserStringValue({
+      subKey: DESKTOP_REGISTRY_KEY,
+      valueName: WALLPAPER_REGISTRY_VALUE,
+      checkIntervalMs: WALLPAPER_CHANGE_CHECK_MS,
+      onChange: (currentPath) => {
+        if (currentPath === lastPath) return
+        lastPath = currentPath
+        broadcast('windows/wallpaper-changed', encode(currentPath))
+      },
+    })
+    app.on('will-quit', desktopWallpaperWatch.stop)
+    if (!lastPath) lastPath = readDesktopWallpaperPath()
+
     ipcMain.on('windows/wallpaper-init', (event) => {
       event.returnValue = encode(lastPath)
     })
-    setInterval(async () => {
-      const currentPath = await getPath()
-      if (currentPath !== lastPath) {
-        lastPath = currentPath
-        broadcast('windows/wallpaper-changed', encode(currentPath))
-      }
-    }, 5000)
   },
 }

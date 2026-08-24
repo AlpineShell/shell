@@ -1,6 +1,7 @@
 const { exec } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
+const { singleFlight } = require('../singleFlight')
 
 const scriptsDir = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts')
@@ -10,148 +11,142 @@ const toggleScriptPath = path.join(scriptsDir, 'bluetoothToggle.ps1')
 const radioScriptPath = path.join(scriptsDir, 'bluetoothRadio.ps1')
 const unpairScriptPath = path.join(scriptsDir, 'bluetoothUnpair.ps1')
 
+const BLUETOOTH_REFRESH_INTERVAL_MS = 5000
+const POST_DISCONNECT_REFRESH_MS = 1500
+const POST_CONNECT_REFRESH_MS = 3000
+
 let lastState = undefined
+let lastDevicesKey = undefined
 let cachedState = { enabled: false, connected: false, devices: [] }
 let cachedDevices = []
 let broadcastRef = null
 
-function getRadioAndDevices() {
+function runBluetoothScript(scriptFile, args = '') {
   return new Promise((resolve) => {
     exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}" -WithRadio`,
-      (err, stdout) => {
-        if (err || !stdout) return resolve({ enabled: false, devices: [] })
-        try {
-          const parsed = JSON.parse(stdout.trim())
-          const raw = parsed.devices
-          const devices = Array.isArray(raw) ? raw : raw ? [raw] : []
-          resolve({ enabled: parsed.enabled === true, devices })
-        } catch {
-          resolve({ enabled: false, devices: [] })
-        }
-      }
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}" ${args}`,
+      (err, stdout) => resolve(err || !stdout ? null : stdout.trim())
     )
   })
 }
 
-async function getBluetoothState() {
-  const { enabled, devices } = await getRadioAndDevices()
-  if (!enabled) return { enabled: false, connected: false, devices: [] }
+function parseJsonOutput(output, fallback) {
+  if (!output) return fallback
+  try {
+    return JSON.parse(output)
+  } catch {
+    return fallback
+  }
+}
 
-  const names = devices.filter((d) => d.connected).map((d) => d.name)
-  const connectedNames = [...new Set(names)]
+function toDeviceArray(raw) {
+  if (Array.isArray(raw)) return raw
+  return raw ? [raw] : []
+}
+
+function deviceRank(device) {
+  if (device.connected) return 0
+  return device.paired ? 1 : 2
+}
+
+function inStableOrder(devices) {
+  return [...devices].sort(
+    (a, b) =>
+      deviceRank(a) - deviceRank(b) ||
+      `${a.name ?? ''}`.localeCompare(`${b.name ?? ''}`) ||
+      `${a.instanceId ?? ''}`.localeCompare(`${b.instanceId ?? ''}`)
+  )
+}
+
+async function fetchRadioAndDevices() {
+  const parsed = parseJsonOutput(await runBluetoothScript(scanScriptPath, '-WithRadio'), null)
+  if (!parsed) return null
+  return { enabled: parsed.enabled === true, devices: inStableOrder(toDeviceArray(parsed.devices)) }
+}
+
+function toBluetoothState(enabled, devices) {
+  if (!enabled) return { enabled: false, connected: false, devices: [] }
+  const connectedNames = [...new Set(devices.filter((d) => d.connected).map((d) => d.name))]
   return { enabled: true, connected: connectedNames.length > 0, devices: connectedNames }
 }
 
-function scanBluetoothDevices() {
-  return new Promise((resolve) => {
-    exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -File "${scanScriptPath}"`,
-      (err, stdout) => {
-        if (err || !stdout) return resolve(cachedDevices)
-        try {
-          const parsed = JSON.parse(stdout.trim())
-          cachedDevices = Array.isArray(parsed) ? parsed : [parsed]
-          resolve(cachedDevices)
-        } catch {
-          resolve(cachedDevices)
-        }
-      }
-    )
-  })
+function publishBluetooth() {
+  const stateKey = `${cachedState.enabled}:${cachedState.connected}`
+  if (stateKey !== lastState) {
+    lastState = stateKey
+    broadcastRef?.('system/bluetooth-changed', cachedState)
+  }
+  const devicesKey = JSON.stringify(cachedDevices)
+  if (devicesKey !== lastDevicesKey) {
+    lastDevicesKey = devicesKey
+    broadcastRef?.('system/bluetooth-devices-changed', cachedDevices)
+  }
 }
 
-function toggleBluetoothDevice(instanceId, action) {
-  return new Promise((resolve) => {
-    exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -File "${toggleScriptPath}" -InstanceId "${instanceId}" -Action "${action}"`,
-      (err, stdout) => {
-        if (err || !stdout) return resolve({ success: false })
-        try {
-          resolve(JSON.parse(stdout.trim()))
-        } catch {
-          resolve({ success: false })
-        }
-      }
-    )
-  })
+const refreshBluetooth = singleFlight(async () => {
+  const scan = await fetchRadioAndDevices()
+  if (!scan) return cachedDevices
+  cachedDevices = scan.devices
+  cachedState = toBluetoothState(scan.enabled, scan.devices)
+  publishBluetooth()
+  return cachedDevices
+})
+
+function logRefreshFailure(error) {
+  console.error('[bluetooth] refresh failed:', error.message)
+}
+
+function refreshBluetoothQuietly() {
+  refreshBluetooth().catch(logRefreshFailure)
+}
+
+function scanAfterCurrentScan() {
+  if (refreshBluetooth.isPending()) return refreshBluetooth().then(refreshBluetooth)
+  return refreshBluetooth()
+}
+
+function refreshBluetoothAfter(delayMs) {
+  setTimeout(() => scanAfterCurrentScan().catch(logRefreshFailure), delayMs)
+}
+
+async function toggleBluetoothDevice(instanceId, action) {
+  const output = await runBluetoothScript(toggleScriptPath, `-InstanceId "${instanceId}" -Action "${action}"`)
+  return parseJsonOutput(output, { success: false })
 }
 
 function openBluetoothPairing() {
   exec('DevicePairingWizard.exe')
 }
 
-function unpairBluetoothDevice(instanceId) {
-  return new Promise((resolve) => {
-    exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -File "${unpairScriptPath}" -InstanceId "${instanceId}"`,
-      (err, stdout) => {
-        if (err || !stdout) return resolve({ success: false })
-        try {
-          resolve(JSON.parse(stdout.trim()))
-        } catch {
-          resolve({ success: false })
-        }
-      }
-    )
-  })
+async function unpairBluetoothDevice(instanceId) {
+  const output = await runBluetoothScript(unpairScriptPath, `-InstanceId "${instanceId}"`)
+  return parseJsonOutput(output, { success: false })
 }
 
-function setBluetoothRadio(action) {
-  return new Promise((resolve) => {
-    exec(
-      `powershell -NoProfile -ExecutionPolicy Bypass -File "${radioScriptPath}" -Action "${action}"`,
-      (err, stdout) => {
-        if (err || !stdout) return resolve({ success: false })
-        try { resolve(JSON.parse(stdout.trim())) } catch { resolve({ success: false }) }
-      }
-    )
-  })
+async function setBluetoothRadio(action) {
+  const output = await runBluetoothScript(radioScriptPath, `-Action "${action}"`)
+  return parseJsonOutput(output, { success: false })
 }
 
 module.exports = {
   handlers: {
     'system/bluetooth': () => cachedState,
     'system/bluetooth-devices': () => cachedDevices,
-    'system/bluetooth-scan': () => scanBluetoothDevices(),
+    'system/bluetooth-scan': () => refreshBluetooth(),
     'system/bluetooth-toggle': async (_event, { instanceId, action }) => {
       const result = await toggleBluetoothDevice(instanceId, action)
-      const delay = action === 'disconnect' ? 1500 : 3000
-      setTimeout(async () => {
-        const [state, devices] = await Promise.all([
-          getBluetoothState(),
-          scanBluetoothDevices(),
-        ])
-        cachedState = state
-        lastState = `${state.enabled}:${state.connected}`
-        broadcastRef?.('system/bluetooth-changed', state)
-        broadcastRef?.('system/bluetooth-devices-changed', devices)
-      }, delay)
+      refreshBluetoothAfter(action === 'disconnect' ? POST_DISCONNECT_REFRESH_MS : POST_CONNECT_REFRESH_MS)
       return result
     },
     'system/bluetooth-settings': () => openBluetoothPairing(),
     'system/bluetooth-unpair': async (_event, instanceId) => {
       const result = await unpairBluetoothDevice(instanceId)
-      setTimeout(async () => {
-        const [state, devices] = await Promise.all([
-          getBluetoothState(),
-          scanBluetoothDevices(),
-        ])
-        cachedState = state
-        lastState = `${state.enabled}:${state.connected}`
-        broadcastRef?.('system/bluetooth-changed', state)
-        broadcastRef?.('system/bluetooth-devices-changed', devices)
-      }, 1500)
+      refreshBluetoothAfter(POST_DISCONNECT_REFRESH_MS)
       return result
     },
     'system/bluetooth-set-radio': async (_event, enabled) => {
       const result = await setBluetoothRadio(enabled ? 'on' : 'off')
-      setTimeout(async () => {
-        const state = await getBluetoothState()
-        cachedState = state
-        lastState = `${state.enabled}:${state.connected}`
-        broadcastRef?.('system/bluetooth-changed', state)
-      }, 1500)
+      refreshBluetoothAfter(POST_DISCONNECT_REFRESH_MS)
       return result
     },
   },
@@ -162,16 +157,8 @@ module.exports = {
     ipcMain.on('system/bluetooth-init', (event) => {
       event.returnValue = cachedState
     })
-    async function poll() {
-      const current = await getBluetoothState()
-      cachedState = current
-      const key = `${current.enabled}:${current.connected}`
-      if (key !== lastState) {
-        lastState = key
-        broadcast('system/bluetooth-changed', current)
-      }
-    }
-    poll()
-    setInterval(poll, 5000)
+    refreshBluetoothQuietly()
+    const pollTimer = setInterval(refreshBluetoothQuietly, BLUETOOTH_REFRESH_INTERVAL_MS)
+    app.on('will-quit', () => clearInterval(pollTimer))
   },
 }

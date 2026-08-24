@@ -35,13 +35,15 @@ try {
     $radioState = 'error'
 }
 
-$ethernet = Get-NetAdapter | Where-Object { $_.Name -match 'Ethernet|^LAN' -and $_.Name -notmatch 'WLAN' -and $_.PhysicalMediaType -ne 'Unspecified' } | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
+$liveAdapters = @(Get-NetAdapter | Where-Object { $_.Status -eq 'Up' })
+
+$ethernet = $liveAdapters | Where-Object { $_.Name -match 'Ethernet|^LAN' -and $_.Name -notmatch 'WLAN' -and $_.PhysicalMediaType -ne 'Unspecified' } | Select-Object -First 1
 if ($ethernet) {
     @{ signal = $null; connected = $true; type = 'ethernet'; ssid = $null; radioSuccess = $radioSuccess; radioState = $radioState } | ConvertTo-Json -Compress
     exit
 }
 
-$wifi = Get-NetAdapter | Where-Object { $_.Name -match 'Wi-?Fi|WLAN' } | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
+$wifi = $liveAdapters | Where-Object { $_.Name -match 'Wi-?Fi|WLAN' } | Select-Object -First 1
 if (-not $wifi) {
     @{ signal = $null; connected = $false; type = 'wifi'; ssid = $null; radioSuccess = $radioSuccess; radioState = $radioState } | ConvertTo-Json -Compress
     exit
