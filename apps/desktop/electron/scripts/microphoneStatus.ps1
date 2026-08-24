@@ -72,10 +72,14 @@ public static class MicDetect {
 
     static readonly Guid IID_IAudioSessionManager2 = new Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
 
+    static IMMDeviceEnumerator sharedEnumerator;
+
     public static string[] GetActiveCapturers() {
         var names = new List<string>();
         try {
-            var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            if (sharedEnumerator == null)
+                sharedEnumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            var enumerator = sharedEnumerator;
             IMMDeviceCollection devices;
             enumerator.EnumAudioEndpoints(1, 1, out devices);
             int count;
@@ -109,7 +113,9 @@ public static class MicDetect {
                     }
                 }
             }
-        } catch {}
+        } catch {
+            sharedEnumerator = null;
+        }
         return names.ToArray();
     }
 }

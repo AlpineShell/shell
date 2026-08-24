@@ -49,48 +49,97 @@ interface IMMDeviceEnumerator {
 class MMDeviceEnumeratorComObject {}
 
 public class Audio {
-    private static IAudioEndpointVolume GetEndpointVolume() {
-        var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
-        IMMDevice dev;
-        enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
-        var iid = typeof(IAudioEndpointVolume).GUID;
-        object ppv;
-        dev.Activate(ref iid, 1, IntPtr.Zero, out ppv);
-        return (IAudioEndpointVolume)ppv;
+    private static IMMDeviceEnumerator deviceEnumerator;
+    private static string boundDeviceId;
+    private static IAudioEndpointVolume boundVolume;
+    private static IAudioMeterInformation boundMeter;
+
+    private static void ReleaseBinding() {
+        deviceEnumerator = null;
+        boundDeviceId = null;
+        boundVolume = null;
+        boundMeter = null;
     }
 
-    public static float GetVolume() {
+    private static void BindDefaultEndpoint() {
+        if (deviceEnumerator == null)
+            deviceEnumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
+        IMMDevice device;
+        deviceEnumerator.GetDefaultAudioEndpoint(0, 1, out device);
+        if (device == null) throw new InvalidOperationException("no default render endpoint");
+        string deviceId;
+        device.GetId(out deviceId);
+        if (deviceId == boundDeviceId && boundVolume != null && boundMeter != null) return;
+        var volumeIid = typeof(IAudioEndpointVolume).GUID;
+        object volumeInterface;
+        device.Activate(ref volumeIid, 1, IntPtr.Zero, out volumeInterface);
+        var meterIid = typeof(IAudioMeterInformation).GUID;
+        object meterInterface;
+        device.Activate(ref meterIid, 1, IntPtr.Zero, out meterInterface);
+        boundVolume = (IAudioEndpointVolume)volumeInterface;
+        boundMeter = (IAudioMeterInformation)meterInterface;
+        boundDeviceId = deviceId;
+    }
+
+    private static T OnBoundEndpoint<T>(Func<T> body) {
+        try {
+            BindDefaultEndpoint();
+            return body();
+        } catch {
+            ReleaseBinding();
+            BindDefaultEndpoint();
+            return body();
+        }
+    }
+
+    private static float ReadVolume() {
         float level;
-        GetEndpointVolume().GetMasterVolumeLevelScalar(out level);
+        boundVolume.GetMasterVolumeLevelScalar(out level);
         return level;
     }
 
-    public static void SetVolume(float level) {
-        var guid = Guid.Empty;
-        GetEndpointVolume().SetMasterVolumeLevelScalar(level, ref guid);
-    }
-
-    public static bool GetMute() {
+    private static bool ReadMute() {
         bool muted;
-        GetEndpointVolume().GetMute(out muted);
+        boundVolume.GetMute(out muted);
         return muted;
     }
 
+    public static float GetVolume() {
+        return OnBoundEndpoint(new Func<float>(ReadVolume));
+    }
+
+    public static void SetVolume(float level) {
+        OnBoundEndpoint(new Func<bool>(delegate {
+            var context = Guid.Empty;
+            boundVolume.SetMasterVolumeLevelScalar(level, ref context);
+            return true;
+        }));
+    }
+
+    public static bool GetMute() {
+        return OnBoundEndpoint(new Func<bool>(ReadMute));
+    }
+
     public static void SetMute(bool mute) {
-        var guid = Guid.Empty;
-        GetEndpointVolume().SetMute(mute, ref guid);
+        OnBoundEndpoint(new Func<bool>(delegate {
+            var context = Guid.Empty;
+            boundVolume.SetMute(mute, ref context);
+            return true;
+        }));
+    }
+
+    public static string GetState() {
+        return OnBoundEndpoint(new Func<string>(delegate {
+            return ((int)Math.Round(ReadVolume() * 100)) + "|" + (ReadMute() ? "1" : "0");
+        }));
     }
 
     public static float GetPeak() {
-        var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
-        IMMDevice dev;
-        enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
-        var iid = typeof(IAudioMeterInformation).GUID;
-        object ppv;
-        dev.Activate(ref iid, 1, IntPtr.Zero, out ppv);
-        float peak;
-        ((IAudioMeterInformation)ppv).GetPeakValue(out peak);
-        return peak;
+        return OnBoundEndpoint(new Func<float>(delegate {
+            float peak;
+            boundMeter.GetPeakValue(out peak);
+            return peak;
+        }));
     }
 }
 "@

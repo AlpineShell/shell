@@ -10,9 +10,9 @@ $asTask = $asTaskGeneric.MakeGenericMethod([Windows.Media.Control.GlobalSystemMe
 $task = $asTask.Invoke($null, @($asyncOp))
 $null = $task.Wait(-1)
 $global:smtcMgr = $task.Result
-$global:asTaskGeneric = $asTaskGeneric
-$global:typeName = $typeName
 $global:asTaskBool = $asTaskGeneric.MakeGenericMethod([bool])
+$global:asTaskMediaProperties = $asTaskGeneric.MakeGenericMethod([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+$global:asTaskStream = $asTaskGeneric.MakeGenericMethod([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
 function global:MediaControl($action) {
     $session = $global:smtcMgr.GetCurrentSession()
     if ($null -eq $session) { return '{"success":false}' }
@@ -32,10 +32,8 @@ function global:MediaControl($action) {
 function global:MediaInfoFast() {
     $session = $global:smtcMgr.GetCurrentSession()
     if ($null -eq $session) { return '{}' }
-    $asTask2Generic = ([type]$global:typeName).GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
-    $asTask2 = $asTask2Generic.MakeGenericMethod([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
     $infoOp = $session.TryGetMediaPropertiesAsync()
-    $task2 = $asTask2.Invoke($null, @($infoOp))
+    $task2 = $global:asTaskMediaProperties.Invoke($null, @($infoOp))
     $null = $task2.Wait(-1)
     $props = $task2.Result
     $playback = $session.GetPlaybackInfo()
@@ -51,19 +49,16 @@ function global:MediaInfoFast() {
 function global:MediaThumbnail() {
     $session = $global:smtcMgr.GetCurrentSession()
     if ($null -eq $session) { return '{}' }
-    $asTask2Generic = ([type]$global:typeName).GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
-    $asTask2 = $asTask2Generic.MakeGenericMethod([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
     $infoOp = $session.TryGetMediaPropertiesAsync()
-    $task2 = $asTask2.Invoke($null, @($infoOp))
+    $task2 = $global:asTaskMediaProperties.Invoke($null, @($infoOp))
     $null = $task2.Wait(-1)
     $props = $task2.Result
     $thumbnail = $null
     $thumbnailType = $null
     if ($props.Thumbnail) {
         try {
-            $asTaskStream = $asTask2Generic.MakeGenericMethod([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
             $streamOp = $props.Thumbnail.OpenReadAsync()
-            $streamTask = $asTaskStream.Invoke($null, @($streamOp))
+            $streamTask = $global:asTaskStream.Invoke($null, @($streamOp))
             $null = $streamTask.Wait(-1)
             $stream = $streamTask.Result
             $ct = $stream.ContentType

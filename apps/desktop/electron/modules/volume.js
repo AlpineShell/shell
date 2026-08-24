@@ -104,6 +104,17 @@ async function getMute() {
   }
 }
 
+async function getState() {
+  try {
+    const [rawVolume, rawMute] = (await runCmd('[Audio]::GetState()')).trim().split('|')
+    const volume = parseInt(rawVolume, 10)
+    if (isNaN(volume)) return null
+    return { volume, muted: rawMute === '1' }
+  } catch {
+    return null
+  }
+}
+
 async function setMute(muted) {
   lastSetTime = Date.now()
   commandQueue = commandQueue.filter(c => !c.cmd.startsWith('[Audio]::SetMute'))
@@ -113,6 +124,8 @@ async function setMute(muted) {
 
 let peakListeners = 0
 let peakInterval = null
+let lastPeak = null
+let broadcastToTopbarsRef = null
 
 async function getPeak() {
   try {
@@ -123,12 +136,13 @@ async function getPeak() {
   }
 }
 
-function startPeakMeter(broadcastToTopbars) {
-  if (peakInterval) return
+function startPeakMeter() {
+  if (peakInterval || !broadcastToTopbarsRef) return
   peakInterval = setInterval(async () => {
-    if (peakListeners <= 0) return
     const peak = await getPeak()
-    broadcastToTopbars('system/audio-peak', peak)
+    if (peakListeners <= 0 || peak === lastPeak) return
+    lastPeak = peak
+    broadcastToTopbarsRef('system/audio-peak', peak)
   }, 66)
 }
 
@@ -137,6 +151,7 @@ function stopPeakMeter() {
     clearInterval(peakInterval)
     peakInterval = null
   }
+  lastPeak = null
 }
 
 module.exports = {
@@ -145,25 +160,33 @@ module.exports = {
     'system/volume-set': (_event, value) => setVolume(value),
     'system/mute-get': () => getMute(),
     'system/mute-set': (_event, muted) => setMute(muted),
-    'system/peak-subscribe': () => { peakListeners++; return true },
-    'system/peak-unsubscribe': () => { peakListeners = Math.max(0, peakListeners - 1); return true },
+    'system/peak-subscribe': () => {
+      peakListeners++
+      if (peakListeners === 1) startPeakMeter()
+      return true
+    },
+    'system/peak-unsubscribe': () => {
+      peakListeners = Math.max(0, peakListeners - 1)
+      if (peakListeners === 0) stopPeakMeter()
+      return true
+    },
   },
 
   start(_broadcast, broadcastToTopbars) {
+    broadcastToTopbarsRef = broadcastToTopbars
     initPS()
-    startPeakMeter(broadcastToTopbars)
 
     setInterval(async () => {
       if (Date.now() - lastSetTime < 1500) return
-      const current = await getVolume()
-      if (current !== lastVolume) {
-        lastVolume = current
-        broadcastToTopbars('system/volume-changed', current)
+      const state = await getState()
+      if (!state) return
+      if (state.volume !== lastVolume) {
+        lastVolume = state.volume
+        broadcastToTopbars('system/volume-changed', state.volume)
       }
-      const currentMute = await getMute()
-      if (currentMute !== lastMute) {
-        lastMute = currentMute
-        broadcastToTopbars('system/mute-changed', currentMute)
+      if (state.muted !== lastMute) {
+        lastMute = state.muted
+        broadcastToTopbars('system/mute-changed', state.muted)
       }
     }, 1000)
   },
