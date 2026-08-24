@@ -1,6 +1,6 @@
 function singleFlight(task) {
   let pending = null
-  return function () {
+  function guarded() {
     if (pending) return pending
     pending = Promise.resolve(task()).then(
       (value) => {
@@ -14,6 +14,8 @@ function singleFlight(task) {
     )
     return pending
   }
+  guarded.isPending = () => pending !== null
+  return guarded
 }
 
 module.exports = { singleFlight }

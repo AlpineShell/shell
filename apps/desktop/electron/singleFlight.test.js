@@ -66,4 +66,17 @@ describe('singleFlight', () => {
     const guarded = singleFlight(() => 'immediate')
     await expect(guarded()).resolves.toBe('immediate')
   })
+
+  it('reports whether a task is still in flight', async () => {
+    const gate = deferred()
+    const guarded = singleFlight(() => gate.promise)
+
+    expect(guarded.isPending()).toBe(false)
+    const call = guarded()
+    expect(guarded.isPending()).toBe(true)
+
+    gate.resolve('done')
+    await call
+    expect(guarded.isPending()).toBe(false)
+  })
 })

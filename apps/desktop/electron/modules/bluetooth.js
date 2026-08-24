@@ -1,7 +1,7 @@
 const { exec } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
-const { createPersistentRunner } = require('../powershell')
+const { createPersistentRunner, createInteractiveRunner } = require('../powershell')
 const { singleFlight } = require('../singleFlight')
 
 const scriptsDir = app.isPackaged
@@ -15,7 +15,8 @@ const unpairScriptPath = path.join(scriptsDir, 'bluetoothUnpair.ps1')
 const BLUETOOTH_SCRIPT_TIMEOUT_MS = 45000
 const BLUETOOTH_REFRESH_INTERVAL_MS = 5000
 
-const runner = createPersistentRunner(undefined, BLUETOOTH_SCRIPT_TIMEOUT_MS)
+const scanRunner = createPersistentRunner(undefined, BLUETOOTH_SCRIPT_TIMEOUT_MS)
+const actionRunner = createInteractiveRunner(undefined, BLUETOOTH_SCRIPT_TIMEOUT_MS)
 
 let lastState = undefined
 let lastDevicesKey = undefined
@@ -23,7 +24,7 @@ let cachedState = { enabled: false, connected: false, devices: [] }
 let cachedDevices = []
 let broadcastRef = null
 
-function runBluetoothScript(scriptFile, args) {
+function runBluetoothScript(runner, scriptFile, args) {
   return runner.run(`& "${scriptFile}" ${args}`)
 }
 
@@ -41,11 +42,25 @@ function toDeviceArray(raw) {
   return raw ? [raw] : []
 }
 
+function deviceRank(device) {
+  if (device.connected) return 0
+  return device.paired ? 1 : 2
+}
+
+function inStableOrder(devices) {
+  return [...devices].sort(
+    (a, b) =>
+      deviceRank(a) - deviceRank(b) ||
+      `${a.name ?? ''}`.localeCompare(`${b.name ?? ''}`) ||
+      `${a.instanceId ?? ''}`.localeCompare(`${b.instanceId ?? ''}`)
+  )
+}
+
 async function fetchRadioAndDevices() {
-  const output = await runBluetoothScript(scanScriptPath, '-WithRadio')
+  const output = await runBluetoothScript(scanRunner, scanScriptPath, '-WithRadio')
   const parsed = parseJsonOutput(output, null)
   if (!parsed) return null
-  return { enabled: parsed.enabled === true, devices: toDeviceArray(parsed.devices) }
+  return { enabled: parsed.enabled === true, devices: inStableOrder(toDeviceArray(parsed.devices)) }
 }
 
 function toBluetoothState(enabled, devices) {
@@ -76,12 +91,21 @@ const refreshBluetooth = singleFlight(async () => {
   return cachedDevices
 })
 
+function scanAfterCurrentScan() {
+  if (refreshBluetooth.isPending()) return refreshBluetooth().then(refreshBluetooth)
+  return refreshBluetooth()
+}
+
 function refreshBluetoothAfter(delayMs) {
-  setTimeout(refreshBluetooth, delayMs)
+  setTimeout(scanAfterCurrentScan, delayMs)
 }
 
 async function toggleBluetoothDevice(instanceId, action) {
-  const output = await runBluetoothScript(toggleScriptPath, `-InstanceId "${instanceId}" -Action "${action}"`)
+  const output = await runBluetoothScript(
+    actionRunner,
+    toggleScriptPath,
+    `-InstanceId "${instanceId}" -Action "${action}"`
+  )
   return parseJsonOutput(output, { success: false })
 }
 
@@ -90,12 +114,12 @@ function openBluetoothPairing() {
 }
 
 async function unpairBluetoothDevice(instanceId) {
-  const output = await runBluetoothScript(unpairScriptPath, `-InstanceId "${instanceId}"`)
+  const output = await runBluetoothScript(actionRunner, unpairScriptPath, `-InstanceId "${instanceId}"`)
   return parseJsonOutput(output, { success: false })
 }
 
 async function setBluetoothRadio(action) {
-  const output = await runBluetoothScript(radioScriptPath, `-Action "${action}"`)
+  const output = await runBluetoothScript(actionRunner, radioScriptPath, `-Action "${action}"`)
   return parseJsonOutput(output, { success: false })
 }
 
@@ -129,6 +153,11 @@ module.exports = {
       event.returnValue = cachedState
     })
     refreshBluetooth()
-    setInterval(refreshBluetooth, BLUETOOTH_REFRESH_INTERVAL_MS)
+    const pollTimer = setInterval(refreshBluetooth, BLUETOOTH_REFRESH_INTERVAL_MS)
+    app.on('will-quit', () => {
+      clearInterval(pollTimer)
+      scanRunner.dispose()
+      actionRunner.dispose()
+    })
   },
 }

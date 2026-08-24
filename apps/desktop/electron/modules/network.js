@@ -1,7 +1,7 @@
 const { exec } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
-const { createPersistentRunner } = require('../powershell')
+const { createPersistentRunner, createInteractiveRunner } = require('../powershell')
 const { singleFlight } = require('../singleFlight')
 
 let lastSignal = undefined
@@ -11,6 +11,7 @@ let cachedStatus = { signal: null, connected: false, type: 'wifi', ssid: null }
 let cachedNetworks = []
 let cachedRadio = true
 let wifiRescanPending = false
+let wifiRescanQueued = false
 
 const scriptsDir = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts')
@@ -20,14 +21,16 @@ const scanScriptPath = path.join(scriptsDir, 'wifiScan.ps1')
 const radioScriptPath = path.join(scriptsDir, 'wifiRadio.ps1')
 
 const NETWORK_SCRIPT_TIMEOUT_MS = 15000
+const NETWORK_ACTION_TIMEOUT_MS = 10000
 const NETWORK_REFRESH_INTERVAL_MS = 10000
 const WIFI_RESCAN_SETTLE_MS = 3000
 
-const runner = createPersistentRunner(undefined, NETWORK_SCRIPT_TIMEOUT_MS)
+const pollRunner = createPersistentRunner(undefined, NETWORK_SCRIPT_TIMEOUT_MS)
+const actionRunner = createInteractiveRunner(undefined, NETWORK_ACTION_TIMEOUT_MS)
 
 let broadcastFn = null
 
-function runNetworkScript(scriptFile, args = '') {
+function runNetworkScript(runner, scriptFile, args = '') {
   return runner.run(`& "${scriptFile}" ${args}`)
 }
 
@@ -40,12 +43,9 @@ function parseJsonOutput(output, fallback) {
   }
 }
 
-const EMPTY_STATUS = { signal: null, connected: false, type: 'wifi', ssid: null }
-const UNKNOWN_RADIO = { success: false, state: 'unknown' }
-
-async function fetchNetworkStatusAndRadio() {
-  const parsed = parseJsonOutput(await runNetworkScript(scriptPath), null)
-  if (!parsed) return { status: { ...EMPTY_STATUS }, radio: { ...UNKNOWN_RADIO } }
+async function fetchNetworkStatusAndRadio(runner) {
+  const parsed = parseJsonOutput(await runNetworkScript(runner, scriptPath), null)
+  if (!parsed) return null
   return {
     status: {
       signal: parsed.signal ?? null,
@@ -80,16 +80,20 @@ function publishNetworkStatus() {
   if (broadcastFn) broadcastFn('network/wifi-signal-changed', cachedStatus)
 }
 
-const refreshNetworkStatus = singleFlight(async () => {
-  const { status, radio } = await fetchNetworkStatusAndRadio()
-  cachedStatus = status
-  if (radio.success) applyWifiRadioState(radio.state === 'on')
+async function readNetworkStatus(runner) {
+  const result = await fetchNetworkStatusAndRadio(runner)
+  if (!result) return cachedStatus
+  cachedStatus = result.status
+  if (result.radio.success) applyWifiRadioState(result.radio.state === 'on')
   publishNetworkStatus()
   return cachedStatus
-})
+}
+
+const pollNetworkStatus = singleFlight(() => readNetworkStatus(pollRunner))
+const refreshNetworkStatus = singleFlight(() => readNetworkStatus(actionRunner))
 
 const refreshWifiList = singleFlight(async () => {
-  const parsed = parseJsonOutput(await runNetworkScript(scanScriptPath), null)
+  const parsed = parseJsonOutput(await runNetworkScript(actionRunner, scanScriptPath), null)
   if (!parsed) return null
   cachedNetworks = Array.isArray(parsed) ? parsed : [parsed]
   return cachedNetworks
@@ -99,12 +103,18 @@ async function publishFreshWifiList() {
   wifiRescanPending = false
   const fresh = await refreshWifiList()
   if (fresh && broadcastFn) broadcastFn('network/wifi-scan-updated', fresh)
+  if (!wifiRescanQueued) return
+  wifiRescanQueued = false
+  requestWifiRescan()
 }
 
 function requestWifiRescan() {
-  if (wifiRescanPending) return
+  if (wifiRescanPending) {
+    wifiRescanQueued = true
+    return
+  }
   wifiRescanPending = true
-  runner.run('netsh wlan scan').then(() => {
+  actionRunner.run('netsh wlan scan').then(() => {
     setTimeout(publishFreshWifiList, WIFI_RESCAN_SETTLE_MS)
   })
 }
@@ -153,7 +163,7 @@ function wifiDisconnect() {
 }
 
 async function runWifiRadioScript(action) {
-  const output = await runNetworkScript(radioScriptPath, `-Action "${action}"`)
+  const output = await runNetworkScript(actionRunner, radioScriptPath, `-Action "${action}"`)
   return parseJsonOutput(output, { success: false, state: 'unknown' })
 }
 
@@ -185,7 +195,12 @@ module.exports = {
     ipcMain.on('network/wifi-init', (event) => {
       event.returnValue = { status: cachedStatus, radio: cachedRadio }
     })
-    refreshNetworkStatus()
-    setInterval(refreshNetworkStatus, NETWORK_REFRESH_INTERVAL_MS)
+    pollNetworkStatus()
+    const pollTimer = setInterval(pollNetworkStatus, NETWORK_REFRESH_INTERVAL_MS)
+    app.on('will-quit', () => {
+      clearInterval(pollTimer)
+      pollRunner.dispose()
+      actionRunner.dispose()
+    })
   },
 }
