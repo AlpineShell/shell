@@ -4,6 +4,7 @@ const { promisify } = require('util')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const appxPackages = require('./appxPackages')
 
 const execAsync = promisify(exec)
 const iconCache = new Map()
@@ -35,9 +36,12 @@ function expandEnv(p) {
 }
 
 const CACHE_FILE = 'icon-cache.json'
+const CACHE_VERSION = 2
 const CACHE_MAX_ENTRIES = 4000
 const CACHE_MAX_ENTRY_LENGTH = 512 * 1024
 const CACHE_WRITE_DEBOUNCE = 1500
+const ASYNC_TMP_SUFFIX = '.tmp'
+const QUIT_TMP_SUFFIX = '.tmp-quit'
 
 let diskCache = null
 let diskCacheLoaded = false
@@ -45,6 +49,9 @@ let diskCachePath = null
 let diskCacheWriteTimer = null
 let diskCacheDirty = false
 let quitFlushRegistered = false
+let asyncWriteInFlight = false
+let asyncWriteChain = Promise.resolve()
+let quitting = false
 
 function getDiskCachePath() {
   if (!diskCachePath) diskCachePath = path.join(app.getPath('userData'), CACHE_FILE)
@@ -57,6 +64,12 @@ function registerQuitFlush() {
   app.on('before-quit', flushDiskCache)
   app.on('will-quit', flushDiskCache)
   app.on('quit', flushDiskCache)
+}
+
+function migrateLegacyEntry(key, url) {
+  const parts = key.split('|')
+  if (parts[0] !== 'file' || parts.length !== 5) return null
+  return { key: `file|${parts[1]}|${parts[2]}`, entry: { stamp: `${parts[3]}|${parts[4]}`, url } }
 }
 
 function loadDiskCache() {
@@ -75,8 +88,14 @@ function loadDiskCache() {
     const parsed = JSON.parse(raw)
     if (parsed && typeof parsed.entries === 'object' && parsed.entries) {
       for (const [key, value] of Object.entries(parsed.entries)) {
-        if (typeof value === 'string' && value) diskCache.set(key, value)
+        if (value && typeof value === 'object' && typeof value.url === 'string' && value.url) {
+          diskCache.set(key, { stamp: String(value.stamp || ''), url: value.url })
+        } else if (typeof value === 'string' && value) {
+          const migrated = migrateLegacyEntry(key, value)
+          if (migrated) diskCache.set(migrated.key, migrated.entry)
+        }
       }
+      if (parsed.version !== CACHE_VERSION) scheduleDiskCacheWrite()
     }
   } catch (e) {
     console.error('[appIcons] corrupt cache, rebuilding:', e.message)
@@ -85,32 +104,57 @@ function loadDiskCache() {
   return diskCache
 }
 
-function flushDiskCache() {
-  if (diskCacheWriteTimer) { clearTimeout(diskCacheWriteTimer); diskCacheWriteTimer = null }
-  if (!diskCacheLoaded || !diskCacheDirty) return
-  diskCacheDirty = false
+function serializeDiskCache() {
   const entries = {}
   for (const [key, value] of diskCache) entries[key] = value
-  const tmp = getDiskCachePath() + '.tmp'
+  return JSON.stringify({ version: CACHE_VERSION, entries })
+}
+
+function flushDiskCache() {
+  quitting = true
+  if (diskCacheWriteTimer) { clearTimeout(diskCacheWriteTimer); diskCacheWriteTimer = null }
+  if (!diskCacheLoaded || (!diskCacheDirty && !asyncWriteInFlight)) return
+  diskCacheDirty = false
+  const tmp = `${getDiskCachePath()}${QUIT_TMP_SUFFIX}`
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ version: 1, entries }))
+    fs.writeFileSync(tmp, serializeDiskCache())
     fs.renameSync(tmp, getDiskCachePath())
   } catch (e) {
     console.error('[appIcons] cache write error:', e.message)
   }
 }
 
+async function writeDiskCacheAsync() {
+  if (!diskCacheLoaded || !diskCacheDirty || quitting) return
+  diskCacheDirty = false
+  asyncWriteInFlight = true
+  const tmp = `${getDiskCachePath()}${ASYNC_TMP_SUFFIX}`
+  try {
+    await fs.promises.writeFile(tmp, serializeDiskCache())
+    if (quitting) await fs.promises.unlink(tmp)
+    else await fs.promises.rename(tmp, getDiskCachePath())
+  } catch (e) {
+    console.error('[appIcons] cache write error:', e.message)
+    try { await fs.promises.unlink(tmp) } catch { void 0 }
+  } finally {
+    asyncWriteInFlight = false
+  }
+}
+
 function scheduleDiskCacheWrite() {
   diskCacheDirty = true
   if (diskCacheWriteTimer) clearTimeout(diskCacheWriteTimer)
-  diskCacheWriteTimer = setTimeout(flushDiskCache, CACHE_WRITE_DEBOUNCE)
+  diskCacheWriteTimer = setTimeout(() => {
+    diskCacheWriteTimer = null
+    asyncWriteChain = asyncWriteChain.then(writeDiskCacheAsync)
+  }, CACHE_WRITE_DEBOUNCE)
 }
 
-function rememberIcon(key, value) {
-  if (!key || !value || value.length > CACHE_MAX_ENTRY_LENGTH) return
+function rememberIcon(key, stamp, url) {
+  if (!key || !url || url.length > CACHE_MAX_ENTRY_LENGTH) return
   const cache = loadDiskCache()
   if (cache.has(key)) cache.delete(key)
-  cache.set(key, value)
+  cache.set(key, { stamp: String(stamp || ''), url })
   while (cache.size > CACHE_MAX_ENTRIES) {
     const oldest = cache.keys().next().value
     cache.delete(oldest)
@@ -118,15 +162,28 @@ function rememberIcon(key, value) {
   scheduleDiskCacheWrite()
 }
 
-function fileIconKey(rawPath, index) {
-  const expanded = expandEnv(rawPath)
-  if (!expanded) return null
+function cachedIconFor(key, stamp) {
+  if (!key) return null
+  const entry = loadDiskCache().get(key)
+  if (!entry || entry.stamp !== String(stamp || '')) return null
+  return entry.url
+}
+
+function fileStamp(filePath) {
   try {
-    const stat = fs.statSync(expanded)
-    return `file|${expanded.toLowerCase()}|${index | 0}|${Math.round(stat.mtimeMs)}|${stat.size}`
+    const stat = fs.statSync(filePath)
+    return `${Math.round(stat.mtimeMs)}|${stat.size}`
   } catch {
     return null
   }
+}
+
+function fileIconIdentity(rawPath, index) {
+  const expanded = expandEnv(rawPath)
+  if (!expanded) return null
+  const stamp = fileStamp(expanded)
+  if (stamp === null) return null
+  return { key: `file|${expanded.toLowerCase()}|${index | 0}`, stamp }
 }
 
 const IMAGE_EXTS = new Set(['.png', '.ico', '.jpg', '.jpeg', '.gif', '.bmp'])
@@ -281,6 +338,20 @@ function collectLnks(dir, out) {
   }
 }
 
+const shortcutLinkCache = new Map()
+
+function readShortcutLinkCached(lnkPath) {
+  const key = lnkPath.toLowerCase()
+  const stamp = fileStamp(lnkPath)
+  if (stamp === null) { shortcutLinkCache.delete(key); return null }
+  const cached = shortcutLinkCache.get(key)
+  if (cached && cached.stamp === stamp) return cached.info
+  let info
+  try { info = shell.readShortcutLink(lnkPath) } catch { shortcutLinkCache.delete(key); return null }
+  shortcutLinkCache.set(key, { stamp, info })
+  return info
+}
+
 function buildShortcutIndex() {
   const list = []
   const byTarget = new Map()
@@ -288,8 +359,7 @@ function buildShortcutIndex() {
   const lnkPaths = []
   for (const dir of SHORTCUT_DIRS) collectLnks(dir, lnkPaths)
   for (const lnk of lnkPaths) {
-    let info
-    try { info = shell.readShortcutLink(lnk) } catch { continue }
+    const info = readShortcutLinkCached(lnk)
     if (!info || !info.target) continue
     const iconPath = info.icon && info.icon.length ? info.icon : info.target
     const entry = { targetLower: info.target.toLowerCase(), iconPath, index: info.iconIndex || 0 }
@@ -303,13 +373,13 @@ function buildShortcutIndex() {
 
 async function resolveIcons(specs) {
   if (!specs.length) return []
-  const cache = loadDiskCache()
   const results = new Array(specs.length).fill(null)
   const misses = []
   specs.forEach((spec, i) => {
-    const key = fileIconKey(spec.path, spec.index | 0)
-    if (key && cache.has(key)) { results[i] = cache.get(key); return }
-    misses.push({ resultIndex: i, spec, key })
+    const identity = fileIconIdentity(spec.path, spec.index | 0)
+    const cached = identity && cachedIconFor(identity.key, identity.stamp)
+    if (cached) { results[i] = cached; return }
+    misses.push({ resultIndex: i, spec, identity })
   })
   if (!misses.length) return results
   const entries = misses.map((m) => `@{ p='${String(m.spec.path).replace(/'/g, "''")}'; i=${m.spec.index | 0} }`).join(',')
@@ -361,13 +431,41 @@ $results -join '|'`
   misses.forEach((m, k) => {
     const url = extracted[k] || null
     results[m.resultIndex] = url
-    if (url && m.key) rememberIcon(m.key, url)
+    if (url && m.identity) rememberIcon(m.identity.key, m.identity.stamp, url)
   })
   return results
 }
 
+function appIconIdentity(appId) {
+  const id = String(appId || '')
+  const separator = id.indexOf('!')
+  if (separator <= 0) return null
+  const fullName = appxPackages.packageFullNameForFamily(id.slice(0, separator))
+  if (!fullName) return null
+  return { key: `appid|${id.toLowerCase()}`, stamp: fullName }
+}
+
 async function resolveAppIcons(appIds) {
   if (!appIds.length) return []
+  const results = new Array(appIds.length).fill(null)
+  const misses = []
+  appIds.forEach((appId, i) => {
+    const identity = appIconIdentity(appId)
+    const cached = identity && cachedIconFor(identity.key, identity.stamp)
+    if (cached) { results[i] = cached; return }
+    misses.push({ resultIndex: i, appId, identity })
+  })
+  if (!misses.length) return results
+  const extracted = await extractAppIcons(misses.map((m) => m.appId))
+  misses.forEach((m, k) => {
+    const url = extracted[k] || null
+    results[m.resultIndex] = url
+    if (url && m.identity) rememberIcon(m.identity.key, m.identity.stamp, url)
+  })
+  return results
+}
+
+async function extractAppIcons(appIds) {
   const ids = appIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')
   const script = `Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
@@ -415,8 +513,17 @@ $results -join '|'`
 
 let genericIconUrl = null
 
+const GENERIC_ICON_KEY = 'generic|shell32'
+const SHELL32_PATH = path.join(process.env.SystemRoot || '', 'System32', 'shell32.dll')
+
 async function ensureGenericIcon() {
   if (genericIconUrl !== null) return genericIconUrl
+  const stamp = fileStamp(SHELL32_PATH) || ''
+  const cached = cachedIconFor(GENERIC_ICON_KEY, stamp)
+  if (cached) {
+    genericIconUrl = cached
+    return genericIconUrl
+  }
   const script = `Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
 using System;
@@ -446,6 +553,7 @@ try {
 $b64`
   const out = (await runPsScript(script)).trim()
   genericIconUrl = out && out.length > 10 ? `data:image/png;base64,${out}` : null
+  if (genericIconUrl) rememberIcon(GENERIC_ICON_KEY, stamp, genericIconUrl)
   return genericIconUrl
 }
 
@@ -462,6 +570,7 @@ module.exports = {
   ensureGenericIcon,
   getGenericIcon,
   buildShortcutIndex,
+  readShortcutLinkCached,
   resolveStoreLogo,
   normName,
   expandEnv,

@@ -3,6 +3,7 @@ const { shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { APPROVED_BASE, parseApprovedMap, isMsixStateEnabled } = require('./startupState')
+const { shellExecuteCommandLine } = require('../shellExecute')
 
 const BLOCKED_EXECUTABLES = [
   'explorer.exe',
@@ -163,7 +164,7 @@ function launchEntry(entry) {
     if (entry.isShortcut) {
       shell.openPath(entry.command)
     } else {
-      exec(entry.command, { windowsHide: false })
+      shellExecuteCommandLine(entry.command).catch(() => {})
     }
 
     console.log(`[autostart] Launched: ${entry.name}`)

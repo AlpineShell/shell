@@ -1,4 +1,5 @@
-const { spawn, execFile } = require('child_process')
+const { spawn } = require('child_process')
+const { shellExecute } = require('./shellExecute')
 
 const TYPE_DEFINITION = [
   'Add-Type -TypeDefinition @\'',
@@ -66,7 +67,7 @@ function activatePackaged(aumid) {
 }
 
 function activateViaAppsFolder(appId) {
-  execFile('explorer.exe', [`shell:AppsFolder\\${appId}`], { windowsHide: true })
+  shellExecute(`shell:AppsFolder\\${appId}`, null).catch(() => {})
 }
 
 function activate(appId) {
