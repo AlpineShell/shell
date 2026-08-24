@@ -17,7 +17,6 @@ function runPowerShell(command) {
 
 const PERSISTENT_DELIM = '__PS_PERSISTENT_DONE__'
 const DEFAULT_COMMAND_TIMEOUT_MS = 10000
-const DEFAULT_IDLE_SHUTDOWN_MS = 60000
 
 function spawnPersistentPowerShell() {
   return spawn('powershell', [
@@ -131,47 +130,4 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
   return { run, warm, dispose }
 }
 
-
-function createInteractiveRunner(
-  spawnWorker = spawnPersistentPowerShell,
-  commandTimeoutMs = DEFAULT_COMMAND_TIMEOUT_MS,
-  idleShutdownMs = DEFAULT_IDLE_SHUTDOWN_MS
-) {
-  const runner = createPersistentRunner(spawnWorker, commandTimeoutMs)
-  let outstanding = 0
-  let idleTimer = null
-
-  function cancelIdleShutdown() {
-    if (!idleTimer) return
-    clearTimeout(idleTimer)
-    idleTimer = null
-  }
-
-  function scheduleIdleShutdown() {
-    cancelIdleShutdown()
-    idleTimer = setTimeout(() => {
-      idleTimer = null
-      if (outstanding === 0) runner.dispose()
-    }, idleShutdownMs)
-  }
-
-  async function run(command) {
-    cancelIdleShutdown()
-    outstanding += 1
-    try {
-      return await runner.run(command)
-    } finally {
-      outstanding -= 1
-      if (outstanding === 0) scheduleIdleShutdown()
-    }
-  }
-
-  function dispose() {
-    cancelIdleShutdown()
-    runner.dispose()
-  }
-
-  return { run, dispose }
-}
-
-module.exports = { runPowerShell, createPersistentRunner, createInteractiveRunner }
+module.exports = { runPowerShell, createPersistentRunner }

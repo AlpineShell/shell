@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { createPersistentRunner, createInteractiveRunner } from './powershell.js'
+import { createPersistentRunner } from './powershell.js'
 
 const DELIM = '__PS_PERSISTENT_DONE__'
 
@@ -154,73 +154,5 @@ describe('createPersistentRunner', () => {
     expect(spawnWorker).toHaveBeenCalledTimes(1)
     expect(worker.writes.some((w) => w.includes('LAZY_INIT'))).toBe(true)
     expect(commandWrites(worker)).toHaveLength(0)
-  })
-})
-
-describe('createInteractiveRunner', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('spawns no worker until the first command', () => {
-    const spawnWorker = vi.fn(() => makeFakeWorker())
-    createInteractiveRunner(spawnWorker, 5000, 60000)
-
-    expect(spawnWorker).not.toHaveBeenCalled()
-  })
-
-  it('kills the worker once the idle window passes and respawns for the next command', async () => {
-    const workers = [makeFakeWorker(), makeFakeWorker()]
-    let spawnCount = 0
-    const spawnWorker = vi.fn(() => workers[spawnCount++])
-    const runner = createInteractiveRunner(spawnWorker, 5000, 60000)
-
-    const first = runner.run('Toggle')
-    workers[0].complete('done')
-    await expect(first).resolves.toBe('done')
-    expect(workers[0].killed).toBe(false)
-
-    await vi.advanceTimersByTimeAsync(60000)
-    expect(workers[0].killed).toBe(true)
-
-    const second = runner.run('ToggleAgain')
-    expect(spawnWorker).toHaveBeenCalledTimes(2)
-    workers[1].complete('done again')
-    await expect(second).resolves.toBe('done again')
-  })
-
-  it('keeps the worker alive while commands keep arriving', async () => {
-    const worker = makeFakeWorker()
-    const spawnWorker = vi.fn(() => worker)
-    const runner = createInteractiveRunner(spawnWorker, 5000, 60000)
-
-    const first = runner.run('One')
-    worker.complete('one')
-    await expect(first).resolves.toBe('one')
-
-    await vi.advanceTimersByTimeAsync(59000)
-    const second = runner.run('Two')
-    worker.complete('two')
-    await expect(second).resolves.toBe('two')
-
-    await vi.advanceTimersByTimeAsync(59000)
-    expect(worker.killed).toBe(false)
-    expect(spawnWorker).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not shut down while a command is still running', async () => {
-    const worker = makeFakeWorker()
-    const runner = createInteractiveRunner(() => worker, 120000, 60000)
-
-    const pending = runner.run('Slow')
-    await vi.advanceTimersByTimeAsync(90000)
-    expect(worker.killed).toBe(false)
-
-    worker.complete('slow result')
-    await expect(pending).resolves.toBe('slow result')
   })
 })
