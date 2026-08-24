@@ -1,7 +1,10 @@
 const koffi = require('koffi')
-const { exec } = require('child_process')
-const { screen } = require('electron')
+const fs = require('fs')
+const path = require('path')
+const { exec, execSync } = require('child_process')
+const { app, screen } = require('electron')
 const { createPersistentRunner } = require('../powershell')
+const { dimmedBrightness } = require('./batterySaverPolicy')
 
 const wmiRunner = createPersistentRunner()
 
@@ -55,12 +58,25 @@ const PHYS_MON_SIZE = HANDLE_SIZE + 128 * 2
 
 const MONINFO_SIZE = 104
 
+const BATTERY_SAVER_BASELINE_FILE = 'battery-saver-brightness.json'
+const SHUTDOWN_INTERNAL_WRITE_TIMEOUT_MS = 2000
+const DISPLAY_CHANGE_SETTLE_MS = 1500
+const BRIGHTNESS_READBACK_TOLERANCE_PERCENT = 2
+
 
 let monitors = []
 let lastStateJson = null
 let hasInternalDisplay = null
 let brightnessWriteCount = 0
+let broadcastRef = null
+let enumeratePending = null
+let baselineStorePath = null
+let displayChangeTimer = null
+let desiredBatterySaverReduction = null
+let batterySaverSettleRunning = false
 const brightnessWritesByMonitorId = new Map()
+const batterySaverBaselineByMonitorId = new Map()
+const batterySaverAppliedByMonitorId = new Map()
 
 
 function readWideString(buf, offset, maxChars) {
@@ -221,6 +237,10 @@ async function ddcSetBrightness(hPhysical, rawValue) {
   return !!await offMainThread(SetMonitorBrightnessAPI, [hPhysical, rawValue])
 }
 
+function ddcRawValue(monitor, percent) {
+  return Math.round((percent / 100) * (monitor.ddcMax || 100))
+}
+
 
 async function wmiGetBrightness() {
   const result = await wmiRunner.run('(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness')
@@ -228,14 +248,19 @@ async function wmiGetBrightness() {
   return isNaN(val) ? null : val
 }
 
+function wmiSetBrightnessCommand(clamped) {
+  return `powershell -NoProfile -Command "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, ${clamped})"`
+}
+
 function wmiSetBrightness(value) {
-  const clamped = Math.max(0, Math.min(100, Math.round(value)))
+  const clamped = clampPercent(value)
   return new Promise((resolve) => {
-    exec(
-      `powershell -NoProfile -Command "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, ${clamped})"`,
-      () => resolve(clamped)
-    )
+    exec(wmiSetBrightnessCommand(clamped), () => resolve(clamped))
   })
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Math.round(value)))
 }
 
 
@@ -315,6 +340,12 @@ async function enumerate() {
   return publicState()
 }
 
+function ensureMonitorsEnumerated() {
+  if (monitors.length) return Promise.resolve()
+  if (!enumeratePending) enumeratePending = enumerate().finally(() => { enumeratePending = null })
+  return enumeratePending.then(() => undefined)
+}
+
 
 async function refresh() {
   const sweptMonitors = monitors
@@ -332,6 +363,7 @@ async function refresh() {
               ? Math.round((b.current / b.max) * 100)
               : b.current
             if (val !== m.brightness) { m.brightness = val; changed = true }
+            noteObservedBrightness(m.id, val)
           }
         } catch (_) {}
       }
@@ -341,9 +373,12 @@ async function refresh() {
   const internal = sweptMonitors.find(m => m.type === 'internal')
   if (internal) {
     const val = await wmiGetBrightness()
-    if (val !== null && val !== internal.brightness) {
-      internal.brightness = val
-      changed = true
+    if (val !== null) {
+      if (val !== internal.brightness) {
+        internal.brightness = val
+        changed = true
+      }
+      noteObservedBrightness(internal.id, val)
     }
   }
 
@@ -351,21 +386,27 @@ async function refresh() {
 }
 
 
-async function setMonitorBrightness(id, value) {
-  const clamped = Math.max(0, Math.min(100, Math.round(value)))
+async function writeMonitorBrightness(id, value) {
+  const clamped = clampPercent(value)
   const m = monitors.find(x => x.id === id)
   if (!m) return clamped
 
   if (m.type === 'internal') {
     await wmiSetBrightness(clamped)
   } else if (m.hMon) {
-    const rawValue = Math.round((clamped / 100) * (m.ddcMax || 100))
+    const rawValue = ddcRawValue(m, clamped)
     await withPhysicalMonitor(m.hMon, async (physMonitors) => {
       for (const phys of physMonitors) await ddcSetBrightness(phys.handle, rawValue)
     })
   }
 
   recordBrightnessWrite(id, clamped)
+  return clamped
+}
+
+async function setMonitorBrightness(id, value) {
+  const clamped = await writeMonitorBrightness(id, value)
+  forgetBatterySaverBaseline(id)
   return clamped
 }
 
@@ -393,39 +434,223 @@ function publicState() {
   }))
 }
 
+function publishMonitors() {
+  const state = publicState()
+  lastStateJson = JSON.stringify(state)
+  if (broadcastRef) broadcastRef('system/monitors-changed', state)
+}
+
+
+function getBaselineStorePath() {
+  if (!baselineStorePath) baselineStorePath = path.join(app.getPath('userData'), BATTERY_SAVER_BASELINE_FILE)
+  return baselineStorePath
+}
+
+function persistBatterySaverBaselines() {
+  try {
+    const file = getBaselineStorePath()
+    if (!batterySaverBaselineByMonitorId.size) {
+      fs.rmSync(file, { force: true })
+      return
+    }
+    fs.writeFileSync(file, JSON.stringify(Object.fromEntries(batterySaverBaselineByMonitorId)))
+  } catch (e) {
+    console.error('[brightness] could not persist the battery saver baseline:', e?.message ?? e)
+  }
+}
+
+function loadPersistedBatterySaverBaselines() {
+  try {
+    const file = getBaselineStorePath()
+    if (!fs.existsSync(file)) return
+    const stored = JSON.parse(fs.readFileSync(file, 'utf8'))
+    for (const [id, value] of Object.entries(stored ?? {})) {
+      if (typeof value === 'number') batterySaverBaselineByMonitorId.set(id, clampPercent(value))
+    }
+  } catch (e) {
+    console.error('[brightness] could not read the battery saver baseline:', e?.message ?? e)
+  }
+}
+
+function forgetBatterySaverBaseline(id) {
+  if (!batterySaverBaselineByMonitorId.delete(id)) return
+  batterySaverAppliedByMonitorId.delete(id)
+  persistBatterySaverBaselines()
+}
+
+function withinReadbackTolerance(expected, observed) {
+  return typeof expected === 'number' && Math.abs(expected - observed) <= BRIGHTNESS_READBACK_TOLERANCE_PERCENT
+}
+
+function noteObservedBrightness(id, observed) {
+  if (!batterySaverBaselineByMonitorId.has(id)) return
+  if (withinReadbackTolerance(batterySaverAppliedByMonitorId.get(id), observed)) return
+  if (withinReadbackTolerance(batterySaverBaselineByMonitorId.get(id), observed)) return
+  forgetBatterySaverBaseline(id)
+}
+
+async function dimForBatterySaver(reductionPercent) {
+  let changed = false
+  for (const id of monitors.map(m => m.id)) {
+    const live = monitors.find(m => m.id === id)
+    if (!live) continue
+    if (!batterySaverBaselineByMonitorId.has(id)) batterySaverBaselineByMonitorId.set(id, live.brightness)
+    const target = dimmedBrightness(batterySaverBaselineByMonitorId.get(id), reductionPercent)
+    if (batterySaverAppliedByMonitorId.get(id) === target) continue
+    await writeMonitorBrightness(id, target)
+    batterySaverAppliedByMonitorId.set(id, target)
+    changed = true
+  }
+  if (changed) {
+    persistBatterySaverBaselines()
+    publishMonitors()
+  }
+}
+
+async function restoreFromBatterySaver() {
+  let changed = false
+  for (const id of [...batterySaverBaselineByMonitorId.keys()]) {
+    if (!monitors.some(m => m.id === id)) continue
+    await writeMonitorBrightness(id, batterySaverBaselineByMonitorId.get(id))
+    batterySaverBaselineByMonitorId.delete(id)
+    batterySaverAppliedByMonitorId.delete(id)
+    changed = true
+  }
+  if (changed) {
+    persistBatterySaverBaselines()
+    publishMonitors()
+  }
+}
+
+async function settleBatterySaver() {
+  if (batterySaverSettleRunning) return
+  batterySaverSettleRunning = true
+  try {
+    let settledReduction
+    while (settledReduction !== desiredBatterySaverReduction) {
+      settledReduction = desiredBatterySaverReduction
+      await ensureMonitorsEnumerated()
+      if (settledReduction === null) await restoreFromBatterySaver()
+      else await dimForBatterySaver(settledReduction)
+    }
+  } catch (e) {
+    console.error('[brightness] battery saver dimming failed:', e?.message ?? e)
+  } finally {
+    batterySaverSettleRunning = false
+  }
+}
+
+function applyBatterySaverDimming(reductionPercent) {
+  desiredBatterySaverReduction = reductionPercent
+  return settleBatterySaver()
+}
+
+function clearBatterySaverDimming() {
+  desiredBatterySaverReduction = null
+  return settleBatterySaver()
+}
+
+function resweepAfterDisplayChange() {
+  clearTimeout(displayChangeTimer)
+  displayChangeTimer = setTimeout(() => {
+    enumerate()
+      .then(() => {
+        publishMonitors()
+        return settleBatterySaver()
+      })
+      .catch((e) => console.error('[brightness] display change sweep failed:', e?.message ?? e))
+  }, DISPLAY_CHANGE_SETTLE_MS)
+}
+
+
+function writeDdcBrightnessSynchronously(monitor, percent) {
+  if (!dxva2) return
+  const countBuf = Buffer.alloc(4)
+  if (!GetNumberOfPhysicalMonitorsFromHMONITOR(monitor.hMon, countBuf)) return
+  const count = countBuf.readUInt32LE(0)
+  if (!count) return
+  const buf = Buffer.alloc(PHYS_MON_SIZE * count)
+  if (!GetPhysicalMonitorsFromHMONITOR(monitor.hMon, count, buf)) return
+  try {
+    const rawValue = ddcRawValue(monitor, percent)
+    for (let i = 0; i < count; i++) {
+      SetMonitorBrightnessAPI(buf.readBigUInt64LE(i * PHYS_MON_SIZE), rawValue)
+    }
+  } finally {
+    DestroyPhysicalMonitorsAPI(count, buf)
+  }
+}
+
+function writeInternalBrightnessSynchronously(percent) {
+  execSync(wmiSetBrightnessCommand(clampPercent(percent)), {
+    timeout: SHUTDOWN_INTERNAL_WRITE_TIMEOUT_MS,
+    stdio: 'ignore',
+    windowsHide: true,
+  })
+}
+
+function restoreBatterySaverBrightnessOnShutdown() {
+  if (!batterySaverBaselineByMonitorId.size) return
+  for (const [id, baseline] of [...batterySaverBaselineByMonitorId.entries()]) {
+    const m = monitors.find(x => x.id === id)
+    if (!m) continue
+    try {
+      if (m.type === 'internal') writeInternalBrightnessSynchronously(baseline)
+      else if (m.hMon) writeDdcBrightnessSynchronously(m, clampPercent(baseline))
+      batterySaverBaselineByMonitorId.delete(id)
+      batterySaverAppliedByMonitorId.delete(id)
+    } catch (e) {
+      console.error('[brightness] shutdown restore failed for', id, e?.message ?? e)
+    }
+  }
+  persistBatterySaverBaselines()
+}
+
 
 module.exports = {
+  applyBatterySaverDimming,
+  clearBatterySaverDimming,
+  restoreBatterySaverBrightnessOnShutdown,
+
   handlers: {
     'system/monitors-get': () => enumerate(),
     'system/monitor-brightness-set': (_event, { id, value }) =>
       setMonitorBrightness(id, value),
 
     'system/brightness-get': async () => {
-      if (!monitors.length) await enumerate()
+      await ensureMonitorsEnumerated()
       return monitors[0]?.brightness ?? 50
     },
     'system/brightness-set': async (_event, value) => {
-      if (!monitors.length) await enumerate()
+      await ensureMonitorsEnumerated()
       if (monitors.length > 0) return setMonitorBrightness(monitors[0].id, value)
       return value
     },
   },
 
   start(broadcast) {
-    const publish = (state) => {
-      lastStateJson = JSON.stringify(state)
-      broadcast('system/monitors-changed', state)
-    }
+    broadcastRef = broadcast
+    loadPersistedBatterySaverBaselines()
 
-    setImmediate(() => { enumerate().then(publish) })
+    setImmediate(() => {
+      ensureMonitorsEnumerated()
+        .then(() => {
+          publishMonitors()
+          return settleBatterySaver()
+        })
+        .catch((e) => console.error('[brightness] initial sweep failed:', e?.message ?? e))
+    })
+
+    screen.on('display-added', resweepAfterDisplayChange)
+    screen.on('display-removed', resweepAfterDisplayChange)
 
     setInterval(skippedWhileStillRunning(async () => {
-      if (await refresh()) publish(publicState())
+      if (await refresh()) publishMonitors()
     }), 15000)
 
     setInterval(skippedWhileStillRunning(async () => {
       const state = await enumerate()
-      if (JSON.stringify(state) !== lastStateJson) publish(state)
+      if (JSON.stringify(state) !== lastStateJson) publishMonitors()
     }), 60000)
   },
 }

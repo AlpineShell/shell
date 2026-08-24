@@ -6,6 +6,8 @@ const PROCESS_POWER_THROTTLING_CURRENT_VERSION = 1
 const PROCESS_POWER_THROTTLING_EXECUTION_SPEED = 0x1
 const PROCESS_SET_INFORMATION = 0x0200
 
+let ecoQosEnabled = false
+
 let SetProcessInformation = null
 let OpenProcess = null
 let CloseHandle = null
@@ -25,7 +27,7 @@ try {
   console.error('[powerThrottling] koffi load failed:', e?.message ?? e)
 }
 
-function disableEcoQosForPid(pid) {
+function setEcoQosForPid(pid, enabled) {
   if (!SetProcessInformation || !OpenProcess || !CloseHandle || !PowerThrottlingState) return
   if (!pid) return
   let handle = 0
@@ -35,12 +37,12 @@ function disableEcoQosForPid(pid) {
     const state = {
       Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
       ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
-      StateMask: 0,
+      StateMask: enabled ? PROCESS_POWER_THROTTLING_EXECUTION_SPEED : 0,
     }
     const ok = SetProcessInformation(handle, PROCESS_INFORMATION_CLASS_POWER_THROTTLING, state, koffi.sizeof(PowerThrottlingState))
     if (!ok) console.error('[powerThrottling] SetProcessInformation failed for pid', pid)
   } catch (e) {
-    console.error('[powerThrottling] disableEcoQosForPid failed:', e?.message ?? e)
+    console.error('[powerThrottling] setEcoQosForPid failed:', e?.message ?? e)
   } finally {
     if (handle) {
       try { CloseHandle(handle) } catch {}
@@ -48,14 +50,20 @@ function disableEcoQosForPid(pid) {
   }
 }
 
-function disableEcoQosForAllProcesses() {
+function applyEcoQosToAllProcesses() {
   try {
     for (const metric of app.getAppMetrics()) {
-      disableEcoQosForPid(metric.pid)
+      setEcoQosForPid(metric.pid, ecoQosEnabled)
     }
   } catch (e) {
-    console.error('[powerThrottling] disableEcoQosForAllProcesses failed:', e?.message ?? e)
+    console.error('[powerThrottling] applyEcoQosToAllProcesses failed:', e?.message ?? e)
   }
 }
 
-module.exports = { disableEcoQosForPid, disableEcoQosForAllProcesses }
+function setEcoQosPreference(enabled) {
+  if (ecoQosEnabled === !!enabled) return
+  ecoQosEnabled = !!enabled
+  applyEcoQosToAllProcesses()
+}
+
+module.exports = { setEcoQosForPid, applyEcoQosToAllProcesses, setEcoQosPreference }

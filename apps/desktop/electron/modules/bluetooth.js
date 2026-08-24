@@ -2,6 +2,7 @@ const { exec } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
 const { singleFlight } = require('../singleFlight')
+const batterySaver = require('./batterySaver')
 
 const scriptsDir = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts')
@@ -12,6 +13,7 @@ const radioScriptPath = path.join(scriptsDir, 'bluetoothRadio.ps1')
 const unpairScriptPath = path.join(scriptsDir, 'bluetoothUnpair.ps1')
 
 const BLUETOOTH_REFRESH_INTERVAL_MS = 5000
+const BATTERY_SAVER_BLUETOOTH_REFRESH_INTERVAL_MS = 30000
 const POST_DISCONNECT_REFRESH_MS = 1500
 const POST_CONNECT_REFRESH_MS = 3000
 
@@ -158,7 +160,11 @@ module.exports = {
       event.returnValue = cachedState
     })
     refreshBluetoothQuietly()
-    const pollTimer = setInterval(refreshBluetoothQuietly, BLUETOOTH_REFRESH_INTERVAL_MS)
-    app.on('will-quit', () => clearInterval(pollTimer))
+    const stopPolling = batterySaver.startAdaptivePolling(
+      refreshBluetoothQuietly,
+      BLUETOOTH_REFRESH_INTERVAL_MS,
+      BATTERY_SAVER_BLUETOOTH_REFRESH_INTERVAL_MS,
+    )
+    app.on('will-quit', stopPolling)
   },
 }

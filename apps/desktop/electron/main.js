@@ -23,6 +23,7 @@ const setup = require('./modules/setup')
 const mediaSession = require('./modules/mediaSession')
 const microphone = require('./modules/microphone')
 const battery = require('./modules/battery')
+const batterySaver = require('./modules/batterySaver')
 const systemInfo = require('./modules/systemInfo')
 const launcher = require('./modules/launcher')
 const frecency = require('./modules/frecency')
@@ -149,7 +150,7 @@ function loadAppURL(win, url) {
   let attempts = 0
   win.webContents.on('did-finish-load', () => {
     attempts = 0
-    if (powerThrottling) powerThrottling.disableEcoQosForAllProcesses()
+    if (powerThrottling) powerThrottling.applyEcoQosToAllProcesses()
   })
   win.webContents.on('did-fail-load', (_event, errorCode, _desc, _validatedURL, isMainFrame) => {
     if (!isMainFrame || errorCode === -3 || attempts >= 30) return
@@ -760,7 +761,7 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
 
   setup.setShellShutdown(gracefulShutdown)
 
@@ -927,9 +928,9 @@ function startShellMode() {
   signalShellReadyForUpdate()
 
   if (powerThrottling) {
-    powerThrottling.disableEcoQosForAllProcesses()
-    setTimeout(() => powerThrottling.disableEcoQosForAllProcesses(), 3000)
-    const reassertEcoQos = () => powerThrottling.disableEcoQosForAllProcesses()
+    powerThrottling.applyEcoQosToAllProcesses()
+    setTimeout(() => powerThrottling.applyEcoQosToAllProcesses(), 3000)
+    const reassertEcoQos = () => powerThrottling.applyEcoQosToAllProcesses()
     powerMonitor.on('on-battery', reassertEcoQos)
     powerMonitor.on('on-ac', reassertEcoQos)
     try { powerMonitor.on('speed-limit-change', reassertEcoQos) } catch {}
@@ -956,7 +957,7 @@ function startShellMode() {
     createShellForDisplay(newDisplay)
     scheduleReassert()
     if (powerThrottling) {
-      setTimeout(() => powerThrottling.disableEcoQosForAllProcesses(), 1500)
+      setTimeout(() => powerThrottling.applyEcoQosToAllProcesses(), 1500)
     }
   })
 
@@ -986,11 +987,19 @@ function startShellMode() {
 
 app.on('will-quit', () => {
   unregisterAll()
+  undimDisplays()
   if (shellWindow) shellWindow.destroy()
 })
 
+function undimDisplays() {
+  try { brightness.restoreBatterySaverBrightnessOnShutdown() } catch (e) {
+    console.error('[main] battery saver brightness restore failed:', e?.message ?? e)
+  }
+}
+
 function gracefulShutdown() {
   try { unregisterAll() } catch {}
+  undimDisplays()
   try { if (shellWindow) shellWindow.destroy() } catch {}
   try { frecency.flush() } catch {}
   app.exit(0)

@@ -13,6 +13,7 @@ import DevicesHub from './devicesHub'
 import BluetoothSettingsPage from './bluetoothSettingsPage'
 import WifiSettingsPage from './wifiSettingsPage'
 import SystemPage from './systemPage'
+import BatteryPage from './batteryPage'
 import SystemRevertPage from './systemRevertPage'
 import AppsHub from './appsHub'
 import AppsRunningPage from './appsRunningPage'
@@ -208,6 +209,7 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'apps/installed') return <AppsInstalledPage />
   if (path === 'apps/startup') return <AppsStartupPage />
   if (path === 'system') return <SystemPage onNavigate={navigate} />
+  if (path === 'system/battery') return <BatteryPage />
   if (path === 'system/revert') return <SystemRevertPage />
   if (path === 'plugins') return <PluginsPage />
   if (path === 'updates') return <UpdatesPage />
@@ -233,6 +235,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   bluetooth: 'Bluetooth',
   wifi: 'Wi-Fi',
   system: 'System',
+  battery: 'Battery',
   revert: 'Revert back to Windows',
   plugins: 'Plugins',
   updates: 'Updates',

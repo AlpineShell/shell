@@ -21,9 +21,12 @@ const GetDpiForWindow = user32.func('__stdcall', 'GetDpiForWindow', 'uint32', ['
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
 
+const batterySaver = require('./batterySaver')
+
 const SRCCOPY = 0x00CC0020
 
 const POLL_INTERVAL_MS = 300
+const BATTERY_SAVER_POLL_INTERVAL_MS = 1000
 
 let altTab = null
 try { altTab = require('./altTab') } catch (_) {}
@@ -34,7 +37,7 @@ const hwndPerDisplay = new Map()
 const sampledHwndPerDisplay = new Map()
 let startupIgnoreHwnd = null
 let displayRemovedListener = null
-let pollTimer = null
+let stopPolling = null
 
 function colorEqual(a, b) {
   if (a === b) return true
@@ -175,9 +178,9 @@ function stop() {
     screen.removeListener('display-removed', displayRemovedListener)
     displayRemovedListener = null
   }
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+  if (stopPolling) {
+    stopPolling()
+    stopPolling = null
   }
 }
 
@@ -197,7 +200,7 @@ module.exports = {
     if (initial && IsZoomed(initial)) startupIgnoreHwnd = initial
     displayRemovedListener = (_event, removed) => clearDisplay(removed.id, broadcast)
     screen.on('display-removed', displayRemovedListener)
-    pollTimer = setInterval(() => update(broadcast), POLL_INTERVAL_MS)
+    stopPolling = batterySaver.startAdaptivePolling(() => update(broadcast), POLL_INTERVAL_MS, BATTERY_SAVER_POLL_INTERVAL_MS)
     app.on('will-quit', stop)
   },
 }
