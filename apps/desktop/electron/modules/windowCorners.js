@@ -1,4 +1,5 @@
 const koffi = require('koffi')
+const winEvents = require('./winEvents')
 const {
   DWMWCP_ROUNDSMALL,
   shouldApplyCornerPreference,
@@ -12,10 +13,7 @@ let dwmapi = null
 try { dwmapi = koffi.load('dwmapi.dll') } catch (_) {}
 
 const CORNERS_ENUM_PROC = koffi.proto('__stdcall', 'WindowCornersEnumProc', 'int', ['uintptr_t', 'intptr_t'])
-const CORNERS_WIN_EVENT_PROC = koffi.proto('__stdcall', 'WindowCornersWinEventProc', 'void', ['uintptr_t', 'uint32', 'uintptr_t', 'int32', 'int32', 'uint32', 'uint32'])
 
-const SetWinEventHook = user32.func('__stdcall', 'SetWinEventHook', 'uintptr_t', ['uint32', 'uint32', 'uintptr_t', 'WindowCornersWinEventProc *', 'uint32', 'uint32', 'uint32'])
-const UnhookWinEvent = user32.func('__stdcall', 'UnhookWinEvent', 'int', ['uintptr_t'])
 const EnumWindows = user32.func('__stdcall', 'EnumWindows', 'int', ['WindowCornersEnumProc *', 'intptr_t'])
 
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
@@ -35,14 +33,6 @@ if (dwmapi) {
   DwmSetWindowAttribute = dwmapi.func('__stdcall', 'DwmSetWindowAttribute', 'long', ['uintptr_t', 'uint32', 'void *', 'uint32'])
 }
 
-const EVENT_SYSTEM_FOREGROUND = 0x0003
-const EVENT_SYSTEM_MOVESIZEEND = 0x000b
-const EVENT_SYSTEM_MINIMIZEEND = 0x0017
-const WINEVENT_OUTOFCONTEXT = 0x0000
-const WINEVENT_SKIPOWNPROCESS = 0x0002
-const OBJID_WINDOW = 0
-const CHILDID_SELF = 0
-
 const GWL_EXSTYLE = -20
 const WS_EX_TOOLWINDOW = 0x00000080
 const DWMWA_CLOAKED = 14
@@ -55,8 +45,7 @@ const MAX_TRACKED_WINDOWS = 256
 const CORNER_TARGET = DWMWCP_ROUNDSMALL
 
 const originalPreferences = new Map()
-let winEventHookHandle = null
-let winEventProcPointer = null
+let unsubscribeWinEvents = null
 let enumProcPointer = null
 let cornerApiAvailable = !!DwmSetWindowAttribute
 
@@ -180,51 +169,11 @@ function roundExistingWindows() {
   }
 }
 
-function onWinEvent(_hook, _event, hwndRaw, idObject, idChild) {
-  try {
-    if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
-    roundWindow(hwndRaw)
-  } catch (e) {
-    console.error('[windowCorners] win event error:', e.message)
-  }
-}
-
-function installWinEventHook() {
-  try {
-    winEventProcPointer = koffi.register(onWinEvent, koffi.pointer(CORNERS_WIN_EVENT_PROC))
-    winEventHookHandle = SetWinEventHook(
-      EVENT_SYSTEM_FOREGROUND,
-      EVENT_SYSTEM_MINIMIZEEND,
-      0,
-      winEventProcPointer,
-      0,
-      0,
-      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
-    )
-    if (!toNum(winEventHookHandle)) {
-      console.error('[windowCorners] Failed to install win event hook')
-      winEventHookHandle = null
-      try { koffi.unregister(winEventProcPointer) } catch (_) {}
-      winEventProcPointer = null
-    }
-  } catch (e) {
-    console.error('[windowCorners] win event hook install error:', e.message)
-  }
-}
-
-function uninstallWinEventHook() {
-  if (winEventHookHandle) {
-    try { UnhookWinEvent(winEventHookHandle) } catch (_) {}
-    winEventHookHandle = null
-  }
-  if (winEventProcPointer) {
-    try { koffi.unregister(winEventProcPointer) } catch (_) {}
-    winEventProcPointer = null
-  }
-}
-
 function stop() {
-  uninstallWinEventHook()
+  if (unsubscribeWinEvents) {
+    unsubscribeWinEvents()
+    unsubscribeWinEvents = null
+  }
   restoreAllWindows()
 }
 
@@ -232,7 +181,7 @@ module.exports = {
   start() {
     if (!cornerApiAvailable) return
     const { app } = require('electron')
-    installWinEventHook()
+    unsubscribeWinEvents = winEvents.subscribe('windowCorners', winEvents.SYSTEM_WINDOW_EVENTS, roundWindow)
     setTimeout(roundExistingWindows, 2000)
     app.on('will-quit', stop)
   },

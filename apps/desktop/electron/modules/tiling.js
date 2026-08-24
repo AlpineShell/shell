@@ -2,6 +2,7 @@ const { app, screen } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const koffi = require('koffi')
+const winEvents = require('./winEvents')
 
 const user32 = koffi.load('user32.dll')
 let dwmapi = null
@@ -23,10 +24,6 @@ const GetWindowTextLengthW = user32.func('__stdcall', 'GetWindowTextLengthW', 'i
 const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProcessId', 'uint32', ['uintptr_t', 'void *'])
 const GetWindow = user32.func('__stdcall', 'GetWindow', 'uintptr_t', ['uintptr_t', 'uint32'])
 const SendMessageTimeoutW = user32.func('__stdcall', 'SendMessageTimeoutW', 'intptr_t', ['uintptr_t', 'uint32', 'uintptr_t', 'void *', 'uint32', 'uint32', 'void *'])
-
-const WINEVENTPROC = koffi.proto('__stdcall', 'TilingWinEventProc', 'void', ['uintptr_t', 'uint32', 'uintptr_t', 'int32', 'int32', 'uint32', 'uint32'])
-const SetWinEventHook = user32.func('__stdcall', 'SetWinEventHook', 'uintptr_t', ['uint32', 'uint32', 'uintptr_t', 'TilingWinEventProc *', 'uint32', 'uint32', 'uint32'])
-const UnhookWinEvent = user32.func('__stdcall', 'UnhookWinEvent', 'int', ['uintptr_t'])
 
 let DwmGetWindowAttribute = null
 if (dwmapi) {
@@ -57,10 +54,14 @@ const EVENT_SYSTEM_MOVESIZEEND = 0x000B
 const EVENT_SYSTEM_MINIMIZESTART = 0x0016
 const EVENT_SYSTEM_MINIMIZEEND = 0x0017
 const EVENT_OBJECT_SHOW = 0x8002
-const WINEVENT_OUTOFCONTEXT = 0x0000
-const WINEVENT_SKIPOWNPROCESS = 0x0002
-const OBJID_WINDOW = 0
-const CHILDID_SELF = 0
+const TILING_EVENTS = [
+  EVENT_SYSTEM_FOREGROUND,
+  EVENT_SYSTEM_MOVESIZESTART,
+  EVENT_SYSTEM_MOVESIZEEND,
+  EVENT_SYSTEM_MINIMIZESTART,
+  EVENT_SYSTEM_MINIMIZEEND,
+  EVENT_OBJECT_SHOW,
+]
 
 const STORE_FILE = 'tiling.json'
 const DEFAULT_CONFIG = {
@@ -85,12 +86,10 @@ let lastDynamicSnapshot = ''
 const snapStateByHwnd = new Map()
 const lastAppliedDipByHwnd = new Map()
 const minSizeByHwnd = new Map()
+const minSizeUnavailableHwnds = new Set()
 
 let windowOrder = []
-let winEventHookHandle = null
-let winEventProcPointer = null
-let objectHookHandle = null
-let objectHookPointer = null
+let unsubscribeWinEvents = null
 let dynamicApplyTimers = []
 let dragActive = false
 let dragHwnd = 0
@@ -348,9 +347,10 @@ function queryMinTrackDip(hwnd, display) {
 }
 
 function ensureMinSize(hwnd, display) {
-  if (minSizeByHwnd.has(hwnd)) return
+  if (minSizeByHwnd.has(hwnd) || minSizeUnavailableHwnds.has(hwnd)) return
   const min = queryMinTrackDip(hwnd, display)
   if (min) minSizeByHwnd.set(hwnd, min)
+  else minSizeUnavailableHwnds.add(hwnd)
 }
 
 function positionPhysical(hwnd, dipRect) {
@@ -403,6 +403,7 @@ function pruneRuntimeMaps(windows) {
   const present = new Set(windows)
   for (const hwnd of [...lastAppliedDipByHwnd.keys()]) if (!present.has(hwnd)) lastAppliedDipByHwnd.delete(hwnd)
   for (const hwnd of [...minSizeByHwnd.keys()]) if (!present.has(hwnd)) minSizeByHwnd.delete(hwnd)
+  for (const hwnd of [...minSizeUnavailableHwnds]) if (!present.has(hwnd)) minSizeUnavailableHwnds.delete(hwnd)
 }
 
 function alignOversizedInZone(hwnd, zoneName, display, content) {
@@ -441,6 +442,7 @@ function correctSnapOversize(hwnd, zoneName, display) {
       const overH = content.height - cell.height
       if (overW <= OVERSIZE_TOLERANCE && overH <= OVERSIZE_TOLERANCE) return
       const min = minSizeByHwnd.get(hwnd) || { w: 0, h: 0 }
+      minSizeUnavailableHwnds.delete(hwnd)
       minSizeByHwnd.set(hwnd, {
         w: overW > OVERSIZE_TOLERANCE ? Math.round(content.width) : min.w,
         h: overH > OVERSIZE_TOLERANCE ? Math.round(content.height) : min.h,
@@ -510,6 +512,28 @@ function tileWindow(hwnd, normRect, display) {
   return true
 }
 
+function knownOversizeInZone(hwnd, cell) {
+  if (!config.handleOversized) return null
+  const min = minSizeByHwnd.get(hwnd)
+  if (!min) return null
+  if (min.w - cell.width <= OVERSIZE_TOLERANCE && min.h - cell.height <= OVERSIZE_TOLERANCE) return null
+  return { width: Math.max(min.w, cell.width), height: Math.max(min.h, cell.height) }
+}
+
+function snapToZone(hwnd, zoneName, display) {
+  const zone = ZONES[zoneName]
+  if (!zone || !hwnd || !IsWindow(hwnd)) return
+  const oversize = knownOversizeInZone(hwnd, zoneRectDip(display, zone))
+  if (oversize) {
+    if (IsZoomed(hwnd) || IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE)
+    alignOversizedInZone(hwnd, zoneName, display, oversize)
+  } else {
+    tileWindow(hwnd, zone, display)
+  }
+  snapStateByHwnd.set(hwnd, zoneName)
+  correctSnapOversize(hwnd, zoneName, display)
+}
+
 function transitionZone(current, direction) {
   switch (direction) {
     case 'left':
@@ -559,9 +583,7 @@ function doSnap(direction, shift) {
     if (!target) return
     const current = snapStateByHwnd.get(hwnd)
     const zoneName = current && ZONES[current] ? current : 'full'
-    tileWindow(hwnd, ZONES[zoneName], target)
-    snapStateByHwnd.set(hwnd, zoneName)
-    correctSnapOversize(hwnd, zoneName, target)
+    snapToZone(hwnd, zoneName, target)
     return
   }
 
@@ -583,11 +605,7 @@ function doSnap(direction, shift) {
     snapStateByHwnd.delete(hwnd)
     return
   }
-  if (ZONES[next]) {
-    tileWindow(hwnd, ZONES[next], display)
-    snapStateByHwnd.set(hwnd, next)
-    correctSnapOversize(hwnd, next, display)
-  }
+  if (ZONES[next]) snapToZone(hwnd, next, display)
 }
 
 function layoutColumns(count, ratios) {
@@ -1239,9 +1257,7 @@ function handleSnapDrop(draggedHwnd, startZone, startDisplayId) {
 
   const occupant = findZoneOccupant(display, targetZone, draggedHwnd)
 
-  tileWindow(draggedHwnd, ZONES[targetZone], display)
-  snapStateByHwnd.set(draggedHwnd, targetZone)
-  correctSnapOversize(draggedHwnd, targetZone, display)
+  snapToZone(draggedHwnd, targetZone, display)
 
   if (occupant && occupant !== draggedHwnd) {
     const swapZone = startZone && startZone !== targetZone && ZONES[startZone] ? startZone : complementZone(targetZone)
@@ -1249,9 +1265,7 @@ function handleSnapDrop(draggedHwnd, startZone, startDisplayId) {
       ? screen.getAllDisplays().find((d) => d.id === startDisplayId)
       : null) || display
     evictZone(swapZone, swapDisplay, [draggedHwnd, occupant])
-    tileWindow(occupant, ZONES[swapZone], swapDisplay)
-    snapStateByHwnd.set(occupant, swapZone)
-    correctSnapOversize(occupant, swapZone, swapDisplay)
+    snapToZone(occupant, swapZone, swapDisplay)
   }
 }
 
@@ -1280,93 +1294,34 @@ function handleDragEnd(hwnd) {
   }
 }
 
-function onWinEvent(_hook, event, hwndRaw, idObject, idChild) {
-  try {
-    if (!config.enabled) return
-    if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
-    const hwnd = toNum(hwndRaw)
-    if (!hwnd) return
+function onWindowEvent(hwnd, event) {
+  if (!config.enabled) return
 
-    if (event === EVENT_SYSTEM_MOVESIZESTART) { handleDragStart(hwnd); return }
-    if (event === EVENT_SYSTEM_MOVESIZEEND) { handleDragEnd(hwnd); return }
+  if (event === EVENT_SYSTEM_MOVESIZESTART) { handleDragStart(hwnd); return }
+  if (event === EVENT_SYSTEM_MOVESIZEEND) { handleDragEnd(hwnd); return }
 
-    if (config.mode !== 'dynamic') return
+  if (config.mode !== 'dynamic') return
 
-    if (dragActive) {
-      if (event === EVENT_SYSTEM_FOREGROUND && hwnd !== dragHwnd) {
-        resetDragState()
-        scheduleDynamicApply()
-      }
-      return
-    }
-
-    if (event === EVENT_SYSTEM_FOREGROUND || event === EVENT_SYSTEM_MINIMIZESTART ||
-        event === EVENT_SYSTEM_MINIMIZEEND || event === EVENT_OBJECT_SHOW) {
+  if (dragActive) {
+    if (event === EVENT_SYSTEM_FOREGROUND && hwnd !== dragHwnd) {
+      resetDragState()
       scheduleDynamicApply()
     }
-  } catch (e) {
-    console.error('[tiling] win event error:', e.message)
+    return
   }
+
+  scheduleDynamicApply()
 }
 
 function installWinEventHook() {
-  if (winEventHookHandle || objectHookHandle) return
-  try {
-    winEventProcPointer = koffi.register(onWinEvent, koffi.pointer(WINEVENTPROC))
-    winEventHookHandle = SetWinEventHook(
-      EVENT_SYSTEM_FOREGROUND,
-      EVENT_SYSTEM_MINIMIZEEND,
-      0,
-      winEventProcPointer,
-      0,
-      0,
-      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
-    )
-    if (!toNum(winEventHookHandle)) {
-      console.error('[tiling] Failed to install system win event hook')
-      winEventHookHandle = null
-      try { koffi.unregister(winEventProcPointer) } catch (_) {}
-      winEventProcPointer = null
-    }
-
-    objectHookPointer = koffi.register(onWinEvent, koffi.pointer(WINEVENTPROC))
-    objectHookHandle = SetWinEventHook(
-      EVENT_OBJECT_SHOW,
-      EVENT_OBJECT_SHOW,
-      0,
-      objectHookPointer,
-      0,
-      0,
-      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
-    )
-    if (!toNum(objectHookHandle)) {
-      console.error('[tiling] Failed to install object win event hook')
-      objectHookHandle = null
-      try { koffi.unregister(objectHookPointer) } catch (_) {}
-      objectHookPointer = null
-    }
-  } catch (e) {
-    console.error('[tiling] win event hook install error:', e.message)
-  }
+  if (unsubscribeWinEvents) return
+  unsubscribeWinEvents = winEvents.subscribe('tiling', TILING_EVENTS, onWindowEvent)
 }
 
 function uninstallWinEventHook() {
-  if (winEventHookHandle) {
-    try { UnhookWinEvent(winEventHookHandle) } catch (_) {}
-    winEventHookHandle = null
-  }
-  if (winEventProcPointer) {
-    try { koffi.unregister(winEventProcPointer) } catch (_) {}
-    winEventProcPointer = null
-  }
-  if (objectHookHandle) {
-    try { UnhookWinEvent(objectHookHandle) } catch (_) {}
-    objectHookHandle = null
-  }
-  if (objectHookPointer) {
-    try { koffi.unregister(objectHookPointer) } catch (_) {}
-    objectHookPointer = null
-  }
+  if (!unsubscribeWinEvents) return
+  unsubscribeWinEvents()
+  unsubscribeWinEvents = null
 }
 
 function handleHotkey(direction, shift) {

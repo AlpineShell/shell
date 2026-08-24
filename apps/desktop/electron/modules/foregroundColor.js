@@ -1,5 +1,6 @@
 const koffi = require('koffi')
 const { screen } = require('electron')
+const winEvents = require('./winEvents')
 
 const user32 = koffi.load('user32.dll')
 const gdi32 = koffi.load('gdi32.dll')
@@ -23,6 +24,20 @@ const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uin
 
 const SRCCOPY = 0x00CC0020
 
+const EVENT_SYSTEM_FOREGROUND = 0x0003
+const EVENT_SYSTEM_MOVESIZEEND = 0x000b
+const EVENT_SYSTEM_MINIMIZESTART = 0x0016
+const EVENT_SYSTEM_MINIMIZEEND = 0x0017
+const FOREGROUND_COLOR_EVENTS = [
+  EVENT_SYSTEM_FOREGROUND,
+  EVENT_SYSTEM_MOVESIZEEND,
+  EVENT_SYSTEM_MINIMIZESTART,
+  EVENT_SYSTEM_MINIMIZEEND,
+]
+
+const POLL_INTERVAL_MS = 300
+const MAX_SAMPLE_ATTEMPTS = 8
+
 let altTab = null
 try { altTab = require('./altTab') } catch (_) {}
 
@@ -30,6 +45,7 @@ const perDisplay = new Map()
 const pendingDisplay = new Map()
 const hwndPerDisplay = new Map()
 const sampledHwndPerDisplay = new Map()
+const sampleAttemptsPerDisplay = new Map()
 let startupIgnoreHwnd = null
 
 function colorEqual(a, b) {
@@ -109,6 +125,7 @@ function clearDisplay(displayId, broadcast) {
   hwndPerDisplay.delete(displayId)
   pendingDisplay.delete(displayId)
   sampledHwndPerDisplay.delete(displayId)
+  sampleAttemptsPerDisplay.delete(displayId)
   if (perDisplay.has(displayId)) {
     perDisplay.delete(displayId)
     broadcast('topbar/fg-color-changed', { displayId })
@@ -137,9 +154,14 @@ function update(broadcast) {
   const displayId = getDisplayIdForWindow(hwnd)
   if (displayId == null) return
 
+  if (hwndPerDisplay.get(displayId) !== hwnd) sampleAttemptsPerDisplay.delete(displayId)
   hwndPerDisplay.set(displayId, hwnd)
 
   if (sampledHwndPerDisplay.get(displayId) === hwnd && perDisplay.has(displayId)) return
+
+  const attempt = (sampleAttemptsPerDisplay.get(displayId) || 0) + 1
+  if (attempt > MAX_SAMPLE_ATTEMPTS) return
+  sampleAttemptsPerDisplay.set(displayId, attempt)
 
   const rgb = sampleTitleBarColor(hwnd)
   if (!rgb) {
@@ -149,21 +171,22 @@ function update(broadcast) {
 
   const lum = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b
   const color = { r: rgb.r, g: rgb.g, b: rgb.b, darkText: lum > 128 }
-  const pending = pendingDisplay.get(displayId)
 
-  if (!colorEqual(pending, color)) {
+  if (!colorEqual(pendingDisplay.get(displayId), color) && attempt < MAX_SAMPLE_ATTEMPTS) {
     pendingDisplay.set(displayId, color)
     return
   }
 
+  commitColor(displayId, hwnd, color, broadcast)
+}
+
+function commitColor(displayId, hwnd, color, broadcast) {
   pendingDisplay.delete(displayId)
   sampledHwndPerDisplay.set(displayId, hwnd)
   startupIgnoreHwnd = null
-  const prev = perDisplay.get(displayId)
-  if (!colorEqual(prev, color)) {
-    perDisplay.set(displayId, color)
-    broadcast('topbar/fg-color-changed', { ...color, displayId })
-  }
+  if (colorEqual(perDisplay.get(displayId), color)) return
+  perDisplay.set(displayId, color)
+  broadcast('topbar/fg-color-changed', { ...color, displayId })
 }
 
 module.exports = {
@@ -179,6 +202,8 @@ module.exports = {
   start(broadcast) {
     const initial = GetForegroundWindow()
     if (initial && IsZoomed(initial)) startupIgnoreHwnd = initial
-    setInterval(() => update(broadcast), 300)
+    winEvents.subscribe('foregroundColor', FOREGROUND_COLOR_EVENTS, () => update(broadcast))
+    screen.on('display-removed', (_event, removed) => clearDisplay(removed.id, broadcast))
+    setInterval(() => update(broadcast), POLL_INTERVAL_MS)
   },
 }

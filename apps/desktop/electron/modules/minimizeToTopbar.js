@@ -1,5 +1,6 @@
 const { app } = require('electron')
 const koffi = require('koffi')
+const winEvents = require('./winEvents')
 
 const user32 = koffi.load('user32.dll')
 
@@ -8,10 +9,6 @@ try {
   const dwmapi = koffi.load('dwmapi.dll')
   DwmGetWindowAttribute = dwmapi.func('__stdcall', 'DwmGetWindowAttribute', 'long', ['uintptr_t', 'uint32', 'void *', 'uint32'])
 } catch (_) {}
-
-const MIN_TO_TOPBAR_WIN_EVENT_PROC = koffi.proto('__stdcall', 'MinToTopbarWinEventProc', 'void', ['uintptr_t', 'uint32', 'uintptr_t', 'int32', 'int32', 'uint32', 'uint32'])
-const SetWinEventHook = user32.func('__stdcall', 'SetWinEventHook', 'uintptr_t', ['uint32', 'uint32', 'uintptr_t', 'MinToTopbarWinEventProc *', 'uint32', 'uint32', 'uint32'])
-const UnhookWinEvent = user32.func('__stdcall', 'UnhookWinEvent', 'int', ['uintptr_t'])
 
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
@@ -29,11 +26,7 @@ const SetWindowPos = user32.func('__stdcall', 'SetWindowPos', 'int', ['uintptr_t
 const EVENT_SYSTEM_FOREGROUND = 0x0003
 const EVENT_SYSTEM_MOVESIZEEND = 0x000b
 const EVENT_SYSTEM_MINIMIZESTART = 0x0016
-const EVENT_SYSTEM_MINIMIZEEND = 0x0017
-const WINEVENT_OUTOFCONTEXT = 0x0000
-const WINEVENT_SKIPOWNPROCESS = 0x0002
-const OBJID_WINDOW = 0
-const CHILDID_SELF = 0
+const MINIMIZE_AIM_EVENTS = [EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MINIMIZESTART]
 
 const GWL_EXSTYLE = -20
 const WS_EX_TOOLWINDOW = 0x00000080
@@ -57,8 +50,7 @@ const PARK_SETTLE_MS = 300
 const MAX_TRACKED_TARGETS = 128
 const OFFSCREEN_PARK = -32000
 
-let winEventHookHandle = null
-let winEventProcPointer = null
+let unsubscribeWinEvents = null
 const minPositionTargets = new Map()
 const pendingParks = new Map()
 
@@ -138,52 +130,18 @@ function schedulePark(hwnd) {
   }, PARK_SETTLE_MS))
 }
 
-function onWinEvent(_hook, event, hwndRaw, idObject, idChild) {
-  try {
-    if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
-    const hwnd = toNum(hwndRaw)
-    if (!hwnd) return
-    if (event === EVENT_SYSTEM_FOREGROUND || event === EVENT_SYSTEM_MOVESIZEEND) {
-      aimMinimizeAtTopbar(hwnd)
-    } else if (event === EVENT_SYSTEM_MINIMIZESTART) {
-      schedulePark(hwnd)
-    }
-  } catch (e) {
-    console.error('[minimizeToTopbar] win event error:', e.message)
+function onWindowEvent(hwnd, event) {
+  if (event === EVENT_SYSTEM_MINIMIZESTART) {
+    schedulePark(hwnd)
+    return
   }
+  aimMinimizeAtTopbar(hwnd)
 }
 
-function installWinEventHook() {
-  try {
-    winEventProcPointer = koffi.register(onWinEvent, koffi.pointer(MIN_TO_TOPBAR_WIN_EVENT_PROC))
-    winEventHookHandle = SetWinEventHook(
-      EVENT_SYSTEM_FOREGROUND,
-      EVENT_SYSTEM_MINIMIZEEND,
-      0,
-      winEventProcPointer,
-      0,
-      0,
-      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
-    )
-    if (!toNum(winEventHookHandle)) {
-      console.error('[minimizeToTopbar] Failed to install win event hook')
-      winEventHookHandle = null
-      try { koffi.unregister(winEventProcPointer) } catch (_) {}
-      winEventProcPointer = null
-    }
-  } catch (e) {
-    console.error('[minimizeToTopbar] win event hook install error:', e.message)
-  }
-}
-
-function uninstallWinEventHook() {
-  if (winEventHookHandle) {
-    try { UnhookWinEvent(winEventHookHandle) } catch (_) {}
-    winEventHookHandle = null
-  }
-  if (winEventProcPointer) {
-    try { koffi.unregister(winEventProcPointer) } catch (_) {}
-    winEventProcPointer = null
+function stop() {
+  if (unsubscribeWinEvents) {
+    unsubscribeWinEvents()
+    unsubscribeWinEvents = null
   }
   for (const timer of pendingParks.values()) clearTimeout(timer)
   pendingParks.clear()
@@ -192,7 +150,7 @@ function uninstallWinEventHook() {
 
 module.exports = {
   start() {
-    installWinEventHook()
-    app.on('will-quit', uninstallWinEventHook)
+    unsubscribeWinEvents = winEvents.subscribe('minimizeToTopbar', MINIMIZE_AIM_EVENTS, onWindowEvent)
+    app.on('will-quit', stop)
   },
 }
