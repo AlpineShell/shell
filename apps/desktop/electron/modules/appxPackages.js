@@ -31,6 +31,7 @@ function loadBindings() {
       closeKey: advapi32.func('__stdcall', 'RegCloseKey', 'long', ['uintptr_t']),
       createEvent: kernel32.func('__stdcall', 'CreateEventW', 'uintptr_t', ['void *', 'int', 'int', 'void *']),
       resetEvent: kernel32.func('__stdcall', 'ResetEvent', 'int', ['uintptr_t']),
+      setEvent: kernel32.func('__stdcall', 'SetEvent', 'int', ['uintptr_t']),
       closeHandle: kernel32.func('__stdcall', 'CloseHandle', 'int', ['uintptr_t']),
     }
   } catch (e) {
@@ -76,10 +77,11 @@ let familyMapBuiltAt = 0
 let watchedKey = null
 let changeEvent = null
 let waitWorker = null
+let waitWorkerHasExited = true
 let watchGeneration = 0
 let packagesChangedCallback = null
 let watchLostCallback = null
-let quitCleanupRegistered = false
+let shutdownCleanupRegistered = false
 
 function armChangeNotification() {
   const api = loadBindings()
@@ -122,20 +124,34 @@ function packageFullNameForFamily(familyName) {
   return fullNameByFamily.get(String(familyName).toLowerCase()) || null
 }
 
+function closeWatchHandles(key, event) {
+  const api = loadBindings()
+  if (!api) return
+  if (key !== null) { try { api.closeKey(key) } catch { void 0 } }
+  if (event !== null) { try { api.closeHandle(event) } catch { void 0 } }
+}
+
+function stopWaitWorkerThenCloseHandles(stopped, key, event) {
+  stopped.removeAllListeners()
+  stopped.on('error', () => { void 0 })
+  stopped.on('exit', () => closeWatchHandles(key, event))
+  const api = loadBindings()
+  if (api && event !== null) { try { api.setEvent(event) } catch { void 0 } }
+  try { stopped.postMessage({ stop: true }) } catch { void 0 }
+}
+
 function releaseWatch() {
   watchGeneration++
   packagesChangedCallback = null
-  if (waitWorker) {
-    const stopped = waitWorker
-    waitWorker = null
-    stopped.removeAllListeners()
-    stopped.on('error', () => {})
-    stopped.terminate().catch(() => {})
-  }
-  const api = loadBindings()
-  if (!api) return
-  if (changeEvent !== null) { try { api.closeHandle(changeEvent) } catch { void 0 } changeEvent = null }
-  if (watchedKey !== null) { try { api.closeKey(watchedKey) } catch { void 0 } watchedKey = null }
+  watchLostCallback = null
+  const stopped = waitWorker
+  const key = watchedKey
+  const event = changeEvent
+  waitWorker = null
+  watchedKey = null
+  changeEvent = null
+  if (!stopped || waitWorkerHasExited) closeWatchHandles(key, event)
+  else stopWaitWorkerThenCloseHandles(stopped, key, event)
 }
 
 function loseWatch(reason) {
@@ -146,10 +162,11 @@ function loseWatch(reason) {
   if (notify) notify()
 }
 
-function registerQuitCleanup() {
-  if (quitCleanupRegistered) return
-  quitCleanupRegistered = true
+function registerShutdownCleanup() {
+  if (shutdownCleanupRegistered) return
+  shutdownCleanupRegistered = true
   try { require('electron').app.on('will-quit', releaseWatch) } catch { void 0 }
+  process.on('exit', () => { try { releaseWatch() } catch { void 0 } })
 }
 
 function beginWait() {
@@ -169,6 +186,7 @@ function watchPackages(onPackagesChanged, onWatchLost) {
   try {
     const { Worker } = require('worker_threads')
     waitWorker = new Worker(WAIT_WORKER_ENTRY)
+    waitWorkerHasExited = false
   } catch (e) {
     console.error('[appxPackages] wait worker unavailable:', e.message)
     releaseWatch()
@@ -178,7 +196,10 @@ function watchPackages(onPackagesChanged, onWatchLost) {
   watchLostCallback = onWatchLost
   waitWorker.unref()
   waitWorker.on('error', (e) => { if (generation === watchGeneration) loseWatch(e.message) })
-  waitWorker.on('exit', () => { if (generation === watchGeneration) loseWatch('wait worker exited') })
+  waitWorker.on('exit', () => {
+    waitWorkerHasExited = true
+    if (generation === watchGeneration) loseWatch('wait worker exited')
+  })
   waitWorker.on('message', (message) => {
     if (generation !== watchGeneration) return
     if (!message.signalled) { loseWatch(`wait returned ${message.detail}`); return }
@@ -188,7 +209,7 @@ function watchPackages(onPackagesChanged, onWatchLost) {
     beginWait()
     try { packagesChangedCallback() } catch (e) { console.error('[appxPackages] change callback error:', e.message) }
   })
-  registerQuitCleanup()
+  registerShutdownCleanup()
   beginWait()
   return true
 }
