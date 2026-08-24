@@ -1,9 +1,11 @@
 const sqliteWorker = require('./sqliteWorker')
 
 const ICON_ID_BATCH = 500
+const ICON_CANDIDATES_PER_HOST = 3
+const ICON_MAPPING_ROW_LIMIT = 200000
 const PREFERRED_ICON_PX = 64
 
-const CHROMIUM_ICON_MAPPING_SQL = 'SELECT page_url, icon_id FROM icon_mapping'
+const CHROMIUM_ICON_MAPPING_SQL = 'SELECT page_url, icon_id FROM icon_mapping ORDER BY rowid DESC'
 
 function chromiumBitmapSql(iconIds) {
   return `SELECT icon_id, image_data FROM favicon_bitmaps
@@ -11,7 +13,11 @@ function chromiumBitmapSql(iconIds) {
     ORDER BY (width >= ${PREFERRED_ICON_PX}) DESC, ABS(width - ${PREFERRED_ICON_PX}) ASC`
 }
 
-function preferredIconIdByHost(rows, neededHosts) {
+function warnIfTruncated(label, truncated) {
+  if (truncated) console.error(`[browserFavicons] ${label} hit the ${ICON_MAPPING_ROW_LIMIT} row limit; the oldest mappings were not read`)
+}
+
+function preferredIconIdsByHost(rows, neededHosts) {
   const countsByHost = new Map()
   for (const [pageUrl, iconId] of rows) {
     if (!pageUrl || !Number.isInteger(iconId) || iconId <= 0) continue
@@ -24,14 +30,21 @@ function preferredIconIdByHost(rows, neededHosts) {
   }
   const byHost = new Map()
   for (const [host, counts] of countsByHost) {
-    let bestId = 0
-    let bestCount = 0
-    for (const [iconId, count] of counts) {
-      if (count > bestCount || (count === bestCount && iconId > bestId)) { bestId = iconId; bestCount = count }
-    }
-    byHost.set(host, bestId)
+    const ranked = [...counts]
+      .sort((a, b) => b[1] - a[1] || b[0] - a[0])
+      .slice(0, ICON_CANDIDATES_PER_HOST)
+      .map(([iconId]) => iconId)
+    byHost.set(host, ranked)
   }
   return byHost
+}
+
+function candidateIds(iconIdsByHost) {
+  const ids = new Set()
+  for (const ranked of iconIdsByHost.values()) {
+    for (const iconId of ranked) ids.add(iconId)
+  }
+  return [...ids]
 }
 
 function idBatches(iconIds) {
@@ -50,16 +63,19 @@ function collectBlobs(rows, blobById) {
 async function readIconBlobs(dbPath, iconIds, buildSql) {
   const blobById = new Map()
   for (const batch of idBatches(iconIds)) {
-    collectBlobs(await sqliteWorker.readRows(dbPath, buildSql(batch), ['int', 'blob']), blobById)
+    const { rows } = await sqliteWorker.readRows(dbPath, buildSql(batch), ['int', 'blob'])
+    collectBlobs(rows, blobById)
   }
   return blobById
 }
 
-function iconMapFromBlobs(iconIdByHost, blobById, toIcon) {
+function iconMapFromBlobs(iconIdsByHost, blobById, toIcon) {
   const map = new Map()
-  for (const [host, iconId] of iconIdByHost) {
-    const icon = toIcon(blobById.get(iconId))
-    if (icon) map.set(host, icon)
+  for (const [host, ranked] of iconIdsByHost) {
+    for (const iconId of ranked) {
+      const icon = toIcon(blobById.get(iconId))
+      if (icon) { map.set(host, icon); break }
+    }
   }
   return map
 }
@@ -71,19 +87,23 @@ function toPngDataUrl(data) {
 
 async function readFaviconMap(faviconsDbPath, neededHosts) {
   if (!faviconsDbPath || !neededHosts || neededHosts.size === 0) return new Map()
-  const mappings = await sqliteWorker.readRows(faviconsDbPath, CHROMIUM_ICON_MAPPING_SQL, ['text', 'int'])
-  const iconIdByHost = preferredIconIdByHost(mappings, neededHosts)
-  if (iconIdByHost.size === 0) return new Map()
-  const blobById = await readIconBlobs(faviconsDbPath, [...new Set(iconIdByHost.values())], chromiumBitmapSql)
-  return iconMapFromBlobs(iconIdByHost, blobById, toPngDataUrl)
+  const { rows, truncated } = await sqliteWorker.readRows(faviconsDbPath, CHROMIUM_ICON_MAPPING_SQL, ['text', 'int'], ICON_MAPPING_ROW_LIMIT)
+  warnIfTruncated('icon_mapping', truncated)
+  const iconIdsByHost = preferredIconIdsByHost(rows, neededHosts)
+  if (iconIdsByHost.size === 0) return new Map()
+  const blobById = await readIconBlobs(faviconsDbPath, candidateIds(iconIdsByHost), chromiumBitmapSql)
+  return iconMapFromBlobs(iconIdsByHost, blobById, toPngDataUrl)
 }
 
 module.exports = {
   readFaviconMap,
-  preferredIconIdByHost,
+  preferredIconIdsByHost,
+  candidateIds,
   readIconBlobs,
   iconMapFromBlobs,
   idBatches,
   collectBlobs,
+  warnIfTruncated,
+  ICON_MAPPING_ROW_LIMIT,
   PREFERRED_ICON_PX,
 }

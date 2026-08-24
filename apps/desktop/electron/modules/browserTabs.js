@@ -9,13 +9,9 @@ const { parseTabs } = require('./browserTabsParser')
 
 const COMMAND_TIMEOUT_MS = 30000
 const WARM_DELAY_MS = 30000
-const CACHE_MAX_AGE_MS = 60000
 
 let broadcastFn = null
 let listGeneration = 0
-let cachedTabs = []
-let cachedAtMs = 0
-let refreshing = null
 
 function scriptPath() {
   return app.isPackaged
@@ -53,35 +49,8 @@ async function listTabs() {
     return tabs
   } catch (e) {
     console.error('[browserTabs] list error:', e?.message ?? e)
-    return null
+    return []
   }
-}
-
-function differsFromCache(tabs) {
-  if (cachedTabs.length !== tabs.length) return true
-  return cachedTabs.some((tab, i) => tab.hwnd !== tabs[i].hwnd || tab.index !== tabs[i].index || tab.title !== tabs[i].title)
-}
-
-function refreshTabs() {
-  if (!refreshing) {
-    refreshing = listTabs()
-      .then((tabs) => {
-        if (!tabs) return cachedTabs
-        const changed = differsFromCache(tabs)
-        cachedTabs = tabs
-        cachedAtMs = Date.now()
-        if (changed && broadcastFn) broadcastFn('browser-tabs/changed', tabs)
-        return tabs
-      })
-      .finally(() => { refreshing = null })
-  }
-  return refreshing
-}
-
-function cachedTabsOrRefresh() {
-  if (cachedTabs.length === 0 || Date.now() - cachedAtMs >= CACHE_MAX_AGE_MS) return refreshTabs()
-  setImmediate(refreshTabs)
-  return cachedTabs
 }
 
 async function activateTab(tab) {
@@ -101,11 +70,7 @@ async function activateTab(tab) {
 
 module.exports = {
   handlers: {
-    'browser-tabs/list': () => {
-      if (launcherPrefs.getShowBrowserTabs()) return cachedTabsOrRefresh()
-      cachedTabs = []
-      return []
-    },
+    'browser-tabs/list': () => (launcherPrefs.getShowBrowserTabs() ? listTabs() : []),
     'browser-tabs/activate': (_event, tab) => activateTab(tab),
   },
   start(broadcast) {

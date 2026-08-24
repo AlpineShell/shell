@@ -53,7 +53,7 @@ function handleMessage(message) {
   clearTimeout(entry.timer)
   if (message.ok && Array.isArray(message.rows)) {
     consecutiveExits = 0
-    entry.resolve(toBuffers(message.rows))
+    entry.resolve({ rows: toBuffers(message.rows), truncated: !!message.truncated })
   } else {
     entry.reject(new Error(message.reason || 'sqlite worker request failed'))
   }

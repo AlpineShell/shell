@@ -21,10 +21,6 @@ let watcher = null
 let reloadTimer = null
 let lastPublishedSignature = null
 
-function bookmarksEnabled() {
-  return launcherPrefs.handlers['launcher/show-bookmarks-get']()
-}
-
 function getDefaultBrowserProgId() {
   return new Promise((resolve) => {
     execFile('reg', ['query', DEFAULT_BROWSER_KEY, '/v', 'ProgId'], { windowsHide: true }, (err, stdout) => {
@@ -173,7 +169,7 @@ module.exports = {
   start(b) {
     broadcast = b
     setTimeout(() => {
-      if (bookmarksEnabled()) ensureLoaded()
+      if (launcherPrefs.getShowBookmarks()) ensureLoaded()
     }, WARM_DELAY_MS)
   },
 }

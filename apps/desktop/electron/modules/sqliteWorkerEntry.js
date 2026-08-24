@@ -12,7 +12,8 @@ process.parentPort.on('message', (event) => {
     return
   }
   try {
-    reply({ id: request.id, ok: true, rows: winsqlite.readRows(request.dbPath, request.sql, request.columnTypes, request.rowLimit) })
+    const { rows, truncated } = winsqlite.readRows(request.dbPath, request.sql, request.columnTypes, request.rowLimit)
+    reply({ id: request.id, ok: true, rows, truncated })
   } catch (e) {
     reply({ id: request.id, ok: false, reason: (e && e.message) || String(e) })
   }

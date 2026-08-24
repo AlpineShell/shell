@@ -68,7 +68,7 @@ async function chromiumMaps(browser, tabs) {
 
   const titleHost = new Map()
   for (const dir of profileDirs) {
-    const rows = await sqliteWorker.readRows(path.join(dir, 'History'), CHROMIUM_HISTORY_SQL, ['text', 'text'], HISTORY_ROW_LIMIT)
+    const { rows } = await sqliteWorker.readRows(path.join(dir, 'History'), CHROMIUM_HISTORY_SQL, ['text', 'text'], HISTORY_ROW_LIMIT)
     mergeFirstWins(titleHost, titleHostMapFromRows(rows))
     await yieldToEventLoop()
   }
@@ -89,7 +89,7 @@ async function firefoxMaps(tabs) {
   const profileDir = firefoxData.resolveProfileDir()
   if (!profileDir) return null
 
-  const rows = await sqliteWorker.readRows(path.join(profileDir, 'places.sqlite'), FIREFOX_HISTORY_SQL, ['text', 'text'], HISTORY_ROW_LIMIT)
+  const { rows } = await sqliteWorker.readRows(path.join(profileDir, 'places.sqlite'), FIREFOX_HISTORY_SQL, ['text', 'text'], HISTORY_ROW_LIMIT)
   const titleHost = titleHostMapFromRows(rows)
   await yieldToEventLoop()
 
