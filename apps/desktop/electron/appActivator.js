@@ -1,4 +1,5 @@
-const { spawn, execFile } = require('child_process')
+const { spawn } = require('child_process')
+const { shellExecute, warm: warmShellExecute } = require('./shellExecute')
 
 const TYPE_DEFINITION = [
   'Add-Type -TypeDefinition @\'',
@@ -66,7 +67,7 @@ function activatePackaged(aumid) {
 }
 
 function activateViaAppsFolder(appId) {
-  execFile('explorer.exe', [`shell:AppsFolder\\${appId}`], { windowsHide: true })
+  shellExecute(`shell:AppsFolder\\${appId}`, null)
 }
 
 function activate(appId) {
@@ -81,6 +82,7 @@ function openFileExplorer() {
 
 function warm() {
   ensureProcess()
+  warmShellExecute()
 }
 
 module.exports = { activate, openFileExplorer, warm }

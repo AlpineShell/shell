@@ -2,6 +2,9 @@ const { shell } = require('electron')
 const { execFile, spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
+const { shellExecute, warm: warmShellExecute } = require('../shellExecute')
+
+const PATH_WARM_DELAY_MS = 4000
 
 const PATH_EXTS = (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
   .split(';')
@@ -82,13 +85,19 @@ function pathDirs() {
 }
 
 const dirListingCache = new Map()
-function dirListing(dir) {
+async function dirListing(dir) {
   const key = dir.toLowerCase()
-  if (dirListingCache.has(key)) return dirListingCache.get(key)
-  let names
-  try { names = new Set(fs.readdirSync(dir).map((name) => name.toLowerCase())) } catch { names = new Set() }
-  dirListingCache.set(key, names)
-  return names
+  const cached = dirListingCache.get(key)
+  if (cached) return cached
+  const pending = fs.promises.readdir(dir)
+    .then((names) => new Set(names.map((name) => name.toLowerCase())))
+    .catch(() => new Set())
+  dirListingCache.set(key, pending)
+  return pending
+}
+
+function warmPathDirs() {
+  return Promise.all(pathDirs().map((dir) => dirListing(dir))).catch(() => {})
 }
 
 function existsLoose(filePath) {
@@ -96,7 +105,7 @@ function existsLoose(filePath) {
   try { fs.lstatSync(filePath); return true } catch { return false }
 }
 
-function resolveExecutable(token) {
+async function resolveExecutable(token) {
   if (!token) return null
   const hasExtension = path.extname(token) !== ''
   if (/[\\/]/.test(token) || /^[a-zA-Z]:/.test(token)) {
@@ -106,7 +115,7 @@ function resolveExecutable(token) {
   }
   const lower = token.toLowerCase()
   for (const dir of pathDirs()) {
-    const names = dirListing(dir)
+    const names = await dirListing(dir)
     if (hasExtension) {
       if (names.has(lower)) return path.join(dir, token)
     } else {
@@ -118,7 +127,7 @@ function resolveExecutable(token) {
   return null
 }
 
-function resolve(raw) {
+async function resolve(raw) {
   const query = String(raw || '').trim()
   if (!query) return null
 
@@ -139,7 +148,7 @@ function resolve(raw) {
   }
 
   const { file } = splitCommand(expanded)
-  const resolved = resolveExecutable(file)
+  const resolved = await resolveExecutable(file)
   if (resolved) {
     const terminal = shouldRunInTerminal(resolved)
     return { kind: 'command', label: terminal ? 'Run in terminal' : 'Run', display: query, runInTerminal: terminal }
@@ -149,31 +158,18 @@ function resolve(raw) {
 }
 
 let terminalCache = null
-function detectTerminal() {
+async function detectTerminal() {
   if (terminalCache) return terminalCache
   const localApps = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WindowsApps', 'wt.exe')
-  const hasWt = !!resolveExecutable('wt.exe') || fs.existsSync(localApps)
+  const hasWt = !!(await resolveExecutable('wt.exe')) || fs.existsSync(localApps)
   terminalCache = hasWt ? { type: 'wt' } : { type: 'cmd' }
   return terminalCache
 }
 
-function quotePs(text) {
-  return `'${String(text).replace(/'/g, "''")}'`
-}
-
-function runShellExecute(file, args) {
-  const command = args
-    ? `Start-Process -FilePath ${quotePs(file)} -ArgumentList ${quotePs(args)}`
-    : `Start-Process -FilePath ${quotePs(file)}`
-  execFile('powershell', ['-NoProfile', '-Command', command], { windowsHide: true }, (err) => {
-    if (err) console.error('[run] shell execute error:', err.message)
-  })
-}
-
-function runDirect(raw) {
+async function runDirect(raw) {
   const query = String(raw || '').trim()
   if (!query) return { ok: false }
-  const info = resolve(query)
+  const info = await resolve(query)
 
   if (info && (info.kind === 'folder' || info.kind === 'file')) {
     shell.openPath(info.display).catch(() => {})
@@ -190,7 +186,7 @@ function runDirect(raw) {
   }
 
   const { file, args } = splitCommand(expandEnv(query))
-  runShellExecute(file, args)
+  shellExecute(file, args)
   return { ok: true }
 }
 
@@ -206,10 +202,11 @@ function spawnDetached(file, args) {
   }
 }
 
-function runInTerminal(raw) {
+async function runInTerminal(raw) {
   const query = String(raw || '').trim()
   if (!query) return { ok: false }
-  if (detectTerminal().type === 'wt' && spawnDetached('wt.exe', ['cmd', '/k', query])) return { ok: true }
+  const terminal = await detectTerminal()
+  if (terminal.type === 'wt' && spawnDetached('wt.exe', ['cmd', '/k', query])) return { ok: true }
   spawnDetached('cmd.exe', ['/k', query])
   return { ok: true }
 }
@@ -219,5 +216,11 @@ module.exports = {
     'run/resolve': (_event, query) => resolve(query),
     'run/exec': (_event, query) => runDirect(query),
     'run/exec-terminal': (_event, query) => runInTerminal(query),
+  },
+  start() {
+    setTimeout(() => {
+      warmShellExecute()
+      warmPathDirs()
+    }, PATH_WARM_DELAY_MS)
   },
 }

@@ -5,7 +5,9 @@ const { execFile, exec } = require('child_process')
 const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow, insertText } = require('./winFocus')
 const appIcons = require('./appIcons')
 const appManager = require('./appManager')
+const appxPackages = require('./appxPackages')
 const appActivator = require('../appActivator')
+const { shellExecute } = require('../shellExecute')
 const { shellLinkInShortcut } = require('../launcherDeepLink')
 const frecency = require('./frecency')
 const plugins = require('./plugins')
@@ -23,6 +25,7 @@ const SCAN_DIRS = [
 let index = []
 let startApps = []
 let startAppsRefreshDebounce = null
+let lastStartAppsRefresh = 0
 const shortcutInfoCache = new Map()
 const lnkIconCache = new Map()
 const startAppIconCache = new Map()
@@ -50,7 +53,8 @@ function setEmojiCapture(active, hwnd) {
 }
 
 const LAUNCHER_WIDTH = 600
-const START_APPS_REFRESH_INTERVAL = 1800000
+const START_APPS_REFRESH_MIN_GAP = 30000
+const START_APPS_FALLBACK_REFRESH_INTERVAL = 1800000
 
 function publishIndex() {
   if (!broadcast) return
@@ -120,14 +124,13 @@ function isDocumentAppId(appId) {
 }
 
 function readShortcutInfoCached(scPath, isUrl) {
+  if (!isUrl) return appIcons.readShortcutLinkCached(scPath)
   const key = scPath.toLowerCase()
   let mtimeMs
   try { mtimeMs = fs.statSync(scPath).mtimeMs } catch { shortcutInfoCache.delete(key); return null }
   const cached = shortcutInfoCache.get(key)
   if (cached && cached.mtimeMs === mtimeMs) return cached.info
-  let info
-  if (isUrl) info = readUrlShortcut(scPath)
-  else { try { info = electronShell.readShortcutLink(scPath) } catch { info = null } }
+  const info = readUrlShortcut(scPath)
   shortcutInfoCache.set(key, { mtimeMs, info })
   return info
 }
@@ -283,24 +286,28 @@ async function resolveStartAppIcons(newItems) {
   return true
 }
 
-function lnkIconCacheKey(source, index) {
-  let mtimeMs = 0
-  try { mtimeMs = fs.statSync(appIcons.expandEnv(source)).mtimeMs } catch {}
-  return `${source.toLowerCase()}|${index}|${mtimeMs}`
+function lnkIconIdentity(source, index) {
+  let stamp = ''
+  try {
+    const stat = fs.statSync(appIcons.expandEnv(source))
+    stamp = `${stat.mtimeMs}|${stat.size}`
+  } catch { void 0 }
+  return { key: `${source.toLowerCase()}|${index}`, stamp }
 }
 
 async function resolveLnkIcons(iconItems, generic) {
   const uncached = []
   for (const item of iconItems) {
-    const key = lnkIconCacheKey(item.iconSource, item.iconIndex || 0)
-    if (lnkIconCache.has(key)) item.icon = lnkIconCache.get(key) || generic
-    else uncached.push({ item, key })
+    const identity = lnkIconIdentity(item.iconSource, item.iconIndex || 0)
+    const cached = lnkIconCache.get(identity.key)
+    if (cached && cached.stamp === identity.stamp) item.icon = cached.url || generic
+    else uncached.push({ item, identity })
   }
   if (uncached.length === 0) return
   const icons = await appIcons.resolveIcons(uncached.map((u) => ({ path: u.item.iconSource, index: u.item.iconIndex || 0 })))
   for (let k = 0; k < uncached.length; k++) {
     const url = icons[k] || null
-    lnkIconCache.set(uncached[k].key, url)
+    lnkIconCache.set(uncached[k].identity.key, { stamp: uncached[k].identity.stamp, url })
     uncached[k].item.icon = url || generic
   }
 }
@@ -351,8 +358,22 @@ function scheduleStartAppsRefresh() {
   if (startAppsRefreshDebounce) clearTimeout(startAppsRefreshDebounce)
   startAppsRefreshDebounce = setTimeout(() => {
     startAppsRefreshDebounce = null
+    lastStartAppsRefresh = Date.now()
     refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
   }, 1000)
+}
+
+function onInstalledPackagesChanged() {
+  const sinceLastRefresh = Date.now() - lastStartAppsRefresh
+  if (startAppsRefreshDebounce) return
+  if (sinceLastRefresh >= START_APPS_REFRESH_MIN_GAP) {
+    scheduleStartAppsRefresh()
+    return
+  }
+  startAppsRefreshDebounce = setTimeout(() => {
+    startAppsRefreshDebounce = null
+    scheduleStartAppsRefresh()
+  }, START_APPS_REFRESH_MIN_GAP - sinceLastRefresh)
 }
 
 function watchScanDirs() {
@@ -569,9 +590,7 @@ function launchItem(item) {
     electronShell.openPath(item.lnkPath).then((err) => {
       if (err) {
         console.error('[launcher] openPath failed for', item.lnkPath, '-', err)
-        execFile('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${item.lnkPath.replace(/'/g, "''")}'`], { windowsHide: true }, (e) => {
-          if (e) console.error('[launcher] start-process fallback error:', e.message)
-        })
+        shellExecute(item.lnkPath, null)
       }
     })
   } else if (item.appId) {
@@ -711,11 +730,15 @@ module.exports = {
   start(b) {
     broadcast = b
     appActivator.warm()
+    lastStartAppsRefresh = Date.now()
     refreshStartApps().catch((e) => console.error('[launcher] start apps error:', e.message))
     watchScanDirs()
     plugins.onPluginsChanged(scheduleRebuild)
-    setInterval(() => {
-      refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
-    }, START_APPS_REFRESH_INTERVAL)
+    if (!appxPackages.watchPackages(onInstalledPackagesChanged)) {
+      console.error('[launcher] package watch unavailable, falling back to periodic start apps refresh')
+      setInterval(() => {
+        refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
+      }, START_APPS_FALLBACK_REFRESH_INTERVAL)
+    }
   },
 }
