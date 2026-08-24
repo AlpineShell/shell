@@ -1,5 +1,4 @@
 const fs = require('fs')
-const koffi = require('koffi')
 
 const GWL_EXSTYLE = -20
 const GW_OWNER = 4
@@ -8,26 +7,55 @@ const WS_EX_APPWINDOW = 0x00040000
 const DWMWA_CLOAKED = 14
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 const MAX_IMAGE_PATH_CHARS = 520
+const DESCRIPTION_REVALIDATE_MS = 60000
+const DESCRIPTION_READ_TIMEOUT_MS = 2000
+const DESCRIPTION_CACHE_LIMIT = 512
 
+let koffiModule = null
+let windowEnumCallbackType = null
 let bindings = null
-let enumeratedHandles = []
-let enumeratingPredicate = null
+let loadedLibraries = []
+let enumerationContext = null
+
+function koffiInterface() {
+  if (!koffiModule) koffiModule = require('koffi')
+  return koffiModule
+}
+
+function windowEnumCallbackProto() {
+  if (!windowEnumCallbackType) {
+    windowEnumCallbackType = koffiInterface().proto('__stdcall', 'WindowEnumCallback', 'int', ['uintptr_t', 'intptr_t'])
+  }
+  return windowEnumCallbackType
+}
 
 function toWindowHandle(value) {
   return typeof value === 'bigint' ? Number(value) : value
 }
 
+function collectEnumeratedWindow(context, handle, probe) {
+  if (!context || context.failure) return 0
+  try {
+    if (context.predicate(handle, probe)) context.handles.push(handle)
+    return 1
+  } catch (e) {
+    context.failure = e
+    return 0
+  }
+}
+
 function loadBindings() {
   if (bindings) return bindings
 
+  const koffi = koffiInterface()
   const user32 = koffi.load('user32.dll')
   const kernel32 = koffi.load('kernel32.dll')
-
-  const WINDOW_ENUM_PROC = koffi.proto('__stdcall', 'WindowEnumCallback', 'int', ['uintptr_t', 'intptr_t'])
+  loadedLibraries = [user32, kernel32]
 
   let DwmGetWindowAttribute = null
   try {
     const dwmapi = koffi.load('dwmapi.dll')
+    loadedLibraries.push(dwmapi)
     DwmGetWindowAttribute = dwmapi.func('__stdcall', 'DwmGetWindowAttribute', 'long', ['uintptr_t', 'uint32', 'void *', 'uint32'])
   } catch (_) {}
 
@@ -36,16 +64,16 @@ function loadBindings() {
   let VerQueryValueW = null
   try {
     const version = koffi.load('version.dll')
+    loadedLibraries.push(version)
     GetFileVersionInfoSizeW = version.func('__stdcall', 'GetFileVersionInfoSizeW', 'uint32', ['str16', 'void *'])
     GetFileVersionInfoW = version.func('__stdcall', 'GetFileVersionInfoW', 'int', ['str16', 'uint32', 'uint32', 'void *'])
     VerQueryValueW = version.func('__stdcall', 'VerQueryValueW', 'int', ['void *', 'str16', koffi.out(koffi.pointer('void *')), koffi.out(koffi.pointer('uint32'))])
   } catch (_) {}
 
-  const enumProc = koffi.register((hwnd) => {
-    const handle = toWindowHandle(hwnd)
-    if (enumeratingPredicate(handle, windowProbe)) enumeratedHandles.push(handle)
-    return 1
-  }, koffi.pointer(WINDOW_ENUM_PROC))
+  const enumProc = koffi.register(
+    (hwnd) => collectEnumeratedWindow(enumerationContext, toWindowHandle(hwnd), windowProbe),
+    koffi.pointer(windowEnumCallbackProto())
+  )
 
   bindings = {
     EnumWindows: user32.func('__stdcall', 'EnumWindows', 'int', ['WindowEnumCallback *', 'intptr_t']),
@@ -65,6 +93,22 @@ function loadBindings() {
     enumProc,
   }
   return bindings
+}
+
+function releaseBindings() {
+  if (!bindings) return
+  try { koffiInterface().unregister(bindings.enumProc) } catch (_) {}
+  for (const library of loadedLibraries) {
+    try { library.unload() } catch (_) {}
+  }
+  loadedLibraries = []
+  bindings = null
+}
+
+function callNativeAsync(nativeFunction, args) {
+  return new Promise((resolve, reject) => {
+    nativeFunction.async(...args, (error, result) => (error ? reject(error) : resolve(result)))
+  })
 }
 
 function readWideString(buffer, maxChars) {
@@ -117,14 +161,16 @@ const windowProbe = {
 
 function enumerateWindows(predicate) {
   const native = loadBindings()
-  enumeratedHandles = []
-  enumeratingPredicate = predicate
+  const outerContext = enumerationContext
+  const context = { predicate, handles: [], failure: null }
+  enumerationContext = context
   try {
     native.EnumWindows(native.enumProc, 0)
   } finally {
-    enumeratingPredicate = null
+    enumerationContext = outerContext
   }
-  return enumeratedHandles
+  if (context.failure) throw context.failure
+  return context.handles
 }
 
 function windowTitle(hwnd) {
@@ -159,6 +205,7 @@ function processImagePath(processId) {
 }
 
 function readVersionString(native, block, language, codePage, field) {
+  const koffi = koffiInterface()
   const key = `\\StringFileInfo\\${language.toString(16).padStart(4, '0')}${codePage.toString(16).padStart(4, '0')}\\${field}`
   const valuePointer = [null]
   const valueLength = [0]
@@ -173,14 +220,15 @@ function readVersionString(native, block, language, codePage, field) {
   return text || null
 }
 
-function readFileDescription(exePath) {
+async function readFileDescription(exePath) {
+  const koffi = koffiInterface()
   const native = loadBindings()
   if (!native.GetFileVersionInfoSizeW || !native.GetFileVersionInfoW || !native.VerQueryValueW) return null
   const versionHandle = Buffer.alloc(4)
-  const size = native.GetFileVersionInfoSizeW(exePath, versionHandle)
+  const size = await callNativeAsync(native.GetFileVersionInfoSizeW, [exePath, versionHandle])
   if (!size) return null
   const block = Buffer.alloc(size)
-  if (!native.GetFileVersionInfoW(exePath, 0, size, block)) return null
+  if (!(await callNativeAsync(native.GetFileVersionInfoW, [exePath, 0, size, block]))) return null
   const translationPointer = [null]
   const translationLength = [0]
   if (!native.VerQueryValueW(block, '\\VarFileInfo\\Translation', translationPointer, translationLength)) return null
@@ -192,30 +240,57 @@ function readFileDescription(exePath) {
 }
 
 const fileDescriptionCache = new Map()
+const pendingFileDescriptions = new Map()
 
-function fileVersionStamp(exePath) {
+function rememberFileDescription(exePath, entry) {
+  if (!fileDescriptionCache.has(exePath) && fileDescriptionCache.size >= DESCRIPTION_CACHE_LIMIT) {
+    fileDescriptionCache.delete(fileDescriptionCache.keys().next().value)
+  }
+  fileDescriptionCache.set(exePath, entry)
+}
+
+function settleWithin(promise, timeoutMs, fallback) {
+  let timer = null
+  const expiry = new Promise((resolve) => { timer = setTimeout(() => resolve(fallback), timeoutMs) })
+  return Promise.race([promise, expiry]).finally(() => clearTimeout(timer))
+}
+
+async function fileVersionStamp(exePath) {
   try {
-    const stats = fs.statSync(exePath)
+    const stats = await fs.promises.stat(exePath)
     return `${stats.mtimeMs}:${stats.size}`
   } catch {
     return null
   }
 }
 
-function fileDescription(exePath) {
-  if (!exePath) return null
-  const stamp = fileVersionStamp(exePath)
-  if (!stamp) return null
+async function readCurrentFileDescription(exePath, cached) {
+  const known = cached ? cached.description : null
+  const stamp = await fileVersionStamp(exePath)
+  if (!stamp) return { stamp: null, description: known }
+  if (cached && cached.stamp === stamp) return { stamp, description: known }
+  return { stamp, description: await readFileDescription(exePath) }
+}
+
+function resolveFileDescription(exePath) {
+  if (!exePath) return Promise.resolve(null)
   const cached = fileDescriptionCache.get(exePath)
-  if (cached && cached.stamp === stamp) return cached.description
-  let description = null
-  try {
-    description = readFileDescription(exePath)
-  } catch (e) {
+  if (cached && Date.now() - cached.checkedAt < DESCRIPTION_REVALIDATE_MS) return Promise.resolve(cached.description)
+  const inFlight = pendingFileDescriptions.get(exePath)
+  if (inFlight) return inFlight
+  const unchanged = { stamp: null, description: cached ? cached.description : null }
+  const read = readCurrentFileDescription(exePath, cached).catch((e) => {
     console.error('[windowEnum] version info read failed:', exePath, '-', e?.message ?? e)
-  }
-  fileDescriptionCache.set(exePath, { stamp, description })
-  return description
+    return unchanged
+  })
+  const attempt = settleWithin(read, DESCRIPTION_READ_TIMEOUT_MS, unchanged)
+    .then((result) => {
+      rememberFileDescription(exePath, { ...result, checkedAt: Date.now() })
+      return result.description
+    })
+    .finally(() => pendingFileDescriptions.delete(exePath))
+  pendingFileDescriptions.set(exePath, attempt)
+  return attempt
 }
 
 module.exports = {
@@ -224,10 +299,12 @@ module.exports = {
   readWideString,
   processNameFromPath,
   taskbarWindowPredicate,
+  collectEnumeratedWindow,
   windowProbe,
   enumerateWindows,
+  releaseBindings,
   windowTitle,
   windowProcessId,
   processImagePath,
-  fileDescription,
+  resolveFileDescription,
 }

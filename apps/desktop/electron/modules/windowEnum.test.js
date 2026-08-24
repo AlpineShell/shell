@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import windowEnum from './windowEnum.js'
 
-const { readWideString, processNameFromPath, taskbarWindowPredicate, WS_EX_TOOLWINDOW, WS_EX_APPWINDOW } = windowEnum
+const { readWideString, processNameFromPath, taskbarWindowPredicate, collectEnumeratedWindow, WS_EX_TOOLWINDOW, WS_EX_APPWINDOW } = windowEnum
 
 const HWND = 0x1234
 
@@ -124,5 +124,63 @@ describe('taskbarWindowPredicate', () => {
       isCloaked: (hwnd) => { seen.push(hwnd); return false },
     })
     expect(seen).toEqual([HWND, HWND, HWND, HWND, HWND])
+  })
+})
+
+describe('collectEnumeratedWindow', () => {
+  function context(predicate) {
+    return { predicate, handles: [], failure: null }
+  }
+
+  it('keeps a handle the predicate accepts and asks for the next window', () => {
+    const ctx = context(() => true)
+    expect(collectEnumeratedWindow(ctx, HWND, probe())).toBe(1)
+    expect(ctx.handles).toEqual([HWND])
+  })
+
+  it('drops a handle the predicate rejects and asks for the next window', () => {
+    const ctx = context(() => false)
+    expect(collectEnumeratedWindow(ctx, HWND, probe())).toBe(1)
+    expect(ctx.handles).toEqual([])
+  })
+
+  it('contains a predicate throw instead of letting it escape into native code', () => {
+    const boom = new Error('predicate exploded')
+    const ctx = context(() => { throw boom })
+    expect(() => collectEnumeratedWindow(ctx, HWND, probe())).not.toThrow()
+    expect(ctx.failure).toBe(boom)
+  })
+
+  it('stops the sweep once a predicate has thrown', () => {
+    const ctx = context(() => { throw new Error('predicate exploded') })
+    expect(collectEnumeratedWindow(ctx, HWND, probe())).toBe(0)
+    ctx.predicate = () => true
+    expect(collectEnumeratedWindow(ctx, HWND, probe())).toBe(0)
+    expect(ctx.handles).toEqual([])
+  })
+
+  it('stops the sweep when no enumeration is in progress', () => {
+    expect(collectEnumeratedWindow(null, HWND, probe())).toBe(0)
+  })
+
+  it('passes the probe through to the predicate', () => {
+    const seen = []
+    const shared = probe()
+    const ctx = context((hwnd, given) => { seen.push([hwnd, given]); return false })
+    collectEnumeratedWindow(ctx, HWND, shared)
+    expect(seen).toEqual([[HWND, shared]])
+  })
+})
+
+describe('module surface', () => {
+  it('exposes the sweep and its teardown without loading a native binding at import time', () => {
+    expect(typeof windowEnum.enumerateWindows).toBe('function')
+    expect(typeof windowEnum.releaseBindings).toBe('function')
+    expect(typeof windowEnum.resolveFileDescription).toBe('function')
+  })
+
+  it('resolves no description for a missing path without touching the filesystem', async () => {
+    await expect(windowEnum.resolveFileDescription('')).resolves.toBeNull()
+    await expect(windowEnum.resolveFileDescription(null)).resolves.toBeNull()
   })
 })

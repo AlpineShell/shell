@@ -17,24 +17,30 @@ const UnhookWinEvent = user32.func('__stdcall', 'UnhookWinEvent', 'int', ['uintp
 const EVENT_OBJECT_CREATE = 0x8000
 const EVENT_OBJECT_HIDE = 0x8003
 const EVENT_OBJECT_NAMECHANGE = 0x800c
+const EVENT_OBJECT_CLOAKED = 0x8017
+const EVENT_OBJECT_UNCLOAKED = 0x8018
 const WINEVENT_OUTOFCONTEXT = 0x0000
 const WINEVENT_SKIPOWNPROCESS = 0x0002
 const OBJID_WINDOW = 0
 const CHILDID_SELF = 0
 
+const WIN_EVENT_RANGES = [
+  [EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE],
+  [EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_NAMECHANGE],
+  [EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED],
+]
+
 const REFRESH_THROTTLE_MS = 100
-const BACKSTOP_INTERVAL_MS = 30000
-const FALLBACK_POLL_MS = 2000
+const SWEEP_INTERVAL_MS = 1000
 
 const HIDDEN_PROCESS_NAMES = new Set(['powershell', 'conhost', 'cmd'])
 const SHELL_PROCESS_NAMES = new Set(['electron', 'alpine-shell', 'alpine shell'])
 const SHELL_DEFAULT_TITLE = 'alpine-shell'
 
 let winEventProcPointer = null
-let lifecycleHookHandle = null
-let nameChangeHookHandle = null
+let winEventHookHandles = []
 let refreshTimer = null
-let backstopInterval = null
+let sweepInterval = null
 let refreshing = false
 let refreshQueued = false
 let lastRefreshAt = 0
@@ -71,29 +77,38 @@ function describeWindow(hwnd) {
 
 function listTaskbarWindows() {
   const listed = []
-  for (const hwnd of windowEnum.enumerateWindows(windowEnum.taskbarWindowPredicate)) {
+  let handles = []
+  try {
+    handles = windowEnum.enumerateWindows(windowEnum.taskbarWindowPredicate)
+  } catch (e) {
+    console.error('[openApps] window enumeration failed:', e?.message ?? e)
+    return listed
+  }
+  for (const hwnd of handles) {
     const taskbarWindow = describeWindow(hwnd)
     if (taskbarWindow && isListedWindow(taskbarWindow)) listed.push(taskbarWindow)
   }
   return listed
 }
 
-function trackWindows(taskbarWindows) {
+function trackWindows(apps) {
   trackedWindowHandles.clear()
-  for (const taskbarWindow of taskbarWindows) trackedWindowHandles.add(taskbarWindow.hwnd)
+  for (const openApp of apps) trackedWindowHandles.add(openApp.hwnd)
 }
 
-async function getOpenApps() {
+async function listOpenApps() {
   const taskbarWindows = listTaskbarWindows()
-  trackWindows(taskbarWindows)
   const generic = await appIcons.ensureGenericIcon()
   return Promise.all(
     taskbarWindows.map(async (taskbarWindow) => {
-      const icon = (await appIcons.iconForFile(taskbarWindow.path)) || generic
+      const [icon, description] = await Promise.all([
+        appIcons.iconForFile(taskbarWindow.path),
+        windowEnum.resolveFileDescription(taskbarWindow.path),
+      ])
       const name = SHELL_PROCESS_NAMES.has(taskbarWindow.name.toLowerCase())
         ? taskbarWindow.title
-        : friendlyAppName({ path: taskbarWindow.path, description: windowEnum.fileDescription(taskbarWindow.path), processName: taskbarWindow.name })
-      return { id: taskbarWindow.id, hwnd: taskbarWindow.hwnd, name, title: taskbarWindow.title, path: taskbarWindow.path, icon }
+        : friendlyAppName({ path: taskbarWindow.path, description, processName: taskbarWindow.name })
+      return { id: taskbarWindow.id, hwnd: taskbarWindow.hwnd, name, title: taskbarWindow.title, path: taskbarWindow.path, icon: icon || generic }
     })
   )
 }
@@ -106,17 +121,20 @@ async function refreshOpenApps() {
   if (!broadcastFn) return
   if (refreshing) { refreshQueued = true; return }
   refreshing = true
-  lastRefreshAt = Date.now()
   try {
-    lastApps = await getOpenApps()
+    lastApps = await listOpenApps()
+    trackWindows(lastApps)
     const merged = withShellApps(lastApps)
     const current = snapshot(merged)
     if (current !== lastSnapshot) {
       lastSnapshot = current
       broadcastFn('windows/open-apps-changed', merged)
     }
+  } catch (e) {
+    console.error('[openApps] refresh failed:', e?.message ?? e)
   } finally {
     refreshing = false
+    lastRefreshAt = Date.now()
     if (refreshQueued) {
       refreshQueued = false
       scheduleRefresh()
@@ -124,8 +142,13 @@ async function refreshOpenApps() {
   }
 }
 
+function refreshAlreadyScheduled() {
+  return Boolean(refreshTimer) || refreshQueued
+}
+
 function scheduleRefresh() {
   if (refreshTimer) return
+  if (refreshing) { refreshQueued = true; return }
   const elapsed = Date.now() - lastRefreshAt
   if (elapsed >= REFRESH_THROTTLE_MS) {
     refreshOpenApps()
@@ -147,6 +170,7 @@ function affectsOpenApps(hwnd) {
 function onWindowEvent(_hook, _event, hwnd, idObject, idChild) {
   try {
     if (idObject !== OBJID_WINDOW || idChild !== CHILDID_SELF) return
+    if (refreshAlreadyScheduled()) return
     if (!affectsOpenApps(toNum(hwnd))) return
     scheduleRefresh()
   } catch (e) {
@@ -157,9 +181,11 @@ function onWindowEvent(_hook, _event, hwnd, idObject, idChild) {
 function installWindowEventHooks() {
   try {
     winEventProcPointer = koffi.register(onWindowEvent, koffi.pointer(OPEN_APPS_WIN_EVENT_PROC))
-    lifecycleHookHandle = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE, 0, winEventProcPointer, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)
-    nameChangeHookHandle = SetWinEventHook(EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_NAMECHANGE, 0, winEventProcPointer, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)
-    if (!toNum(lifecycleHookHandle) && !toNum(nameChangeHookHandle)) {
+    for (const [firstEvent, lastEvent] of WIN_EVENT_RANGES) {
+      const handle = SetWinEventHook(firstEvent, lastEvent, 0, winEventProcPointer, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)
+      if (toNum(handle)) winEventHookHandles.push(handle)
+    }
+    if (winEventHookHandles.length === 0) {
       uninstallWindowEventHooks()
       return false
     }
@@ -172,14 +198,10 @@ function installWindowEventHooks() {
 }
 
 function uninstallWindowEventHooks() {
-  if (lifecycleHookHandle) {
-    try { UnhookWinEvent(lifecycleHookHandle) } catch {}
-    lifecycleHookHandle = null
+  for (const handle of winEventHookHandles) {
+    try { UnhookWinEvent(handle) } catch {}
   }
-  if (nameChangeHookHandle) {
-    try { UnhookWinEvent(nameChangeHookHandle) } catch {}
-    nameChangeHookHandle = null
-  }
+  winEventHookHandles = []
   if (winEventProcPointer) {
     try { koffi.unregister(winEventProcPointer) } catch {}
     winEventProcPointer = null
@@ -199,7 +221,8 @@ module.exports = {
   handlers: {
     'windows/open-apps': async () => {
       if (lastApps === null) {
-        lastApps = await getOpenApps()
+        lastApps = await listOpenApps()
+        trackWindows(lastApps)
       }
       const merged = withShellApps(lastApps)
       lastSnapshot = snapshot(merged)
@@ -210,13 +233,14 @@ module.exports = {
     broadcastFn = broadcast
     refreshOpenApps()
 
-    const hooked = installWindowEventHooks()
-    backstopInterval = setInterval(refreshOpenApps, hooked ? BACKSTOP_INTERVAL_MS : FALLBACK_POLL_MS)
+    if (!installWindowEventHooks()) console.error('[openApps] window event hooks unavailable; relying on the periodic sweep')
+    sweepInterval = setInterval(refreshOpenApps, SWEEP_INTERVAL_MS)
 
     app.on('will-quit', () => {
       uninstallWindowEventHooks()
       if (refreshTimer) clearTimeout(refreshTimer)
-      if (backstopInterval) clearInterval(backstopInterval)
+      if (sweepInterval) clearInterval(sweepInterval)
+      windowEnum.releaseBindings()
     })
   },
 }
