@@ -92,6 +92,14 @@ async function readNetworkStatus(runner) {
 const pollNetworkStatus = singleFlight(() => readNetworkStatus(pollRunner))
 const refreshNetworkStatus = singleFlight(() => readNetworkStatus(actionRunner))
 
+function logNetworkFailure(error) {
+  console.error('[network] refresh failed:', error.message)
+}
+
+function pollNetworkStatusQuietly() {
+  pollNetworkStatus().catch(logNetworkFailure)
+}
+
 const refreshWifiList = singleFlight(async () => {
   const parsed = parseJsonOutput(await runNetworkScript(actionRunner, scanScriptPath), null)
   if (!parsed) return null
@@ -115,7 +123,7 @@ function requestWifiRescan() {
   }
   wifiRescanPending = true
   actionRunner.run('netsh wlan scan').then(() => {
-    setTimeout(publishFreshWifiList, WIFI_RESCAN_SETTLE_MS)
+    setTimeout(() => publishFreshWifiList().catch(logNetworkFailure), WIFI_RESCAN_SETTLE_MS)
   })
 }
 
@@ -184,7 +192,7 @@ module.exports = {
     'network/wifi-radio-get': async () => adoptRadioResult(await getWifiRadio()),
     'network/wifi-radio-set': async (_event, enabled) => {
       const result = adoptRadioResult(await runWifiRadioScript(enabled ? 'on' : 'off'))
-      setTimeout(refreshNetworkStatus, 1500)
+      setTimeout(() => refreshNetworkStatus().catch(logNetworkFailure), 1500)
       return result
     },
   },
@@ -195,8 +203,8 @@ module.exports = {
     ipcMain.on('network/wifi-init', (event) => {
       event.returnValue = { status: cachedStatus, radio: cachedRadio }
     })
-    pollNetworkStatus()
-    const pollTimer = setInterval(pollNetworkStatus, NETWORK_REFRESH_INTERVAL_MS)
+    pollNetworkStatusQuietly()
+    const pollTimer = setInterval(pollNetworkStatusQuietly, NETWORK_REFRESH_INTERVAL_MS)
     app.on('will-quit', () => {
       clearInterval(pollTimer)
       pollRunner.dispose()

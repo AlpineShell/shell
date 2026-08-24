@@ -91,13 +91,21 @@ const refreshBluetooth = singleFlight(async () => {
   return cachedDevices
 })
 
+function logRefreshFailure(error) {
+  console.error('[bluetooth] refresh failed:', error.message)
+}
+
+function refreshBluetoothQuietly() {
+  refreshBluetooth().catch(logRefreshFailure)
+}
+
 function scanAfterCurrentScan() {
   if (refreshBluetooth.isPending()) return refreshBluetooth().then(refreshBluetooth)
   return refreshBluetooth()
 }
 
 function refreshBluetoothAfter(delayMs) {
-  setTimeout(scanAfterCurrentScan, delayMs)
+  setTimeout(() => scanAfterCurrentScan().catch(logRefreshFailure), delayMs)
 }
 
 async function toggleBluetoothDevice(instanceId, action) {
@@ -152,8 +160,8 @@ module.exports = {
     ipcMain.on('system/bluetooth-init', (event) => {
       event.returnValue = cachedState
     })
-    refreshBluetooth()
-    const pollTimer = setInterval(refreshBluetooth, BLUETOOTH_REFRESH_INTERVAL_MS)
+    refreshBluetoothQuietly()
+    const pollTimer = setInterval(refreshBluetoothQuietly, BLUETOOTH_REFRESH_INTERVAL_MS)
     app.on('will-quit', () => {
       clearInterval(pollTimer)
       scanRunner.dispose()
