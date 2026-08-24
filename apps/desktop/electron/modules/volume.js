@@ -122,10 +122,10 @@ async function setMute(muted) {
   return muted
 }
 
-let peakListeners = 0
 let peakInterval = null
 let lastPeak = null
 let broadcastToTopbarsRef = null
+const peakSubscribers = new Map()
 
 async function getPeak() {
   try {
@@ -140,7 +140,7 @@ function startPeakMeter() {
   if (peakInterval || !broadcastToTopbarsRef) return
   peakInterval = setInterval(async () => {
     const peak = await getPeak()
-    if (peakListeners <= 0 || peak === lastPeak) return
+    if (!peakInterval || peak === lastPeak) return
     lastPeak = peak
     broadcastToTopbarsRef('system/audio-peak', peak)
   }, 66)
@@ -154,26 +154,48 @@ function stopPeakMeter() {
   lastPeak = null
 }
 
+function forgetPeakSubscriber(sender) {
+  const detachFromSender = peakSubscribers.get(sender.id)
+  if (!detachFromSender) return
+  peakSubscribers.delete(sender.id)
+  detachFromSender()
+  if (peakSubscribers.size === 0) stopPeakMeter()
+}
+
+function rememberPeakSubscriber(sender) {
+  if (peakSubscribers.has(sender.id)) return
+  const forget = () => forgetPeakSubscriber(sender)
+  sender.on('destroyed', forget)
+  sender.on('render-process-gone', forget)
+  peakSubscribers.set(sender.id, () => {
+    if (sender.isDestroyed()) return
+    sender.removeListener('destroyed', forget)
+    sender.removeListener('render-process-gone', forget)
+  })
+}
+
 module.exports = {
   handlers: {
     'system/volume-get': () => getVolume(),
     'system/volume-set': (_event, value) => setVolume(value),
     'system/mute-get': () => getMute(),
     'system/mute-set': (_event, muted) => setMute(muted),
-    'system/peak-subscribe': () => {
-      peakListeners++
-      if (peakListeners === 1) startPeakMeter()
+    'system/peak-subscribe': (event) => {
+      if (!event?.sender) return false
+      rememberPeakSubscriber(event.sender)
+      lastPeak = null
+      startPeakMeter()
       return true
     },
-    'system/peak-unsubscribe': () => {
-      peakListeners = Math.max(0, peakListeners - 1)
-      if (peakListeners === 0) stopPeakMeter()
+    'system/peak-unsubscribe': (event) => {
+      if (event?.sender) forgetPeakSubscriber(event.sender)
       return true
     },
   },
 
   start(_broadcast, broadcastToTopbars) {
     broadcastToTopbarsRef = broadcastToTopbars
+    if (peakSubscribers.size > 0) startPeakMeter()
     initPS()
 
     setInterval(async () => {

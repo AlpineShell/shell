@@ -54,11 +54,26 @@ public class Audio {
     private static IAudioEndpointVolume boundVolume;
     private static IAudioMeterInformation boundMeter;
 
-    private static void ReleaseBinding() {
-        deviceEnumerator = null;
-        boundDeviceId = null;
+    private static void ReleaseComReference(object instance) {
+        if (instance == null) return;
+        try {
+            if (Marshal.IsComObject(instance)) Marshal.ReleaseComObject(instance);
+        } catch {
+        }
+    }
+
+    private static void ReleaseActivatedInterfaces() {
+        ReleaseComReference(boundMeter);
+        ReleaseComReference(boundVolume);
         boundVolume = null;
         boundMeter = null;
+        boundDeviceId = null;
+    }
+
+    private static void ReleaseBinding() {
+        ReleaseActivatedInterfaces();
+        ReleaseComReference(deviceEnumerator);
+        deviceEnumerator = null;
     }
 
     private static void BindDefaultEndpoint() {
@@ -67,25 +82,39 @@ public class Audio {
         IMMDevice device;
         deviceEnumerator.GetDefaultAudioEndpoint(0, 1, out device);
         if (device == null) throw new InvalidOperationException("no default render endpoint");
-        string deviceId;
-        device.GetId(out deviceId);
-        if (deviceId == boundDeviceId && boundVolume != null && boundMeter != null) return;
-        var volumeIid = typeof(IAudioEndpointVolume).GUID;
-        object volumeInterface;
-        device.Activate(ref volumeIid, 1, IntPtr.Zero, out volumeInterface);
-        var meterIid = typeof(IAudioMeterInformation).GUID;
-        object meterInterface;
-        device.Activate(ref meterIid, 1, IntPtr.Zero, out meterInterface);
-        boundVolume = (IAudioEndpointVolume)volumeInterface;
-        boundMeter = (IAudioMeterInformation)meterInterface;
-        boundDeviceId = deviceId;
+        try {
+            string deviceId;
+            device.GetId(out deviceId);
+            if (deviceId == boundDeviceId && boundVolume != null && boundMeter != null) return;
+            var volumeIid = typeof(IAudioEndpointVolume).GUID;
+            object volumeInterface;
+            device.Activate(ref volumeIid, 1, IntPtr.Zero, out volumeInterface);
+            var meterIid = typeof(IAudioMeterInformation).GUID;
+            object meterInterface;
+            device.Activate(ref meterIid, 1, IntPtr.Zero, out meterInterface);
+            ReleaseActivatedInterfaces();
+            boundVolume = (IAudioEndpointVolume)volumeInterface;
+            boundMeter = (IAudioMeterInformation)meterInterface;
+            boundDeviceId = deviceId;
+        } finally {
+            ReleaseComReference(device);
+        }
+    }
+
+    private static bool IsRecoverableComFailure(Exception error) {
+        return error is COMException
+            || error is InvalidComObjectException
+            || error is InvalidCastException
+            || error is NullReferenceException
+            || error is InvalidOperationException;
     }
 
     private static T OnBoundEndpoint<T>(Func<T> body) {
         try {
             BindDefaultEndpoint();
             return body();
-        } catch {
+        } catch (Exception error) {
+            if (!IsRecoverableComFailure(error)) throw;
             ReleaseBinding();
             BindDefaultEndpoint();
             return body();
