@@ -38,6 +38,7 @@ const plugins = require('./modules/plugins')
 const pluginBackendHost = require('./pluginBackendHost')
 const pluginWindows = require('./pluginWindows')
 const { launchCommand } = require('./shellLaunch')
+const { isPointInMenuHotZone, shouldClickCloseMenu } = require('./menuHotZone')
 const shellNotice = require('./modules/shellNotice')
 
 const OPEN_APP_TIMEOUT_MS = 300000
@@ -173,7 +174,6 @@ const INTERACTIVE_RIGHT = 600
 const INTERACTIVE_LEFT = 300
 const INTERACTIVE_CENTER = 120
 
-const MENU_HOT_MARGIN = 64
 const MENU_CLOSE_GRACE_MS = 300
 
 const shells = new Map()
@@ -187,19 +187,17 @@ function clearCloseGrace(state) {
   }
 }
 
-function cursorInMenuHotZone(cursor, bounds, region) {
-  const top = bounds.y + region.top - MENU_HOT_MARGIN
-  const bottom = bounds.y + region.bottom + MENU_HOT_MARGIN
-  const left = bounds.x + region.left - MENU_HOT_MARGIN
-  const right = bounds.x + region.right + MENU_HOT_MARGIN
-  return cursor.y >= top && cursor.y < bottom && cursor.x >= left && cursor.x < right
+function closeActiveMenu(win, state) {
+  clearCloseGrace(state)
+  if (win.isDestroyed() || !state.activeRegion) return
+  win.webContents.send('topbar/close-menus')
 }
 
 function scheduleMenuClose(win, state) {
   if (!state.activeRegion || state.closeGraceTimer) return
   state.closeGraceTimer = setTimeout(() => {
     state.closeGraceTimer = null
-    if (!win.isDestroyed() && state.activeRegion) win.webContents.send('topbar/close-menus')
+    closeActiveMenu(win, state)
   }, MENU_CLOSE_GRACE_MS)
 }
 
@@ -219,7 +217,7 @@ function evaluateTopBarInteraction(win, state) {
 
   let inInteractive
   if (state.activeRegion) {
-    inInteractive = inBarRow || cursorInMenuHotZone(cursor, bounds, state.activeRegion)
+    inInteractive = inBarRow || isPointInMenuHotZone(cursor, bounds, state.activeRegion)
   } else {
     inInteractive = inBarRow && (inLeftZone || inRightZone || inCenterZone)
   }
@@ -363,6 +361,7 @@ function createTopBarWindow(display) {
     if (altTab && altTab.isAltTabActive(win)) return
     clearCloseGrace(state)
     state.activeRegion = null
+    win.watchInputWhileRegionArmed(false)
     win.setAlwaysOnTop(false)
     win.restoreFullBounds()
     state.ignoring = true
@@ -372,6 +371,22 @@ function createTopBarWindow(display) {
 
   win.on('move', win.refreshBarBounds)
   win.on('resize', win.refreshBarBounds)
+
+  const onTopBarInput = (_event, input) => {
+    if (input.type !== 'mouseDown') return
+    if (!state.activeRegion) return
+    if (launcher.isLauncherActive(win)) return
+    if (altTab && altTab.isAltTabActive(win)) return
+    const click = { x: state.bounds.x + input.x, y: state.bounds.y + input.y }
+    if (!shouldClickCloseMenu(click, state.bounds, state.activeRegion)) return
+    closeActiveMenu(win, state)
+  }
+
+  win.watchInputWhileRegionArmed = (armed) => {
+    if (win.isDestroyed()) return
+    win.webContents.removeListener('input-event', onTopBarInput)
+    if (armed) win.webContents.on('input-event', onTopBarInput)
+  }
 
   const onSetActiveRegion = (event, region) => {
     if (win.isDestroyed()) return
@@ -388,6 +403,7 @@ function createTopBarWindow(display) {
       win.setAlwaysOnTop(false)
       win.restoreFullBounds()
     }
+    win.watchInputWhileRegionArmed(Boolean(region))
     evaluateTopBarInteraction(win, state)
   }
   ipcMain.on('topbar/set-active-region', onSetActiveRegion)

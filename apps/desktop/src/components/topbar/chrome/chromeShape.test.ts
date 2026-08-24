@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { surfaceFillPath, barBorderPath } from './chromeShape'
+import { SHOULDER, surfaceFillPath, barBorderPath, chromeSurfaceBounds, chromeContentBounds } from './chromeShape'
 
-const centered = {
+const surface = {
   centerX: 500,
   bodyWidth: 200,
   height: 40,
   barBottom: 0,
-  screenWidth: 1000,
   anchor: 'center' as const,
 }
+
+const centered = { ...surface, screenWidth: 1000 }
 
 describe('surfaceFillPath', () => {
   it('produces the expected closed path for a centered surface', () => {
@@ -59,5 +60,45 @@ describe('barBorderPath', () => {
     const path = barBorderPath(centered, true, true)
     expect(path.startsWith('M0 0 L386 0')).toBe(true)
     expect(path.endsWith('L1000 0')).toBe(true)
+  })
+})
+
+describe('chromeSurfaceBounds', () => {
+  it('spans shoulder tip to shoulder tip when centered', () => {
+    expect(chromeSurfaceBounds(surface)).toEqual({ top: 0, bottom: 40, left: 386, right: 614 })
+  })
+
+  it('drops the shoulder on the anchored edge', () => {
+    expect(chromeSurfaceBounds({ ...surface, anchor: 'left' })).toEqual({ top: 0, bottom: 40, left: 400, right: 614 })
+    expect(chromeSurfaceBounds({ ...surface, anchor: 'right' })).toEqual({ top: 0, bottom: 40, left: 386, right: 600 })
+  })
+
+  it('follows the shoulder the painter clamps on a short surface', () => {
+    expect(chromeSurfaceBounds({ ...surface, height: 10 })).toEqual({ top: 0, bottom: 10, left: 395, right: 605 })
+  })
+})
+
+describe('chromeContentBounds', () => {
+  it('spans only the body, which is painted for the full height', () => {
+    expect(chromeContentBounds(surface)).toEqual({ top: 0, bottom: 40, left: 400, right: 600 })
+  })
+
+  it('is unmoved by the anchor, which only drops a shoulder', () => {
+    expect(chromeContentBounds({ ...surface, anchor: 'left' })).toEqual(chromeContentBounds(surface))
+    expect(chromeContentBounds({ ...surface, anchor: 'right' })).toEqual(chromeContentBounds(surface))
+  })
+
+  it('sits one shoulder inside the surface bounds on each unanchored side', () => {
+    const bounds = chromeSurfaceBounds(surface)
+    const content = chromeContentBounds(surface)
+    expect(content.left - bounds.left).toBe(SHOULDER)
+    expect(bounds.right - content.right).toBe(SHOULDER)
+  })
+
+  it('matches the body edges the fill path runs straight down', () => {
+    const content = chromeContentBounds(surface)
+    const path = surfaceFillPath(centered)
+    expect(path).toContain(`L${content.right} 26`)
+    expect(path).toContain(`L${content.left} 14`)
   })
 })

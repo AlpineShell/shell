@@ -92,6 +92,17 @@ interface ForegroundColorData extends TopBarColor {
 }
 
 type ForegroundColorBroadcast = ForegroundColorData | { displayId: number }
+
+interface TopbarRegionBounds {
+  top: number
+  bottom: number
+  left: number
+  right: number
+}
+
+interface TopbarActiveRegion extends TopbarRegionBounds {
+  contentBounds?: TopbarRegionBounds
+}
 }
 
 declare global {
@@ -671,7 +682,7 @@ declare global {
       activate: (hwnd: number) => Promise<void>
     }
     topbar: {
-      setActiveRegion: (region: { top: number; bottom: number; left: number; right: number } | null) => void
+      setActiveRegion: (region: TopbarActiveRegion | null) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => () => void
       colorOverride: () => Promise<TopBarColor | null>

@@ -3,13 +3,16 @@ export const RADIUS = 14;
 
 export type ChromeAnchor = "center" | "left" | "right";
 
-export interface ChromeGeometry {
+export interface ChromeSurfaceGeometry {
     centerX: number;
     bodyWidth: number;
     height: number;
     barBottom: number;
-    screenWidth: number;
     anchor: ChromeAnchor;
+}
+
+export interface ChromeGeometry extends ChromeSurfaceGeometry {
+    screenWidth: number;
 }
 
 interface ResolvedShape {
@@ -25,7 +28,7 @@ interface ResolvedShape {
     bottom: number;
 }
 
-function resolve(g: ChromeGeometry): ResolvedShape {
+function resolve(g: ChromeSurfaceGeometry): ResolvedShape {
     const halfBody = g.bodyWidth / 2;
     const radius = Math.min(RADIUS, halfBody, g.height / 2);
     const shoulder = Math.min(SHOULDER, Math.max(0, g.height - radius));
@@ -45,6 +48,16 @@ function resolve(g: ChromeGeometry): ResolvedShape {
         top: g.barBottom,
         bottom: g.barBottom + g.height,
     };
+}
+
+export function chromeSurfaceBounds(g: ChromeSurfaceGeometry): TopbarRegionBounds {
+    const s = resolve(g);
+    return { top: s.top, bottom: s.bottom, left: s.leftTip, right: s.rightTip };
+}
+
+export function chromeContentBounds(g: ChromeSurfaceGeometry): TopbarRegionBounds {
+    const s = resolve(g);
+    return { top: s.top, bottom: s.bottom, left: s.bodyLeft, right: s.bodyRight };
 }
 
 export function surfaceFillPath(g: ChromeGeometry): string {
