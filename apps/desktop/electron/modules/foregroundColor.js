@@ -23,6 +23,8 @@ const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uin
 
 const SRCCOPY = 0x00CC0020
 
+const POLL_INTERVAL_MS = 300
+
 let altTab = null
 try { altTab = require('./altTab') } catch (_) {}
 
@@ -31,6 +33,8 @@ const pendingDisplay = new Map()
 const hwndPerDisplay = new Map()
 const sampledHwndPerDisplay = new Map()
 let startupIgnoreHwnd = null
+let displayRemovedListener = null
+let pollTimer = null
 
 function colorEqual(a, b) {
   if (a === b) return true
@@ -166,6 +170,17 @@ function update(broadcast) {
   }
 }
 
+function stop() {
+  if (displayRemovedListener) {
+    screen.removeListener('display-removed', displayRemovedListener)
+    displayRemovedListener = null
+  }
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
 module.exports = {
   handlers: {
     'topbar/fg-color': () => {
@@ -177,8 +192,12 @@ module.exports = {
     },
   },
   start(broadcast) {
+    const { app } = require('electron')
     const initial = GetForegroundWindow()
     if (initial && IsZoomed(initial)) startupIgnoreHwnd = initial
-    setInterval(() => update(broadcast), 300)
+    displayRemovedListener = (_event, removed) => clearDisplay(removed.id, broadcast)
+    screen.on('display-removed', displayRemovedListener)
+    pollTimer = setInterval(() => update(broadcast), POLL_INTERVAL_MS)
+    app.on('will-quit', stop)
   },
 }
