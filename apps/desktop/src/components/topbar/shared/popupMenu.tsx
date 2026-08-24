@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTopbarBg, useFullscreenWindow } from "../../themeContext";
 import { useSurfaceSuperseded } from "../../../hooks/useSurfaceSuperseded";
-import { SHOULDER, RADIUS, type ChromeAnchor } from "../chrome/chromeShape";
+import { SHOULDER, RADIUS, chromeSurfaceBounds, chromeContentBounds, type ChromeAnchor } from "../chrome/chromeShape";
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "../chrome/chromeStore";
 
 const SCREEN_PAD = 6;
@@ -109,19 +109,22 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             anchor: shape.anchor,
             contentEl: clipRef.current,
         });
-        const sideL = shape.anchor === "left" ? 0 : SHOULDER;
-        const sideR = shape.anchor === "right" ? 0 : SHOULDER;
-        const left = shape.left - sideL;
-        const right = shape.left + shape.bodyWidth + sideR;
-        const targetBottom = BAR_BOTTOM + shape.bodyHeight;
+        const geometry = {
+            centerX: shape.centerX,
+            bodyWidth: shape.bodyWidth,
+            height: shape.bodyHeight,
+            barBottom: BAR_BOTTOM,
+            anchor: shape.anchor,
+        };
+        const settled = { ...chromeSurfaceBounds(geometry), contentBounds: chromeContentBounds(geometry) };
+        const heldBottom = Math.max(settled.bottom, regionBottomRef.current);
         clearTimeout(shrinkTimer.current);
-        const reportedBottom = Math.max(targetBottom, regionBottomRef.current);
-        regionBottomRef.current = reportedBottom;
-        window.topbar.setActiveRegion({ top: BAR_BOTTOM, bottom: reportedBottom, left, right });
-        if (targetBottom < reportedBottom) {
+        regionBottomRef.current = heldBottom;
+        window.topbar.setActiveRegion({ ...settled, bottom: heldBottom });
+        if (settled.bottom < heldBottom) {
             shrinkTimer.current = setTimeout(() => {
-                regionBottomRef.current = targetBottom;
-                window.topbar.setActiveRegion({ top: BAR_BOTTOM, bottom: targetBottom, left, right });
+                regionBottomRef.current = settled.bottom;
+                window.topbar.setActiveRegion(settled);
             }, REGION_SHRINK_DELAY_MS);
         }
     }, [open, shape, outline]);

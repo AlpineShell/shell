@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDarkText, useFullscreenWindow } from "../themeContext";
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded";
 import { useShellNotice } from "../../hooks/useShellNotice";
-import { SHOULDER, RADIUS, type ChromeAnchor } from "./chrome/chromeShape";
+import { SHOULDER, RADIUS, chromeSurfaceBounds, type ChromeAnchor } from "./chrome/chromeShape";
 import { setChromeSurface, clearChromeSurface, getChromeSurface, nextSurfaceId } from "./chrome/chromeStore";
 
 const BAR_BOTTOM = 24;
@@ -115,15 +115,14 @@ export default function NoticeStrip() {
             anchor: shape.anchor,
             contentEl: clipRef.current,
         });
-        const sideL = shape.anchor === "left" ? 0 : SHOULDER;
-        const sideR = shape.anchor === "right" ? 0 : SHOULDER;
         holdsRegion.current = true;
-        window.topbar.setActiveRegion({
-            top: BAR_BOTTOM,
-            bottom: BAR_BOTTOM + shape.bodyHeight,
-            left: shape.left - sideL,
-            right: shape.left + shape.bodyWidth + sideR,
-        });
+        window.topbar.setActiveRegion(chromeSurfaceBounds({
+            centerX: shape.centerX,
+            bodyWidth: shape.bodyWidth,
+            height: shape.bodyHeight,
+            barBottom: BAR_BOTTOM,
+            anchor: shape.anchor,
+        }));
     }, [notice, shape, outline, superseded]);
 
     useEffect(() => {
