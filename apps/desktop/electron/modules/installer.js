@@ -17,7 +17,7 @@ const UPDATE_HANDOFF_FILE = '.update-in-progress'
 const UPDATE_HANDOFF_MAX_AGE_MS = 15 * 60 * 1000
 const SHELL_HANDOFF_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const SHELL_REVERT_FAILED = 'Could not hand the Windows shell back to Explorer.'
-const SHELL_HANDOFF_HELPER_FAILED = 'Could not start the helper that brings Windows Explorer back, so nothing was changed.'
+const SHELL_HANDOFF_HELPER_FAILED = 'Windows Explorer could not be brought back, so nothing was changed.'
 const SHELL_HANDOFF_HELPER_MISSING = 'Windows Explorer is registered as your shell, but Alpine Shell could not close itself. Restart Windows to finish.'
 
 const CURSOR_REGISTRY_NAMES = [
@@ -133,8 +133,8 @@ function markerAgeMs(markerPath) {
   }
 }
 
-function isMarkerActive(markerPath, maxAgeMs) {
-  const plan = shellExclusivity.planMarkerAge({ ageMs: markerAgeMs(markerPath), maxAgeMs })
+function isMarkerActive(markerPath, maxAgeMs, systemUptimeMs = null) {
+  const plan = shellExclusivity.planMarkerAge({ ageMs: markerAgeMs(markerPath), maxAgeMs, systemUptimeMs })
   if (plan.restamp) writeMarker(markerPath)
   return plan.active
 }
@@ -169,7 +169,7 @@ function clearUpdateHandoff() {
 }
 
 function isUpdateHandoffActive() {
-  return isMarkerActive(userDataFile(UPDATE_HANDOFF_FILE), UPDATE_HANDOFF_MAX_AGE_MS)
+  return isMarkerActive(userDataFile(UPDATE_HANDOFF_FILE), UPDATE_HANDOFF_MAX_AGE_MS, os.uptime() * 1000)
 }
 
 function writeRevertHelper(scriptName, script) {
@@ -210,6 +210,16 @@ function restoreShellRegistration() {
   try { regAdd(WINLOGON_KEY, 'Shell', getInstalledExePath()) } catch {}
 }
 
+function undoShellHandoff() {
+  restoreShellRegistration()
+  clearShellHandoff()
+  return { success: false, error: SHELL_HANDOFF_HELPER_FAILED }
+}
+
+function reportShellStillOnScreen() {
+  return { success: false, error: SHELL_HANDOFF_HELPER_MISSING }
+}
+
 function revertShellTemporarily() {
   try {
     const helper = revertScript.buildTemporaryRevertScript({
@@ -219,7 +229,10 @@ function revertShellTemporarily() {
     })
     const scriptPath = writeRevertHelper('alpine_revert_temporary.bat', helper.script)
 
-    beginShellHandoff()
+    if (!beginShellHandoff()) {
+      console.error('[installer] Could not mark the shell hand-off — leaving the shell registration alone')
+      return { success: false, error: SHELL_REVERT_FAILED }
+    }
     regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
     if (!isShellRevertedToExplorer()) {
       clearShellHandoff()
@@ -228,12 +241,8 @@ function revertShellTemporarily() {
     try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
 
     const handoff = launchRevertHelper(scriptPath, helper.env)
-    if (!handoff) {
-      restoreShellRegistration()
-      clearShellHandoff()
-      return { success: false, error: SHELL_HANDOFF_HELPER_FAILED }
-    }
-    return { success: true, error: null, handoff }
+    if (!handoff) return undoShellHandoff()
+    return { success: true, error: null, handoff, abandonHandoff: undoShellHandoff }
   } catch (e) {
     return { success: false, error: e.message }
   }
@@ -252,8 +261,8 @@ function revertShellPermanently() {
     restoreDefaultCursors()
 
     const handoff = launchRevertHelper(scriptPath, helper.env)
-    if (!handoff) return { success: false, error: SHELL_HANDOFF_HELPER_MISSING }
-    return { success: true, error: null, handoff }
+    if (!handoff) return reportShellStillOnScreen()
+    return { success: true, error: null, handoff, abandonHandoff: reportShellStillOnScreen }
   } catch (e) {
     return { success: false, error: e.message }
   }
@@ -362,8 +371,8 @@ function uninstall() {
     }
 
     const handoff = launchRevertHelper(scriptPath, helper.env)
-    if (!handoff) return { success: false, error: SHELL_HANDOFF_HELPER_MISSING, leftBehind: [] }
-    return { success: true, error: null, leftBehind: helper.skippedDirs, handoff }
+    if (!handoff) return { ...reportShellStillOnScreen(), leftBehind: helper.skippedDirs }
+    return { success: true, error: null, leftBehind: helper.skippedDirs, handoff, abandonHandoff: reportShellStillOnScreen }
   } catch (e) {
     return { success: false, error: e.message, leftBehind: [] }
   }

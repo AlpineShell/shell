@@ -261,29 +261,33 @@ function progress(step) {
   if (broadcast) broadcast('setup/progress', step)
 }
 
-function exitShellOnceHandoffIsRunning(handoff) {
-  setTimeout(() => {
-    if (!installer.isRevertHelperRunning(handoff)) {
-      console.error('[setup] The hand-back helper is no longer running — keeping Alpine Shell on screen')
-      return
-    }
-    exitShell()
-  }, REVERT_QUIT_DELAY_MS)
+function confirmHandoffStillRunning(handoff) {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(installer.isRevertHelperRunning(handoff)), REVERT_QUIT_DELAY_MS)
+  })
 }
 
-function runRevert(action) {
+function exitShellAfterReply() {
+  setTimeout(exitShell, 0)
+}
+
+async function runRevert(action) {
   const blockedReason = shellExclusivity.revertBlockedReason({
     packaged: app.isPackaged,
     updatePending: updater.isUpdatePending() || installer.isUpdateHandoffActive(),
   })
   if (blockedReason) return { success: false, gpoBlocked: false, error: REVERT_BLOCKED_MESSAGES[blockedReason], leftBehind: [] }
 
-  const result = action()
+  const started = action()
+  const replacementConfirmed = started.success && await confirmHandoffStillRunning(started.handoff)
   const plan = shellExclusivity.planShellRevert({
-    shellHandedToExplorer: result.success,
-    replacementConfirmed: installer.isRevertHelperRunning(result.handoff),
+    shellHandedToExplorer: started.success,
+    replacementConfirmed,
   })
-  if (plan.steps.includes(shellExclusivity.EXIT_ALPINE)) exitShellOnceHandoffIsRunning(result.handoff)
+  if (plan.steps.includes(shellExclusivity.EXIT_ALPINE)) exitShellAfterReply()
+  else if (started.success) console.error('[setup] The hand-back helper is no longer running — keeping Alpine Shell on screen')
+
+  const result = shellExclusivity.settleShellRevert(started, replacementConfirmed)
   return {
     success: result.success,
     gpoBlocked: hasGpoShellOverride(),

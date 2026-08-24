@@ -11,6 +11,7 @@ const {
   isRegistrationSatisfied,
   revertBlockedReason,
   planShellRevert,
+  settleShellRevert,
   planMarkerAge,
 } = shellExclusivity
 
@@ -210,6 +211,47 @@ describe('planShellRevert', () => {
   })
 })
 
+describe('settleShellRevert', () => {
+  function startedRevert(overrides = {}) {
+    return {
+      success: true,
+      error: null,
+      abandonHandoff: () => ({ success: false, error: 'explorer never came back' }),
+      ...overrides,
+    }
+  }
+
+  it('keeps the reported success when the replacement is confirmed', () => {
+    expect(settleShellRevert(startedRevert(), true)).toMatchObject({ success: true, error: null })
+  })
+
+  it('reports the failure when the helper is gone by the time it is re-checked', () => {
+    const settled = settleShellRevert(startedRevert(), false)
+    expect(settled.success).toBe(false)
+    expect(settled.error).toBe('explorer never came back')
+  })
+
+  it('never claims success once the helper it depended on has died', () => {
+    for (const leftBehind of [[], ['C']]) {
+      expect(settleShellRevert(startedRevert({ leftBehind }), false).success).toBe(false)
+    }
+  })
+
+  it('leaves an already-failed revert alone without abandoning anything twice', () => {
+    const started = startedRevert({
+      success: false,
+      error: 'the registration never moved',
+      abandonHandoff: () => { throw new Error('must not abandon a revert that never started') },
+    })
+    expect(settleShellRevert(started, false)).toBe(started)
+  })
+
+  it('keeps the directories the uninstall could not remove when it abandons', () => {
+    const started = startedRevert({ leftBehind: ['left-on-disk'] })
+    expect(settleShellRevert(started, false).leftBehind).toEqual(['left-on-disk'])
+  })
+})
+
 describe('planMarkerAge', () => {
   const maxAgeMs = 1000
 
@@ -234,5 +276,22 @@ describe('planMarkerAge', () => {
     const skewed = planMarkerAge({ ageMs: -5000, maxAgeMs })
     expect(skewed.restamp).toBe(true)
     expect(planMarkerAge({ ageMs: maxAgeMs, maxAgeMs }).active).toBe(false)
+  })
+
+  it('ignores the uptime it was not given', () => {
+    expect(planMarkerAge({ ageMs: 500, maxAgeMs })).toEqual({ active: true, restamp: false })
+  })
+
+  it('keeps a marker stamped during this boot active', () => {
+    expect(planMarkerAge({ ageMs: 500, maxAgeMs, systemUptimeMs: 900 })).toEqual({ active: true, restamp: false })
+  })
+
+  it('expires a marker that did not survive the reboot it was meant to bracket', () => {
+    expect(planMarkerAge({ ageMs: 500, maxAgeMs, systemUptimeMs: 100 })).toEqual({ active: false, restamp: false })
+  })
+
+  it('frees a fresh marker whose operation a power cut interrupted', () => {
+    const interrupted = planMarkerAge({ ageMs: 1, maxAgeMs: 15 * 60 * 1000, systemUptimeMs: 0 })
+    expect(interrupted.active).toBe(false)
   })
 })

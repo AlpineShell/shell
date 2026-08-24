@@ -48,9 +48,15 @@ function planShellRevert({ shellHandedToExplorer, replacementConfirmed }) {
   return { steps: shellHandedToExplorer && replacementConfirmed ? [EXIT_ALPINE] : [] }
 }
 
-function planMarkerAge({ ageMs, maxAgeMs }) {
+function settleShellRevert(result, replacementConfirmed) {
+  if (!result.success || replacementConfirmed) return result
+  return { ...result, ...result.abandonHandoff() }
+}
+
+function planMarkerAge({ ageMs, maxAgeMs, systemUptimeMs = null }) {
   if (ageMs === null) return { active: false, restamp: false }
   if (ageMs < 0) return { active: true, restamp: true }
+  if (systemUptimeMs !== null && ageMs > systemUptimeMs) return { active: false, restamp: false }
   return { active: ageMs < maxAgeMs, restamp: false }
 }
 
@@ -64,5 +70,6 @@ module.exports = {
   isRegistrationSatisfied,
   revertBlockedReason,
   planShellRevert,
+  settleShellRevert,
   planMarkerAge,
 }
