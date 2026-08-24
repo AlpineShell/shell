@@ -74,47 +74,56 @@ public static class MicDetect {
 
     static IMMDeviceEnumerator sharedEnumerator;
 
+    static void CollectActiveCapturers(List<string> names) {
+        if (sharedEnumerator == null)
+            sharedEnumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+        var enumerator = sharedEnumerator;
+        IMMDeviceCollection devices;
+        enumerator.EnumAudioEndpoints(1, 1, out devices);
+        int count;
+        devices.GetCount(out count);
+        for (int i = 0; i < count; i++) {
+            IMMDevice device;
+            devices.Item(i, out device);
+            object obj;
+            device.Activate(IID_IAudioSessionManager2, 0x17, IntPtr.Zero, out obj);
+            var mgr = (IAudioSessionManager2)obj;
+            IAudioSessionEnumerator sessionEnum;
+            mgr.GetSessionEnumerator(out sessionEnum);
+            int sCount;
+            sessionEnum.GetCount(out sCount);
+            for (int j = 0; j < sCount; j++) {
+                IAudioSessionControl ctrl;
+                sessionEnum.GetSession(j, out ctrl);
+                int state;
+                ctrl.GetState(out state);
+                if (state == 1) {
+                    try {
+                        var ctrl2 = (IAudioSessionControl2)ctrl;
+                        int pid;
+                        ctrl2.GetProcessId(out pid);
+                        if (pid > 0) {
+                            var proc = Process.GetProcessById(pid);
+                            if (!names.Contains(proc.ProcessName))
+                                names.Add(proc.ProcessName);
+                        }
+                    } catch {}
+                }
+            }
+        }
+    }
+
     public static string[] GetActiveCapturers() {
         var names = new List<string>();
         try {
-            if (sharedEnumerator == null)
-                sharedEnumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-            var enumerator = sharedEnumerator;
-            IMMDeviceCollection devices;
-            enumerator.EnumAudioEndpoints(1, 1, out devices);
-            int count;
-            devices.GetCount(out count);
-            for (int i = 0; i < count; i++) {
-                IMMDevice device;
-                devices.Item(i, out device);
-                object obj;
-                device.Activate(IID_IAudioSessionManager2, 0x17, IntPtr.Zero, out obj);
-                var mgr = (IAudioSessionManager2)obj;
-                IAudioSessionEnumerator sessionEnum;
-                mgr.GetSessionEnumerator(out sessionEnum);
-                int sCount;
-                sessionEnum.GetCount(out sCount);
-                for (int j = 0; j < sCount; j++) {
-                    IAudioSessionControl ctrl;
-                    sessionEnum.GetSession(j, out ctrl);
-                    int state;
-                    ctrl.GetState(out state);
-                    if (state == 1) {
-                        try {
-                            var ctrl2 = (IAudioSessionControl2)ctrl;
-                            int pid;
-                            ctrl2.GetProcessId(out pid);
-                            if (pid > 0) {
-                                var proc = Process.GetProcessById(pid);
-                                if (!names.Contains(proc.ProcessName))
-                                    names.Add(proc.ProcessName);
-                            }
-                        } catch {}
-                    }
-                }
-            }
+            CollectActiveCapturers(names);
         } catch {
             sharedEnumerator = null;
+            try {
+                CollectActiveCapturers(names);
+            } catch {
+                sharedEnumerator = null;
+            }
         }
         return names.ToArray();
     }
