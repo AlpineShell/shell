@@ -788,6 +788,7 @@ declare global {
         revertDisplayLayout: () => Promise<DisplayInfo[]>
         onDisplaysChanged: (callback: (data: DisplayInfo[]) => void) => () => void
         powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
+        onResume: (callback: () => void) => () => void
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>
         onBatteryChanged: (callback: (data: BatteryStatus) => void) => () => void

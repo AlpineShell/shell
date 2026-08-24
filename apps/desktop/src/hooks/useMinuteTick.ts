@@ -7,13 +7,22 @@ function delayToNextMinute(epochMs: number): number {
   return MINUTE_MS - (epochMs % MINUTE_MS) + BOUNDARY_GUARD_MS
 }
 
+function rendersIdentically(current: Date, next: Date): boolean {
+  return Math.floor(current.getTime() / MINUTE_MS) === Math.floor(next.getTime() / MINUTE_MS)
+    && current.getTimezoneOffset() === next.getTimezoneOffset()
+}
+
 export function useMinuteTick(): Date {
   const [minute, setMinute] = useState(() => new Date())
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
+    const publish = () => {
+      const next = new Date()
+      setMinute((current) => (rendersIdentically(current, next) ? current : next))
+    }
     const tick = () => {
-      setMinute(new Date())
+      publish()
       timer = setTimeout(tick, delayToNextMinute(Date.now()))
     }
     const resync = () => {
@@ -21,10 +30,10 @@ export function useMinuteTick(): Date {
       tick()
     }
     timer = setTimeout(tick, delayToNextMinute(Date.now()))
-    document.addEventListener('visibilitychange', resync)
+    const unsubscribeResume = window.shell?.system?.onResume?.(resync)
     return () => {
       clearTimeout(timer)
-      document.removeEventListener('visibilitychange', resync)
+      unsubscribeResume?.()
     }
   }, [])
 

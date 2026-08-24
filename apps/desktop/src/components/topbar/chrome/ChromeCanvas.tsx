@@ -186,7 +186,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
             running = false;
             if (!getChromeSurface() && allocatedHeight !== restingHeight()) {
                 allocate(restingHeight());
-                kick();
+                draw();
             }
         };
 

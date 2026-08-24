@@ -369,6 +369,11 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('system/displays-changed', handler)
     },
     powerAction: (action) => ipcRenderer.invoke('system/power-action', action),
+    onResume: (callback) => {
+      const handler = () => callback()
+      ipcRenderer.on('system/resume', handler)
+      return () => ipcRenderer.removeListener('system/resume', handler)
+    },
     info: () => ipcRenderer.invoke('system/info'),
     battery: () => ipcRenderer.invoke('system/battery'),
     onBatteryChanged: (callback) => {

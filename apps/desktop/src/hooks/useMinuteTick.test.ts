@@ -4,8 +4,15 @@ import { useMinuteTick } from './useMinuteTick'
 
 const at = (iso: string) => new Date(iso).getTime()
 
+type ResumeSubscription = (callback: () => void) => () => void
+
+const stubResumeChannel = (onResume: ResumeSubscription) => {
+  ;(window as unknown as { shell: { system: { onResume: ResumeSubscription } } }).shell = { system: { onResume } }
+}
+
 afterEach(() => {
   vi.useRealTimers()
+  delete (window as unknown as { shell?: unknown }).shell
 })
 
 describe('useMinuteTick', () => {
@@ -53,13 +60,30 @@ describe('useMinuteTick', () => {
     expect(result.current.getTime()).toBe(at('2026-08-24T11:37:00.020Z'))
   })
 
-  it('catches up immediately when the machine wakes mid-minute', () => {
+  it('subscribes to the main process resume broadcast and unsubscribes on unmount', () => {
     vi.useFakeTimers()
     vi.setSystemTime(at('2026-08-24T11:35:20.000Z'))
+    const unsubscribe = vi.fn()
+    const onResume = vi.fn(() => unsubscribe)
+    stubResumeChannel(onResume)
+    const { unmount } = renderHook(() => useMinuteTick())
+    expect(onResume).toHaveBeenCalledTimes(1)
+    unmount()
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('catches up on a resume that lands mid-minute and re-aligns to the next boundary', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(at('2026-08-24T11:35:20.000Z'))
+    let notifyResume = () => {}
+    stubResumeChannel((callback) => {
+      notifyResume = callback
+      return () => {}
+    })
     const { result } = renderHook(() => useMinuteTick())
     act(() => {
       vi.setSystemTime(at('2026-08-24T12:14:30.000Z'))
-      document.dispatchEvent(new Event('visibilitychange'))
+      notifyResume()
     })
     expect(result.current.getTime()).toBe(at('2026-08-24T12:14:30.000Z'))
     act(() => {
@@ -72,7 +96,24 @@ describe('useMinuteTick', () => {
     expect(result.current.getTime()).toBe(at('2026-08-24T12:15:00.020Z'))
   })
 
-  it('stops its timer on unmount', () => {
+  it('keeps the same Date when a resync lands inside the minute already displayed', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(at('2026-08-24T11:35:20.000Z'))
+    let notifyResume = () => {}
+    stubResumeChannel((callback) => {
+      notifyResume = callback
+      return () => {}
+    })
+    const { result } = renderHook(() => useMinuteTick())
+    const first = result.current
+    act(() => {
+      vi.setSystemTime(at('2026-08-24T11:35:47.000Z'))
+      notifyResume()
+    })
+    expect(result.current).toBe(first)
+  })
+
+  it('works without the shell bridge and stops its timer on unmount', () => {
     vi.useFakeTimers()
     vi.setSystemTime(at('2026-08-24T11:35:20.000Z'))
     const { unmount } = renderHook(() => useMinuteTick())
