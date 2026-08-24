@@ -11,7 +11,7 @@ const SYSTEM_WINDOW_EVENTS = Object.freeze(
   )
 )
 
-const DISPATCH_ORDER = Object.freeze(['tiling', 'windowCorners', 'minimizeToTopbar', 'foregroundColor'])
+const DISPATCH_ORDER = Object.freeze(['tiling', 'windowCorners', 'minimizeToTopbar'])
 
 function dispatchPriority(name) {
   const index = DISPATCH_ORDER.indexOf(name)
@@ -39,15 +39,14 @@ function isWindowItself(idObject, idChild) {
 function dispatchWinEvent(subscribers, event, hwnd, idObject, idChild) {
   if (!isWindowItself(idObject, idChild)) return
   if (!hwnd) return
-  for (let index = 0; index < subscribers.length; index++) {
-    const subscriber = subscribers[index]
+  for (const subscriber of [...subscribers]) {
     if (!subscriber.events.has(event)) continue
+    if (!subscribers.includes(subscriber)) continue
     try {
       subscriber.listener(hwnd, event)
     } catch (e) {
       console.error(`[winEvents] ${subscriber.name} listener error:`, e.message)
     }
-    if (subscribers[index] !== subscriber) index--
   }
 }
 

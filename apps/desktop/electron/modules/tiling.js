@@ -357,7 +357,7 @@ function minSizeRetryDelayMs(attempts) {
 function minSizeQueryAllowed(hwnd) {
   const failure = minSizeQueryFailures.get(hwnd)
   if (!failure) return true
-  return Date.now() >= failure.retryAt
+  return performance.now() >= failure.retryAt
 }
 
 function ensureMinSize(hwnd, display) {
@@ -371,7 +371,7 @@ function ensureMinSize(hwnd, display) {
   }
   const failure = minSizeQueryFailures.get(hwnd)
   const attempts = (failure ? failure.attempts : 0) + 1
-  minSizeQueryFailures.set(hwnd, { attempts, retryAt: Date.now() + minSizeRetryDelayMs(attempts) })
+  minSizeQueryFailures.set(hwnd, { attempts, retryAt: performance.now() + minSizeRetryDelayMs(attempts) })
 }
 
 function positionPhysical(hwnd, dipRect) {
@@ -532,24 +532,10 @@ function tileWindow(hwnd, normRect, display) {
   return true
 }
 
-function knownOversizeInZone(hwnd, cell) {
-  if (!config.handleOversized) return null
-  const min = minSizeByHwnd.get(hwnd)
-  if (!min) return null
-  if (min.w - cell.width <= OVERSIZE_TOLERANCE && min.h - cell.height <= OVERSIZE_TOLERANCE) return null
-  return { width: Math.max(min.w, cell.width), height: Math.max(min.h, cell.height) }
-}
-
 function snapToZone(hwnd, zoneName, display) {
   const zone = ZONES[zoneName]
-  if (!zone || !hwnd || !IsWindow(hwnd)) return
-  const oversize = knownOversizeInZone(hwnd, zoneRectDip(display, zone))
-  if (oversize) {
-    if (IsZoomed(hwnd) || IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE)
-    alignOversizedInZone(hwnd, zoneName, display, oversize)
-  } else {
-    tileWindow(hwnd, zone, display)
-  }
+  if (!zone) return
+  tileWindow(hwnd, zone, display)
   snapStateByHwnd.set(hwnd, zoneName)
   correctSnapOversize(hwnd, zoneName, display)
 }

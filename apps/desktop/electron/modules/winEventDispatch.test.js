@@ -48,10 +48,10 @@ describe('dispatchPriority', () => {
 describe('addSubscriber', () => {
   it('keeps subscribers in the pinned dispatch order regardless of registration order', () => {
     const subscribers = []
-    addSubscriber(subscribers, 'foregroundColor', [EVENT_SYSTEM_FOREGROUND], () => {})
+    addSubscriber(subscribers, 'minimizeToTopbar', [EVENT_SYSTEM_FOREGROUND], () => {})
     addSubscriber(subscribers, 'windowCorners', SYSTEM_WINDOW_EVENTS, () => {})
     addSubscriber(subscribers, 'tiling', [EVENT_SYSTEM_FOREGROUND], () => {})
-    expect(subscribers.map((s) => s.name)).toEqual(['tiling', 'windowCorners', 'foregroundColor'])
+    expect(subscribers.map((s) => s.name)).toEqual(['tiling', 'windowCorners', 'minimizeToTopbar'])
   })
 })
 
@@ -128,6 +128,20 @@ describe('dispatchWinEvent', () => {
     dispatchWinEvent(subscribers, EVENT_SYSTEM_FOREGROUND, HWND, OBJID_WINDOW, CHILDID_SELF)
     expect(last).toHaveBeenCalledTimes(1)
     expect(subscribers.map((s) => s.name)).toEqual(['windowCorners', 'minimizeToTopbar'])
+  })
+
+  it('still reaches the last subscriber when a listener removes two earlier ones', () => {
+    const subscribers = []
+    const last = vi.fn()
+    const first = addSubscriber(subscribers, 'tiling', [EVENT_SYSTEM_FOREGROUND], vi.fn())
+    const second = addSubscriber(subscribers, 'windowCorners', [EVENT_SYSTEM_FOREGROUND], () => {
+      removeSubscriber(subscribers, first)
+      removeSubscriber(subscribers, second)
+    })
+    addSubscriber(subscribers, 'minimizeToTopbar', [EVENT_SYSTEM_FOREGROUND], last)
+    dispatchWinEvent(subscribers, EVENT_SYSTEM_FOREGROUND, HWND, OBJID_WINDOW, CHILDID_SELF)
+    expect(last).toHaveBeenCalledTimes(1)
+    expect(subscribers.map((s) => s.name)).toEqual(['minimizeToTopbar'])
   })
 
   it('does not call a subscriber a listener removed before it ran', () => {

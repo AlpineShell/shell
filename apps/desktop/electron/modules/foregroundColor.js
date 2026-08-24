@@ -1,7 +1,5 @@
 const koffi = require('koffi')
 const { screen } = require('electron')
-const winEvents = require('./winEvents')
-const { createSampleBudget } = require('./foregroundSampleBudget')
 
 const user32 = koffi.load('user32.dll')
 const gdi32 = koffi.load('gdi32.dll')
@@ -22,18 +20,8 @@ const GetDpiForWindow = user32.func('__stdcall', 'GetDpiForWindow', 'uint32', ['
 
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
-const IsIconic = user32.func('__stdcall', 'IsIconic', 'int', ['uintptr_t'])
 
 const SRCCOPY = 0x00CC0020
-
-const EVENT_SYSTEM_FOREGROUND = 0x0003
-const EVENT_SYSTEM_MOVESIZEEND = 0x000b
-const EVENT_SYSTEM_MINIMIZEEND = 0x0017
-const FOREGROUND_COLOR_EVENTS = [
-  EVENT_SYSTEM_FOREGROUND,
-  EVENT_SYSTEM_MOVESIZEEND,
-  EVENT_SYSTEM_MINIMIZEEND,
-]
 
 const POLL_INTERVAL_MS = 300
 
@@ -44,9 +32,7 @@ const perDisplay = new Map()
 const pendingDisplay = new Map()
 const hwndPerDisplay = new Map()
 const sampledHwndPerDisplay = new Map()
-const sampleBudget = createSampleBudget()
 let startupIgnoreHwnd = null
-let unsubscribeWinEvents = null
 let displayRemovedListener = null
 let pollTimer = null
 
@@ -123,24 +109,21 @@ function getDisplayIdForWindow(hwnd) {
   return display.id
 }
 
-function clearColor(displayId, broadcast) {
-  pendingDisplay.delete(displayId)
-  sampledHwndPerDisplay.delete(displayId)
-  if (!perDisplay.has(displayId)) return
-  perDisplay.delete(displayId)
-  broadcast('topbar/fg-color-changed', { displayId })
-}
-
 function clearDisplay(displayId, broadcast) {
   hwndPerDisplay.delete(displayId)
-  clearColor(displayId, broadcast)
+  pendingDisplay.delete(displayId)
+  sampledHwndPerDisplay.delete(displayId)
+  if (perDisplay.has(displayId)) {
+    perDisplay.delete(displayId)
+    broadcast('topbar/fg-color-changed', { displayId })
+  }
 }
 
 function update(broadcast) {
   if (altTab && altTab.isSwitcherActive()) return
 
   for (const [displayId, trackedHwnd] of [...hwndPerDisplay.entries()]) {
-    if (!trackedHwnd || !IsZoomed(trackedHwnd) || IsIconic(trackedHwnd)) {
+    if (!trackedHwnd || !IsZoomed(trackedHwnd)) {
       clearDisplay(displayId, broadcast)
     }
   }
@@ -161,39 +144,33 @@ function update(broadcast) {
   hwndPerDisplay.set(displayId, hwnd)
 
   if (sampledHwndPerDisplay.get(displayId) === hwnd && perDisplay.has(displayId)) return
-  if (!sampleBudget.claim(Date.now())) return
 
   const rgb = sampleTitleBarColor(hwnd)
   if (!rgb) {
-    clearColor(displayId, broadcast)
+    clearDisplay(displayId, broadcast)
     return
   }
 
   const lum = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b
   const color = { r: rgb.r, g: rgb.g, b: rgb.b, darkText: lum > 128 }
+  const pending = pendingDisplay.get(displayId)
 
-  if (!colorEqual(pendingDisplay.get(displayId), color)) {
+  if (!colorEqual(pending, color)) {
     pendingDisplay.set(displayId, color)
     return
   }
 
-  commitColor(displayId, hwnd, color, broadcast)
-}
-
-function commitColor(displayId, hwnd, color, broadcast) {
   pendingDisplay.delete(displayId)
   sampledHwndPerDisplay.set(displayId, hwnd)
   startupIgnoreHwnd = null
-  if (colorEqual(perDisplay.get(displayId), color)) return
-  perDisplay.set(displayId, color)
-  broadcast('topbar/fg-color-changed', { ...color, displayId })
+  const prev = perDisplay.get(displayId)
+  if (!colorEqual(prev, color)) {
+    perDisplay.set(displayId, color)
+    broadcast('topbar/fg-color-changed', { ...color, displayId })
+  }
 }
 
 function stop() {
-  if (unsubscribeWinEvents) {
-    unsubscribeWinEvents()
-    unsubscribeWinEvents = null
-  }
   if (displayRemovedListener) {
     screen.removeListener('display-removed', displayRemovedListener)
     displayRemovedListener = null
@@ -218,7 +195,6 @@ module.exports = {
     const { app } = require('electron')
     const initial = GetForegroundWindow()
     if (initial && IsZoomed(initial)) startupIgnoreHwnd = initial
-    unsubscribeWinEvents = winEvents.subscribe('foregroundColor', FOREGROUND_COLOR_EVENTS, () => update(broadcast))
     displayRemovedListener = (_event, removed) => clearDisplay(removed.id, broadcast)
     screen.on('display-removed', displayRemovedListener)
     pollTimer = setInterval(() => update(broadcast), POLL_INTERVAL_MS)
