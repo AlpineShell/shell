@@ -8,6 +8,7 @@ const {
   readInterfaceGeneration,
   disposeNetworkNative,
 } = require('../networkNative')
+const batterySaver = require('./batterySaver')
 
 let lastSignal = undefined
 let lastType = undefined
@@ -28,6 +29,7 @@ const radioScriptPath = path.join(scriptsDir, 'wifiRadio.ps1')
 
 const WIFI_LIST_TIMEOUT_MS = 10000
 const NETWORK_REFRESH_INTERVAL_MS = 10000
+const BATTERY_SAVER_NETWORK_REFRESH_INTERVAL_MS = 60000
 const WIFI_RESCAN_SETTLE_MS = 3000
 const POST_RADIO_SET_REFRESH_MS = 1500
 
@@ -236,9 +238,13 @@ module.exports = {
       event.returnValue = { status: cachedStatus, radio: cachedRadio }
     })
     refreshNetworkStatusQuietly()
-    const pollTimer = setInterval(refreshNetworkStatusQuietly, NETWORK_REFRESH_INTERVAL_MS)
+    const stopPolling = batterySaver.startAdaptivePolling(
+      refreshNetworkStatusQuietly,
+      NETWORK_REFRESH_INTERVAL_MS,
+      BATTERY_SAVER_NETWORK_REFRESH_INTERVAL_MS,
+    )
     app.on('will-quit', () => {
-      clearInterval(pollTimer)
+      stopPolling()
       disposeNetworkNative()
     })
   },

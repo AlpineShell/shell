@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, MonitorCog, RotateCcw } from 'lucide-react'
+import { BatteryLow, Check, MonitorCog, RotateCcw } from 'lucide-react'
 import { NavRow } from './appsShared'
 
 interface SystemPageProps {
@@ -7,6 +7,12 @@ interface SystemPageProps {
 }
 
 const ROWS = [
+  {
+    path: 'system/battery',
+    label: 'Battery',
+    description: 'Battery saver, when it turns on and what it changes',
+    icon: BatteryLow,
+  },
   {
     path: 'system/revert',
     label: 'Revert back to Windows',

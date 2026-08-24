@@ -194,6 +194,30 @@ declare global {
   interface BatteryStatus {
     percent: number | null
     charging: boolean
+    onAcPower: boolean
+    hasBattery: boolean
+  }
+
+  type BatterySaverReason = 'manual' | 'threshold' | null
+
+  type BatterySaverOverride = 'auto' | 'on' | 'off'
+
+  interface BatterySaverConfig {
+    automaticEnabled: boolean
+    thresholdPercent: number
+    dimDisplays: boolean
+    brightnessReductionPercent: number
+    reduceBackgroundPolling: boolean
+    throttleProcesses: boolean
+  }
+
+  interface BatterySaverState {
+    active: boolean
+    reason: BatterySaverReason
+    override: BatterySaverOverride
+    percent: number | null
+    charging: boolean
+    onAcPower: boolean
     hasBattery: boolean
   }
 
@@ -803,6 +827,14 @@ declare global {
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>
         onBatteryChanged: (callback: (data: BatteryStatus) => void) => () => void
+      }
+      batterySaver: {
+        config: () => Promise<BatterySaverConfig>
+        setConfig: (partial: Partial<BatterySaverConfig>) => Promise<BatterySaverConfig>
+        onConfigChanged: (callback: (config: BatterySaverConfig) => void) => () => void
+        state: () => Promise<BatterySaverState>
+        setOverride: (override: BatterySaverOverride) => Promise<BatterySaverState>
+        onStateChanged: (callback: (state: BatterySaverState) => void) => () => void
       }
       media: {
         session: () => Promise<MediaPlayback>

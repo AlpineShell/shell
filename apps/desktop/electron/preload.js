@@ -382,6 +382,22 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('system/battery-changed', handler)
     },
   },
+  batterySaver: {
+    config: () => ipcRenderer.invoke('battery-saver/config-get'),
+    setConfig: (partial) => ipcRenderer.invoke('battery-saver/config-set', partial),
+    onConfigChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('battery-saver/config-changed', handler)
+      return () => ipcRenderer.removeListener('battery-saver/config-changed', handler)
+    },
+    state: () => ipcRenderer.invoke('battery-saver/state-get'),
+    setOverride: (override) => ipcRenderer.invoke('battery-saver/override-set', override),
+    onStateChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('battery-saver/state-changed', handler)
+      return () => ipcRenderer.removeListener('battery-saver/state-changed', handler)
+    },
+  },
   media: {
     session: () => ipcRenderer.invoke('media/session'),
     onSessionChanged: (callback) => {
