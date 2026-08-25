@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { BatteryLow, Check, MonitorCog, RotateCcw } from 'lucide-react'
-import { NavRow } from './appsShared'
+import PageTitle from '../ui/pageTitle'
+import NavRow from '../ui/navRow'
+import Button from '../ui/button'
 
 interface SystemPageProps {
   onNavigate: (path: string) => void
@@ -44,21 +46,21 @@ export default function SystemPage({ onNavigate }: SystemPageProps) {
 
   return (
     <div className="w-full flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">System</h1>
+      <PageTitle title="System" />
 
       {(status || isDev) && (
-        <div className="rounded-lg bg-neutral-900 border border-white/5 px-4 py-4 flex items-center gap-3">
-          <MonitorCog size={18} className="text-white/60 shrink-0" />
+        <div className="rounded-card bg-surface-2 border border-line-hairline px-4 py-4 flex items-center gap-3">
+          <MonitorCog size={18} className="text-ink-secondary shrink-0" />
           <div className="flex flex-col flex-1 min-w-0 gap-0.5">
             <div className="flex items-center gap-2">
-              <span className="text-[13px] text-white/90">Default shell</span>
+              <span className="text-dense text-ink-primary">Default shell</span>
               {isDev && (
-                <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400/90">
+                <span className="text-eyebrow uppercase px-1.5 py-0.5 rounded bg-warning/15 text-warning">
                   Dev
                 </span>
               )}
             </div>
-            <span className="text-xs text-white/50">
+            <span className="text-xs text-ink-quiet">
               {isDev
                 ? 'Unavailable in development — run an installed build to set the shell.'
                 : isShell
@@ -69,35 +71,37 @@ export default function SystemPage({ onNavigate }: SystemPageProps) {
             </span>
           </div>
           {isDev ? (
-            <button
-              disabled
-              className="shrink-0 h-8 px-3 rounded-md bg-white/10 text-white/40 text-[12px] font-medium cursor-not-allowed"
-            >
+            <Button variant="outline" size="sm" onClick={() => {}} disabled className="shrink-0 font-medium">
               Set as default shell
-            </button>
+            </Button>
           ) : isShell ? (
-            <span className="shrink-0 inline-flex items-center gap-1.5 text-xs text-emerald-400">
+            <span className="shrink-0 inline-flex items-center gap-1.5 text-xs text-success">
               <Check size={14} />
               Active
             </span>
           ) : applied ? (
-            <span className="shrink-0 text-xs text-white/50">Pending restart</span>
+            <span className="shrink-0 text-xs text-ink-quiet">Pending restart</span>
           ) : (
-            <button
-              onClick={setAsDefaultShell}
-              disabled={applying}
-              className="shrink-0 h-8 px-3 rounded-md bg-white hover:bg-neutral-200 text-neutral-950 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-50"
-            >
+            <Button size="sm" onClick={setAsDefaultShell} disabled={applying} className="shrink-0 font-medium">
               {applying ? 'Setting...' : 'Set as default shell'}
-            </button>
+            </Button>
           )}
         </div>
       )}
 
       <div className="flex flex-col gap-2">
-        {ROWS.map((row) => (
-          <NavRow key={row.path} icon={row.icon} label={row.label} description={row.description} onClick={() => onNavigate(row.path)} />
-        ))}
+        {ROWS.map((row) => {
+          const Icon = row.icon
+          return (
+            <NavRow
+              key={row.path}
+              icon={<Icon size={18} />}
+              label={row.label}
+              description={row.description}
+              onClick={() => onNavigate(row.path)}
+            />
+          )
+        })}
       </div>
     </div>
   )

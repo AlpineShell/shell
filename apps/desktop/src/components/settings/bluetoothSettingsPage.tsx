@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Bluetooth, BluetoothConnected, Loader2, Plus, RefreshCw, Unlink } from 'lucide-react'
+import PageTitle from '../ui/pageTitle'
 import Toggle from '../ui/toggle'
+import IconButton from '../ui/iconButton'
 
 export default function BluetoothSettingsPage() {
   const [enabled, setEnabled] = useState(window.alpineBoot?.bluetooth()?.enabled ?? false)
@@ -67,24 +69,18 @@ export default function BluetoothSettingsPage() {
   return (
     <div className="w-full flex flex-col gap-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Bluetooth</h1>
-        <div className="flex items-center gap-4">
-          <button
+        <PageTitle title="Bluetooth" />
+        <div className="flex items-center gap-2">
+          <IconButton
             onClick={() => window.shell.system.bluetoothOpenSettings()}
             disabled={!enabled}
-            className="text-white/60 hover:text-white cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Pair new device"
+            label="Pair new device"
           >
             <Plus size={16} />
-          </button>
-          <button
-            onClick={scan}
-            disabled={scanning || !enabled}
-            className="text-white/60 hover:text-white cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Rescan"
-          >
+          </IconButton>
+          <IconButton onClick={scan} disabled={scanning || !enabled} label="Rescan">
             <RefreshCw size={15} className={scanning ? 'animate-spin' : ''} />
-          </button>
+          </IconButton>
           <Toggle label="Bluetooth" checked={enabled} onChange={toggleRadio} />
         </div>
       </div>
@@ -116,21 +112,21 @@ export default function BluetoothSettingsPage() {
 
 function DeviceRow({ device, busy, removing, removeFailed, onClick, onRemove }: { device: BluetoothDevice; busy: boolean; removing: boolean; removeFailed: boolean; onClick: () => void; onRemove: () => void }) {
   return (
-    <div className="group relative after:content-[''] after:absolute after:bottom-0 after:left-2 after:right-2 after:h-px after:bg-white/3 last:after:hidden hover:after:hidden [&:has(+*:hover)]:after:hidden">
+    <div className="group relative after:content-[''] after:absolute after:bottom-0 after:left-2 after:right-2 after:h-px after:bg-line-hairline last:after:hidden hover:after:hidden [&:has(+*:hover)]:after:hidden">
       <button
         onClick={onClick}
         disabled={busy || removing}
-        className="w-full flex items-center justify-between gap-4 py-3 px-2 rounded-md cursor-pointer hover:bg-white/3 transition-colors text-left disabled:cursor-default"
+        className="focus-ring w-full flex items-center justify-between gap-4 py-3 px-2 rounded-field cursor-pointer hover:bg-fill-ghost transition-colors text-left disabled:cursor-default"
       >
         <div className="flex items-center gap-3 min-w-0">
           {device.connected ? (
-            <BluetoothConnected size={16} className="text-white shrink-0" />
+            <BluetoothConnected size={16} className="text-ink-primary shrink-0" />
           ) : (
-            <Bluetooth size={16} className="text-white/50 shrink-0" />
+            <Bluetooth size={16} className="text-ink-quiet shrink-0" />
           )}
           <div className="flex flex-col min-w-0">
-            <span className="text-sm text-white/90 truncate">{device.name}</span>
-            <span className={`text-xs ${removeFailed ? 'text-red-400' : 'text-white/50'}`}>
+            <span className="text-sm text-ink-primary truncate">{device.name}</span>
+            <span className={`text-xs ${removeFailed ? 'text-danger' : 'text-ink-quiet'}`}>
               {removeFailed ? 'Failed to remove' : removing ? 'Removing...' : busy ? (device.connected ? 'Disconnecting...' : 'Connecting...') : device.connected ? 'Connected' : device.paired ? 'Paired' : 'Available'}
             </span>
           </div>
@@ -138,14 +134,14 @@ function DeviceRow({ device, busy, removing, removeFailed, onClick, onRemove }: 
       </button>
       <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
         {busy || removing ? (
-          <Loader2 size={14} className="text-white/60 animate-spin" />
+          <Loader2 size={14} className="text-ink-secondary animate-spin" />
         ) : device.paired ? (
           <button
             onClick={(e) => {
               e.stopPropagation()
               onRemove()
             }}
-            className="pointer-events-auto flex items-center justify-center text-white/50 hover:text-red-400 cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
+            className="focus-ring pointer-events-auto flex items-center justify-center text-ink-quiet hover:text-danger cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
             aria-label="Remove device"
             title="Remove device"
           >
@@ -159,7 +155,7 @@ function DeviceRow({ device, busy, removing, removeFailed, onClick, onRemove }: 
 
 function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-12 text-white/40">
+    <div className="flex flex-col items-center justify-center gap-2 py-12 text-ink-faint">
       {icon}
       <span className="text-sm">{text}</span>
     </div>

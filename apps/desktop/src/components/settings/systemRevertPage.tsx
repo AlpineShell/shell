@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import PageTitle from '../ui/pageTitle'
+import Button from '../ui/button'
 
 type RevertAction = 'temporary' | 'permanent' | 'delete'
 
@@ -80,7 +82,7 @@ export default function SystemRevertPage() {
 
   return (
     <div className="flex flex-col gap-6 w-full">
-      <h1 className="text-2xl font-semibold tracking-tight">Revert back to Windows</h1>
+      <PageTitle title="Revert back to Windows" />
 
       {state.phase === 'done' && (
         <Banner
@@ -93,7 +95,7 @@ export default function SystemRevertPage() {
       {state.phase === 'error' && <Banner title="Couldn't complete that." detail={state.message} danger />}
 
       {isDev && (
-        <div className="text-xs text-white/50">
+        <div className="text-xs text-ink-quiet">
           Unavailable in development — run an installed build to revert the shell.
         </div>
       )}
@@ -134,15 +136,15 @@ function Banner({
 }) {
   return (
     <div
-      className={`rounded-lg border px-4 py-3 flex items-start gap-3 ${
-        danger ? 'border-red-500/30 bg-red-500/5' : 'border-white/10 bg-neutral-900'
+      className={`rounded-card border px-4 py-3 flex items-start gap-3 ${
+        danger ? 'border-danger/30 bg-danger/10' : 'border-line-hairline bg-surface-2'
       }`}
     >
-      <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${danger ? 'text-red-400' : 'text-amber-400'}`} />
+      <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${danger ? 'text-danger' : 'text-warning'}`} />
       <div className="text-sm">
-        <p className="text-white/90">{title}</p>
-        <p className="text-white/50 text-xs mt-0.5">{detail}</p>
-        {extra && <p className="text-amber-400/80 text-xs mt-1">{extra}</p>}
+        <p className="text-ink-primary">{title}</p>
+        <p className="text-ink-quiet text-xs mt-0.5">{detail}</p>
+        {extra && <p className="text-warning text-xs mt-1">{extra}</p>}
       </div>
     </div>
   )
@@ -172,44 +174,31 @@ function Row({
   onCancel: () => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3 border-b border-white/5 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 py-3 border-b border-line-hairline last:border-b-0">
       <div className="min-w-0">
-        <div className="text-sm font-medium">{label}</div>
-        <div className="text-xs text-white/50 mt-0.5">{description}</div>
+        <div className="text-sm font-medium text-ink-primary">{label}</div>
+        <div className="text-xs text-ink-quiet mt-0.5">{description}</div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {confirming ? (
           <>
-            <button
-              onClick={onCancel}
-              className="h-8 px-3 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-[12px] transition-colors cursor-pointer"
-            >
+            <Button variant="outline" size="sm" onClick={onCancel}>
               Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              disabled={busy}
-              className={`h-8 px-3 rounded-md text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                danger
-                  ? 'bg-red-500 hover:bg-red-600 text-white'
-                  : 'bg-white hover:bg-neutral-200 text-neutral-950'
-              }`}
-            >
+            </Button>
+            <Button variant={danger ? 'danger' : 'primary'} size="sm" onClick={onConfirm} disabled={busy} className="font-medium">
               {busy ? 'Working…' : 'Confirm'}
-            </button>
+            </Button>
           </>
         ) : (
-          <button
+          <Button
+            variant={danger ? 'dangerOutline' : 'outline'}
+            size="sm"
             onClick={onStart}
             disabled={disabled}
-            className={`h-8 px-3 rounded-md border text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-              danger
-                ? 'border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300'
-                : 'border-white/10 bg-white/5 hover:bg-white/10 text-white/90'
-            }`}
+            className="font-medium"
           >
             {actionLabel}
-          </button>
+          </Button>
         )}
       </div>
     </div>

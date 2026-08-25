@@ -43,6 +43,7 @@ declare global {
     onChange: (value: boolean) => void
     label: string
     disabled?: boolean
+    pending?: boolean
   }
 
   interface SegmentedOption<T> {
@@ -67,13 +68,14 @@ declare global {
   interface SliderProps {
     min: number
     max: number
+    step?: number
     value: number
     onChange: (value: number) => void
     label: string
     suffix?: string
   }
 
-  type ButtonVariant = 'primary' | 'outline' | 'ghost'
+  type ButtonVariant = 'primary' | 'outline' | 'ghost' | 'danger' | 'dangerOutline'
 
   type ButtonSize = 'sm' | 'md'
 

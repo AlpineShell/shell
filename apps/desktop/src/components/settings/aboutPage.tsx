@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Bluetooth, Image as ImageIcon, Wifi } from 'lucide-react'
 import { useWallpaper } from '../../hooks/useWallpaper'
-import { NavRow } from './appsShared'
+import NavRow from '../ui/navRow'
 
 const CACHE_KEY = 'alpine.systemInfo.v2'
 
@@ -59,7 +59,7 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
       <div className="flex gap-6 items-stretch max-w-4xl">
         <div className="w-72 shrink-0 flex flex-col gap-2">
           <div
-            className="w-full aspect-video rounded-lg bg-neutral-900 bg-cover bg-center border border-white/5"
+            className="w-full aspect-video rounded-field bg-surface-3 bg-cover bg-center border border-line-hairline"
             style={wallpaper ? { backgroundImage: `url('${wallpaper}')` } : undefined}
           />
 
@@ -83,7 +83,7 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
             </>
           ) : (
             [0, 1, 2].map((i) => (
-              <div key={i} className="w-full h-6 rounded-md bg-neutral-900 border border-white/5 animate-pulse" />
+              <div key={i} className="w-full h-6 rounded-md bg-surface-3 border border-line-hairline animate-pulse" />
             ))
           )}
         </div>
@@ -93,14 +93,14 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
           style={{ opacity: info ? 1 : 0 }}
         >
           <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold tracking-tight truncate">
+            <h1 className="font-display text-2xl font-normal tracking-tight text-ink-primary truncate">
               {info?.computerName ?? ''}
             </h1>
-            <span className="text-sm text-white/60 truncate">
+            <span className="text-sm text-ink-secondary truncate">
               {info?.os.name ?? ''}
             </span>
             {info?.os.build && (
-              <span className="text-xs text-white/40">
+              <span className="text-xs text-ink-quiet">
                 Version {info.os.version} - Build {info.os.build}
               </span>
             )}
@@ -109,9 +109,9 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
       </div>
 
       <div className="flex flex-col gap-2">
-        <NavRow icon={Bluetooth} label="Bluetooth" description="Pair and manage Bluetooth devices" onClick={() => onNavigate('devices/bluetooth')} />
-        <NavRow icon={ImageIcon} label="Wallpaper" description="Change background image" onClick={() => onNavigate('personalization/wallpaper')} />
-        <NavRow icon={Wifi} label="Wi-Fi" description="Connect to networks" onClick={() => onNavigate('devices/wifi')} />
+        <NavRow icon={<Bluetooth size={18} />} label="Bluetooth" description="Pair and manage Bluetooth devices" onClick={() => onNavigate('devices/bluetooth')} />
+        <NavRow icon={<ImageIcon size={18} />} label="Wallpaper" description="Change background image" onClick={() => onNavigate('personalization/wallpaper')} />
+        <NavRow icon={<Wifi size={18} />} label="Wi-Fi" description="Connect to networks" onClick={() => onNavigate('devices/wifi')} />
       </div>
     </div>
   )
@@ -120,14 +120,14 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
 function UsageRow({ label, used, total, color }: { label: string; used: number; total: number; color: string }) {
   const pct = total > 0 ? (used / total) * 100 : 0
   return (
-    <div className="relative w-full h-6 rounded-md bg-neutral-900 border border-white/5 overflow-hidden">
+    <div className="relative w-full h-6 rounded-md bg-surface-3 border border-line-hairline overflow-hidden">
       <div
         className="absolute left-0 top-0 bottom-0 transition-all"
         style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
       />
-      <div className="absolute inset-0 flex items-center justify-between px-2.5 text-[11px] font-medium">
-        <span className="text-white/90">{label}</span>
-        <span className="text-white/80">
+      <div className="absolute inset-0 flex items-center justify-between px-2.5 text-[11px] font-medium text-ink-primary">
+        <span>{label}</span>
+        <span>
           {formatSize(used)} / {formatSize(total)}
         </span>
       </div>

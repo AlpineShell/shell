@@ -70,7 +70,8 @@
 
   --alpine-focus-ring: #333332;
   --alpine-danger: #dc2626;
-  --alpine-success: #059669;
+  --alpine-success: #047857;
+  --alpine-warning: #b45309;
   --alpine-scrim: rgba(0, 0, 0, 0.25);
 
   --alpine-scrollbar-thumb: rgba(0, 0, 0, 0.18);
@@ -95,7 +96,7 @@
   --alpine-ink-faint: #6f6f6b;
 
   --alpine-fill-solid: #ebebe7;
-  --alpine-fill-solid-hover: #ffffff;
+  --alpine-fill-solid-hover: #f5f5f2;
   --alpine-on-solid: #1a1a19;
   --alpine-fill-subtle: #292928;
   --alpine-fill-ghost: rgba(255, 255, 255, 0.07);
@@ -104,6 +105,7 @@
   --alpine-focus-ring: #ebebe7;
   --alpine-danger: #f87171;
   --alpine-success: #34d399;
+  --alpine-warning: #fbbf24;
   --alpine-scrim: rgba(0, 0, 0, 0.5);
 
   --alpine-scrollbar-thumb: rgba(255, 255, 255, 0.16);
@@ -137,6 +139,7 @@
   --color-focus-ring: var(--alpine-focus-ring);
   --color-danger: var(--alpine-danger);
   --color-success: var(--alpine-success);
+  --color-warning: var(--alpine-warning);
   --color-scrim: var(--alpine-scrim);
 
   --shadow-float: var(--alpine-shadow-float);

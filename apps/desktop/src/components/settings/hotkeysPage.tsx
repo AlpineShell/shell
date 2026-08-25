@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
+import PageTitle from '../ui/pageTitle'
+import Row from '../ui/row'
+import Toggle from '../ui/toggle'
+import IconButton from '../ui/iconButton'
 
 const SPECIAL_KEY_MAP: Record<string, string> = {
   ' ': 'Space',
@@ -95,7 +99,7 @@ export default function HotkeysPage() {
 
   return (
     <div className="flex flex-col gap-8 w-full">
-      <h1 className="text-2xl font-semibold tracking-tight">Hotkeys</h1>
+      <PageTitle title="Hotkeys" />
 
       <div className="flex flex-col">
         <HotkeyRow
@@ -116,25 +120,25 @@ export default function HotkeysPage() {
       </div>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-base font-semibold">Search results</h2>
-        <ToggleRow
+        <h2 className="text-sm font-semibold text-ink-primary">Search results</h2>
+        <Row
           label="Show recent apps"
           description="When you open Search, list your most-used apps before you type. Turn this off to start with an empty search."
-          checked={recentApps}
-          onChange={toggleRecentApps}
-        />
-        <ToggleRow
+        >
+          <Toggle label="Show recent apps" checked={recentApps} onChange={toggleRecentApps} />
+        </Row>
+        <Row
           label="Show browser bookmarks"
           description="Search your default browser's bookmarks and open them from Search. Works with Chromium browsers (Chrome, Edge, Brave and more)."
-          checked={showBookmarks}
-          onChange={toggleShowBookmarks}
-        />
-        <ToggleRow
+        >
+          <Toggle label="Show browser bookmarks" checked={showBookmarks} onChange={toggleShowBookmarks} />
+        </Row>
+        <Row
           label="Show open browser tabs"
           description="Find the tabs you have open in Chrome, Edge, Firefox and other browsers, and switch straight to them from Search."
-          checked={showBrowserTabs}
-          onChange={toggleShowBrowserTabs}
-        />
+        >
+          <Toggle label="Show open browser tabs" checked={showBrowserTabs} onChange={toggleShowBrowserTabs} />
+        </Row>
         <StepperRow
           label="Maximum results"
           description="The most apps and options Search will show at once, before and after you type."
@@ -199,16 +203,16 @@ function HotkeyRow({
   const display = recording ? (draft ? formatHotkey(draft) : 'Press keys…') : formatHotkey(value)
 
   return (
-    <div className="flex items-center justify-between gap-4 py-3 border-b border-white/5 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 py-3 border-b border-line-hairline last:border-b-0">
       <div className="min-w-0">
-        <div className="text-sm font-medium">{label}</div>
-        <div className="text-xs text-white/50 mt-0.5">{description}</div>
+        <div className="text-sm font-medium text-ink-primary">{label}</div>
+        <div className="text-xs text-ink-quiet mt-0.5">{description}</div>
       </div>
       <div className="flex items-center gap-3 shrink-0">
         {showReset && (
           <button
             onClick={() => onChange(defaultValue)}
-            className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer"
+            className="focus-ring cursor-pointer text-xs text-ink-quiet underline decoration-line-strong underline-offset-4 transition-colors hover:text-ink-primary"
           >
             reset
           </button>
@@ -219,53 +223,17 @@ function HotkeyRow({
           onKeyDown={handleKey}
           onBlur={stopRecording}
           disabled={disabled}
-          className={`min-w-15 h-8 px-3 rounded-md border text-[12px] font-medium outline-none transition-colors ${
+          className={`focus-ring min-w-15 h-8 px-3 rounded-field border text-[12px] font-medium outline-none transition-colors ${
             disabled
-              ? 'border-white/5 bg-white/5 text-white/40 cursor-not-allowed'
+              ? 'border-line-hairline bg-fill-subtle text-ink-faint cursor-not-allowed'
               : recording
-                ? 'border-white/30 bg-white/10 text-white cursor-text'
-                : 'border-white/10 bg-white/5 text-white/90 hover:bg-white/10 cursor-pointer'
+                ? 'border-focus-ring bg-surface-3 text-ink-primary cursor-text'
+                : 'border-line-hairline bg-surface-2 text-ink-primary hover:bg-fill-subtle cursor-pointer'
           }`}
         >
           {display}
         </button>
       </div>
-    </div>
-  )
-}
-
-function ToggleRow({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string
-  description?: string
-  checked: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <div className="text-sm">{label}</div>
-        {description && <div className="text-xs text-white/50 mt-0.5">{description}</div>}
-      </div>
-      <button
-        onClick={() => onChange(!checked)}
-        className={`shrink-0 relative rounded-full transition-colors cursor-pointer ${checked ? 'bg-white' : 'bg-white/15'}`}
-        style={{ width: 36, height: 20 }}
-      >
-        <span
-          className="absolute top-0.5 rounded-full transition-all"
-          style={{
-            width: 16,
-            height: 16,
-            left: checked ? 18 : 2,
-            backgroundColor: checked ? 'rgb(20,20,20)' : 'rgba(255,255,255,0.7)',
-          }}
-        />
-      </button>
     </div>
   )
 }
@@ -286,47 +254,16 @@ function StepperRow({
   onChange: (v: number) => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <div className="text-sm">{label}</div>
-        {description && <div className="text-xs text-white/50 mt-0.5">{description}</div>}
-      </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        <StepperButton ariaLabel="Fewer results" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}>
+    <Row label={label} description={description}>
+      <div className="flex items-center gap-1.5">
+        <IconButton label="Fewer results" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}>
           <Minus size={14} />
-        </StepperButton>
-        <span className="w-6 text-center text-sm tabular-nums">{value}</span>
-        <StepperButton ariaLabel="More results" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}>
+        </IconButton>
+        <span className="w-6 text-center text-sm tabular-nums text-ink-primary">{value}</span>
+        <IconButton label="More results" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}>
           <Plus size={14} />
-        </StepperButton>
+        </IconButton>
       </div>
-    </div>
-  )
-}
-
-function StepperButton({
-  ariaLabel,
-  onClick,
-  disabled,
-  children,
-}: {
-  ariaLabel: string
-  onClick: () => void
-  disabled: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={ariaLabel}
-      className={`w-8 h-8 flex items-center justify-center rounded-md border transition-colors ${
-        disabled
-          ? 'border-white/5 bg-white/5 text-white/30 cursor-not-allowed'
-          : 'border-white/10 bg-white/5 text-white/90 hover:bg-white/10 cursor-pointer'
-      }`}
-    >
-      {children}
-    </button>
+    </Row>
   )
 }

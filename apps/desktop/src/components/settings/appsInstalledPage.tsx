@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { Boxes, ChevronDown, ChevronRight, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
 import { useStartupApps } from '../../hooks/useStartupApps'
-import { AppIcon, PageHeader, SearchBox, Spinner, Toggle } from './appsShared'
+import { AppIcon, PageHeader, SearchBox, Spinner } from './appsShared'
+import Toggle from '../ui/toggle'
 
 type InstalledAction = 'open' | 'locate' | 'uninstall'
 
@@ -35,22 +36,22 @@ export default function AppsInstalledPage() {
       </PageHeader>
 
       <div className="flex flex-col gap-1">
-        {installed.length === 0 && <p className="text-sm text-white/50">Looking for installed apps…</p>}
-        {installed.length > 0 && apps.length === 0 && <p className="text-sm text-white/50">No apps match your search.</p>}
+        {installed.length === 0 && <p className="text-sm text-ink-quiet">Looking for installed apps…</p>}
+        {installed.length > 0 && apps.length === 0 && <p className="text-sm text-ink-quiet">No apps match your search.</p>}
 
         {userApps.map((app) => (
           <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
         ))}
 
         {components.length > 0 && (
-          <div className="rounded-lg bg-neutral-900 border border-white/5 mt-1 overflow-hidden">
-            <button onClick={() => setComponentsOpen((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 cursor-pointer text-left hover:bg-white/3 transition-colors">
-              <Boxes size={18} className="text-white/40 shrink-0" />
+          <div className="rounded-card bg-surface-2 border border-line-hairline mt-1 overflow-hidden">
+            <button onClick={() => setComponentsOpen((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 cursor-pointer text-left hover:bg-fill-ghost transition-colors">
+              <Boxes size={18} className="text-ink-faint shrink-0" />
               <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-[13px] text-white/80">Components &amp; dependencies ({components.length})</span>
-                <span className="text-[11px] text-white/40">Shared runtime and support files other apps rely on — usually safe to leave alone.</span>
+                <span className="text-dense text-ink-secondary">Components &amp; dependencies ({components.length})</span>
+                <span className="text-[11px] text-ink-faint">Shared runtime and support files other apps rely on — usually safe to leave alone.</span>
               </div>
-              {showComponents ? <ChevronDown size={16} className="text-white/40 shrink-0" /> : <ChevronRight size={16} className="text-white/40 shrink-0" />}
+              {showComponents ? <ChevronDown size={16} className="text-ink-faint shrink-0" /> : <ChevronRight size={16} className="text-ink-faint shrink-0" />}
             </button>
             {showComponents && (
               <div className="flex flex-col gap-1 px-2 pb-2">
@@ -78,39 +79,39 @@ function InstalledRow({ app, startupEntry }: { app: InstalledApp; startupEntry?:
   }
 
   return (
-    <div className="rounded-lg bg-neutral-900 border border-white/5 overflow-hidden">
-      <button onClick={() => setExpanded((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 text-left cursor-pointer hover:bg-white/3 transition-colors">
+    <div className="rounded-card bg-surface-2 border border-line-hairline overflow-hidden">
+      <button onClick={() => setExpanded((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 text-left cursor-pointer hover:bg-fill-ghost transition-colors">
         <AppIcon icon={app.icon} name={app.name} />
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-[13px] text-white/90 truncate">{app.name}</span>
-          <span className="text-[11px] text-white/45 truncate">{app.publisher || (app.source === 'store' ? 'Microsoft Store app' : 'App')}</span>
+          <span className="text-dense text-ink-primary truncate">{app.name}</span>
+          <span className="text-[11px] text-ink-quiet truncate">{app.publisher || (app.source === 'store' ? 'Microsoft Store app' : 'App')}</span>
         </div>
-        <ChevronDown size={16} className={`text-white/40 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <ChevronDown size={16} className={`text-ink-faint shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </button>
 
       {expanded && (
-        <div className="border-t border-white/5 bg-black/15 px-3 py-3 flex items-center justify-between gap-x-4 gap-y-3 flex-wrap">
+        <div className="border-t border-line-hairline bg-surface-0 px-3 py-3 flex items-center justify-between gap-x-4 gap-y-3 flex-wrap">
           {startupEntry ? (
-            <label className="flex items-center gap-2.5 text-[12px] text-white/60 cursor-pointer select-none">
-              <Toggle checked={startOn} pending={!!startupEntry.pending} onChange={() => window.shell.apps.setStartup(startupEntry.id, !startOn)} />
+            <label className="flex items-center gap-2.5 text-[12px] text-ink-secondary cursor-pointer select-none">
+              <Toggle label="Starts with your PC" checked={startOn} pending={!!startupEntry.pending} onChange={() => window.shell.apps.setStartup(startupEntry.id, !startOn)} />
               Starts with your PC
             </label>
           ) : (
-            <span className="text-[12px] text-white/30">{app.source === 'store' ? 'Microsoft Store app' : 'Desktop app'}</span>
+            <span className="text-[12px] text-ink-faint">{app.source === 'store' ? 'Microsoft Store app' : 'Desktop app'}</span>
           )}
           <div className="flex items-center gap-1.5 ml-auto">
             {app.canOpen && (
-              <button onClick={() => act('open', () => window.shell.apps.openApp(app.id))} disabled={!!pending} className="h-8 px-3 flex items-center gap-1.5 rounded-md text-[12px] text-white/70 bg-white/5 hover:bg-white/10 hover:text-white cursor-pointer transition-colors disabled:opacity-60">
+              <button onClick={() => act('open', () => window.shell.apps.openApp(app.id))} disabled={!!pending} className="h-8 px-3 flex items-center gap-1.5 rounded-field text-[12px] text-ink-secondary bg-fill-ghost hover:bg-surface-3 hover:text-ink-primary cursor-pointer transition-colors disabled:opacity-60">
                 {pending === 'open' ? <Spinner size={14} /> : <ExternalLink size={14} />} Open
               </button>
             )}
             {app.canOpenLocation && (
-              <button onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))} disabled={!!pending} className="h-8 px-3 flex items-center gap-1.5 rounded-md text-[12px] text-white/70 bg-white/5 hover:bg-white/10 hover:text-white cursor-pointer transition-colors disabled:opacity-60">
+              <button onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))} disabled={!!pending} className="h-8 px-3 flex items-center gap-1.5 rounded-field text-[12px] text-ink-secondary bg-fill-ghost hover:bg-surface-3 hover:text-ink-primary cursor-pointer transition-colors disabled:opacity-60">
                 {pending === 'locate' ? <Spinner size={14} /> : <FolderOpen size={14} />} Location
               </button>
             )}
             {app.canUninstall && (
-              <button onClick={() => act('uninstall', () => window.shell.apps.uninstall(app.id))} disabled={!!pending} className="h-8 w-22 flex items-center justify-center gap-1.5 rounded-md text-[12px] text-red-300/90 bg-red-500/10 hover:bg-red-500/20 hover:text-red-200 cursor-pointer transition-colors disabled:opacity-60">
+              <button onClick={() => act('uninstall', () => window.shell.apps.uninstall(app.id))} disabled={!!pending} className="h-8 w-22 flex items-center justify-center gap-1.5 rounded-field text-[12px] text-danger bg-danger/10 hover:bg-danger/20 cursor-pointer transition-colors disabled:opacity-60">
                 {pending === 'uninstall' ? <Spinner size={14} /> : <><Trash2 size={14} /> Remove</>}
               </button>
             )}

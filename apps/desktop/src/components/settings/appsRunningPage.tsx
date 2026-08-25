@@ -27,22 +27,22 @@ export default function AppsRunningPage() {
       </PageHeader>
 
       <div className="flex flex-col gap-1">
-        {running.length === 0 && <p className="text-sm text-white/50">Looking at what's running…</p>}
-        {running.length > 0 && visible.length === 0 && <p className="text-sm text-white/50">No apps match your search.</p>}
+        {running.length === 0 && <p className="text-sm text-ink-quiet">Looking at what's running…</p>}
+        {running.length > 0 && visible.length === 0 && <p className="text-sm text-ink-quiet">No apps match your search.</p>}
 
         {foreground.map((app) => (
           <RunningRow key={app.name} app={app} />
         ))}
 
         {background.length > 0 && (
-          <div className="rounded-lg bg-neutral-900 border border-white/5 mt-1 overflow-hidden">
-            <button onClick={() => setBackgroundOpen((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 cursor-pointer text-left hover:bg-white/3 transition-colors">
-              <Boxes size={18} className="text-white/40 shrink-0" />
+          <div className="rounded-card bg-surface-2 border border-line-hairline mt-1 overflow-hidden">
+            <button onClick={() => setBackgroundOpen((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 cursor-pointer text-left hover:bg-fill-ghost transition-colors">
+              <Boxes size={18} className="text-ink-faint shrink-0" />
               <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-[13px] text-white/80">Running in the background ({background.length})</span>
-                <span className="text-[11px] text-white/40">Helpers and services running without a window — usually started by your apps.</span>
+                <span className="text-dense text-ink-secondary">Running in the background ({background.length})</span>
+                <span className="text-[11px] text-ink-faint">Helpers and services running without a window — usually started by your apps.</span>
               </div>
-              {showBackground ? <ChevronDown size={16} className="text-white/40 shrink-0" /> : <ChevronRight size={16} className="text-white/40 shrink-0" />}
+              {showBackground ? <ChevronDown size={16} className="text-ink-faint shrink-0" /> : <ChevronRight size={16} className="text-ink-faint shrink-0" />}
             </button>
             {showBackground && (
               <div className="flex flex-col gap-1 px-2 pb-2">
@@ -71,17 +71,17 @@ function RunningRow({ app }: { app: RunningApp }) {
   if (closed) return null
 
   return (
-    <div className="flex items-center gap-3 px-3 h-12 rounded-lg bg-neutral-900 border border-white/5">
+    <div className="flex items-center gap-3 px-3 h-12 rounded-card bg-surface-2 border border-line-hairline">
       <AppIcon icon={app.icon} name={app.friendlyName} size={24} />
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="text-[13px] text-white/90 truncate">{app.friendlyName}</span>
-        {app.count > 1 && <span className="text-[11px] text-white/40 shrink-0">({app.count})</span>}
+        <span className="text-dense text-ink-primary truncate">{app.friendlyName}</span>
+        {app.count > 1 && <span className="text-[11px] text-ink-faint shrink-0">({app.count})</span>}
       </div>
       <span className={`text-[12px] shrink-0 w-20 text-right ${bandClass(app.band)}`}>{bandLabel(app.band)}</span>
       <button
         onClick={close}
         disabled={busy}
-        className="h-7 w-16 flex items-center justify-center rounded-md text-[12px] text-white/60 hover:text-red-200 hover:bg-red-500/15 cursor-pointer transition-colors shrink-0 disabled:cursor-default disabled:text-white/60 disabled:hover:bg-transparent"
+        className="h-7 w-16 flex items-center justify-center rounded-md text-[12px] text-ink-secondary hover:text-danger hover:bg-danger/10 cursor-pointer transition-colors shrink-0 disabled:cursor-default disabled:text-ink-secondary disabled:hover:bg-transparent"
       >
         {busy ? <Spinner size={13} /> : 'Close'}
       </button>

@@ -1,10 +1,11 @@
-export default function Slider({ min, max, value, onChange, label, suffix }: SliderProps) {
+export default function Slider({ min, max, step, value, onChange, label, suffix }: SliderProps) {
   return (
     <div className="flex items-center gap-3">
       <input
         type="range"
         min={min}
         max={max}
+        step={step}
         value={value}
         aria-label={label}
         onChange={(event) => onChange(parseInt(event.target.value, 10))}

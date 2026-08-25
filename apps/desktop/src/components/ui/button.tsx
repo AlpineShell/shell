@@ -2,6 +2,8 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: 'bg-fill-solid text-on-solid hover:bg-fill-solid-hover',
   outline: 'border border-line-hairline bg-surface-2 text-ink-primary hover:bg-fill-subtle',
   ghost: 'bg-transparent text-ink-primary hover:bg-fill-ghost',
+  danger: 'bg-danger text-on-solid hover:bg-danger/85',
+  dangerOutline: 'border border-danger/40 bg-transparent text-danger hover:bg-danger/10',
 }
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {

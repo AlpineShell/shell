@@ -1,5 +1,6 @@
 import { CalendarDays, Image as ImageIcon, Keyboard, LayoutDashboard, LayoutGrid, PanelTop } from 'lucide-react'
-import { NavRow } from './appsShared'
+import PageTitle from '../ui/pageTitle'
+import NavRow from '../ui/navRow'
 
 interface PersonalizationHubProps {
   onNavigate: (path: string) => void
@@ -17,12 +18,21 @@ const ROWS = [
 export default function PersonalizationHub({ onNavigate }: PersonalizationHubProps) {
   return (
     <div className="w-full flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Personalization</h1>
+      <PageTitle title="Personalization" />
 
       <div className="flex flex-col gap-2">
-        {ROWS.map((row) => (
-          <NavRow key={row.path} icon={row.icon} label={row.label} description={row.description} onClick={() => onNavigate(row.path)} />
-        ))}
+        {ROWS.map((row) => {
+          const Icon = row.icon
+          return (
+            <NavRow
+              key={row.path}
+              icon={<Icon size={18} />}
+              label={row.label}
+              description={row.description}
+              onClick={() => onNavigate(row.path)}
+            />
+          )
+        })}
       </div>
     </div>
   )
