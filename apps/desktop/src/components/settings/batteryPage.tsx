@@ -57,7 +57,7 @@ export default function BatteryPage() {
         <div className="flex flex-col gap-3">
           <ToggleRow
             label="Dim the displays"
-            description="Lower the brightness of every display Alpine can control, and put it back when battery saver ends."
+            description="Lower the brightness of the built-in display, and put it back when battery saver ends."
             checked={config.dimDisplays}
             onChange={(v) => setConfig({ dimDisplays: v })}
           />
@@ -70,6 +70,14 @@ export default function BatteryPage() {
               value={config.brightnessReductionPercent}
               suffix="%"
               onChange={(v) => setConfig({ brightnessReductionPercent: v })}
+            />
+          )}
+          {config.dimDisplays && (
+            <ToggleRow
+              label="Also dim external monitors"
+              description="External monitors run on their own power supply, so dimming them saves no battery. Turn this on only if a monitor draws its power from this PC."
+              checked={config.dimExternalDisplays}
+              onChange={(v) => setConfig({ dimExternalDisplays: v })}
             />
           )}
           <ToggleRow

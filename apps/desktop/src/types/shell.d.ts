@@ -206,6 +206,7 @@ declare global {
     automaticEnabled: boolean
     thresholdPercent: number
     dimDisplays: boolean
+    dimExternalDisplays: boolean
     brightnessReductionPercent: number
     reduceBackgroundPolling: boolean
     throttleProcesses: boolean
@@ -226,6 +227,7 @@ declare global {
     name: string
     type: 'internal' | 'external'
     brightness: number
+    brightnessWritable: boolean
   }
 
   type DisplayOrientation = 0 | 90 | 180 | 270

@@ -199,6 +199,18 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     },
   },
   {
+    id: "battery-saver-dim-externals",
+    label: "Battery saver dims external monitors",
+    hint: "Include externally powered monitors in battery saver dimming",
+    icon: Sun,
+    keywords: ["battery saver external", "external monitor", "dim", "brightness", "power saving"],
+    control: {
+      kind: "toggle",
+      get: () => window.shell.batterySaver.config().then((c) => c.dimExternalDisplays),
+      set: (v) => window.shell.batterySaver.setConfig({ dimExternalDisplays: v }),
+    },
+  },
+  {
     id: "battery-saver-dim-amount",
     label: "Battery saver dim amount",
     hint: "How much to dim while battery saver is on",

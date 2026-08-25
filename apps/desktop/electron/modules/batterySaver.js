@@ -109,7 +109,7 @@ function rescheduleAdaptivePollers() {
 
 function applyDisplayDimming() {
   const dim = active && config.dimDisplays
-    ? brightness.applyBatterySaverDimming(config.brightnessReductionPercent)
+    ? brightness.applyBatterySaverDimming(config.brightnessReductionPercent, config.dimExternalDisplays)
     : brightness.clearBatterySaverDimming()
   if (dim && typeof dim.catch === 'function') dim.catch((e) => console.error('[batterySaver] display dimming failed:', e?.message ?? e))
 }
