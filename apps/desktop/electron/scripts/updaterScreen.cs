@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -16,6 +17,9 @@ class AlpineUpdater {
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+    [DllImport("gdi32.dll")] static extern int GetDeviceCaps(IntPtr hdc, int nIndex);
 
     delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
@@ -29,6 +33,7 @@ class AlpineUpdater {
     [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
 
     const int SW_HIDE = 0;
+    const int LOGPIXELSY = 90;
     static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     const uint SWP_NOSIZE = 0x0001;
     const uint SWP_NOMOVE = 0x0002;
@@ -55,34 +60,54 @@ class AlpineUpdater {
     static LowLevelKeyboardProc keyboardProc;
 
     const string ShellKeyPath = @"Software\Microsoft\Windows NT\CurrentVersion\Winlogon";
+    const string PreviewFlag = "--preview";
 
     static string installerPath = "";
     static string alpineExe = "";
     static string version = "";
     static string readyMarkerPath = "";
     static string logoPath = "";
+    static string displayFontPath = "";
     static Image brandLogo = null;
     static MemoryStream brandLogoStream = null;
+    static PrivateFontCollection displayFonts = null;
+    static FontFamily displayFontFamily = null;
 
     static readonly List<Form> covers = new List<Form>();
     static volatile bool suppressTaskbar = true;
     static bool workerStarted = false;
+    static bool previewMode = false;
+    static float dpiScale = 1f;
 
-    public static readonly Color GradientTop = ColorTranslator.FromHtml("#001C30");
-    public static readonly Color GradientBottom = ColorTranslator.FromHtml("#005896");
-    static readonly string brandFontFamily = ResolveBrandFontFamily();
+    public static readonly Color CoverGround = ColorTranslator.FromHtml("#212120");
+    public static readonly Color PrimaryInk = ColorTranslator.FromHtml("#ebebe7");
+    public static readonly Color SecondaryInk = ColorTranslator.FromHtml("#b8b8b2");
+    static readonly string bodyFontFamily = ResolveBodyFontFamily();
 
     [STAThread]
     static void Main(string[] args) {
-        if (args.Length > 0) installerPath = args[0];
-        if (args.Length > 1) alpineExe = args[1];
-        if (args.Length > 2) version = args[2];
-        if (args.Length > 3) logoPath = args[3];
+        List<string> positional = new List<string>();
+        foreach (string arg in args) {
+            if (arg == PreviewFlag) {
+                previewMode = true;
+                suppressTaskbar = false;
+            } else {
+                positional.Add(arg);
+            }
+        }
+
+        if (positional.Count > 0) installerPath = positional[0];
+        if (positional.Count > 1) alpineExe = positional[1];
+        if (positional.Count > 2) version = positional[2];
+        if (positional.Count > 3) logoPath = positional[3];
+        if (positional.Count > 4) displayFontPath = positional[4];
 
         try { SetProcessDPIAware(); } catch { }
+        dpiScale = ResolveDpiScale();
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
+        LoadDisplayFont();
         brandLogo = LoadBrandLogo();
 
         foreach (Screen screen in Screen.AllScreens) {
@@ -100,10 +125,11 @@ class AlpineUpdater {
         primary.Shown += delegate {
             if (workerStarted) return;
             workerStarted = true;
-            InstallInputGuard();
+            if (!previewMode) InstallInputGuard();
             try { SetForegroundWindow(primary.Handle); } catch { }
             try { BringWindowToTop(primary.Handle); } catch { }
             KeepOnTop();
+            if (previewMode) return;
             Thread worker = new Thread(RunUpdate);
             worker.IsBackground = true;
             worker.Start();
@@ -113,21 +139,59 @@ class AlpineUpdater {
         Application.Run(primary);
     }
 
-    static string ResolveBrandFontFamily() {
+    static float ResolveDpiScale() {
+        IntPtr screenDc = IntPtr.Zero;
         try {
-            using (new FontFamily("Segoe UI Variable Display")) { }
-            return "Segoe UI Variable Display";
+            screenDc = GetDC(IntPtr.Zero);
+            if (screenDc == IntPtr.Zero) return 1f;
+            int screenDpi = GetDeviceCaps(screenDc, LOGPIXELSY);
+            if (screenDpi > 0) return screenDpi / 96f;
+        } catch {
+        } finally {
+            if (screenDc != IntPtr.Zero) {
+                try { ReleaseDC(IntPtr.Zero, screenDc); } catch { }
+            }
+        }
+        return 1f;
+    }
+
+    static int ScaleUnits(int designUnits) {
+        return (int)Math.Round(designUnits * dpiScale);
+    }
+
+    static string ResolveBodyFontFamily() {
+        try {
+            using (new FontFamily("Segoe UI Variable Text")) { }
+            return "Segoe UI Variable Text";
         } catch (ArgumentException) {
             return "Segoe UI";
         }
     }
 
-    static Font BrandFont(float size, FontStyle style) {
+    static Font BodyFont(float size, FontStyle style) {
         try {
-            return new Font(brandFontFamily, size, style);
+            return new Font(bodyFontFamily, size, style);
         } catch (ArgumentException) {
             return new Font("Segoe UI", size, style);
         }
+    }
+
+    static void LoadDisplayFont() {
+        try {
+            if (displayFontPath.Length == 0 || !File.Exists(displayFontPath)) return;
+            displayFonts = new PrivateFontCollection();
+            displayFonts.AddFontFile(displayFontPath);
+            if (displayFonts.Families.Length > 0) displayFontFamily = displayFonts.Families[0];
+        } catch { }
+    }
+
+    static Font DisplayFont(float size) {
+        if (displayFontFamily != null) {
+            try {
+                return new Font(displayFontFamily, size, FontStyle.Regular);
+            } catch (ArgumentException) { }
+        }
+        return BodyFont(size, FontStyle.Regular);
     }
 
     static Image LoadBrandLogo() {
@@ -145,15 +209,13 @@ class AlpineUpdater {
         cover.FormBorderStyle = FormBorderStyle.None;
         cover.StartPosition = FormStartPosition.Manual;
         cover.Bounds = screen.Bounds;
-        cover.BackColor = GradientTop;
+        cover.BackColor = CoverGround;
         cover.TopMost = true;
         cover.ShowInTaskbar = false;
         cover.ControlBox = false;
         cover.Cursor = Cursors.WaitCursor;
 
-        Form gradientTarget = cover;
-
-        int logoSlotHeight = 48;
+        int logoSlotHeight = ScaleUnits(48);
         int logoSlotWidth = 0;
         if (brandLogo != null) {
             logoSlotWidth = (int)Math.Round((double)brandLogo.Width * logoSlotHeight / brandLogo.Height);
@@ -167,8 +229,8 @@ class AlpineUpdater {
             wordmark.Visible = false;
         } else {
             wordmark.Text = "Alpine Shell";
-            wordmark.ForeColor = Color.White;
-            wordmark.Font = BrandFont(26f, FontStyle.Bold);
+            wordmark.ForeColor = PrimaryInk;
+            wordmark.Font = DisplayFont(30f);
             wordmark.AutoSize = true;
             wordmark.UseCompatibleTextRendering = true;
         }
@@ -176,23 +238,17 @@ class AlpineUpdater {
 
         Label wordmarkSlot = wordmark;
         cover.Paint += delegate(object paintSender, PaintEventArgs paintArgs) {
+            if (brandLogo == null || wordmarkSlot.Top <= 0) return;
             Graphics g = paintArgs.Graphics;
-            Rectangle area = gradientTarget.ClientRectangle;
-            if (area.Width <= 0 || area.Height <= 0) return;
-            using (LinearGradientBrush background = new LinearGradientBrush(area, GradientTop, GradientBottom, LinearGradientMode.Vertical)) {
-                g.FillRectangle(background, area);
-            }
-            if (brandLogo != null && wordmarkSlot.Top > 0) {
-                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                g.PixelOffsetMode = PixelOffsetMode.Half;
-                g.DrawImage(brandLogo, wordmarkSlot.Bounds);
-            }
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.Half;
+            g.DrawImage(brandLogo, wordmarkSlot.Bounds);
         };
 
         Label title = new Label();
         title.Text = "Updating Alpine Shell";
-        title.ForeColor = Color.White;
-        title.Font = BrandFont(18f, FontStyle.Regular);
+        title.ForeColor = PrimaryInk;
+        title.Font = DisplayFont(20f);
         title.AutoSize = true;
         title.BackColor = Color.Transparent;
         title.UseCompatibleTextRendering = true;
@@ -202,12 +258,14 @@ class AlpineUpdater {
         subtitle.Text = version.Length > 0
             ? "Installing version " + version + " \u2014 please don't turn off your PC"
             : "Please don't turn off your PC";
-        subtitle.ForeColor = Color.FromArgb(179, 255, 255, 255);
-        subtitle.Font = BrandFont(11f, FontStyle.Regular);
+        subtitle.ForeColor = SecondaryInk;
+        subtitle.Font = BodyFont(11f, FontStyle.Regular);
         subtitle.AutoSize = true;
         subtitle.BackColor = Color.Transparent;
         subtitle.UseCompatibleTextRendering = true;
         cover.Controls.Add(subtitle);
+
+        if (previewMode) AllowPreviewDismissal(cover);
 
         Form captured = cover;
         Label capturedWordmark = wordmark;
@@ -220,10 +278,18 @@ class AlpineUpdater {
         return cover;
     }
 
+    static void AllowPreviewDismissal(Form cover) {
+        cover.KeyPreview = true;
+        cover.KeyDown += delegate(object keySender, KeyEventArgs keyArgs) {
+            if (keyArgs.KeyCode == Keys.Escape) Application.Exit();
+        };
+        cover.Click += delegate { Application.Exit(); };
+    }
+
     static void LayoutCover(Form cover, Control wordmark, Control title, Control subtitle) {
         int centerX = cover.ClientSize.Width / 2;
-        int wordmarkGap = 32;
-        int titleGap = 8;
+        int wordmarkGap = ScaleUnits(40);
+        int titleGap = ScaleUnits(10);
         int blockHeight = wordmark.Height + wordmarkGap + title.Height + titleGap + subtitle.Height;
         int top = (cover.ClientSize.Height - blockHeight) / 2;
 
