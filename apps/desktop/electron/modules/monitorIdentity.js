@@ -7,6 +7,8 @@ const DEVICE_INTERFACE_PREFIX = /^\\\\[?.]\\/
 const GUID_SEGMENT = /^\{[0-9a-fA-F-]+\}$/
 const INSTANCE_INDEX_SUFFIX = /_\d+$/
 
+const MAX_EDID_RESOLUTION_ATTEMPTS = 3
+
 function normalizeInstancePath(value) {
   if (typeof value !== 'string') return null
   const segments = value
@@ -75,6 +77,7 @@ function createMonitorIdentityCache() {
   const instancePathByAdapter = new Map()
   const stableKeyByInstancePath = new Map()
   let resolvedPortSignature = null
+  let invalidationEpoch = 0
 
   function instancePathForAdapter(adapterDeviceName, readInstancePath) {
     if (!adapterDeviceName) return null
@@ -103,24 +106,34 @@ function createMonitorIdentityCache() {
     return new Map(displays.map(display => [display.id, rememberedStableKey(display.instancePath)]))
   }
 
+  function unresolvedKeysFor(displays) {
+    return new Map(displays.map(display => [display.id, null]))
+  }
+
   async function stableKeysForDisplays(displays, readEdidRows) {
     const attached = displays ?? []
     const signature = attachedPortSignature(attached.map(display => display.instancePath))
     if (signature === resolvedPortSignature) return rememberedKeysFor(attached)
-    const edidByInstancePath = await readEdidRows()
-    const keysById = assignStableMonitorKeys(attached.map(display => ({
-      id: display.id,
-      instancePath: display.instancePath,
-      edid: edidByInstancePath.get(normalizeInstancePath(display.instancePath) ?? '') ?? null,
-    })), edidByInstancePath.values())
-    rememberResolution(attached, keysById)
-    return keysById
+    for (let attempt = 0; attempt < MAX_EDID_RESOLUTION_ATTEMPTS; attempt++) {
+      const epochWhenQueried = invalidationEpoch
+      const edidByInstancePath = await readEdidRows()
+      if (epochWhenQueried !== invalidationEpoch) continue
+      const keysById = assignStableMonitorKeys(attached.map(display => ({
+        id: display.id,
+        instancePath: display.instancePath,
+        edid: edidByInstancePath.get(normalizeInstancePath(display.instancePath) ?? '') ?? null,
+      })), edidByInstancePath.values())
+      rememberResolution(attached, keysById)
+      return keysById
+    }
+    return unresolvedKeysFor(attached)
   }
 
   function invalidate() {
     instancePathByAdapter.clear()
     stableKeyByInstancePath.clear()
     resolvedPortSignature = null
+    invalidationEpoch++
   }
 
   return { instancePathForAdapter, rememberedStableKey, stableKeysForDisplays, invalidate }

@@ -179,6 +179,41 @@ describe('createMonitorIdentityCache', () => {
     expect(cache.rememberedStableKey(LEFT_DELL_INTERFACE)).toBe(panelKey(RIGHT_DELL_SERIAL))
   })
 
+  it('discards panel identities that a display change invalidated while the query was in flight', async () => {
+    const cache = createMonitorIdentityCache()
+    let swapHappened = false
+    const readInterruptedByASwap = () => {
+      if (swapHappened) return Promise.resolve(dellEdidRows(RIGHT_DELL_SERIAL, LEFT_DELL_SERIAL))
+      swapHappened = true
+      cache.invalidate()
+      return Promise.resolve(dellEdidRows(LEFT_DELL_SERIAL, RIGHT_DELL_SERIAL))
+    }
+
+    const keys = await cache.stableKeysForDisplays(BOTH_DELLS, readInterruptedByASwap)
+
+    expect(keys.get(LEFT_DELL_DEVICE_NAME)).toBe(panelKey(RIGHT_DELL_SERIAL))
+    expect(keys.get(RIGHT_DELL_DEVICE_NAME)).toBe(panelKey(LEFT_DELL_SERIAL))
+    expect(cache.rememberedStableKey(LEFT_DELL_INTERFACE)).toBe(panelKey(RIGHT_DELL_SERIAL))
+    expect(cache.rememberedStableKey(RIGHT_DELL_INTERFACE)).toBe(panelKey(LEFT_DELL_SERIAL))
+  })
+
+  it('gives up on the panel identities rather than retrying forever while display changes keep arriving', async () => {
+    const cache = createMonitorIdentityCache()
+    let reads = 0
+    const readInterruptedEveryTime = () => {
+      reads++
+      if (reads > 10) throw new Error('stableKeysForDisplays retried without a bound')
+      cache.invalidate()
+      return Promise.resolve(dellEdidRows(LEFT_DELL_SERIAL, RIGHT_DELL_SERIAL))
+    }
+
+    const keys = await cache.stableKeysForDisplays(BOTH_DELLS, readInterruptedEveryTime)
+
+    expect(keys.get(LEFT_DELL_DEVICE_NAME)).toBeNull()
+    expect(keys.get(RIGHT_DELL_DEVICE_NAME)).toBeNull()
+    expect(cache.rememberedStableKey(LEFT_DELL_INTERFACE)).toBeNull()
+  })
+
   it('remembers no key for a port once the attached set is invalidated', async () => {
     const cache = createMonitorIdentityCache()
     await cache.stableKeysForDisplays(BOTH_DELLS, countingEdidReader(LEFT_DELL_SERIAL, RIGHT_DELL_SERIAL))
