@@ -46,6 +46,7 @@ const OPEN_APP_TIMEOUT_MS = 300000
 const fileHandlers = require('./modules/fileHandlers')
 const displayConfig = require('./modules/displayConfig')
 const clockPrefs = require('./modules/clockPrefs')
+const theme = require('./modules/theme')
 const bookmarks = require('./modules/bookmarks')
 const browserTabs = require('./modules/browserTabs')
 let googleCalendar = null
@@ -521,7 +522,7 @@ function createSetupWindow() {
     resizable: false,
     center: true,
     transparent: false,
-    backgroundColor: '#001C30',
+    backgroundColor: theme.getWindowBackground(),
     skipTaskbar: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -559,7 +560,7 @@ function createSettingsWindow() {
     transparent: false,
     skipTaskbar: false,
     show: false,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: theme.getWindowBackground(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -761,7 +762,7 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, theme, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
 
   setup.setShellShutdown(gracefulShutdown)
 

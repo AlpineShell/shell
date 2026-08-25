@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, Lock, RefreshCw, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from 'lucide-react'
+import Toggle from '../ui/toggle'
 
 function SignalIcon({ signal, color, size }: { signal: number; color: string; size: number }) {
   if (signal >= 70) return <Wifi color={color} size={size} />
@@ -90,7 +91,7 @@ export default function WifiSettingsPage() {
           >
             <RefreshCw size={15} className={scanning ? 'animate-spin' : ''} />
           </button>
-          <Toggle checked={enabled} onChange={toggleRadio} />
+          <Toggle label="Wi-Fi" checked={enabled} onChange={toggleRadio} />
         </div>
       </div>
 
@@ -220,25 +221,5 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
       {icon}
       <span className="text-sm">{text}</span>
     </div>
-  )
-}
-
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange(!checked)}
-      className={`relative shrink-0 cursor-pointer rounded-full transition-colors ${checked ? 'bg-white' : 'bg-white/15'}`}
-      style={{ width: 36, height: 20 }}
-    >
-      <span
-        className="absolute top-0.5 rounded-full transition-all"
-        style={{
-          width: 16,
-          height: 16,
-          left: checked ? 18 : 2,
-          backgroundColor: checked ? 'rgb(20,20,20)' : 'rgba(255,255,255,0.7)',
-        }}
-      />
-    </button>
   )
 }

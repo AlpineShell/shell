@@ -6,12 +6,14 @@ let bootWifi = null
 let bootSettingsIcon = null
 let bootSettingsPage = null
 let bootClockPrefs = null
+let bootTheme = { name: 'dark', background: '#1a1a19' }
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
 try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
 try { bootSettingsIcon = ipcRenderer.sendSync('windows/settings-icon') } catch {}
 try { bootSettingsPage = ipcRenderer.sendSync('windows/settings-init') } catch {}
 try { bootClockPrefs = ipcRenderer.sendSync('clock/prefs-init') } catch {}
+try { bootTheme = ipcRenderer.sendSync('theme/init') || bootTheme } catch {}
 
 ipcRenderer.on('windows/wallpaper-changed', (_, data) => { bootWallpaper = data })
 ipcRenderer.on('system/bluetooth-changed', (_, data) => { bootBluetooth = data })
@@ -48,6 +50,20 @@ function paintDesktopBackgroundEarly() {
   }
 }
 try { paintDesktopBackgroundEarly() } catch {}
+
+function paintThemeEarly() {
+  const apply = () => {
+    const el = document.documentElement
+    if (el) el.dataset.theme = bootTheme.name
+  }
+  apply()
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', apply, { once: true })
+  }
+}
+try { paintThemeEarly() } catch {}
+
+ipcRenderer.on('theme/changed', (_, data) => { bootTheme = data })
 
 contextBridge.exposeInMainWorld('topbar', {
   setActiveRegion: (region) => ipcRenderer.send('topbar/set-active-region', region),
@@ -263,6 +279,15 @@ contextBridge.exposeInMainWorld('setup', {
 
 contextBridge.exposeInMainWorld('shell', {
   settingsIcon: bootSettingsIcon,
+  theme: {
+    initial: bootTheme,
+    get: () => ipcRenderer.invoke('theme/get'),
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('theme/changed', handler)
+      return () => ipcRenderer.removeListener('theme/changed', handler)
+    },
+  },
   windows: {
     wallpaper: () => ipcRenderer.invoke('windows/wallpaper'),
     onWallpaperChanged: (callback) => {

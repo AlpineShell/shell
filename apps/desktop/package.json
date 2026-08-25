@@ -79,6 +79,11 @@
     ],
     "extraResources": [
       {
+        "from": "src/assets/fonts",
+        "to": "licenses/fonts",
+        "filter": ["OFL-*.txt"]
+      },
+      {
         "from": "public/cursor",
         "to": "cursor",
         "filter": ["**/*", "!Bibata-Modern-Ice/**"]

@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
+import PageTitle from '../ui/pageTitle'
+import Section from '../ui/section'
+import Row from '../ui/row'
+import Toggle from '../ui/toggle'
 
 const PRESET_COLORS = [
   { r: 48, g: 48, b: 48 },
@@ -61,13 +65,13 @@ export default function TopBarPage() {
   const isAuto = colorOverride === null
 
   return (
-    <div className="flex flex-col gap-8 w-full">
-      <h1 className="text-2xl font-semibold tracking-tight">Top Bar</h1>
+    <div className="flex w-full flex-col gap-section">
+      <PageTitle title="Top Bar" />
 
       <Section title="Color" subtitle="Pick a preset or use a color from your wallpaper.">
         <div className="flex flex-col gap-4">
           <div>
-            <span className="block text-xs text-white/50 mb-2">Presets</span>
+            <span className="mb-2 block text-eyebrow uppercase text-ink-quiet">Presets</span>
             <div className="flex flex-wrap gap-2">
               <Swatch
                 onClick={() => selectColor(null)}
@@ -89,7 +93,7 @@ export default function TopBarPage() {
 
           {palette.length > 0 && (
             <div>
-              <span className="block text-xs text-white/50 mb-2">From wallpaper</span>
+              <span className="mb-2 block text-eyebrow uppercase text-ink-quiet">From wallpaper</span>
               <div className="flex flex-wrap gap-2">
                 {palette.map((c, i) => (
                   <Swatch
@@ -107,35 +111,23 @@ export default function TopBarPage() {
       </Section>
 
       <Section title="Icon">
-        <ToggleRow
+        <Row
           label="Show search icon"
           description="Display the search button in the top bar. The hotkey still works either way."
-          checked={searchIcon}
-          onChange={toggleSearchIcon}
-        />
+        >
+          <Toggle label="Show search icon" checked={searchIcon} onChange={toggleSearchIcon} />
+        </Row>
       </Section>
 
       <Section title="Media">
-        <ToggleRow
+        <Row
           label="Show visualizer"
           description="Show the audio visualizer instead of the playing app's icon. The bars only animate for audio playing on this PC, so leave this off if you often play to other devices."
-          checked={showVisualizer}
-          onChange={toggleVisualizer}
-        />
+        >
+          <Toggle label="Show visualizer" checked={showVisualizer} onChange={toggleVisualizer} />
+        </Row>
       </Section>
     </div>
-  )
-}
-
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-base font-semibold">{title}</h2>
-        {subtitle && <p className="text-xs text-white/50 mt-1">{subtitle}</p>}
-      </div>
-      {children}
-    </section>
   )
 }
 
@@ -158,8 +150,8 @@ function Swatch({
     <button
       onClick={onClick}
       title={title}
-      className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-colors ${
-        selected ? 'border-white' : 'border-white/10 hover:border-white/30'
+      className={`focus-ring flex h-9 w-9 cursor-pointer items-center justify-center rounded-field border-2 transition-colors ${
+        selected ? 'border-focus-ring' : 'border-line-hairline hover:border-line-strong'
       }`}
       style={gradient ? { background: gradient } : { backgroundColor: bg }}
     >
@@ -174,38 +166,3 @@ function Swatch({
   )
 }
 
-function ToggleRow({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string
-  description?: string
-  checked: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <div className="text-sm">{label}</div>
-        {description && <div className="text-xs text-white/50 mt-0.5">{description}</div>}
-      </div>
-      <button
-        onClick={() => onChange(!checked)}
-        className={`shrink-0 relative rounded-full transition-colors cursor-pointer ${checked ? 'bg-white' : 'bg-white/15'}`}
-        style={{ width: 36, height: 20 }}
-      >
-        <span
-          className="absolute top-0.5 rounded-full transition-all"
-          style={{
-            width: 16,
-            height: 16,
-            left: checked ? 18 : 2,
-            backgroundColor: checked ? 'rgb(20,20,20)' : 'rgba(255,255,255,0.7)',
-          }}
-        />
-      </button>
-    </div>
-  )
-}

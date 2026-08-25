@@ -1,6 +1,98 @@
 export {}
 
 declare global {
+  type ThemeName = 'light' | 'dark'
+
+  interface ThemeState {
+    name: ThemeName
+    background: string
+  }
+
+  interface SectionProps {
+    title: string
+    subtitle?: string
+    children: import('react').ReactNode
+  }
+
+  interface PageTitleProps {
+    title: string
+    subtitle?: string
+  }
+
+  interface CardProps {
+    className?: string
+    children: import('react').ReactNode
+  }
+
+  interface RowProps {
+    label: string
+    description?: import('react').ReactNode
+    disabled?: boolean
+    children?: import('react').ReactNode
+  }
+
+  interface NavRowProps {
+    label: string
+    description?: string
+    icon?: import('react').ReactNode
+    onClick: () => void
+  }
+
+  interface ToggleProps {
+    checked: boolean
+    onChange: (value: boolean) => void
+    label: string
+    disabled?: boolean
+  }
+
+  interface SegmentedOption<T> {
+    value: T
+    label: string
+  }
+
+  interface SegmentedProps<T extends string | number> {
+    options: SegmentedOption<T>[]
+    value: T
+    onChange: (value: T) => void
+    label?: string
+  }
+
+  interface SelectProps<T extends string> {
+    options: SegmentedOption<T>[]
+    value: T
+    onChange: (value: T) => void
+    label: string
+  }
+
+  interface SliderProps {
+    min: number
+    max: number
+    value: number
+    onChange: (value: number) => void
+    label: string
+    suffix?: string
+  }
+
+  type ButtonVariant = 'primary' | 'outline' | 'ghost'
+
+  type ButtonSize = 'sm' | 'md'
+
+  interface ButtonProps {
+    onClick: () => void
+    children: import('react').ReactNode
+    variant?: ButtonVariant
+    size?: ButtonSize
+    disabled?: boolean
+    className?: string
+  }
+
+  interface IconButtonProps {
+    onClick: () => void
+    label: string
+    children: import('react').ReactNode
+    disabled?: boolean
+  }
+
 interface OpenApp {
   id: number
   hwnd: number
@@ -726,6 +818,11 @@ declare global {
     }
     shell: {
       settingsIcon: string
+      theme: {
+        initial: ThemeState
+        get: () => Promise<ThemeState>
+        onChanged: (callback: (theme: ThemeState) => void) => () => void
+      }
       windows: {
         wallpaper: () => Promise<string | null>
         onWallpaperChanged: (callback: (data: string | null) => void) => () => void
