@@ -584,6 +584,44 @@ declare global {
 
   type TopbarSlot = 'left' | 'center' | 'right'
 
+  type TopbarItemId =
+    | 'system-menu'
+    | 'plugins-left'
+    | 'notice'
+    | 'launcher'
+    | 'tray'
+    | 'media'
+    | 'microphone'
+    | 'status'
+    | 'plugins-right'
+    | 'clock'
+
+  type TopbarItemKind = 'element' | 'plugin-group'
+
+  interface TopbarItemDefinition {
+    id: TopbarItemId
+    slot: TopbarSlot
+    kind: TopbarItemKind
+    label: string
+  }
+
+  interface TopbarLayoutItem {
+    id: TopbarItemId
+    slot: TopbarSlot
+    order: number
+    visible: boolean
+  }
+
+  interface StoredTopbarLayout {
+    slots: Record<TopbarSlot, string[]>
+    hidden: string[]
+  }
+
+  interface TopbarLayoutPatch {
+    slots?: Partial<Record<TopbarSlot, string[]>>
+    hidden?: string[]
+  }
+
   interface TopbarWidgetContribution {
     type: 'topbar-widget'
     id: string
@@ -831,6 +869,10 @@ declare global {
       foregroundColor: () => Promise<ForegroundColorData[]>
       onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => () => void
       onCloseMenus: (callback: () => void) => () => void
+      layout: () => Promise<StoredTopbarLayout>
+      setLayout: (layout: TopbarLayoutPatch) => Promise<StoredTopbarLayout>
+      onLayoutChanged: (callback: (layout: StoredTopbarLayout) => void) => () => void
+      initialLayout: StoredTopbarLayout | null
     }
     shell: {
       settingsIcon: string

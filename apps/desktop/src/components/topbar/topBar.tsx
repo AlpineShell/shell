@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import Clock from "./clock";
 import StatusIndicator from "./status/statusIndicator";
 import SystemMenu from "./systemMenu";
@@ -12,6 +12,8 @@ import AltTabPanel from "./altTabPanel";
 import { warmRenderableEmojis } from "../../lib/emojiRenderable";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
+import { useTopbarLayout } from "../../hooks/useTopbarLayout";
+import { visibleTopbarSlotItems } from "./layout/topbarLayout";
 import ChromeCanvas from "./chrome/ChromeCanvas";
 import PluginSlot from "./pluginSlot";
 import NoticeStrip from "./noticeStrip";
@@ -20,9 +22,28 @@ import { loadTopbarPlugins } from "../../plugins/loadPlugins";
 
 const noop = () => {};
 
+const TOPBAR_ELEMENTS: Record<TopbarItemId, () => ReactNode> = {
+    "system-menu": () => <SystemMenu />,
+    "plugins-left": () => <PluginSlot slot="left" />,
+    notice: () => <NoticeStatus />,
+    launcher: () => <LauncherTrigger />,
+    tray: () => <SystemTray />,
+    media: () => <MediaStatus />,
+    microphone: () => <MicrophoneStatus />,
+    status: () => <StatusIndicator />,
+    "plugins-right": () => <PluginSlot slot="right" />,
+    clock: () => <Clock />,
+};
+
+const renderSlot = (layout: TopbarLayoutItem[], slot: TopbarSlot) =>
+    visibleTopbarSlotItems(layout, slot).map((item) => (
+        <Fragment key={item.id}>{TOPBAR_ELEMENTS[item.id]()}</Fragment>
+    ));
+
 export default function TopBar() {
     const wallpaperColor = useTopbarColor();
     const fgColor = useForegroundColor();
+    const layout = useTopbarLayout();
     const color = fgColor || wallpaperColor;
     const bg = color ? `rgb(${color.r},${color.g},${color.b})` : "rgb(31,32,32)";
     const darkText = color?.darkText ?? false;
@@ -54,20 +75,13 @@ export default function TopBar() {
                 onMouseLeave={() => setHovered(false)}
             >
                 <div className="flex items-center gap-1 relative z-1 self-stretch min-w-0">
-                    <SystemMenu />
-                    <PluginSlot slot="left" />
-                    <NoticeStatus />
+                    {renderSlot(layout, "left")}
                 </div>
                 <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center z-1">
-                    <LauncherTrigger />
+                    {renderSlot(layout, "center")}
                 </div>
                 <div className="flex items-center gap-1 mr-1 relative z-1 self-stretch">
-                    <SystemTray />
-                    <MediaStatus />
-                    <MicrophoneStatus />
-                    <StatusIndicator />
-                    <PluginSlot slot="right" />
-                    <Clock />
+                    {renderSlot(layout, "right")}
                 </div>
             </div>
             {launcherOpen && <LauncherPanel mode={launcherMode} />}

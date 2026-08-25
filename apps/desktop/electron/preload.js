@@ -6,6 +6,7 @@ let bootWifi = null
 let bootSettingsIcon = null
 let bootSettingsPage = null
 let bootClockPrefs = null
+let bootTopbarLayout = null
 let bootTheme = { name: 'dark', background: '#1a1a19' }
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
@@ -13,6 +14,7 @@ try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
 try { bootSettingsIcon = ipcRenderer.sendSync('windows/settings-icon') } catch {}
 try { bootSettingsPage = ipcRenderer.sendSync('windows/settings-init') } catch {}
 try { bootClockPrefs = ipcRenderer.sendSync('clock/prefs-init') } catch {}
+try { bootTopbarLayout = ipcRenderer.sendSync('topbar/layout-init') } catch {}
 try { bootTheme = ipcRenderer.sendSync('theme/init') || bootTheme } catch {}
 
 ipcRenderer.on('windows/wallpaper-changed', (_, data) => { bootWallpaper = data })
@@ -101,6 +103,14 @@ contextBridge.exposeInMainWorld('topbar', {
     ipcRenderer.on('topbar/close-menus', handler)
     return () => ipcRenderer.removeListener('topbar/close-menus', handler)
   },
+  layout: () => ipcRenderer.invoke('topbar/layout-get'),
+  setLayout: (layout) => ipcRenderer.invoke('topbar/layout-set', layout),
+  onLayoutChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('topbar/layout-changed', handler)
+    return () => ipcRenderer.removeListener('topbar/layout-changed', handler)
+  },
+  initialLayout: bootTopbarLayout,
 })
 
 contextBridge.exposeInMainWorld('plugins', {
