@@ -10,6 +10,8 @@ const {
   edidMonitorKey,
   portMonitorKey,
   assignStableMonitorKeys,
+  attachedPortSignature,
+  createMonitorIdentityCache,
   isPersistableMonitorKey,
   migratePersistedBaselines,
   parseMonitorEdidRows,
@@ -21,9 +23,31 @@ const LEFT_DELL_WMI_INSTANCE = 'DISPLAY\\DEL4278\\5&391b0070&0&UID278_0'
 const RIGHT_DELL_WMI_INSTANCE = 'DISPLAY\\DEL4278\\5&391b0070&0&UID257_0'
 const LEFT_DELL_SERIAL = '52KH2P3'
 const RIGHT_DELL_SERIAL = 'H1KH2P3'
+const LEFT_DELL_DEVICE_NAME = '\\\\.\\DISPLAY3'
+const RIGHT_DELL_DEVICE_NAME = '\\\\.\\DISPLAY2'
 
 function dell(serial) {
   return { manufacturer: 'DEL', productCode: '4278', serial }
+}
+
+function panelKey(serial) {
+  return `${EDID_KEY_PREFIX}DEL-4278-${serial}`
+}
+
+function dellEdidRows(leftSerial, rightSerial) {
+  return parseMonitorEdidRows([
+    `${LEFT_DELL_WMI_INSTANCE}|DEL|4278|${leftSerial}`,
+    `${RIGHT_DELL_WMI_INSTANCE}|DEL|4278|${rightSerial}`,
+  ].join('\r\n'))
+}
+
+function countingEdidReader(leftSerial, rightSerial) {
+  const reader = () => {
+    reader.calls++
+    return Promise.resolve(dellEdidRows(leftSerial, rightSerial))
+  }
+  reader.calls = 0
+  return reader
 }
 
 describe('normalizeInstancePath', () => {
@@ -100,6 +124,134 @@ describe('assignStableMonitorKeys', () => {
       { id: 'ddc-0', instancePath: null, edid: null },
     ])
     expect(keys.get('ddc-0')).toBeNull()
+  })
+
+  it('falls back to the port when a panel outside the enumerable set reports the same serial', () => {
+    const keys = assignStableMonitorKeys(
+      [{ id: 'left', instancePath: LEFT_DELL_INTERFACE, edid: dell(LEFT_DELL_SERIAL) }],
+      [dell(LEFT_DELL_SERIAL), dell(LEFT_DELL_SERIAL)],
+    )
+    expect(keys.get('left')).toBe(portMonitorKey(LEFT_DELL_INTERFACE))
+  })
+
+  it('keeps the EDID key when the wider attached set reports that serial exactly once', () => {
+    const keys = assignStableMonitorKeys(
+      [{ id: 'left', instancePath: LEFT_DELL_INTERFACE, edid: dell(LEFT_DELL_SERIAL) }],
+      [dell(LEFT_DELL_SERIAL), dell(RIGHT_DELL_SERIAL)],
+    )
+    expect(keys.get('left')).toBe(panelKey(LEFT_DELL_SERIAL))
+  })
+})
+
+describe('attachedPortSignature', () => {
+  it('does not depend on the order the displays are enumerated in', () => {
+    expect(attachedPortSignature([LEFT_DELL_INTERFACE, RIGHT_DELL_INTERFACE]))
+      .toBe(attachedPortSignature([RIGHT_DELL_INTERFACE, LEFT_DELL_INTERFACE]))
+  })
+
+  it('changes when a display leaves the attached set', () => {
+    expect(attachedPortSignature([LEFT_DELL_INTERFACE, RIGHT_DELL_INTERFACE]))
+      .not.toBe(attachedPortSignature([LEFT_DELL_INTERFACE]))
+  })
+
+  it('folds the device interface name and the WMI instance name onto one signature', () => {
+    expect(attachedPortSignature([LEFT_DELL_INTERFACE])).toBe(attachedPortSignature([LEFT_DELL_WMI_INSTANCE]))
+  })
+})
+
+describe('createMonitorIdentityCache', () => {
+  const BOTH_DELLS = [
+    { id: LEFT_DELL_DEVICE_NAME, instancePath: LEFT_DELL_INTERFACE },
+    { id: RIGHT_DELL_DEVICE_NAME, instancePath: RIGHT_DELL_INTERFACE },
+  ]
+
+  it('gives a panel moved one port over its own key, not the key cached for that port', async () => {
+    const cache = createMonitorIdentityCache()
+    const beforeSwap = await cache.stableKeysForDisplays(BOTH_DELLS, countingEdidReader(LEFT_DELL_SERIAL, RIGHT_DELL_SERIAL))
+    expect(beforeSwap.get(LEFT_DELL_DEVICE_NAME)).toBe(panelKey(LEFT_DELL_SERIAL))
+    expect(cache.rememberedStableKey(LEFT_DELL_INTERFACE)).toBe(panelKey(LEFT_DELL_SERIAL))
+
+    cache.invalidate()
+
+    const afterSwap = await cache.stableKeysForDisplays(BOTH_DELLS, countingEdidReader(RIGHT_DELL_SERIAL, LEFT_DELL_SERIAL))
+    expect(afterSwap.get(LEFT_DELL_DEVICE_NAME)).toBe(panelKey(RIGHT_DELL_SERIAL))
+    expect(afterSwap.get(RIGHT_DELL_DEVICE_NAME)).toBe(panelKey(LEFT_DELL_SERIAL))
+    expect(cache.rememberedStableKey(LEFT_DELL_INTERFACE)).toBe(panelKey(RIGHT_DELL_SERIAL))
+  })
+
+  it('remembers no key for a port once the attached set is invalidated', async () => {
+    const cache = createMonitorIdentityCache()
+    await cache.stableKeysForDisplays(BOTH_DELLS, countingEdidReader(LEFT_DELL_SERIAL, RIGHT_DELL_SERIAL))
+    cache.invalidate()
+    expect(cache.rememberedStableKey(LEFT_DELL_INTERFACE)).toBeNull()
+  })
+
+  it('reads the panel identities again after invalidation, though every display already carried a key', async () => {
+    const cache = createMonitorIdentityCache()
+    const reader = countingEdidReader(LEFT_DELL_SERIAL, RIGHT_DELL_SERIAL)
+    await cache.stableKeysForDisplays(BOTH_DELLS, reader)
+    cache.invalidate()
+    await cache.stableKeysForDisplays(BOTH_DELLS, reader)
+    expect(reader.calls).toBe(2)
+  })
+
+  it('reads the panel identities again when a display leaves the attached set', async () => {
+    const cache = createMonitorIdentityCache()
+    const reader = countingEdidReader(LEFT_DELL_SERIAL, RIGHT_DELL_SERIAL)
+    await cache.stableKeysForDisplays(BOTH_DELLS, reader)
+    await cache.stableKeysForDisplays([BOTH_DELLS[0]], reader)
+    expect(reader.calls).toBe(2)
+  })
+
+  it('does not read the panel identities again while the attached set is unchanged', async () => {
+    const cache = createMonitorIdentityCache()
+    const reader = countingEdidReader(LEFT_DELL_SERIAL, RIGHT_DELL_SERIAL)
+    await cache.stableKeysForDisplays(BOTH_DELLS, reader)
+    const again = await cache.stableKeysForDisplays(BOTH_DELLS, reader)
+    expect(reader.calls).toBe(1)
+    expect(again.get(LEFT_DELL_DEVICE_NAME)).toBe(panelKey(LEFT_DELL_SERIAL))
+  })
+
+  it('keys an enumerable panel by its port when a panel it cannot enumerate reports the same serial', async () => {
+    const cache = createMonitorIdentityCache()
+    const keys = await cache.stableKeysForDisplays([BOTH_DELLS[0]], countingEdidReader(LEFT_DELL_SERIAL, LEFT_DELL_SERIAL))
+    expect(keys.get(LEFT_DELL_DEVICE_NAME)).toBe(portMonitorKey(LEFT_DELL_INTERFACE))
+  })
+
+  it('reads a display device path once per adapter name', () => {
+    const cache = createMonitorIdentityCache()
+    const asked = []
+    const read = (adapter) => { asked.push(adapter); return LEFT_DELL_INTERFACE }
+    expect(cache.instancePathForAdapter(LEFT_DELL_DEVICE_NAME, read)).toBe(LEFT_DELL_INTERFACE)
+    expect(cache.instancePathForAdapter(LEFT_DELL_DEVICE_NAME, read)).toBe(LEFT_DELL_INTERFACE)
+    expect(asked).toEqual([LEFT_DELL_DEVICE_NAME])
+  })
+
+  it('reads the display device path again after a display change, because the name may name another port', () => {
+    const cache = createMonitorIdentityCache()
+    let attachedPath = LEFT_DELL_INTERFACE
+    const read = () => attachedPath
+    expect(cache.instancePathForAdapter(LEFT_DELL_DEVICE_NAME, read)).toBe(LEFT_DELL_INTERFACE)
+    cache.invalidate()
+    attachedPath = RIGHT_DELL_INTERFACE
+    expect(cache.instancePathForAdapter(LEFT_DELL_DEVICE_NAME, read)).toBe(RIGHT_DELL_INTERFACE)
+  })
+
+  it('remembers that an adapter reported no device path instead of asking again', () => {
+    const cache = createMonitorIdentityCache()
+    let asked = 0
+    const read = () => { asked++; return null }
+    expect(cache.instancePathForAdapter(LEFT_DELL_DEVICE_NAME, read)).toBeNull()
+    expect(cache.instancePathForAdapter(LEFT_DELL_DEVICE_NAME, read)).toBeNull()
+    expect(asked).toBe(1)
+  })
+
+  it('never asks Windows for the device path of a display with no adapter name', () => {
+    const cache = createMonitorIdentityCache()
+    let asked = 0
+    const read = () => { asked++; return LEFT_DELL_INTERFACE }
+    expect(cache.instancePathForAdapter(null, read)).toBeNull()
+    expect(asked).toBe(0)
   })
 })
 

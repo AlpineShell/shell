@@ -38,22 +38,24 @@ function portMonitorKey(instancePath) {
   return normalized ? `${PORT_KEY_PREFIX}${normalized}` : null
 }
 
-function countKeys(candidates) {
+function countKeys(keys) {
   const counts = new Map()
-  for (const candidate of candidates) {
-    if (!candidate.edidKey) continue
-    counts.set(candidate.edidKey, (counts.get(candidate.edidKey) ?? 0) + 1)
+  for (const key of keys) {
+    if (!key) continue
+    counts.set(key, (counts.get(key) ?? 0) + 1)
   }
   return counts
 }
 
-function assignStableMonitorKeys(descriptors) {
+function assignStableMonitorKeys(descriptors, attachedPanelEdids) {
   const candidates = (descriptors ?? []).map(descriptor => ({
     id: descriptor.id,
     edidKey: edidMonitorKey(descriptor.edid),
     portKey: portMonitorKey(descriptor.instancePath),
   }))
-  const edidKeyCounts = countKeys(candidates)
+  const edidKeyCounts = countKeys(attachedPanelEdids
+    ? [...attachedPanelEdids].map(edidMonitorKey)
+    : candidates.map(candidate => candidate.edidKey))
   const keys = new Map()
   for (const candidate of candidates) {
     const unambiguousEdidKey = candidate.edidKey && edidKeyCounts.get(candidate.edidKey) === 1
@@ -62,6 +64,66 @@ function assignStableMonitorKeys(descriptors) {
     keys.set(candidate.id, unambiguousEdidKey ?? candidate.portKey ?? null)
   }
   return keys
+}
+
+function attachedPortSignature(instancePaths) {
+  const ports = (instancePaths ?? []).map(normalizeInstancePath).filter(Boolean)
+  return [...new Set(ports)].sort().join('|')
+}
+
+function createMonitorIdentityCache() {
+  const instancePathByAdapter = new Map()
+  const stableKeyByInstancePath = new Map()
+  let resolvedPortSignature = null
+
+  function instancePathForAdapter(adapterDeviceName, readInstancePath) {
+    if (!adapterDeviceName) return null
+    if (!instancePathByAdapter.has(adapterDeviceName)) {
+      instancePathByAdapter.set(adapterDeviceName, readInstancePath(adapterDeviceName) ?? null)
+    }
+    return instancePathByAdapter.get(adapterDeviceName)
+  }
+
+  function rememberedStableKey(instancePath) {
+    const normalized = normalizeInstancePath(instancePath)
+    if (!normalized) return null
+    return stableKeyByInstancePath.get(normalized) ?? null
+  }
+
+  function rememberResolution(displays, keysById) {
+    for (const display of displays) {
+      const normalized = normalizeInstancePath(display.instancePath)
+      const stableKey = keysById.get(display.id)
+      if (normalized && stableKey) stableKeyByInstancePath.set(normalized, stableKey)
+    }
+    resolvedPortSignature = attachedPortSignature(displays.map(display => display.instancePath))
+  }
+
+  function rememberedKeysFor(displays) {
+    return new Map(displays.map(display => [display.id, rememberedStableKey(display.instancePath)]))
+  }
+
+  async function stableKeysForDisplays(displays, readEdidRows) {
+    const attached = displays ?? []
+    const signature = attachedPortSignature(attached.map(display => display.instancePath))
+    if (signature === resolvedPortSignature) return rememberedKeysFor(attached)
+    const edidByInstancePath = await readEdidRows()
+    const keysById = assignStableMonitorKeys(attached.map(display => ({
+      id: display.id,
+      instancePath: display.instancePath,
+      edid: edidByInstancePath.get(normalizeInstancePath(display.instancePath) ?? '') ?? null,
+    })), edidByInstancePath.values())
+    rememberResolution(attached, keysById)
+    return keysById
+  }
+
+  function invalidate() {
+    instancePathByAdapter.clear()
+    stableKeyByInstancePath.clear()
+    resolvedPortSignature = null
+  }
+
+  return { instancePathForAdapter, rememberedStableKey, stableKeysForDisplays, invalidate }
 }
 
 function isPersistableMonitorKey(key) {
@@ -112,6 +174,8 @@ module.exports = {
   edidMonitorKey,
   portMonitorKey,
   assignStableMonitorKeys,
+  attachedPortSignature,
+  createMonitorIdentityCache,
   isPersistableMonitorKey,
   migratePersistedBaselines,
   parseMonitorEdidRows,
