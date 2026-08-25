@@ -1957,7 +1957,7 @@ function LauncherBrightness({ darkText, onBack, monitors, setBrightness }: { dar
   const items: LauncherMenuItem[] = monitors.map((m): LauncherMenuItem => ({
     id: m.id,
     kind: "slider",
-    label: m.name,
+    label: m.brightnessWritable ? m.name : `${m.name} (not responding)`,
     icon: Monitor,
     value: m.brightness,
     min: 0,

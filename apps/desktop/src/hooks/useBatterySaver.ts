@@ -5,6 +5,7 @@ const DEFAULT_CONFIG: BatterySaverConfig = {
   automaticEnabled: true,
   thresholdPercent: 20,
   dimDisplays: true,
+  dimExternalDisplays: false,
   brightnessReductionPercent: 30,
   reduceBackgroundPolling: true,
   throttleProcesses: false,

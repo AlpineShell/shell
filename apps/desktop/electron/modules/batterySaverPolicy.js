@@ -1,3 +1,5 @@
+const { isPersistableMonitorKey } = require('./monitorIdentity')
+
 const THRESHOLD_MIN_PERCENT = 5
 const THRESHOLD_MAX_PERCENT = 90
 const THRESHOLD_DEFAULT_PERCENT = 20
@@ -15,6 +17,7 @@ const DEFAULT_CONFIG = {
   automaticEnabled: true,
   thresholdPercent: THRESHOLD_DEFAULT_PERCENT,
   dimDisplays: true,
+  dimExternalDisplays: false,
   brightnessReductionPercent: BRIGHTNESS_REDUCTION_DEFAULT_PERCENT,
   reduceBackgroundPolling: true,
   throttleProcesses: false,
@@ -24,6 +27,10 @@ function clampPercent(value, min, max, fallback) {
   const rounded = Math.round(Number(value))
   if (!Number.isFinite(rounded)) return fallback
   return Math.max(min, Math.min(max, rounded))
+}
+
+function clampBrightnessPercent(value) {
+  return clampPercent(value, 0, 100, 0)
 }
 
 function clampThresholdPercent(value) {
@@ -40,6 +47,7 @@ function mergeConfig(current, partial) {
   if (typeof partial.automaticEnabled === 'boolean') merged.automaticEnabled = partial.automaticEnabled
   if (partial.thresholdPercent !== undefined) merged.thresholdPercent = clampThresholdPercent(partial.thresholdPercent)
   if (typeof partial.dimDisplays === 'boolean') merged.dimDisplays = partial.dimDisplays
+  if (typeof partial.dimExternalDisplays === 'boolean') merged.dimExternalDisplays = partial.dimExternalDisplays
   if (partial.brightnessReductionPercent !== undefined) merged.brightnessReductionPercent = clampBrightnessReductionPercent(partial.brightnessReductionPercent)
   if (typeof partial.reduceBackgroundPolling === 'boolean') merged.reduceBackgroundPolling = partial.reduceBackgroundPolling
   if (typeof partial.throttleProcesses === 'boolean') merged.throttleProcesses = partial.throttleProcesses
@@ -50,6 +58,19 @@ function dimmedBrightness(baselinePercent, reductionPercent) {
   const reduced = Math.round((baselinePercent * (100 - reductionPercent)) / 100)
   if (reduced < MIN_SAVER_BRIGHTNESS_PERCENT) return Math.min(baselinePercent, MIN_SAVER_BRIGHTNESS_PERCENT)
   return reduced
+}
+
+function isBatteryPoweredDisplay(monitor) {
+  return !!monitor && monitor.type === 'internal'
+}
+
+function isDimmableDisplay(monitor, dimExternalDisplays) {
+  if (!monitor || !isPersistableMonitorKey(monitor.stableKey)) return false
+  return isBatteryPoweredDisplay(monitor) || !!dimExternalDisplays
+}
+
+function displaysToDim(monitors, dimExternalDisplays) {
+  return (monitors ?? []).filter(monitor => isDimmableDisplay(monitor, dimExternalDisplays))
 }
 
 function isPluggedIn(battery) {
@@ -96,9 +117,13 @@ module.exports = {
   isPluggedIn,
   normalizeOverride,
   clampThresholdPercent,
+  clampBrightnessPercent,
   clampBrightnessReductionPercent,
   mergeConfig,
   dimmedBrightness,
+  isBatteryPoweredDisplay,
+  isDimmableDisplay,
+  displaysToDim,
   resolveBatterySaverActivation,
   shouldResetOverride,
 }
