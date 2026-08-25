@@ -489,14 +489,22 @@ function startBrandedUpdate(installerPath, version) {
   if (!installerPath || !fs.existsSync(installerPath)) return false
   const updaterExe = ensureUpdaterExe()
   if (!updaterExe) return false
-  const logoPath = path.join(path.dirname(getUpdaterSourcePath()), 'alpineWordmark.png')
+  const brandingDir = path.dirname(getUpdaterSourcePath())
+  const logoPath = path.join(brandingDir, 'alpineWordmark.png')
+  const displayFontPath = path.join(brandingDir, 'averiaSerifLibre.ttf')
   if (!beginUpdateHandoff()) {
     console.error('[installer] Could not mark the update in progress — leaving the shell registration alone')
     return false
   }
   try {
     regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
-    spawn(updaterExe, [installerPath, getInstalledExePath(), version || '', fs.existsSync(logoPath) ? logoPath : ''], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    spawn(updaterExe, [
+      installerPath,
+      getInstalledExePath(),
+      version || '',
+      fs.existsSync(logoPath) ? logoPath : '',
+      fs.existsSync(displayFontPath) ? displayFontPath : '',
+    ], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
     return true
   } catch (e) {
     clearUpdateHandoff()

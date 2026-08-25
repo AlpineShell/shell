@@ -105,6 +105,32 @@ shell-replacement lifecycle with the NSIS installer:
 The legacy portable `--uninstall` path and `registerUninstaller()` remain for backward
 compatibility but are unused by NSIS installs.
 
+## Previewing the Update Screen
+
+`apps/desktop/electron/scripts/updaterScreen.cs` is the full-screen cover shown while Alpine updates
+itself. It is compiled at runtime by the in-box C# 5 compiler and only appears during a real update —
+`installer.startBrandedUpdate()` returns early when the app is not packaged, so it never shows in a
+dev run. To look at it without performing an update, compile it by hand and pass `--preview`:
+
+```powershell
+$csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+$scripts = "apps\desktop\electron\scripts"
+& $csc /nologo /optimize /target:winexe /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll `
+  /out:AlpineUpdater.exe "$scripts\updaterScreen.cs"
+.\AlpineUpdater.exe --preview "" "" 0.9.9 "$scripts\alpineWordmark.png" "$scripts\averiaSerifLibre.ttf"
+```
+
+`--preview` skips the low-level keyboard guard, the taskbar suppression and the update worker
+thread, and closes the cover on click or Escape. **Never run the compiled exe without it** — bare,
+it kills `explorer.exe`, rewrites the shell registration and waits up to 60s for an installer that
+is not coming.
+
+The positional arguments are exactly the ones `startBrandedUpdate()` passes: installer path,
+installed exe path, version, wordmark PNG, and the Averia Serif Libre TTF. The last two are
+optional; the screen falls back to Segoe UI Variable Text and a text wordmark when either is
+missing. The source hash names the cached exe under `%APPDATA%\Alpine Shell\updater\`, so editing
+the source invalidates the cache on its own.
+
 ## Publishing a Plugin
 
 Plugins are published to the marketplace object store with `scripts/publishPlugin.js`:
