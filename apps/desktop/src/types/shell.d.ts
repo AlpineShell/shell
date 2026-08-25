@@ -603,6 +603,11 @@ declare global {
     hidden: string[]
   }
 
+  interface TopbarLayoutPatch {
+    slots?: Partial<Record<TopbarSlot, string[]>>
+    hidden?: string[]
+  }
+
   interface TopbarWidgetContribution {
     type: 'topbar-widget'
     id: string
@@ -851,7 +856,7 @@ declare global {
       onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => () => void
       onCloseMenus: (callback: () => void) => () => void
       layout: () => Promise<StoredTopbarLayout>
-      setLayout: (layout: Partial<StoredTopbarLayout>) => Promise<StoredTopbarLayout>
+      setLayout: (layout: TopbarLayoutPatch) => Promise<StoredTopbarLayout>
       onLayoutChanged: (callback: (layout: StoredTopbarLayout) => void) => () => void
       initialLayout: StoredTopbarLayout | null
     }

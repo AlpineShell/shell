@@ -31,6 +31,34 @@ function acceptsItem(definition: TopbarItemDefinition, slot: TopbarSlot): boolea
   return definition.kind !== 'plugin-group' || definition.slot === slot
 }
 
+const EARLIER_IN_CATALOGUE = -1
+const LATER_IN_CATALOGUE = 1
+
+function catalogueIndex(id: TopbarItemId): number {
+  return TOPBAR_ITEMS.findIndex((item) => item.id === id)
+}
+
+function nearestNeighbourPosition(placed: TopbarItemId[], index: number, direction: -1 | 1): number {
+  let position = -1
+  let distance = Infinity
+  placed.forEach((id, at) => {
+    const gap = (catalogueIndex(id) - index) * direction
+    if (gap > 0 && gap < distance) {
+      distance = gap
+      position = at
+    }
+  })
+  return position
+}
+
+function catalogueInsertionPosition(placed: TopbarItemId[], id: TopbarItemId): number {
+  const index = catalogueIndex(id)
+  const predecessor = nearestNeighbourPosition(placed, index, EARLIER_IN_CATALOGUE)
+  if (predecessor >= 0) return predecessor + 1
+  const successor = nearestNeighbourPosition(placed, index, LATER_IN_CATALOGUE)
+  return successor >= 0 ? successor : placed.length
+}
+
 function placeStoredItems(stored: StoredTopbarLayout | null | undefined): Record<TopbarSlot, TopbarItemId[]> {
   const bySlot: Record<TopbarSlot, TopbarItemId[]> = { left: [], center: [], right: [] }
   const placed = new Set<TopbarItemId>()
@@ -46,7 +74,8 @@ function placeStoredItems(stored: StoredTopbarLayout | null | undefined): Record
   for (const definition of TOPBAR_ITEMS) {
     if (placed.has(definition.id)) continue
     placed.add(definition.id)
-    bySlot[definition.slot].push(definition.id)
+    const target = bySlot[definition.slot]
+    target.splice(catalogueInsertionPosition(target, definition.id), 0, definition.id)
   }
 
   return bySlot

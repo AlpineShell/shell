@@ -4,7 +4,11 @@ const path = require('path')
 const STORE_FILE = 'topbar-layout.json'
 const SLOTS = ['left', 'center', 'right']
 
-let slots = { left: [], center: [], right: [] }
+function emptySlots() {
+  return { left: [], center: [], right: [] }
+}
+
+let slots = emptySlots()
 let hidden = []
 let storePath = null
 let broadcastRef = null
@@ -21,9 +25,11 @@ function sanitizeIds(value) {
   return Array.isArray(value) ? value.filter((id) => typeof id === 'string') : []
 }
 
-function sanitizeSlots(value) {
-  const next = {}
-  for (const slot of SLOTS) next[slot] = sanitizeIds(value && value[slot])
+function mergeSlots(current, value) {
+  const next = { ...current }
+  for (const slot of SLOTS) {
+    if (Array.isArray(value && value[slot])) next[slot] = sanitizeIds(value[slot])
+  }
   return next
 }
 
@@ -36,7 +42,7 @@ function load() {
     const file = getStorePath()
     if (!fs.existsSync(file)) return
     const data = JSON.parse(fs.readFileSync(file, 'utf8'))
-    slots = sanitizeSlots(data.slots)
+    slots = mergeSlots(emptySlots(), data.slots)
     hidden = sanitizeIds(data.hidden)
   } catch (e) {
     console.error('[topbarLayout] load error:', e.message)
@@ -55,8 +61,8 @@ function save() {
 
 function applyPartial(partial) {
   if (!partial || typeof partial !== 'object') return
-  if (partial.slots) slots = sanitizeSlots(partial.slots)
-  if (partial.hidden) hidden = sanitizeIds(partial.hidden)
+  slots = mergeSlots(slots, partial.slots)
+  if (Array.isArray(partial.hidden)) hidden = sanitizeIds(partial.hidden)
 }
 
 module.exports = {
