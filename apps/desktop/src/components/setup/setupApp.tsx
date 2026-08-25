@@ -1,29 +1,56 @@
 import { useState, useEffect } from 'react'
 import { Check, X, AlertTriangle, FlaskConical } from 'lucide-react'
+import { useTheme } from '../../hooks/useTheme'
+import Button from '../ui/button'
+import Card from '../ui/card'
+import IconButton from '../ui/iconButton'
+import PageTitle from '../ui/pageTitle'
+import Row from '../ui/row'
+import Toggle from '../ui/toggle'
 
 type Page = 'welcome' | 'options' | 'installing' | 'complete' | 'error'
-
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange(!checked)}
-      className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${
-        checked ? 'bg-white' : 'bg-neutral-700'
-      }`}
-    >
-      <div
-        className={`w-5 h-5 rounded-full absolute top-0.5 transition-all ${
-          checked ? 'left-5.5 bg-neutral-950' : 'left-0.5 bg-neutral-400'
-        }`}
-      />
-    </button>
-  )
-}
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
 
+const wordmarkSource = 'url("./AlpineShellLogo.svg")'
+const wordmarkMask: React.CSSProperties = {
+  maskImage: wordmarkSource,
+  WebkitMaskImage: wordmarkSource,
+  maskSize: 'contain',
+  WebkitMaskSize: 'contain',
+  maskRepeat: 'no-repeat',
+  WebkitMaskRepeat: 'no-repeat',
+}
+
+function OutcomeBadge({ tone, children }: OutcomeBadgeProps) {
+  return (
+    <div
+      className={`flex h-12 w-12 items-center justify-center rounded-full ${
+        tone === 'success' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
+      }`}
+    >
+      {children}
+    </div>
+  )
+}
+
+function OutcomeNote({ tone, children }: OutcomeNoteProps) {
+  return (
+    <p className={`flex items-center gap-2 ${tone === 'warning' ? 'text-warning' : 'text-ink-quiet'}`}>
+      {tone === 'warning' ? (
+        <AlertTriangle size={11} className="shrink-0" />
+      ) : (
+        <Check size={11} className="shrink-0 text-success" />
+      )}
+      {children}
+    </p>
+  )
+}
+
 export default function SetupApp() {
+  useTheme()
+
   const [page, setPage] = useState<Page>('welcome')
   const [installCursor, setInstallCursor] = useState(true)
   const [status, setStatus] = useState<SetupStatus | null>(null)
@@ -38,7 +65,6 @@ export default function SetupApp() {
   const isUpdate = !!status && !status.isFirstRun
   const verb = isUpdate ? 'Update' : 'Install'
   const verbIng = isUpdate ? 'Updating' : 'Installing'
-  const verbPast = isUpdate ? 'updated' : 'installed'
 
   async function handleInstall() {
     setCurrentStep('')
@@ -52,194 +78,132 @@ export default function SetupApp() {
     window.setup.testOut()
   }
 
-
   return (
-    <div className="w-screen h-screen bg-linear-to-br from-[#001C30] to-[#005896] text-white flex flex-col overflow-hidden relative">
-      <div className="absolute inset-0 opacity-[0.6] mix-blend-overlay pointer-events-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")', backgroundSize: '200px 200px' }} />
-      <div className="h-8 flex items-center justify-end px-2 shrink-0 relative z-10" style={dragRegion}>
-        <button
-          onClick={() => window.close()}
-          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
-          style={noDragRegion}
-        >
-          <X size={14} strokeWidth={2.5} />
-        </button>
+    <div className="settings-scope flex h-screen w-screen flex-col overflow-hidden bg-surface-0 text-ink-primary">
+      <div className="flex h-9 shrink-0 items-center justify-end px-2" style={dragRegion}>
+        <div style={noDragRegion}>
+          <IconButton label="Close" onClick={() => window.close()}>
+            <X size={14} />
+          </IconButton>
+        </div>
       </div>
 
-      <div className="flex-1 flex flex-col px-10 pt-2 pb-5 relative z-10">
+      <div className="flex flex-1 flex-col px-8 pt-1 pb-8">
         {page === 'welcome' && (
-          <div className="flex-1 flex justify-between flex-col">
-            <div>
-              <img src="./AlpineShellLogo.svg" className="w-fit h-10 mb-4" />
-              <p className="text-white text-[19px] leading">
+          <div className="flex flex-1 flex-col">
+            <div className="flex flex-1 flex-col justify-center">
+              <div className="aspect-[193/34] h-8 bg-ink-primary" style={wordmarkMask} role="img" aria-label="Alpine Shell" />
+              <p className="mt-5 text-base text-ink-secondary">
                 Welcome to a faster, cleaner Windows experience
               </p>
             </div>
-            <div>
-              <button
-                onClick={handleInstall}
-                className="w-full h-11 bg-white cursor-pointer text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors"
-              >
+            <div className="flex flex-col gap-2.5">
+              <Button className="w-full" onClick={handleInstall}>
                 {verb}
-              </button>
+              </Button>
               {!isUpdate && (
-                <button
-                  onClick={handleTestOut}
-                  className="mt-3 w-full h-13 cursor-pointer rounded-lg border border-white/20 text-white text-sm hover:bg-white/5 transition-colors flex flex-col items-center justify-center"
-                >
-                  <div className='flex items-center gap-1'>
-                    <FlaskConical size={14} />
-                    Test Out
-                  </div>
-                  <span className="text-white/50 text-xs"> Resets on restart</span>
-                </button>
+                <Button className="w-full" variant="outline" onClick={handleTestOut}>
+                  <FlaskConical size={14} />
+                  Test Out
+                  <span className="text-ink-quiet">Resets on restart</span>
+                </Button>
               )}
-              <button
-                onClick={() => setPage('options')}
-                className="mt-3 w-full h-11 cursor-pointer text-white text-sm hover:text-neutral-300 transition-colors"
-              >
+              <Button className="w-full" variant="ghost" onClick={() => setPage('options')}>
                 Customize {verb}
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {page === 'options' && (
-          <div className="flex-1 flex justify-between flex-col">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Configure</h1>
-              <p className="text-neutral-400 mt-2 text-sm">Choose what to set up.</p>
+          <div className="flex flex-1 flex-col justify-between">
+            <div className="flex flex-col gap-5">
+              <PageTitle title="Configure" subtitle="Choose what to set up." />
 
-              <div className="mt-8 space-y-6">
-                {status?.gpoBlocked && (
-                  <div className="flex items-center gap-1.5 text-amber-400 text-xs">
-                    <AlertTriangle size={12} />
-                    <span>Group Policy may prevent shell replacement</span>
-                  </div>
-                )}
-
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-[15px] font-medium">Custom Cursor</div>
-                    <div className="text-sm text-white/60 mt-0.5">
-                      Install the Bibata cursor pack
-                    </div>
-                  </div>
-                  <Toggle checked={installCursor} onChange={setInstallCursor} />
+              {status?.gpoBlocked && (
+                <div className="flex items-center gap-1.5 text-xs text-warning">
+                  <AlertTriangle size={12} className="shrink-0" />
+                  Group Policy may prevent shell replacement
                 </div>
-              </div>
+              )}
+
+              <Card className="px-4 py-3.5">
+                <Row label="Custom cursor" description="Install the Bibata cursor pack">
+                  <Toggle label="Custom cursor" checked={installCursor} onChange={setInstallCursor} />
+                </Row>
+              </Card>
             </div>
 
-            <div>
-              <button
-                onClick={handleInstall}
-                className="w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
-              >
+            <div className="flex flex-col gap-2.5">
+              <Button className="w-full" onClick={handleInstall}>
                 {verb}
-              </button>
-              <button
-                onClick={() => setPage('welcome')}
-                className="mt-3 w-full h-11 text-white text-sm hover:text-neutral-300 transition-colors cursor-default"
-              >
+              </Button>
+              <Button className="w-full" variant="ghost" onClick={() => setPage('welcome')}>
                 Back
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {page === 'installing' && (
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="w-8 h-8 border-2 border-neutral-700 border-t-white rounded-full animate-spin" />
-            <p className="mt-5 text-[15px]">{verbIng}</p>
-            <p className="mt-2 text-xs text-white/70 h-4 transition-all">
-              {currentStep}
-            </p>
+          <div className="flex flex-1 flex-col items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-ink-primary" />
+            <p className="mt-5 text-sm text-ink-primary">{verbIng}</p>
+            <p className="mt-2 h-4 text-xs text-ink-quiet">{currentStep}</p>
           </div>
         )}
 
         {page === 'error' && result && (
-          <div className="flex-1 flex justify-between flex-col">
-            <div>
-              <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
-                <X size={24} strokeWidth={2.5} className="text-red-400" />
-              </div>
-              <h1 className="text-2xl font-semibold tracking-tight mt-5">{isUpdate ? 'Update' : 'Installation'} failed</h1>
-              <p className="text-neutral-500 text-sm mt-2 leading-relaxed">
-                Something went wrong during {isUpdate ? 'the update' : 'installation'}.
-              </p>
-              <p className="mt-3 text-xs text-red-400/80 bg-red-400/5 rounded-lg px-3 py-2 font-mono break-all">
+          <div className="flex flex-1 flex-col justify-between">
+            <div className="flex flex-col gap-5">
+              <OutcomeBadge tone="danger">
+                <X size={24} strokeWidth={2.5} />
+              </OutcomeBadge>
+              <PageTitle title={isUpdate ? 'Update failed' : 'Installation failed'} />
+              <p className="rounded-field border border-line-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all text-ink-secondary">
                 {result.error}
               </p>
             </div>
-            <div>
-              <button
-                onClick={() => setPage('options')}
-                className="w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
-              >
+
+            <div className="flex flex-col gap-2.5">
+              <Button className="w-full" onClick={() => setPage('options')}>
                 Try Again
-              </button>
-              <button
-                onClick={() => window.close()}
-                className="mt-3 w-full h-11 text-white text-sm hover:text-neutral-300 transition-colors cursor-default"
-              >
+              </Button>
+              <Button className="w-full" variant="ghost" onClick={() => window.close()}>
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {page === 'complete' && result && (
-          <div className="flex-1 flex justify-between flex-col">
-            <div>
-              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+          <div className="flex flex-1 flex-col justify-between">
+            <div className="flex flex-col gap-5">
+              <OutcomeBadge tone="success">
                 <Check size={24} strokeWidth={2.5} />
-              </div>
-              <h1 className="text-2xl font-semibold tracking-tight mt-5">{isUpdate ? 'Update complete' : 'Setup complete'}</h1>
-              <p className="text-white/70 text-sm mt-2 leading-relaxed">
-                Restart your computer to {verbPast === 'updated' ? 'finish updating' : 'start using'} Alpine Shell.
-              </p>
+              </OutcomeBadge>
+              <PageTitle
+                title={isUpdate ? 'Update complete' : 'Setup complete'}
+                subtitle={`Restart your PC to ${isUpdate ? 'finish updating' : 'start using'} Alpine Shell.`}
+              />
 
-              <div className="mt-5 space-y-1.5 text-xs text-white/60">
-                {result.shell && (
-                  <p className="flex items-center gap-2">
-                    <Check size={11} className="text-white/70 shrink-0" />
-                    Set as default desktop environment
-                  </p>
-                )}
-                {result.startup && (
-                  <p className="flex items-center gap-2">
-                    <Check size={11} className="text-white/70 shrink-0" />
-                    Added to startup
-                  </p>
-                )}
-                {result.cursor && (
-                  <p className="flex items-center gap-2">
-                    <Check size={11} className="text-white/70 shrink-0" />
-                    Custom cursor installed
-                  </p>
-                )}
+              <div className="flex flex-col gap-1.5 text-xs">
+                {result.shell && <OutcomeNote tone="done">Set as default desktop environment</OutcomeNote>}
+                {result.startup && <OutcomeNote tone="done">Added to startup</OutcomeNote>}
+                {result.cursor && <OutcomeNote tone="done">Custom cursor installed</OutcomeNote>}
                 {result.gpoBlocked && (
-                  <p className="flex items-center gap-2 text-amber-500">
-                    <AlertTriangle size={11} className="shrink-0" />
-                    Group Policy may have blocked shell replacement
-                  </p>
+                  <OutcomeNote tone="warning">Group Policy may have blocked shell replacement</OutcomeNote>
                 )}
               </div>
             </div>
 
-            <div>
-              <button
-                onClick={() => window.setup.restartWindows()}
-                className="w-full h-11 bg-white text-neutral-950 rounded-lg font-medium text-[15px] hover:bg-neutral-200 transition-colors cursor-default"
-              >
+            <div className="flex flex-col gap-2.5">
+              <Button className="w-full" onClick={() => window.setup.restartWindows()}>
                 Restart Now
-              </button>
-              <button
-                onClick={() => window.close()}
-                className="mt-3 w-full h-11 text-white text-sm hover:text-neutral-300 transition-colors cursor-default"
-              >
+              </Button>
+              <Button className="w-full" variant="ghost" onClick={() => window.close()}>
                 Restart Later
-              </button>
+              </Button>
             </div>
           </div>
         )}
