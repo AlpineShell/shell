@@ -100,7 +100,7 @@ export default function SettingsApp() {
 
   return (
     <div className="settings-scope flex h-screen w-screen overflow-hidden bg-surface-1 text-ink-primary">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-line-hairline bg-surface-0" style={dragRegion}>
+      <aside className="flex w-56 shrink-0 flex-col bg-surface-0" style={dragRegion}>
         <div className="h-14 flex items-center px-5 shrink-0">
           <span className="font-display text-base font-normal tracking-tight text-ink-primary">Settings</span>
         </div>
