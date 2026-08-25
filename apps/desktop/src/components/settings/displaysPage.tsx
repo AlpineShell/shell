@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { RotateCw, Star, MonitorCheck } from 'lucide-react'
 import { useDisplays } from '../../hooks/useDisplays'
+import { useMonitors } from '../../hooks/useMonitors'
+import { monitorForDisplay } from './displayBrightness'
 import PageTitle from '../ui/pageTitle'
 import Section from '../ui/section'
+import Row from '../ui/row'
 import Button from '../ui/button'
+import Slider from '../ui/slider'
+import Flyout from '../ui/flyout'
 
 const SNAP_SCREEN_PX = 16
 const KEEP_CHANGES_SECONDS = 15
-
-function pickDefaultId(displays: DisplayInfo[]): string | null {
-  return displays.find((d) => d.primary)?.id ?? displays[0]?.id ?? null
-}
 
 function sameLayout(a: DisplayInfo[], b: DisplayInfo[]): boolean {
   if (a.length !== b.length) return false
@@ -56,6 +57,7 @@ function snapAxis(value: number, size: number, others: { start: number; extent: 
 
 export default function DisplaysPage() {
   const committed = useDisplays()
+  const { monitors, setBrightness } = useMonitors()
   const [draft, setDraft] = useState<DisplayInfo[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [phase, setPhase] = useState<'editing' | 'confirming'>('editing')
@@ -65,7 +67,7 @@ export default function DisplaysPage() {
 
   useEffect(() => {
     setDraft(committed)
-    setSelectedId((prev) => (committed.some((d) => d.id === prev) ? prev : pickDefaultId(committed)))
+    setSelectedId((prev) => (committed.some((d) => d.id === prev) ? prev : null))
   }, [committed])
 
   useEffect(() => {
@@ -87,8 +89,11 @@ export default function DisplaysPage() {
     }
   }, [phase])
 
+  const closeFlyout = useCallback(() => setSelectedId(null), [])
+
   const dirty = !sameLayout(draft, committed)
   const selected = draft.find((d) => d.id === selectedId) ?? null
+  const selectedMonitor = selected ? monitorForDisplay(monitors, selected, draft) : null
 
   function moveDisplay(id: string, x: number, y: number) {
     setDraft((prev) => prev.map((d) => (d.id === id ? { ...d, x, y } : d)))
@@ -121,7 +126,6 @@ export default function DisplaysPage() {
 
   function discard() {
     setDraft(committed)
-    setSelectedId(pickDefaultId(committed))
     setError(null)
   }
 
@@ -136,7 +140,7 @@ export default function DisplaysPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 w-full">
+    <div className="flex w-full flex-col gap-8">
       <PageTitle title="Displays" />
 
       {committed.length === 0 ? (
@@ -144,12 +148,12 @@ export default function DisplaysPage() {
       ) : (
         <>
           {phase === 'confirming' ? (
-            <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 border border-line-hairline px-4 py-3">
+            <div className="flex items-center justify-between gap-4 rounded-card border border-line-hairline bg-surface-2 px-4 py-3">
               <span className="inline-flex items-center gap-2 text-dense text-ink-primary">
                 <MonitorCheck size={16} className="text-success" />
                 Keep these display changes? Reverting in {secondsLeft}s.
               </span>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex shrink-0 items-center gap-2">
                 <Button variant="outline" size="sm" onClick={revertNow} className="font-medium">
                   Revert
                 </Button>
@@ -160,9 +164,9 @@ export default function DisplaysPage() {
             </div>
           ) : (
             dirty && (
-              <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 border border-line-hairline px-4 py-3">
+              <div className="flex items-center justify-between gap-4 rounded-card border border-line-hairline bg-surface-2 px-4 py-3">
                 <span className="text-dense text-ink-primary">You have unsaved display changes.</span>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex shrink-0 items-center gap-2">
                   <Button variant="outline" size="sm" onClick={discard} className="font-medium">
                     Discard
                   </Button>
@@ -176,42 +180,70 @@ export default function DisplaysPage() {
 
           {error && <p className="text-xs text-danger">{error}</p>}
 
-          <Section title="Arrangement" subtitle="Drag the displays to match how they are physically placed on your desk.">
+          <Section title="Arrangement" subtitle="Drag the displays to match your desk. Click one to configure it.">
             <DisplayCanvas displays={draft} selectedId={selectedId} onSelect={setSelectedId} onMove={moveDisplay} />
           </Section>
-
-          {selected && (
-            <Section title={selected.name}>
-              <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 border border-line-hairline px-4 py-4">
-                <div className="min-w-0">
-                  <div className="text-dense text-ink-primary">
-                    {selected.width} × {selected.height}
-                    {selected.refreshRate ? ` · ${selected.refreshRate} Hz` : ''}
-                  </div>
-                  <div className="text-xs text-ink-quiet mt-0.5">{orientationLabel(selected.orientation)}</div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button variant="outline" size="sm" onClick={rotateSelected} className="font-medium">
-                    <RotateCw size={14} />
-                    Rotate
-                  </Button>
-                  {selected.primary ? (
-                    <span className="inline-flex items-center gap-1.5 h-8 px-3 text-xs text-success">
-                      <Star size={14} />
-                      Primary
-                    </span>
-                  ) : (
-                    <Button variant="outline" size="sm" onClick={setPrimarySelected} className="font-medium">
-                      <Star size={14} />
-                      Set as primary
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Section>
-          )}
         </>
       )}
+
+      <Flyout
+        open={!!selected}
+        title={selected?.name ?? ''}
+        subtitle={
+          selected
+            ? `${selected.width} × ${selected.height}${selected.refreshRate ? ` · ${selected.refreshRate} Hz` : ''}`
+            : undefined
+        }
+        onClose={closeFlyout}
+      >
+        {selected && (
+          <div className="flex flex-col gap-4">
+            <Row label="Orientation" description={orientationLabel(selected.orientation)}>
+              <Button variant="outline" size="sm" onClick={rotateSelected} className="font-medium">
+                <RotateCw size={14} />
+                Rotate
+              </Button>
+            </Row>
+
+            <Row label="Primary display">
+              {selected.primary ? (
+                <span className="inline-flex h-8 items-center gap-1.5 text-xs text-success">
+                  <Star size={14} />
+                  Primary
+                </span>
+              ) : (
+                <Button variant="outline" size="sm" onClick={setPrimarySelected} className="font-medium">
+                  Set
+                </Button>
+              )}
+            </Row>
+
+            <Row
+              label="Brightness"
+              description={
+                selectedMonitor
+                  ? selectedMonitor.brightnessWritable
+                    ? undefined
+                    : 'This display reports brightness but will not accept changes.'
+                  : 'This display does not report brightness over DDC/CI.'
+              }
+              disabled={!selectedMonitor || !selectedMonitor.brightnessWritable}
+            >
+              {selectedMonitor && selectedMonitor.brightnessWritable && (
+                <Slider
+                  label="Brightness"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={selectedMonitor.brightness}
+                  suffix="%"
+                  onChange={(value) => setBrightness(selectedMonitor.id, value)}
+                />
+              )}
+            </Row>
+          </div>
+        )}
+      </Flyout>
     </div>
   )
 }
@@ -282,7 +314,7 @@ function DisplayCanvas({
       onMouseMove={onMouseMove}
       onMouseUp={endDrag}
       onMouseLeave={endDrag}
-      className="relative h-64 w-full rounded-card bg-surface-2 border border-line-hairline overflow-hidden select-none"
+      className="relative h-64 w-full select-none overflow-hidden rounded-card border border-line-hairline bg-surface-2"
     >
       {scale > 0 &&
         displays.map((d, index) => {
@@ -291,7 +323,7 @@ function DisplayCanvas({
             <div
               key={d.id}
               onMouseDown={(e) => startDrag(e, d)}
-              className={`absolute flex flex-col items-center justify-center rounded-md border-2 transition-colors cursor-grab active:cursor-grabbing ${
+              className={`absolute flex cursor-grab flex-col items-center justify-center rounded-md border-2 transition-colors active:cursor-grabbing ${
                 active ? 'border-focus-ring bg-fill-ghost text-ink-primary' : 'border-line-strong bg-surface-3 text-ink-secondary hover:border-ink-faint'
               }`}
               style={{
@@ -301,9 +333,9 @@ function DisplayCanvas({
                 height: Math.max(d.height * scale, 24),
               }}
             >
-              <span className="text-xl font-semibold leading-none">{index + 1}</span>
-              <span className="mt-1 text-[10px] opacity-70 truncate max-w-full px-1">{d.name}</span>
-              {d.primary && <Star size={12} className="absolute top-1 right-1 text-success fill-success" />}
+              <span className="text-xl leading-none font-semibold">{index + 1}</span>
+              <span className="mt-1 max-w-full truncate px-1 text-[10px] opacity-70">{d.name}</span>
+              {d.primary && <Star size={12} className="absolute top-1 right-1 fill-success text-success" />}
             </div>
           )
         })}

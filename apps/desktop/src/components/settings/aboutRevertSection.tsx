@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import PageTitle from '../ui/pageTitle'
+import Section from '../ui/section'
 import Button from '../ui/button'
 
 type RevertAction = 'temporary' | 'permanent' | 'delete'
@@ -64,7 +64,7 @@ const DONE_COPY: Record<RevertAction, { title: string; detail: string }> = {
 const GPO_WARNING = 'Your organisation’s policy controls the Windows shell, so this may not take effect at sign-in.'
 const LEFT_BEHIND_WARNING = 'These folders could not be removed automatically and are still on disk:'
 
-export default function SystemRevertPage() {
+export default function AboutRevertSection() {
   const [state, setState] = useState<ActionState>({ phase: 'idle' })
   const isDev = import.meta.env.DEV
 
@@ -81,9 +81,7 @@ export default function SystemRevertPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full">
-      <PageTitle title="Revert back to Windows" />
-
+    <Section title="Revert back to Windows">
       {state.phase === 'done' && (
         <Banner
           title={DONE_COPY[state.action].title}
@@ -119,7 +117,7 @@ export default function SystemRevertPage() {
           ))}
         </div>
       )}
-    </div>
+    </Section>
   )
 }
 

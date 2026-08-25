@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Boxes, ChevronDown, ChevronRight } from 'lucide-react'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { AppIcon, PageHeader, SearchBox, Spinner, bandLabel, bandClass } from './appsShared'
+import { AppIcon, SearchBox, Spinner, bandLabel, bandClass } from './appsShared'
 
 export default function AppsRunningPage() {
   const running = useRunningApps()
@@ -22,9 +22,9 @@ export default function AppsRunningPage() {
 
   return (
     <div className="flex flex-col gap-5 w-full">
-      <PageHeader title="Running" description="Apps using your computer right now. You can close ones you're not using.">
+      <div className="flex justify-end">
         <SearchBox value={query} onChange={setQuery} placeholder="Search for an app" />
-      </PageHeader>
+      </div>
 
       <div className="flex flex-col gap-1">
         {running.length === 0 && <p className="text-sm text-ink-quiet">Looking at what's running…</p>}

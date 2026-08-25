@@ -95,6 +95,42 @@ declare global {
     disabled?: boolean
   }
 
+  interface SettingsNavItem {
+    path: string
+    label: string
+    icon: import('lucide-react').LucideIcon
+  }
+
+  interface SettingsNavGroup {
+    label: string
+    items: SettingsNavItem[]
+  }
+
+  type AppsTab = 'running' | 'installed' | 'startup'
+
+  type DevicesTab = 'wifi' | 'bluetooth' | 'sound' | 'battery'
+
+  interface HotkeyRecorderProps {
+    value: string
+    defaultValue?: string
+    onChange: (hotkey: string) => void
+    disabled?: boolean
+  }
+
+  interface ShortcutEntry {
+    id: string
+    label: string
+    keys: string
+  }
+
+  interface FlyoutProps {
+    open: boolean
+    title: string
+    subtitle?: string
+    onClose: () => void
+    children: import('react').ReactNode
+  }
+
   type SetupOutcomeTone = 'success' | 'danger'
 
   interface OutcomeBadgeProps {
@@ -896,6 +932,7 @@ declare global {
         setSettingsPage: (name: string) => Promise<void>
         initialPage: string | null
         onSettingsNavigate: (callback: (page: string) => void) => () => void
+        onSettingsReset: (callback: (page: string) => void) => () => void
       }
       run: {
         resolve: (query: string) => Promise<RunResult | null>

@@ -1,45 +1,19 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, AppWindow, House, Monitor, MonitorCog, Paintbrush, Plug, Puzzle, RefreshCw, X } from 'lucide-react'
-import AboutPage from './aboutPage'
-import PersonalizationHub from './personalizationHub'
-import WallpaperPage from './wallpaperPage'
+import { ArrowLeft, ArrowRight, X } from 'lucide-react'
 import TopBarPage from './topBarPage'
-import CalendarPage from './calendarPage'
-import TrayPage from './trayPage'
-import TrayIconsPage from './trayIconsPage'
-import HotkeysPage from './hotkeysPage'
-import TilingPage from './tilingPage'
-import DevicesHub from './devicesHub'
-import BluetoothSettingsPage from './bluetoothSettingsPage'
-import WifiSettingsPage from './wifiSettingsPage'
-import SystemPage from './systemPage'
-import BatteryPage from './batteryPage'
-import SystemRevertPage from './systemRevertPage'
-import AppsHub from './appsHub'
-import AppsRunningPage from './appsRunningPage'
-import AppsInstalledPage from './appsInstalledPage'
-import AppsStartupPage from './appsStartupPage'
-import UpdatesPage from './updatesPage'
-import PluginsPage from './pluginsPage'
+import DesktopPage from './desktopPage'
 import DisplaysPage from './displaysPage'
+import WindowsPage from './windowsPage'
+import LauncherPage from './launcherPage'
+import ShortcutsPage from './shortcutsPage'
+import AppsPage from './appsPage'
+import DevicesPage from './devicesPage'
+import PluginsPage from './pluginsPage'
+import UpdatesPage from './updatesPage'
+import AboutPage from './aboutPage'
+import { DEFAULT_SETTINGS_PAGE, SETTINGS_NAV, SETTINGS_PAGE_LABELS } from './settingsNav'
+import { FlyoutHostContext } from '../ui/flyoutHost'
 import { useTheme } from '../../hooks/useTheme'
-
-interface NavItem {
-  path: string
-  label: string
-  icon: typeof House
-}
-
-const NAV: NavItem[] = [
-  { path: 'home', label: 'Home', icon: House },
-  { path: 'personalization', label: 'Personalization', icon: Paintbrush },
-  { path: 'displays', label: 'Displays', icon: Monitor },
-  { path: 'devices', label: 'Devices & Connections', icon: Plug },
-  { path: 'apps', label: 'Apps', icon: AppWindow },
-  { path: 'system', label: 'System', icon: MonitorCog },
-  { path: 'plugins', label: 'Plugins', icon: Puzzle },
-  { path: 'updates', label: 'Updates', icon: RefreshCw },
-]
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
@@ -49,13 +23,13 @@ export default function SettingsApp() {
 
   const [history, setHistory] = useState<string[]>(() => {
     const page = window.shell.windows.initialPage
-    return page && page !== 'home' ? ['home', page] : ['home']
+    return page && page !== DEFAULT_SETTINGS_PAGE ? [DEFAULT_SETTINGS_PAGE, page] : [DEFAULT_SETTINGS_PAGE]
   })
   const [historyIndex, setHistoryIndex] = useState(() => history.length - 1)
+  const [flyoutHost, setFlyoutHost] = useState<HTMLElement | null>(null)
 
   const currentPath = history[historyIndex]
-  const segments = currentPath.split('/')
-  const topSegment = segments[0]
+  const currentPage = currentPath.split('/')[0]
   const canBack = historyIndex > 0
   const canForward = historyIndex < history.length - 1
 
@@ -83,6 +57,13 @@ export default function SettingsApp() {
   }, [])
 
   useEffect(() => {
+    return window.shell.windows.onSettingsReset((page) => {
+      setHistory([page])
+      setHistoryIndex(0)
+    })
+  }, [])
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
@@ -94,39 +75,43 @@ export default function SettingsApp() {
   }, [])
 
   useEffect(() => {
-    const leaf = segments[segments.length - 1]
-    window.shell.windows.setSettingsPage(SEGMENT_LABELS[leaf] ?? leaf)
-  }, [currentPath])
+    window.shell.windows.setSettingsPage(SETTINGS_PAGE_LABELS[currentPage] ?? currentPage)
+  }, [currentPage])
 
   return (
     <div className="settings-scope flex h-screen w-screen overflow-hidden bg-surface-1 text-ink-primary">
       <aside className="flex w-56 shrink-0 flex-col bg-surface-0" style={dragRegion}>
-        <div className="h-14 flex items-center px-5 shrink-0">
+        <div className="flex h-14 shrink-0 items-center px-5">
           <span className="font-display text-base font-normal tracking-tight text-ink-primary">Settings</span>
         </div>
-        <nav className="flex-1 px-2 flex flex-col gap-0.5 overflow-auto" style={noDragRegion}>
-          {NAV.map((p) => {
-            const Icon = p.icon
-            const active = p.path === topSegment
-            return (
-              <button
-                key={p.path}
-                onClick={() => navigate(p.path)}
-                className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
-                  active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
-                }`}
-              >
-                <Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />
-                {p.label}
-              </button>
-            )
-          })}
+        <nav className="flex flex-1 flex-col gap-5 overflow-auto px-2 pb-4" style={noDragRegion}>
+          {SETTINGS_NAV.map((group) => (
+            <div key={group.label} className="flex flex-col gap-0.5">
+              <span className="px-3 pb-1 text-eyebrow uppercase text-ink-faint">{group.label}</span>
+              {group.items.map((item) => {
+                const Icon = item.icon
+                const active = item.path === currentPage
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
+                      active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
+                    }`}
+                  >
+                    <Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />
+                    {item.label}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
         </nav>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col bg-surface-0">
         <div className="flex h-14 shrink-0 items-center bg-surface-0" style={dragRegion}>
-          <header className="w-full h-10 flex items-center gap-3 pl-3 pr-3">
+          <header className="flex h-10 w-full items-center gap-3 px-3">
             <div className="flex items-center gap-1" style={noDragRegion}>
               <button
                 onClick={back}
@@ -150,9 +135,7 @@ export default function SettingsApp() {
               </button>
             </div>
 
-            <div style={noDragRegion}>
-              <Breadcrumb path={currentPath} onNavigate={navigate} />
-            </div>
+            <span className="select-none text-dense text-ink-quiet">{SETTINGS_PAGE_LABELS[currentPage] ?? currentPage}</span>
 
             <div className="flex-1" />
 
@@ -167,10 +150,15 @@ export default function SettingsApp() {
           </header>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto rounded-tl-card border-t border-l border-line-hairline bg-surface-1 px-gutter pt-gutter pb-6">
-          <PageErrorBoundary key={currentPath}>
-            <PageRouter path={currentPath} navigate={navigate} />
-          </PageErrorBoundary>
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-tl-card border-t border-l border-line-hairline bg-surface-1">
+          <div className="h-full overflow-auto px-gutter pt-gutter pb-6">
+            <PageErrorBoundary key={currentPath}>
+              <FlyoutHostContext.Provider value={flyoutHost}>
+                <PageRouter path={currentPath} />
+              </FlyoutHostContext.Provider>
+            </PageErrorBoundary>
+          </div>
+          <div ref={setFlyoutHost} className="pointer-events-none absolute inset-0 z-20 overflow-hidden" />
         </div>
       </main>
     </div>
@@ -193,81 +181,18 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boo
   }
 }
 
-function PageRouter({ path, navigate }: { path: string; navigate: (p: string) => void }) {
-  if (path === 'home') return <AboutPage onNavigate={navigate} />
-  if (path === 'personalization') return <PersonalizationHub onNavigate={navigate} />
-  if (path === 'personalization/wallpaper') return <WallpaperPage />
-  if (path === 'personalization/topbar') return <TopBarPage />
-  if (path === 'personalization/calendar') return <CalendarPage />
-  if (path === 'personalization/tray') return <TrayPage onNavigate={navigate} />
-  if (path === 'personalization/tray/icons') return <TrayIconsPage />
-  if (path === 'personalization/hotkeys') return <HotkeysPage />
-  if (path === 'personalization/tiling') return <TilingPage />
-  if (path === 'displays') return <DisplaysPage />
-  if (path === 'devices') return <DevicesHub onNavigate={navigate} />
-  if (path === 'devices/bluetooth') return <BluetoothSettingsPage />
-  if (path === 'devices/wifi') return <WifiSettingsPage />
-  if (path === 'apps') return <AppsHub onNavigate={navigate} />
-  if (path === 'apps/running') return <AppsRunningPage />
-  if (path === 'apps/installed') return <AppsInstalledPage />
-  if (path === 'apps/startup') return <AppsStartupPage />
-  if (path === 'system') return <SystemPage onNavigate={navigate} />
-  if (path === 'system/battery') return <BatteryPage />
-  if (path === 'system/revert') return <SystemRevertPage />
-  if (path === 'plugins') return <PluginsPage />
-  if (path === 'updates') return <UpdatesPage />
+function PageRouter({ path }: { path: string }) {
+  const [page, tab] = path.split('/')
+  if (page === 'topbar') return <TopBarPage />
+  if (page === 'desktop') return <DesktopPage />
+  if (page === 'displays') return <DisplaysPage />
+  if (page === 'windows') return <WindowsPage />
+  if (page === 'launcher') return <LauncherPage />
+  if (page === 'shortcuts') return <ShortcutsPage />
+  if (page === 'apps') return <AppsPage initialTab={tab} />
+  if (page === 'devices') return <DevicesPage initialTab={tab} />
+  if (page === 'plugins') return <PluginsPage />
+  if (page === 'updates') return <UpdatesPage />
+  if (page === 'about') return <AboutPage />
   return null
-}
-
-const SEGMENT_LABELS: Record<string, string> = {
-  home: 'Home',
-  apps: 'Apps',
-  running: 'Running',
-  installed: 'Installed',
-  startup: 'Startup',
-  personalization: 'Personalization',
-  displays: 'Displays',
-  wallpaper: 'Wallpaper',
-  topbar: 'Top Bar',
-  calendar: 'Calendar',
-  tray: 'System Tray',
-  icons: 'Manage Icons',
-  hotkeys: 'Hotkeys',
-  tiling: 'Window Tiling',
-  devices: 'Devices & Connections',
-  bluetooth: 'Bluetooth',
-  wifi: 'Wi-Fi',
-  system: 'System',
-  battery: 'Battery',
-  revert: 'Revert back to Windows',
-  plugins: 'Plugins',
-  updates: 'Updates',
-}
-
-function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string) => void }) {
-  const segments = path.split('/')
-  return (
-    <div className="flex items-center gap-1 select-none">
-      {segments.map((seg, i) => {
-        const isLast = i === segments.length - 1
-        const subpath = segments.slice(0, i + 1).join('/')
-        const label = SEGMENT_LABELS[seg] ?? seg
-        return (
-          <span key={subpath} className="flex items-center gap-1">
-            {i > 0 && <span className="text-dense text-ink-faint">/</span>}
-            {isLast ? (
-              <span className="text-dense text-ink-primary underline decoration-line-strong underline-offset-4">{label}</span>
-            ) : (
-              <button
-                onClick={() => onNavigate(subpath)}
-                className="focus-ring cursor-pointer text-dense text-ink-quiet underline-offset-4 decoration-line-strong hover:text-ink-primary hover:underline"
-              >
-                {label}
-              </button>
-            )}
-          </span>
-        )
-      })}
-    </div>
-  )
 }

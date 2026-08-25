@@ -290,6 +290,17 @@
   color-scheme: light;
 }
 
+.alpine-flyout {
+  transition-property: transform;
+  transition-duration: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alpine-flyout {
+    transition-duration: 1ms;
+  }
+}
+
 .focus-ring:focus-visible {
   outline: 2px solid var(--alpine-focus-ring);
   outline-offset: 2px;

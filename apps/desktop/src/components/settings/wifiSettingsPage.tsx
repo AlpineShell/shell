@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, Lock, RefreshCw, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from 'lucide-react'
-import PageTitle from '../ui/pageTitle'
+import Row from '../ui/row'
 import Toggle from '../ui/toggle'
 import IconButton from '../ui/iconButton'
 
@@ -82,15 +82,14 @@ export default function WifiSettingsPage() {
 
   return (
     <div className="w-full flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <PageTitle title="Wi-Fi" />
+      <Row label="Wi-Fi">
         <div className="flex items-center gap-2">
           <IconButton onClick={scan} disabled={scanning || !enabled} label="Rescan">
             <RefreshCw size={15} className={scanning ? 'animate-spin' : ''} />
           </IconButton>
           <Toggle label="Wi-Fi" checked={enabled} onChange={toggleRadio} />
         </div>
-      </div>
+      </Row>
 
       {!enabled ? (
         <EmptyState icon={<WifiOff size={20} />} text="Wi-Fi off" />

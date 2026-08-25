@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react'
+import { AlertTriangle, AppWindow, CheckCircle2, ChevronDown, ChevronRight, Download, RefreshCw, RotateCcw, ScrollText } from 'lucide-react'
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
 import { PageHeader, Spinner } from './appsShared'
@@ -163,6 +163,8 @@ export default function UpdatesPage() {
         </div>
       )}
 
+      {alpine.log.length > 0 && <UpdateLog entries={alpine.log} />}
+
       {showEmptyState && (
         <div className="flex flex-col items-center justify-center gap-2.5 py-14 text-center">
           {checking ? (
@@ -179,6 +181,32 @@ export default function UpdatesPage() {
               {windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''}
             </span>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function UpdateLog({ entries }: { entries: UpdateLogEntry[] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="overflow-hidden rounded-card border border-line-hairline bg-surface-2">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="focus-ring flex h-12 w-full cursor-pointer items-center gap-3 px-3 text-left transition-colors hover:bg-fill-ghost"
+      >
+        <ScrollText size={18} className="shrink-0 text-ink-faint" />
+        <span className="flex-1 text-dense text-ink-secondary">Update log ({entries.length})</span>
+        {open ? <ChevronDown size={16} className="shrink-0 text-ink-faint" /> : <ChevronRight size={16} className="shrink-0 text-ink-faint" />}
+      </button>
+      {open && (
+        <div className="flex max-h-64 flex-col gap-1 overflow-auto border-t border-line-hairline px-3 py-2">
+          {entries.map((entry, i) => (
+            <div key={`${entry.time}-${i}`} className="flex gap-3 font-mono text-[11px]">
+              <span className="shrink-0 tabular-nums text-ink-faint">{formatTime(entry.time)}</span>
+              <span className={entry.level === 'error' ? 'text-danger' : 'text-ink-secondary'}>{entry.message}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>

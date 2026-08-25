@@ -1,23 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Boxes, ChevronDown, ChevronRight, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
-import { useStartupApps } from '../../hooks/useStartupApps'
-import { AppIcon, PageHeader, SearchBox, Spinner } from './appsShared'
-import Toggle from '../ui/toggle'
+import { AppIcon, SearchBox, Spinner } from './appsShared'
 
 type InstalledAction = 'open' | 'locate' | 'uninstall'
 
 export default function AppsInstalledPage() {
   const installed = useInstalledApps()
-  const startup = useStartupApps()
   const [query, setQuery] = useState('')
   const [componentsOpen, setComponentsOpen] = useState(false)
-
-  const startupById = useMemo(() => {
-    const map = new Map<string, StartupEntry>()
-    for (const e of startup) map.set(e.id, e)
-    return map
-  }, [startup])
 
   const q = query.trim().toLowerCase()
   const apps = q
@@ -27,20 +18,18 @@ export default function AppsInstalledPage() {
   const components = apps.filter((a) => a.isComponent)
   const showComponents = componentsOpen || q.length > 0
 
-  const startupEntryFor = (app: InstalledApp) => (app.startupId ? startupById.get(app.startupId) : undefined)
-
   return (
     <div className="flex flex-col gap-5 w-full">
-      <PageHeader title="Installed" description="The apps on your PC. Click one to manage it.">
+      <div className="flex justify-end">
         <SearchBox value={query} onChange={setQuery} placeholder="Search for an app" />
-      </PageHeader>
+      </div>
 
       <div className="flex flex-col gap-1">
         {installed.length === 0 && <p className="text-sm text-ink-quiet">Looking for installed apps…</p>}
         {installed.length > 0 && apps.length === 0 && <p className="text-sm text-ink-quiet">No apps match your search.</p>}
 
         {userApps.map((app) => (
-          <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
+          <InstalledRow key={app.id} app={app} />
         ))}
 
         {components.length > 0 && (
@@ -56,7 +45,7 @@ export default function AppsInstalledPage() {
             {showComponents && (
               <div className="flex flex-col gap-1 px-2 pb-2">
                 {components.map((app) => (
-                  <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
+                  <InstalledRow key={app.id} app={app} />
                 ))}
               </div>
             )}
@@ -67,10 +56,9 @@ export default function AppsInstalledPage() {
   )
 }
 
-function InstalledRow({ app, startupEntry }: { app: InstalledApp; startupEntry?: StartupEntry }) {
+function InstalledRow({ app }: { app: InstalledApp }) {
   const [expanded, setExpanded] = useState(false)
   const [pending, setPending] = useState<InstalledAction | null>(null)
-  const startOn = startupEntry ? (startupEntry.pending ? startupEntry.pending === 'enable' : startupEntry.enabled) : false
 
   async function act(kind: InstalledAction, run: () => Promise<unknown>) {
     if (pending) return
@@ -91,14 +79,7 @@ function InstalledRow({ app, startupEntry }: { app: InstalledApp; startupEntry?:
 
       {expanded && (
         <div className="border-t border-line-hairline bg-surface-0 px-3 py-3 flex items-center justify-between gap-x-4 gap-y-3 flex-wrap">
-          {startupEntry ? (
-            <label className="flex items-center gap-2.5 text-[12px] text-ink-secondary cursor-pointer select-none">
-              <Toggle label="Starts with your PC" checked={startOn} pending={!!startupEntry.pending} onChange={() => window.shell.apps.setStartup(startupEntry.id, !startOn)} />
-              Starts with your PC
-            </label>
-          ) : (
-            <span className="text-[12px] text-ink-faint">{app.source === 'store' ? 'Microsoft Store app' : 'Desktop app'}</span>
-          )}
+          <span className="text-[12px] text-ink-faint">{app.source === 'store' ? 'Microsoft Store app' : 'Desktop app'}</span>
           <div className="flex items-center gap-1.5 ml-auto">
             {app.canOpen && (
               <button onClick={() => act('open', () => window.shell.apps.openApp(app.id))} disabled={!!pending} className="h-8 px-3 flex items-center gap-1.5 rounded-field text-[12px] text-ink-secondary bg-fill-ghost hover:bg-surface-3 hover:text-ink-primary cursor-pointer transition-colors disabled:opacity-60">

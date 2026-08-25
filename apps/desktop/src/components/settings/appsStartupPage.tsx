@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, FolderOpen, Lock, ShieldAlert } from 'lucide-react'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { AppIcon, PageHeader, SearchBox, Spinner, processKey } from './appsShared'
+import { AppIcon, SearchBox, Spinner, processKey } from './appsShared'
 import Toggle from '../ui/toggle'
 
 export default function AppsStartupPage() {
@@ -38,9 +38,9 @@ export default function AppsStartupPage() {
 
   return (
     <div className="flex flex-col gap-5 w-full">
-      <PageHeader title="Startup" description="Apps that open automatically when you start your PC.">
+      <div className="flex justify-end">
         <SearchBox value={query} onChange={setQuery} placeholder="Search for an app" />
-      </PageHeader>
+      </div>
 
       <div className="flex flex-col gap-3">
         {pending.length > 0 && (

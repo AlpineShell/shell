@@ -38,7 +38,7 @@ function writeCache(key: string, list: WallpaperItem[]) {
   } catch {}
 }
 
-export default function WallpaperPage() {
+export default function DesktopPage() {
   const wallpaper = useWallpaper()
   const [tab, setTab] = useState<Tab>('mine')
   const cachedMine = readCache(MINE_CACHE)
@@ -97,7 +97,7 @@ export default function WallpaperPage() {
   return (
     <div className="flex flex-col gap-5 w-full">
       <div className="flex items-center justify-between">
-        <PageTitle title="Wallpaper" />
+        <PageTitle title="Desktop" />
         <Segmented label="Wallpaper source" options={TABS} value={tab} onChange={setTab} />
       </div>
 

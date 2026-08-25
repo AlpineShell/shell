@@ -1,6 +1,5 @@
 import { BatteryCharging, BatteryLow, Leaf } from 'lucide-react'
 import { useBatterySaver } from '../../hooks/useBatterySaver'
-import PageTitle from '../ui/pageTitle'
 import Section from '../ui/section'
 import Row from '../ui/row'
 import Toggle from '../ui/toggle'
@@ -18,8 +17,6 @@ export default function BatteryPage() {
 
   return (
     <div className="flex flex-col gap-section w-full">
-      <PageTitle title="Battery" />
-
       <StatusCard state={state} thresholdPercent={config.thresholdPercent} automaticEnabled={config.automaticEnabled} />
 
       <Section title="Battery saver">

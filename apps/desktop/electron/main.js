@@ -541,20 +541,45 @@ function createSetupWindow() {
   return setupWin
 }
 
+const SETTINGS_DEFAULT_PAGE = 'topbar'
+const SETTINGS_PREFERRED_WIDTH = 1440
+const SETTINGS_PREFERRED_HEIGHT = 920
+const SETTINGS_MIN_WIDTH = 960
+const SETTINGS_MIN_HEIGHT = 640
+const SETTINGS_SCREEN_MARGIN = 120
+const SETTINGS_PREWARM_DELAY_MS = 1500
+
 let settingsWin = null
 let currentSettingsPage = null
 let pendingSettingsPage = null
-function createSettingsWindow() {
-  if (settingsWin && !settingsWin.isDestroyed()) {
-    settingsWin.focus()
-    return settingsWin
+
+function settingsWindowSize() {
+  const { workAreaSize } = screen.getPrimaryDisplay()
+  return {
+    width: Math.max(SETTINGS_MIN_WIDTH, Math.min(SETTINGS_PREFERRED_WIDTH, workAreaSize.width - SETTINGS_SCREEN_MARGIN)),
+    height: Math.max(SETTINGS_MIN_HEIGHT, Math.min(SETTINGS_PREFERRED_HEIGHT, workAreaSize.height - SETTINGS_SCREEN_MARGIN)),
   }
+}
+
+function raiseTopBarsAboveSettings() {
+  for (const shell of shells.values()) {
+    const tb = shell.topBar
+    if (tb && !tb.isDestroyed()) {
+      try { tb.moveTop() } catch {}
+      try { tb.webContents.invalidate() } catch {}
+    }
+  }
+}
+
+function createSettingsWindow() {
+  if (settingsWin && !settingsWin.isDestroyed()) return settingsWin
+  const { width, height } = settingsWindowSize()
   settingsWin = new BrowserWindow({
     title: 'Settings',
-    width: 1280,
-    height: 820,
-    minWidth: 800,
-    minHeight: 560,
+    width,
+    height,
+    minWidth: SETTINGS_MIN_WIDTH,
+    minHeight: SETTINGS_MIN_HEIGHT,
     frame: false,
     resizable: true,
     center: true,
@@ -570,46 +595,64 @@ function createSettingsWindow() {
   })
   settingsWin.on('page-title-updated', (e) => e.preventDefault())
   loadAppURL(settingsWin, getURL('settings'))
-  settingsWin.once('ready-to-show', () => {
-    if (settingsWin && !settingsWin.isDestroyed()) settingsWin.show()
-  })
   settingsWin.on('closed', () => {
     settingsWin = null
     currentSettingsPage = null
     pendingSettingsPage = null
     openApps.refresh()
-    for (const shell of shells.values()) {
-      const tb = shell.topBar
-      if (tb && !tb.isDestroyed()) {
-        try { tb.moveTop() } catch {}
-        try { tb.webContents.invalidate() } catch {}
-      }
-    }
+    raiseTopBarsAboveSettings()
   })
   return settingsWin
 }
 
+function prewarmSettingsWindow() {
+  if (settingsWin && !settingsWin.isDestroyed()) return
+  try {
+    createSettingsWindow()
+  } catch (e) {
+    console.error('[main] settings prewarm failed:', e && e.message)
+  }
+}
+
+function showSettingsWindow() {
+  const win = createSettingsWindow()
+  if (!win || win.isDestroyed()) return null
+  if (win.isMinimized()) win.restore()
+  if (!win.isVisible()) {
+    win.center()
+    win.show()
+    openApps.refresh()
+  }
+  win.focus()
+  return win
+}
+
+function hideSettingsWindow() {
+  if (!settingsWin || settingsWin.isDestroyed()) return
+  settingsWin.hide()
+  currentSettingsPage = null
+  pendingSettingsPage = null
+  try { settingsWin.webContents.send('windows/settings-reset', SETTINGS_DEFAULT_PAGE) } catch {}
+  openApps.refresh()
+  raiseTopBarsAboveSettings()
+}
+
 function openSettingsToPlugins(deepInstall) {
   pendingSettingsPage = 'plugins'
-  const win = createSettingsWindow()
+  const win = showSettingsWindow()
   if (!win) return
   const send = () => {
     if (!win || win.isDestroyed()) return
     win.webContents.send('windows/settings-navigate', 'plugins')
     if (deepInstall) win.webContents.send('plugins/deep-install', deepInstall)
-    if (win.isMinimized()) win.restore()
-    win.focus()
   }
   if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send)
   else send()
 }
 
 function openSettingsFromHotkey() {
-  if (!settingsWin || settingsWin.isDestroyed()) pendingSettingsPage = null
-  const win = createSettingsWindow()
-  if (!win) return
-  if (win.isMinimized()) win.restore()
-  win.focus()
+  pendingSettingsPage = null
+  showSettingsWindow()
 }
 
 function handleDeepLink(rawUrl) {
@@ -672,25 +715,21 @@ function openPluginApp(pluginId, app) {
 
 ipcMain.handle('windows/open-settings', (_event, page) => {
   const target = typeof page === 'string' && page ? page : null
-  const wasOpen = settingsWin && !settingsWin.isDestroyed()
   pendingSettingsPage = target
-  createSettingsWindow()
-  if (wasOpen && target && settingsWin && !settingsWin.isDestroyed()) {
-    const wc = settingsWin.webContents
-    if (wc.isLoading()) {
-      wc.once('did-finish-load', () => {
-        if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('windows/settings-navigate', target)
-      })
-    } else {
-      wc.send('windows/settings-navigate', target)
-    }
+  const win = showSettingsWindow()
+  if (!win || !target) return
+  const wc = win.webContents
+  if (wc.isLoading()) {
+    wc.once('did-finish-load', () => {
+      if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('windows/settings-navigate', target)
+    })
+  } else {
+    wc.send('windows/settings-navigate', target)
   }
 })
 
 ipcMain.handle('windows/close-settings', () => {
-  if (settingsWin && !settingsWin.isDestroyed()) {
-    settingsWin.destroy()
-  }
+  hideSettingsWindow()
 })
 
 ipcMain.handle('windows/set-settings-page', (_event, name) => {
@@ -705,7 +744,7 @@ ipcMain.on('windows/settings-init', (e) => {
 })
 const SETTINGS_APP_PATH = 'alpine:settings'
 openApps.setShellAppsProvider(() => {
-  if (!settingsWin || settingsWin.isDestroyed()) return []
+  if (!settingsWin || settingsWin.isDestroyed() || !settingsWin.isVisible()) return []
   let hwnd = 0
   try { hwnd = settingsWin.getNativeWindowHandle().readUInt32LE(0) } catch { return [] }
   return [{ id: -1, hwnd, name: 'Settings', title: currentSettingsPage || 'Settings', path: SETTINGS_APP_PATH, icon: SETTINGS_ICON_DATA_URL }]
@@ -953,6 +992,8 @@ function startShellMode() {
   }
 
   if (!isDev && !isUpdateRestart()) setTimeout(() => { processAutostart().catch((e) => console.error('[autostart] processAutostart error:', e)) }, 1500)
+
+  setTimeout(prewarmSettingsWindow, SETTINGS_PREWARM_DELAY_MS)
 
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)

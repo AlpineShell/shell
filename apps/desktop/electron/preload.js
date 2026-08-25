@@ -325,6 +325,11 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('windows/settings-navigate', handler)
       return () => ipcRenderer.removeListener('windows/settings-navigate', handler)
     },
+    onSettingsReset: (callback) => {
+      const handler = (_, page) => callback(page)
+      ipcRenderer.on('windows/settings-reset', handler)
+      return () => ipcRenderer.removeListener('windows/settings-reset', handler)
+    },
   },
   network: {
     wifiSignal: () => ipcRenderer.invoke('network/wifi-signal'),

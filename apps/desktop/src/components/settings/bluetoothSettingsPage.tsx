@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Bluetooth, BluetoothConnected, Loader2, Plus, RefreshCw, Unlink } from 'lucide-react'
-import PageTitle from '../ui/pageTitle'
+import Row from '../ui/row'
 import Toggle from '../ui/toggle'
 import IconButton from '../ui/iconButton'
 
@@ -68,8 +68,7 @@ export default function BluetoothSettingsPage() {
 
   return (
     <div className="w-full flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <PageTitle title="Bluetooth" />
+      <Row label="Bluetooth">
         <div className="flex items-center gap-2">
           <IconButton
             onClick={() => window.shell.system.bluetoothOpenSettings()}
@@ -83,7 +82,7 @@ export default function BluetoothSettingsPage() {
           </IconButton>
           <Toggle label="Bluetooth" checked={enabled} onChange={toggleRadio} />
         </div>
-      </div>
+      </Row>
 
       {!enabled ? (
         <EmptyState icon={<Bluetooth size={20} />} text="Bluetooth off" />

@@ -24,14 +24,14 @@ const PLACEMENT_OPTIONS: SegmentedOption<'edge' | 'center'>[] = [
   { value: 'center', label: 'Center' },
 ]
 
-export default function TilingPage() {
+export default function WindowsPage() {
   const { config, setConfig } = useTiling()
 
   return (
     <div className="flex w-full flex-col gap-section">
-      <PageTitle title="Window Tiling" />
+      <PageTitle title="Windows" />
 
-      <Section title="General">
+      <Section title="Tiling">
         <Row
           label="Enable window tiling"
           description="Arrange windows into layouts. When off, Windows behaves normally."
