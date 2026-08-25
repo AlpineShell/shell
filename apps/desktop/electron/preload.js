@@ -326,7 +326,7 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('windows/settings-navigate', handler)
     },
     onSettingsReset: (callback) => {
-      const handler = (_, page) => callback(page)
+      const handler = () => callback()
       ipcRenderer.on('windows/settings-reset', handler)
       return () => ipcRenderer.removeListener('windows/settings-reset', handler)
     },

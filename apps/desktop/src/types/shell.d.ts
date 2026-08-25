@@ -131,6 +131,11 @@ declare global {
     children: import('react').ReactNode
   }
 
+  interface FlyoutHost {
+    element: HTMLElement
+    setOpen: (open: boolean) => void
+  }
+
   type SetupOutcomeTone = 'success' | 'danger'
 
   interface OutcomeBadgeProps {
@@ -932,7 +937,7 @@ declare global {
         setSettingsPage: (name: string) => Promise<void>
         initialPage: string | null
         onSettingsNavigate: (callback: (page: string) => void) => () => void
-        onSettingsReset: (callback: (page: string) => void) => () => void
+        onSettingsReset: (callback: () => void) => () => void
       }
       run: {
         resolve: (query: string) => Promise<RunResult | null>

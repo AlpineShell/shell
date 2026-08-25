@@ -1,3 +1,3 @@
 import { createContext } from 'react'
 
-export const FlyoutHostContext = createContext<HTMLElement | null>(null)
+export const FlyoutHostContext = createContext<FlyoutHost | null>(null)

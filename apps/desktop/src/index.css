@@ -288,6 +288,8 @@
 .settings-scope {
   font-family: var(--font-sans);
   color-scheme: light;
+  --alpine-flyout-width: 20rem;
+  --alpine-flyout-inset: calc(var(--alpine-flyout-width) + var(--spacing-gutter));
 }
 
 .alpine-flyout {
@@ -295,8 +297,15 @@
   transition-duration: 220ms;
 }
 
+.alpine-flyout-reflow {
+  transition-property: padding-right;
+  transition-duration: 220ms;
+  transition-timing-function: var(--ease-state);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .alpine-flyout {
+  .alpine-flyout,
+  .alpine-flyout-reflow {
     transition-duration: 1ms;
   }
 }

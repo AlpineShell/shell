@@ -7,6 +7,7 @@ import IconButton from './iconButton'
 export default function Flyout({ open, title, subtitle, onClose, children }: FlyoutProps) {
   const host = useContext(FlyoutHostContext)
   const panelRef = useRef<HTMLDivElement>(null)
+  const setHostOpen = host?.setOpen
 
   useEffect(() => {
     if (!open) return
@@ -28,6 +29,12 @@ export default function Flyout({ open, title, subtitle, onClose, children }: Fly
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [open, onClose])
 
+  useEffect(() => {
+    if (!setHostOpen) return
+    setHostOpen(open)
+    return () => setHostOpen(false)
+  }, [open, setHostOpen])
+
   if (!host) return null
 
   return createPortal(
@@ -38,7 +45,7 @@ export default function Flyout({ open, title, subtitle, onClose, children }: Fly
       aria-hidden={!open}
       inert={!open}
       tabIndex={-1}
-      className={`alpine-flyout absolute inset-y-0 right-0 flex w-80 max-w-full flex-col border-l border-line-hairline bg-surface-2 shadow-float outline-none ${
+      className={`alpine-flyout absolute inset-y-0 right-0 flex w-[var(--alpine-flyout-width)] max-w-full flex-col border-l border-line-hairline bg-surface-2 shadow-float outline-none ${
         open ? 'pointer-events-auto translate-x-0 ease-enter' : 'pointer-events-none translate-x-full ease-exit'
       }`}
     >
@@ -53,6 +60,6 @@ export default function Flyout({ open, title, subtitle, onClose, children }: Fly
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-4 py-4">{children}</div>
     </div>,
-    host
+    host.element
   )
 }

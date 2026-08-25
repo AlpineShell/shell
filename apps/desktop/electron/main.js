@@ -541,17 +541,19 @@ function createSetupWindow() {
   return setupWin
 }
 
-const SETTINGS_DEFAULT_PAGE = 'topbar'
 const SETTINGS_PREFERRED_WIDTH = 1440
 const SETTINGS_PREFERRED_HEIGHT = 920
 const SETTINGS_MIN_WIDTH = 960
 const SETTINGS_MIN_HEIGHT = 640
 const SETTINGS_SCREEN_MARGIN = 120
-const SETTINGS_PREWARM_DELAY_MS = 1500
+const SETTINGS_PREWARM_DELAY_MS = 2500
+const SETTINGS_BOUNDS_FILE = 'settings-window.json'
+const SETTINGS_BOUNDS_SAVE_DEBOUNCE_MS = 400
 
 let settingsWin = null
 let currentSettingsPage = null
 let pendingSettingsPage = null
+let settingsBoundsSaveTimer = null
 
 function settingsWindowSize() {
   const { workAreaSize } = screen.getPrimaryDisplay()
@@ -559,6 +561,37 @@ function settingsWindowSize() {
     width: Math.max(SETTINGS_MIN_WIDTH, Math.min(SETTINGS_PREFERRED_WIDTH, workAreaSize.width - SETTINGS_SCREEN_MARGIN)),
     height: Math.max(SETTINGS_MIN_HEIGHT, Math.min(SETTINGS_PREFERRED_HEIGHT, workAreaSize.height - SETTINGS_SCREEN_MARGIN)),
   }
+}
+
+function settingsBoundsPath() {
+  return path.join(app.getPath('userData'), SETTINGS_BOUNDS_FILE)
+}
+
+function storedSettingsBounds() {
+  try {
+    const { x, y, width, height } = JSON.parse(fs.readFileSync(settingsBoundsPath(), 'utf8'))
+    if (![x, y, width, height].every(Number.isFinite)) return null
+    if (width < SETTINGS_MIN_WIDTH || height < SETTINGS_MIN_HEIGHT) return null
+    const { workArea } = screen.getDisplayMatching({ x, y, width, height })
+    const overlapsWorkArea =
+      x + width > workArea.x &&
+      x < workArea.x + workArea.width &&
+      y + height > workArea.y &&
+      y < workArea.y + workArea.height
+    return overlapsWorkArea ? { x, y, width, height } : null
+  } catch {
+    return null
+  }
+}
+
+function saveSettingsBounds() {
+  if (!settingsWin || settingsWin.isDestroyed() || !settingsWin.isVisible() || settingsWin.isMinimized()) return
+  try { fs.writeFileSync(settingsBoundsPath(), JSON.stringify(settingsWin.getBounds())) } catch {}
+}
+
+function scheduleSettingsBoundsSave() {
+  clearTimeout(settingsBoundsSaveTimer)
+  settingsBoundsSaveTimer = setTimeout(saveSettingsBounds, SETTINGS_BOUNDS_SAVE_DEBOUNCE_MS)
 }
 
 function raiseTopBarsAboveSettings() {
@@ -573,16 +606,19 @@ function raiseTopBarsAboveSettings() {
 
 function createSettingsWindow() {
   if (settingsWin && !settingsWin.isDestroyed()) return settingsWin
-  const { width, height } = settingsWindowSize()
+  const stored = storedSettingsBounds()
+  const { width, height } = stored || settingsWindowSize()
   settingsWin = new BrowserWindow({
     title: 'Settings',
     width,
     height,
+    x: stored ? stored.x : undefined,
+    y: stored ? stored.y : undefined,
     minWidth: SETTINGS_MIN_WIDTH,
     minHeight: SETTINGS_MIN_HEIGHT,
     frame: false,
     resizable: true,
-    center: true,
+    center: !stored,
     transparent: false,
     skipTaskbar: false,
     show: false,
@@ -595,7 +631,10 @@ function createSettingsWindow() {
   })
   settingsWin.on('page-title-updated', (e) => e.preventDefault())
   loadAppURL(settingsWin, getURL('settings'))
+  settingsWin.on('moved', scheduleSettingsBoundsSave)
+  settingsWin.on('resized', scheduleSettingsBoundsSave)
   settingsWin.on('closed', () => {
+    clearTimeout(settingsBoundsSaveTimer)
     settingsWin = null
     currentSettingsPage = null
     pendingSettingsPage = null
@@ -619,7 +658,6 @@ function showSettingsWindow() {
   if (!win || win.isDestroyed()) return null
   if (win.isMinimized()) win.restore()
   if (!win.isVisible()) {
-    win.center()
     win.show()
     openApps.refresh()
   }
@@ -629,10 +667,12 @@ function showSettingsWindow() {
 
 function hideSettingsWindow() {
   if (!settingsWin || settingsWin.isDestroyed()) return
+  clearTimeout(settingsBoundsSaveTimer)
+  saveSettingsBounds()
   settingsWin.hide()
   currentSettingsPage = null
   pendingSettingsPage = null
-  try { settingsWin.webContents.send('windows/settings-reset', SETTINGS_DEFAULT_PAGE) } catch {}
+  try { settingsWin.webContents.send('windows/settings-reset') } catch {}
   openApps.refresh()
   raiseTopBarsAboveSettings()
 }

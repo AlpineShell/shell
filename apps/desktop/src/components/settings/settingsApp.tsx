@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, X } from 'lucide-react'
 import TopBarPage from './topBarPage'
 import DesktopPage from './desktopPage'
@@ -26,7 +26,13 @@ export default function SettingsApp() {
     return page && page !== DEFAULT_SETTINGS_PAGE ? [DEFAULT_SETTINGS_PAGE, page] : [DEFAULT_SETTINGS_PAGE]
   })
   const [historyIndex, setHistoryIndex] = useState(() => history.length - 1)
-  const [flyoutHost, setFlyoutHost] = useState<HTMLElement | null>(null)
+  const [flyoutHostElement, setFlyoutHostElement] = useState<HTMLElement | null>(null)
+  const [flyoutOpen, setFlyoutOpen] = useState(false)
+
+  const flyoutHost = useMemo<FlyoutHost | null>(
+    () => (flyoutHostElement ? { element: flyoutHostElement, setOpen: setFlyoutOpen } : null),
+    [flyoutHostElement]
+  )
 
   const currentPath = history[historyIndex]
   const currentPage = currentPath.split('/')[0]
@@ -57,8 +63,8 @@ export default function SettingsApp() {
   }, [])
 
   useEffect(() => {
-    return window.shell.windows.onSettingsReset((page) => {
-      setHistory([page])
+    return window.shell.windows.onSettingsReset(() => {
+      setHistory([DEFAULT_SETTINGS_PAGE])
       setHistoryIndex(0)
     })
   }, [])
@@ -151,14 +157,18 @@ export default function SettingsApp() {
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-tl-card border-t border-l border-line-hairline bg-surface-1">
-          <div className="h-full overflow-auto px-gutter pt-gutter pb-6">
+          <div
+            className={`alpine-flyout-reflow h-full overflow-auto px-gutter pt-gutter pb-6 ${
+              flyoutOpen ? 'pr-[var(--alpine-flyout-inset)]' : ''
+            }`}
+          >
             <PageErrorBoundary key={currentPath}>
               <FlyoutHostContext.Provider value={flyoutHost}>
                 <PageRouter path={currentPath} />
               </FlyoutHostContext.Provider>
             </PageErrorBoundary>
           </div>
-          <div ref={setFlyoutHost} className="pointer-events-none absolute inset-0 z-20 overflow-hidden" />
+          <div ref={setFlyoutHostElement} className="pointer-events-none absolute inset-0 z-20 overflow-hidden" />
         </div>
       </main>
     </div>
