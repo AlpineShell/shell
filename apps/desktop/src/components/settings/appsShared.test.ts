@@ -38,8 +38,8 @@ describe('bandLabel', () => {
 
 describe('bandClass', () => {
   it('highlights only the heavy band', () => {
-    expect(bandClass('heavy')).toBe('text-amber-300/80')
-    expect(bandClass('light')).toBe('text-white/45')
-    expect(bandClass('moderate')).toBe('text-white/45')
+    expect(bandClass('heavy')).toBe('text-warning')
+    expect(bandClass('light')).toBe('text-ink-quiet')
+    expect(bandClass('moderate')).toBe('text-ink-quiet')
   })
 })

@@ -11,6 +11,9 @@ import {
   Store,
   Trash2,
 } from 'lucide-react'
+import PageTitle from '../ui/pageTitle'
+import Toggle from '../ui/toggle'
+import Button from '../ui/button'
 
 function assetUrl(id: string, rel?: string | null): string | null {
   if (!rel || rel.startsWith('lucide:')) return null
@@ -48,53 +51,42 @@ function InstalledCard({
   const subtitle = plugin.marketplace?.shortDescription || plugin.description
 
   return (
-    <li className="rounded-lg bg-white/5 overflow-hidden">
+    <li className="rounded-card border border-line-hairline bg-surface-2 overflow-hidden">
       <div className="flex items-center gap-3 px-3 h-14">
         {logo ? (
           <img src={logo} alt="" className="w-8 h-8 rounded shrink-0 object-cover" />
         ) : (
-          <Puzzle size={18} className="text-white/40 shrink-0" />
+          <Puzzle size={18} className="text-ink-faint shrink-0" />
         )}
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-[13px] text-white truncate flex items-center gap-2">
+          <span className="text-dense text-ink-primary truncate flex items-center gap-2">
             {plugin.name}
-            <span className="text-[11px] text-white/30">
+            <span className="text-[11px] text-ink-faint">
               {plugin.version && plugin.version !== '0.0.0' ? `v${plugin.version}` : ''}
             </span>
             {plugin.preset && (
-              <span className="text-[9px] uppercase tracking-wide text-white/40 bg-white/10 rounded px-1.5 py-0.5">
+              <span className="text-eyebrow uppercase text-ink-quiet bg-fill-ghost rounded px-1.5 py-0.5">
                 Preset
               </span>
             )}
           </span>
-          <span className="text-[11px] text-white/40 truncate">{subtitle || plugin.id}</span>
+          <span className="text-[11px] text-ink-quiet truncate">{subtitle || plugin.id}</span>
         </div>
         {!plugin.preset && (
           <button
             onClick={() => onUninstall(plugin)}
             disabled={removing}
             aria-label="Uninstall"
-            className="text-white/40 hover:text-red-300 transition-colors p-1 cursor-pointer disabled:opacity-50 disabled:cursor-default"
+            className="focus-ring text-ink-quiet hover:text-danger transition-colors p-1 cursor-pointer disabled:opacity-50 disabled:cursor-default"
           >
             {removing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
           </button>
         )}
-        <button
-          onClick={() => onToggle(plugin)}
-          role="switch"
-          aria-checked={enabled}
-          className="relative shrink-0 cursor-pointer rounded-full transition-colors"
-          style={{ width: 26, height: 14, backgroundColor: enabled ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.18)' }}
-        >
-          <span
-            className="absolute top-0.5 rounded-full transition-all"
-            style={{ width: 10, height: 10, left: enabled ? 14 : 2, backgroundColor: enabled ? 'rgb(20,20,20)' : 'rgba(255,255,255,0.7)' }}
-          />
-        </button>
+        <Toggle label={`Enable ${plugin.name}`} checked={enabled} onChange={() => onToggle(plugin)} />
       </div>
 
       {!plugin.loadable && (
-        <div className="flex items-center gap-2 px-3 pb-2 -mt-1 text-[11px] text-amber-300/90">
+        <div className="flex items-center gap-2 px-3 pb-2 -mt-1 text-[11px] text-warning">
           <AlertTriangle size={12} /> {plugin.compat?.reason || (plugin.errors[0] ?? 'Cannot load this plugin.')}
         </div>
       )}
@@ -126,45 +118,42 @@ function BrowseCard({
   const canUpdate = installed && semverGt(plugin.version, installedVersion)
 
   return (
-    <li className="rounded-lg bg-white/5 overflow-hidden">
+    <li className="rounded-card border border-line-hairline bg-surface-2 overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-2.5">
         {logo ? (
           <img src={logo} alt="" className="w-9 h-9 rounded-lg shrink-0 object-cover" />
         ) : (
-          <div className="w-9 h-9 rounded-lg shrink-0 bg-white/5 flex items-center justify-center">
-            <Puzzle size={18} className="text-white/40" />
+          <div className="w-9 h-9 rounded-field shrink-0 bg-surface-3 flex items-center justify-center">
+            <Puzzle size={18} className="text-ink-faint" />
           </div>
         )}
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-[13px] text-white truncate flex items-center gap-2">
+          <span className="text-dense text-ink-primary truncate flex items-center gap-2">
             {plugin.name}
-            <span className="text-[11px] text-white/30">v{plugin.version}</span>
+            <span className="text-[11px] text-ink-faint">v{plugin.version}</span>
           </span>
-          <span className="text-[11px] text-white/40 truncate">{plugin.shortDescription || plugin.id}</span>
+          <span className="text-[11px] text-ink-quiet truncate">{plugin.shortDescription || plugin.id}</span>
         </div>
         <button
           onClick={() => window.plugins.marketplace.openWeb(plugin.id)}
-          className="text-white/40 hover:text-white/70 transition-colors p-1 cursor-pointer shrink-0"
+          className="focus-ring text-ink-quiet hover:text-ink-primary transition-colors p-1 cursor-pointer shrink-0"
           aria-label="View on the web"
           title="View on the web"
         >
           <ExternalLink size={15} />
         </button>
         {installing ? (
-          <span className="flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/5 text-[12px] text-white/45 shrink-0">
+          <span className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-fill-subtle text-[12px] text-ink-quiet shrink-0">
             <Loader2 size={13} className="animate-spin" /> Installing…
           </span>
         ) : installed && !canUpdate ? (
-          <span className="flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/5 text-[12px] text-white/45 shrink-0">
+          <span className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-fill-subtle text-[12px] text-ink-quiet shrink-0">
             <ShieldCheck size={13} /> Installed
           </span>
         ) : (
-          <button
-            onClick={() => onInstall(plugin)}
-            className="flex items-center gap-1.5 h-8 px-3 rounded-md bg-white/90 hover:bg-white text-[12px] font-medium text-black cursor-pointer transition-colors shrink-0"
-          >
+          <Button size="sm" onClick={() => onInstall(plugin)} className="font-medium shrink-0">
             <Download size={13} /> {installed ? 'Update' : 'Install'}
-          </button>
+          </Button>
         )}
       </div>
     </li>
@@ -274,26 +263,28 @@ export default function PluginsPage() {
 
   return (
     <div className="w-full">
-      <h1 className="text-lg font-semibold mb-1">Plugins</h1>
-      <p className="text-[13px] text-white/50 mb-4 leading-relaxed">
-        Browse the marketplace and install with one click, or drop a plugin folder into your plugins directory.
-      </p>
+      <div className="mb-4">
+        <PageTitle
+          title="Plugins"
+          subtitle="Browse the marketplace and install with one click, or drop a plugin folder into your plugins directory."
+        />
+      </div>
 
       <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 w-fit">
+        <div className="flex items-center gap-1 rounded-full border border-line-hairline p-1 w-fit">
           <button
             onClick={() => setTab('installed')}
-            className={`flex items-center gap-1.5 h-8 px-3.5 rounded-md text-[13px] cursor-pointer transition-colors ${
-              tab === 'installed' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'
+            className={`focus-ring flex items-center gap-1.5 h-8 px-3.5 rounded-full text-dense cursor-pointer transition-colors ${
+              tab === 'installed' ? 'bg-fill-solid text-on-solid' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
             }`}
           >
             <Puzzle size={14} /> Installed
-            {plugins.length > 0 && <span className="text-[11px] text-white/40">{plugins.length}</span>}
+            {plugins.length > 0 && <span className="text-[11px] opacity-70">{plugins.length}</span>}
           </button>
           <button
             onClick={() => setTab('browse')}
-            className={`flex items-center gap-1.5 h-8 px-3.5 rounded-md text-[13px] cursor-pointer transition-colors ${
-              tab === 'browse' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'
+            className={`focus-ring flex items-center gap-1.5 h-8 px-3.5 rounded-full text-dense cursor-pointer transition-colors ${
+              tab === 'browse' ? 'bg-fill-solid text-on-solid' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
             }`}
           >
             <Store size={14} /> Browse
@@ -302,38 +293,29 @@ export default function PluginsPage() {
         <div className="flex items-center gap-2 shrink-0">
           {tab === 'installed' ? (
             <>
-              <button
-                onClick={() => window.plugins.openFolder()}
-                className="flex items-center gap-2 h-8 px-3 rounded-md bg-white/10 hover:bg-white/15 text-[13px] text-white cursor-pointer transition-colors"
-              >
+              <Button variant="outline" size="sm" onClick={() => window.plugins.openFolder()}>
                 <FolderOpen size={14} /> Open plugins folder
-              </button>
-              <button
-                onClick={reload}
-                className="flex items-center gap-2 h-8 px-3 rounded-md bg-white/5 hover:bg-white/10 text-[13px] text-white/80 cursor-pointer transition-colors"
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={reload}>
                 <RefreshCw size={14} className={reloading ? 'animate-spin' : ''} /> Reload
-              </button>
+              </Button>
             </>
           ) : (
-            <button
-              onClick={loadBrowse}
-              className="flex items-center gap-2 h-8 px-3 rounded-md bg-white/5 hover:bg-white/10 text-[13px] text-white/80 cursor-pointer transition-colors"
-            >
+            <Button variant="ghost" size="sm" onClick={loadBrowse}>
               <RefreshCw size={14} className={browse.status === 'loading' ? 'animate-spin' : ''} /> Refresh
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {tab === 'installed' ? (
         plugins.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 text-center border border-white/10 rounded-lg py-10 px-6">
-            <Puzzle size={22} className="text-white/30" />
-            <span className="text-[13px] text-white/50">No plugins installed yet.</span>
+          <div className="flex flex-col items-center gap-2 text-center border border-line-hairline rounded-card py-10 px-6">
+            <Puzzle size={22} className="text-ink-faint" />
+            <span className="text-dense text-ink-quiet">No plugins installed yet.</span>
             <button
               onClick={() => setTab('browse')}
-              className="mt-1 text-[12px] text-sky-300 hover:text-sky-200 cursor-pointer"
+              className="focus-ring mt-1 cursor-pointer text-[12px] text-ink-primary underline decoration-line-strong underline-offset-4 transition-colors hover:decoration-ink-primary"
             >
               Browse the marketplace →
             </button>
@@ -352,22 +334,22 @@ export default function PluginsPage() {
           </ul>
         )
       ) : browse.status === 'loading' ? (
-        <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-white/40">
+        <div className="flex items-center justify-center gap-2 py-12 text-dense text-ink-quiet">
           <Loader2 size={16} className="animate-spin" /> Loading marketplace…
         </div>
       ) : browse.status === 'error' ? (
-        <div className="flex flex-col items-center gap-2 text-center border border-white/10 rounded-lg py-10 px-6">
-          <AlertTriangle size={22} className="text-amber-300/70" />
-          <span className="text-[13px] text-white/60">Couldn&apos;t reach the marketplace.</span>
-          {browse.base && <span className="text-[11px] text-white/30 font-mono break-all">{browse.base}</span>}
-          <button onClick={loadBrowse} className="mt-1 text-[12px] text-sky-300 hover:text-sky-200 cursor-pointer">
+        <div className="flex flex-col items-center gap-2 text-center border border-line-hairline rounded-card py-10 px-6">
+          <AlertTriangle size={22} className="text-warning" />
+          <span className="text-dense text-ink-secondary">Couldn&apos;t reach the marketplace.</span>
+          {browse.base && <span className="text-[11px] text-ink-faint font-mono break-all">{browse.base}</span>}
+          <button onClick={loadBrowse} className="focus-ring mt-1 cursor-pointer text-[12px] text-ink-primary underline decoration-line-strong underline-offset-4 transition-colors hover:decoration-ink-primary">
             Try again
           </button>
         </div>
       ) : browse.plugins.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 text-center border border-white/10 rounded-lg py-10 px-6">
-          <Store size={22} className="text-white/30" />
-          <span className="text-[13px] text-white/50">No plugins published yet.</span>
+        <div className="flex flex-col items-center gap-2 text-center border border-line-hairline rounded-card py-10 px-6">
+          <Store size={22} className="text-ink-faint" />
+          <span className="text-dense text-ink-quiet">No plugins published yet.</span>
         </div>
       ) : (
         <ul className="flex flex-col gap-1.5">

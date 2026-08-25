@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, FolderOpen, Lock, ShieldAlert } from 'lucide-react'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { AppIcon, PageHeader, SearchBox, Spinner, Toggle, processKey } from './appsShared'
+import { AppIcon, PageHeader, SearchBox, Spinner, processKey } from './appsShared'
+import Toggle from '../ui/toggle'
 
 export default function AppsStartupPage() {
   const startup = useStartupApps()
@@ -43,19 +44,19 @@ export default function AppsStartupPage() {
 
       <div className="flex flex-col gap-3">
         {pending.length > 0 && (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-400/10 border border-amber-400/30">
-            <ShieldAlert size={18} className="text-amber-300 shrink-0" />
+          <div className="flex items-center gap-3 px-4 py-3 rounded-card bg-warning/10 border border-warning/30">
+            <ShieldAlert size={18} className="text-warning shrink-0" />
             <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-[13px] text-amber-100">{pending.length} system {pending.length === 1 ? 'app change needs' : 'app changes need'} your approval</span>
-              {error && <span className="text-xs text-red-300 mt-0.5">{error}</span>}
+              <span className="text-dense text-ink-primary">{pending.length} system {pending.length === 1 ? 'app change needs' : 'app changes need'} your approval</span>
+              {error && <span className="text-xs text-danger mt-0.5">{error}</span>}
             </div>
-            <button onClick={() => pending.forEach((e) => window.shell.apps.clearPending(e.id))} disabled={applying} className="h-7 px-3 rounded-md text-[12px] text-white/70 hover:text-white hover:bg-white/10 cursor-pointer transition-colors disabled:opacity-40">Cancel</button>
-            <button onClick={applyChanges} disabled={applying} className="h-7 px-3 rounded-md text-[12px] bg-amber-400 text-black hover:bg-amber-300 cursor-pointer transition-colors disabled:opacity-40">{applying ? 'Approving…' : 'Approve'}</button>
+            <button onClick={() => pending.forEach((e) => window.shell.apps.clearPending(e.id))} disabled={applying} className="h-7 px-3 rounded-field text-[12px] text-ink-secondary hover:text-ink-primary hover:bg-fill-ghost cursor-pointer transition-colors disabled:opacity-40">Cancel</button>
+            <button onClick={applyChanges} disabled={applying} className="h-7 px-3 rounded-field text-[12px] bg-fill-solid text-on-solid hover:bg-fill-solid-hover cursor-pointer transition-colors disabled:opacity-40">{applying ? 'Approving…' : 'Approve'}</button>
           </div>
         )}
 
-        {startup.length === 0 && <p className="text-sm text-white/50">Looking for startup apps…</p>}
-        {startup.length > 0 && appEntries.length === 0 && systemEntries.length === 0 && <p className="text-sm text-white/50">No apps match your search.</p>}
+        {startup.length === 0 && <p className="text-sm text-ink-quiet">Looking for startup apps…</p>}
+        {startup.length > 0 && appEntries.length === 0 && systemEntries.length === 0 && <p className="text-sm text-ink-quiet">No apps match your search.</p>}
 
         <div className="flex flex-col gap-1">
           {appEntries.map((entry) => (
@@ -64,14 +65,14 @@ export default function AppsStartupPage() {
         </div>
 
         {systemEntries.length > 0 && (
-          <div className="rounded-lg bg-neutral-900 border border-white/5">
+          <div className="rounded-card bg-surface-2 border border-line-hairline">
             <button onClick={() => setSystemOpen(!systemOpen)} className="w-full flex items-center gap-3 px-3 h-12 cursor-pointer text-left">
-              <Lock size={15} className="text-white/40 shrink-0" />
+              <Lock size={15} className="text-ink-faint shrink-0" />
               <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-[13px] text-white/80">Part of Windows ({systemEntries.length})</span>
-                <span className="text-[11px] text-white/40">Kept on so your PC works properly. We recommend leaving these on.</span>
+                <span className="text-dense text-ink-secondary">Part of Windows ({systemEntries.length})</span>
+                <span className="text-[11px] text-ink-faint">Kept on so your PC works properly. We recommend leaving these on.</span>
               </div>
-              {systemOpen ? <ChevronDown size={15} className="text-white/40" /> : <ChevronRight size={15} className="text-white/40" />}
+              {systemOpen ? <ChevronDown size={15} className="text-ink-faint" /> : <ChevronRight size={15} className="text-ink-faint" />}
             </button>
             {systemOpen && (
               <div className="flex flex-col gap-1 px-2 pb-2">
@@ -107,25 +108,25 @@ function StartupRow({ entry, running }: { entry: StartupEntry; running?: Running
   }
 
   return (
-    <div className="flex items-center gap-3 px-3 min-h-14 py-2 rounded-lg bg-neutral-900 border border-white/5">
+    <div className="flex items-center gap-3 px-3 min-h-14 py-2 rounded-card bg-surface-2 border border-line-hairline">
       <AppIcon icon={entry.icon} name={entry.friendlyName} />
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center gap-2 min-w-0">
-          <span className={`text-[13px] truncate ${entry.missing ? 'text-white/55' : 'text-white/90'}`}>{entry.friendlyName}</span>
+          <span className={`text-[13px] truncate ${entry.missing ? 'text-ink-quiet' : 'text-ink-primary'}`}>{entry.friendlyName}</span>
           {!entry.missing && running && (
-            <span className="flex items-center gap-1 text-[11px] text-emerald-300/90 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Open now
+            <span className="flex items-center gap-1 text-[11px] text-success shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-success" /> Open now
             </span>
           )}
-          {!entry.missing && heavy && <span className="text-[11px] text-amber-300/80 shrink-0">· Uses a lot of memory</span>}
+          {!entry.missing && heavy && <span className="text-[11px] text-warning shrink-0">· Uses a lot of memory</span>}
         </div>
-        <span className="text-[11px] text-white/45 truncate">{entry.missing ? 'This app is no longer on your PC' : (entry.blurb || (effectiveOn ? 'Opens when you start your PC' : 'Off'))}</span>
+        <span className="text-[11px] text-ink-quiet truncate">{entry.missing ? 'This app is no longer on your PC' : (entry.blurb || (effectiveOn ? 'Opens when you start your PC' : 'Off'))}</span>
       </div>
       {entry.missing ? (
         <button
           onClick={remove}
           disabled={removing}
-          className="h-7 w-20 flex items-center justify-center rounded-md text-[12px] text-white/60 hover:text-red-200 hover:bg-red-500/15 cursor-pointer transition-colors shrink-0 disabled:cursor-default disabled:text-white/60 disabled:hover:bg-transparent"
+          className="h-7 w-20 flex items-center justify-center rounded-field text-[12px] text-ink-secondary hover:text-danger hover:bg-danger/10 cursor-pointer transition-colors shrink-0 disabled:cursor-default disabled:text-ink-secondary disabled:hover:bg-transparent"
         >
           {removing ? <Spinner size={13} /> : 'Remove'}
         </button>
@@ -137,15 +138,15 @@ function StartupRow({ entry, running }: { entry: StartupEntry; running?: Running
               disabled={locating}
               title="Open file location"
               aria-label="Open file location"
-              className="w-8 h-8 flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 cursor-pointer transition-colors shrink-0 disabled:hover:bg-transparent"
+              className="w-8 h-8 flex items-center justify-center rounded-field text-ink-faint hover:text-ink-primary hover:bg-fill-ghost cursor-pointer transition-colors shrink-0 disabled:hover:bg-transparent"
             >
               {locating ? <Spinner size={15} /> : <FolderOpen size={15} />}
             </button>
           )}
           {entry.locked ? (
-            <Lock size={15} className="text-white/30 shrink-0" />
+            <Lock size={15} className="text-ink-faint shrink-0" />
           ) : (
-            <Toggle checked={effectiveOn} pending={!!entry.pending} onChange={() => window.shell.apps.setStartup(entry.id, !effectiveOn)} />
+            <Toggle label="Opens when you start your PC" checked={effectiveOn} pending={!!entry.pending} onChange={() => window.shell.apps.setStartup(entry.id, !effectiveOn)} />
           )}
         </>
       )}

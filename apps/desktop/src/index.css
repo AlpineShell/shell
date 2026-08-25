@@ -1,7 +1,174 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: block;
+  src: url('./assets/fonts/geist-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: block;
+  src: url('./assets/fonts/geist-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: block;
+  src: url('./assets/fonts/geistMono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Averia Serif Libre';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('./assets/fonts/averiaSerifLibre-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Averia Serif Libre';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('./assets/fonts/averiaSerifLibre-700-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root,
+:root[data-theme='light'] {
+  --alpine-surface-0: #f9fafb;
+  --alpine-surface-1: #ffffff;
+  --alpine-surface-2: #ffffff;
+  --alpine-surface-3: #f3f4f6;
+
+  --alpine-line-hairline: #e5e7eb;
+  --alpine-line-strong: #d1d5db;
+  --alpine-line-soft: #f3f4f6;
+
+  --alpine-ink-primary: #333332;
+  --alpine-ink-secondary: #4b4b49;
+  --alpine-ink-quiet: #6a7282;
+  --alpine-ink-faint: #99a1af;
+
+  --alpine-fill-solid: #333332;
+  --alpine-fill-solid-hover: #4a4a48;
+  --alpine-on-solid: #ffffff;
+  --alpine-fill-subtle: #f9fafb;
+  --alpine-fill-ghost: rgba(0, 0, 0, 0.05);
+  --alpine-fill-track: #d1d5db;
+
+  --alpine-focus-ring: #333332;
+  --alpine-danger: #dc2626;
+  --alpine-success: #047857;
+  --alpine-warning: #b45309;
+  --alpine-scrim: rgba(0, 0, 0, 0.25);
+
+  --alpine-scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --alpine-scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+
+  --alpine-shadow-float: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+:root[data-theme='dark'] {
+  --alpine-surface-0: #1a1a19;
+  --alpine-surface-1: #212120;
+  --alpine-surface-2: #292928;
+  --alpine-surface-3: #333332;
+
+  --alpine-line-hairline: #3b3b39;
+  --alpine-line-strong: #4b4b49;
+  --alpine-line-soft: #292928;
+
+  --alpine-ink-primary: #ebebe7;
+  --alpine-ink-secondary: #b8b8b2;
+  --alpine-ink-quiet: #9a9a95;
+  --alpine-ink-faint: #6f6f6b;
+
+  --alpine-fill-solid: #ebebe7;
+  --alpine-fill-solid-hover: #f5f5f2;
+  --alpine-on-solid: #1a1a19;
+  --alpine-fill-subtle: #292928;
+  --alpine-fill-ghost: rgba(255, 255, 255, 0.07);
+  --alpine-fill-track: #4b4b49;
+
+  --alpine-focus-ring: #ebebe7;
+  --alpine-danger: #f87171;
+  --alpine-success: #34d399;
+  --alpine-warning: #fbbf24;
+  --alpine-scrim: rgba(0, 0, 0, 0.5);
+
+  --alpine-scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  --alpine-scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+
+  --alpine-shadow-float: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+}
+
+@theme inline {
+  --color-surface-0: var(--alpine-surface-0);
+  --color-surface-1: var(--alpine-surface-1);
+  --color-surface-2: var(--alpine-surface-2);
+  --color-surface-3: var(--alpine-surface-3);
+
+  --color-line-hairline: var(--alpine-line-hairline);
+  --color-line-strong: var(--alpine-line-strong);
+  --color-line-soft: var(--alpine-line-soft);
+
+  --color-ink-primary: var(--alpine-ink-primary);
+  --color-ink-secondary: var(--alpine-ink-secondary);
+  --color-ink-quiet: var(--alpine-ink-quiet);
+  --color-ink-faint: var(--alpine-ink-faint);
+
+  --color-fill-solid: var(--alpine-fill-solid);
+  --color-fill-solid-hover: var(--alpine-fill-solid-hover);
+  --color-on-solid: var(--alpine-on-solid);
+  --color-fill-subtle: var(--alpine-fill-subtle);
+  --color-fill-ghost: var(--alpine-fill-ghost);
+  --color-fill-track: var(--alpine-fill-track);
+
+  --color-focus-ring: var(--alpine-focus-ring);
+  --color-danger: var(--alpine-danger);
+  --color-success: var(--alpine-success);
+  --color-warning: var(--alpine-warning);
+  --color-scrim: var(--alpine-scrim);
+
+  --shadow-float: var(--alpine-shadow-float);
+}
+
 @theme {
   --color-systemBg: rgba(255, 255, 255, 0.7);
+
+  --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-display: 'Averia Serif Libre', Georgia, 'Times New Roman', serif;
+
+  --text-eyebrow: 0.6875rem;
+  --text-eyebrow--line-height: 1rem;
+  --text-eyebrow--font-weight: 600;
+  --text-eyebrow--letter-spacing: 0.05em;
+  --text-dense: 0.8125rem;
+  --text-dense--line-height: 1.25rem;
+
+  --radius-card: 0.75rem;
+  --radius-field: 0.5rem;
+
+  --spacing-stack: 1rem;
+  --spacing-gutter: 1.25rem;
+  --spacing-section: 2rem;
+
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.32, 0, 0.67, 0);
+  --ease-state: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @property --slider-progress {
@@ -104,18 +271,32 @@
 }
 
 .settings-scope ::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.16);
-  border-radius: 8px;
+  background-color: var(--alpine-scrollbar-thumb);
+  border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 .settings-scope ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.28);
+  background-color: var(--alpine-scrollbar-thumb-hover);
 }
 
 .settings-scope ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+.settings-scope {
+  font-family: var(--font-sans);
+  color-scheme: light;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--alpine-focus-ring);
+  outline-offset: 2px;
+}
+
+:root[data-theme='dark'] .settings-scope {
+  color-scheme: dark;
 }
 
 .cc-scroll::-webkit-scrollbar {

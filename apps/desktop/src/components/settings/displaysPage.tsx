@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { RotateCw, Star, MonitorCheck } from 'lucide-react'
 import { useDisplays } from '../../hooks/useDisplays'
+import PageTitle from '../ui/pageTitle'
+import Section from '../ui/section'
+import Button from '../ui/button'
 
 const SNAP_SCREEN_PX = 16
 const KEEP_CHANGES_SECONDS = 15
@@ -134,57 +137,44 @@ export default function DisplaysPage() {
 
   return (
     <div className="flex flex-col gap-8 w-full">
-      <h1 className="text-2xl font-semibold tracking-tight">Displays</h1>
+      <PageTitle title="Displays" />
 
       {committed.length === 0 ? (
-        <p className="text-sm text-white/50">No displays detected.</p>
+        <p className="text-sm text-ink-quiet">No displays detected.</p>
       ) : (
         <>
           {phase === 'confirming' ? (
-            <div className="flex items-center justify-between gap-4 rounded-lg bg-neutral-900 border border-white/5 px-4 py-3">
-              <span className="inline-flex items-center gap-2 text-[13px] text-white/90">
-                <MonitorCheck size={16} className="text-emerald-400" />
+            <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 border border-line-hairline px-4 py-3">
+              <span className="inline-flex items-center gap-2 text-dense text-ink-primary">
+                <MonitorCheck size={16} className="text-success" />
                 Keep these display changes? Reverting in {secondsLeft}s.
               </span>
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={revertNow}
-                  className="h-8 px-3 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/90 text-[12px] font-medium transition-colors cursor-pointer"
-                >
+                <Button variant="outline" size="sm" onClick={revertNow} className="font-medium">
                   Revert
-                </button>
-                <button
-                  onClick={keep}
-                  className="h-8 px-3 rounded-md bg-white hover:bg-neutral-200 text-neutral-950 text-[12px] font-medium transition-colors cursor-pointer"
-                >
+                </Button>
+                <Button size="sm" onClick={keep} className="font-medium">
                   Keep changes
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
             dirty && (
-              <div className="flex items-center justify-between gap-4 rounded-lg bg-neutral-900 border border-white/5 px-4 py-3">
-                <span className="text-[13px] text-white/90">You have unsaved display changes.</span>
+              <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 border border-line-hairline px-4 py-3">
+                <span className="text-dense text-ink-primary">You have unsaved display changes.</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={discard}
-                    className="h-8 px-3 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/90 text-[12px] font-medium transition-colors cursor-pointer"
-                  >
+                  <Button variant="outline" size="sm" onClick={discard} className="font-medium">
                     Discard
-                  </button>
-                  <button
-                    onClick={apply}
-                    disabled={applying}
-                    className="h-8 px-3 rounded-md bg-white hover:bg-neutral-200 text-neutral-950 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-50"
-                  >
+                  </Button>
+                  <Button size="sm" onClick={apply} disabled={applying} className="font-medium">
                     {applying ? 'Applying…' : 'Apply'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )
           )}
 
-          {error && <p className="text-xs text-red-300">{error}</p>}
+          {error && <p className="text-xs text-danger">{error}</p>}
 
           <Section title="Arrangement" subtitle="Drag the displays to match how they are physically placed on your desk.">
             <DisplayCanvas displays={draft} selectedId={selectedId} onSelect={setSelectedId} onMove={moveDisplay} />
@@ -192,35 +182,29 @@ export default function DisplaysPage() {
 
           {selected && (
             <Section title={selected.name}>
-              <div className="flex items-center justify-between gap-4 rounded-lg bg-neutral-900 border border-white/5 px-4 py-4">
+              <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 border border-line-hairline px-4 py-4">
                 <div className="min-w-0">
-                  <div className="text-[13px] text-white/90">
+                  <div className="text-dense text-ink-primary">
                     {selected.width} × {selected.height}
                     {selected.refreshRate ? ` · ${selected.refreshRate} Hz` : ''}
                   </div>
-                  <div className="text-xs text-white/50 mt-0.5">{orientationLabel(selected.orientation)}</div>
+                  <div className="text-xs text-ink-quiet mt-0.5">{orientationLabel(selected.orientation)}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={rotateSelected}
-                    className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/90 text-xs font-medium transition-colors cursor-pointer"
-                  >
+                  <Button variant="outline" size="sm" onClick={rotateSelected} className="font-medium">
                     <RotateCw size={14} />
                     Rotate
-                  </button>
+                  </Button>
                   {selected.primary ? (
-                    <span className="inline-flex items-center gap-1.5 h-8 px-3 text-xs text-emerald-400">
+                    <span className="inline-flex items-center gap-1.5 h-8 px-3 text-xs text-success">
                       <Star size={14} />
                       Primary
                     </span>
                   ) : (
-                    <button
-                      onClick={setPrimarySelected}
-                      className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/90 text-xs font-medium transition-colors cursor-pointer"
-                    >
+                    <Button variant="outline" size="sm" onClick={setPrimarySelected} className="font-medium">
                       <Star size={14} />
                       Set as primary
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -298,7 +282,7 @@ function DisplayCanvas({
       onMouseMove={onMouseMove}
       onMouseUp={endDrag}
       onMouseLeave={endDrag}
-      className="relative h-64 w-full rounded-lg bg-neutral-900 border border-white/5 overflow-hidden select-none"
+      className="relative h-64 w-full rounded-card bg-surface-2 border border-line-hairline overflow-hidden select-none"
     >
       {scale > 0 &&
         displays.map((d, index) => {
@@ -308,7 +292,7 @@ function DisplayCanvas({
               key={d.id}
               onMouseDown={(e) => startDrag(e, d)}
               className={`absolute flex flex-col items-center justify-center rounded-md border-2 transition-colors cursor-grab active:cursor-grabbing ${
-                active ? 'border-white bg-white/10 text-white' : 'border-white/15 bg-neutral-800 text-white/70 hover:border-white/30'
+                active ? 'border-focus-ring bg-fill-ghost text-ink-primary' : 'border-line-strong bg-surface-3 text-ink-secondary hover:border-ink-faint'
               }`}
               style={{
                 left: originX + d.x * scale,
@@ -319,22 +303,10 @@ function DisplayCanvas({
             >
               <span className="text-xl font-semibold leading-none">{index + 1}</span>
               <span className="mt-1 text-[10px] opacity-70 truncate max-w-full px-1">{d.name}</span>
-              {d.primary && <Star size={12} className="absolute top-1 right-1 text-emerald-400 fill-emerald-400" />}
+              {d.primary && <Star size={12} className="absolute top-1 right-1 text-success fill-success" />}
             </div>
           )
         })}
     </div>
-  )
-}
-
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-base font-semibold">{title}</h2>
-        {subtitle && <p className="text-xs text-white/50 mt-1">{subtitle}</p>}
-      </div>
-      {children}
-    </section>
   )
 }

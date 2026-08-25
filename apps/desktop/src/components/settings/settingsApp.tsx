@@ -22,6 +22,7 @@ import AppsStartupPage from './appsStartupPage'
 import UpdatesPage from './updatesPage'
 import PluginsPage from './pluginsPage'
 import DisplaysPage from './displaysPage'
+import { useTheme } from '../../hooks/useTheme'
 
 interface NavItem {
   path: string
@@ -44,6 +45,8 @@ const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
 
 export default function SettingsApp() {
+  useTheme()
+
   const [history, setHistory] = useState<string[]>(() => {
     const page = window.shell.windows.initialPage
     return page && page !== 'home' ? ['home', page] : ['home']
@@ -96,10 +99,10 @@ export default function SettingsApp() {
   }, [currentPath])
 
   return (
-    <div className="settings-scope w-screen h-screen bg-neutral-950 text-white flex overflow-hidden">
-      <aside className="w-56 shrink-0 flex flex-col bg-neutral-900" style={dragRegion}>
+    <div className="settings-scope flex h-screen w-screen overflow-hidden bg-surface-1 text-ink-primary">
+      <aside className="flex w-56 shrink-0 flex-col bg-surface-0" style={dragRegion}>
         <div className="h-14 flex items-center px-5 shrink-0">
-          <span className="text-base font-semibold tracking-tight">Settings</span>
+          <span className="font-display text-base font-normal tracking-tight text-ink-primary">Settings</span>
         </div>
         <nav className="flex-1 px-2 flex flex-col gap-0.5 overflow-auto" style={noDragRegion}>
           {NAV.map((p) => {
@@ -109,8 +112,8 @@ export default function SettingsApp() {
               <button
                 key={p.path}
                 onClick={() => navigate(p.path)}
-                className={`flex items-center gap-2.5 px-3 h-9 rounded-md text-left text-[13px] cursor-pointer transition-colors ${
-                  active ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white hover:bg-white/5'
+                className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
+                  active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
                 }`}
               >
                 <Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />
@@ -121,15 +124,15 @@ export default function SettingsApp() {
         </nav>
       </aside>
 
-      <main className="flex-1 min-w-0 flex flex-col bg-neutral-900">
-        <div className="h-14 flex items-center shrink-0 bg-neutral-900" style={dragRegion}>
+      <main className="flex min-w-0 flex-1 flex-col bg-surface-0">
+        <div className="flex h-14 shrink-0 items-center bg-surface-0" style={dragRegion}>
           <header className="w-full h-10 flex items-center gap-3 pl-3 pr-3">
             <div className="flex items-center gap-1" style={noDragRegion}>
               <button
                 onClick={back}
                 disabled={!canBack}
-                className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
-                  canBack ? 'hover:bg-white/10 cursor-pointer text-white' : 'text-white/30 cursor-not-allowed'
+                className={`focus-ring flex h-7 w-7 items-center justify-center rounded-field transition-colors ${
+                  canBack ? 'cursor-pointer text-ink-primary hover:bg-fill-ghost' : 'cursor-not-allowed text-ink-faint'
                 }`}
                 aria-label="Back"
               >
@@ -138,8 +141,8 @@ export default function SettingsApp() {
               <button
                 onClick={forward}
                 disabled={!canForward}
-                className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
-                  canForward ? 'hover:bg-white/10 cursor-pointer text-white' : 'text-white/30 cursor-not-allowed'
+                className={`focus-ring flex h-7 w-7 items-center justify-center rounded-field transition-colors ${
+                  canForward ? 'cursor-pointer text-ink-primary hover:bg-fill-ghost' : 'cursor-not-allowed text-ink-faint'
                 }`}
                 aria-label="Forward"
               >
@@ -155,7 +158,7 @@ export default function SettingsApp() {
 
             <button
               onClick={() => window.shell.windows.closeSettings()}
-              className="w-7 h-7 flex items-center justify-center cursor-pointer text-white/60 hover:text-white transition-colors"
+              className="focus-ring flex h-7 w-7 cursor-pointer items-center justify-center rounded-field text-ink-quiet transition-colors hover:text-ink-primary"
               style={noDragRegion}
               aria-label="Close"
             >
@@ -164,7 +167,7 @@ export default function SettingsApp() {
           </header>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-auto px-5 pt-5 pb-6 bg-neutral-950 rounded-tl-xl">
+        <div className="min-h-0 flex-1 overflow-auto rounded-tl-card border-t border-l border-line-hairline bg-surface-1 px-gutter pt-gutter pb-6">
           <PageErrorBoundary key={currentPath}>
             <PageRouter path={currentPath} navigate={navigate} />
           </PageErrorBoundary>
@@ -184,7 +187,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boo
   }
   render() {
     if (this.state.failed) {
-      return <div className="text-sm text-white/50">This page failed to load. Try reopening Settings or restarting the shell.</div>
+      return <div className="text-sm text-ink-quiet">This page failed to load. Try reopening Settings or restarting the shell.</div>
     }
     return this.props.children
   }
@@ -251,13 +254,13 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
         const label = SEGMENT_LABELS[seg] ?? seg
         return (
           <span key={subpath} className="flex items-center gap-1">
-            {i > 0 && <span className="text-white/30 text-[13px]">/</span>}
+            {i > 0 && <span className="text-dense text-ink-faint">/</span>}
             {isLast ? (
-              <span className="text-[13px] underline decoration-white/30 underline-offset-4">{label}</span>
+              <span className="text-dense text-ink-primary underline decoration-line-strong underline-offset-4">{label}</span>
             ) : (
               <button
                 onClick={() => onNavigate(subpath)}
-                className="text-[13px] text-white/60 hover:text-white hover:underline underline-offset-4 decoration-white/30 cursor-pointer"
+                className="focus-ring cursor-pointer text-dense text-ink-quiet underline-offset-4 decoration-line-strong hover:text-ink-primary hover:underline"
               >
                 {label}
               </button>

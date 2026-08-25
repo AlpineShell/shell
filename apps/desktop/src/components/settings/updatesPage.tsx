@@ -3,6 +3,7 @@ import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw 
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
 import { PageHeader, Spinner } from './appsShared'
+import Button from '../ui/button'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
@@ -83,7 +84,7 @@ export default function UpdatesPage() {
             disabled={checking || installing || alpineBusy}
             title="Check for updates"
             aria-label="Check for updates"
-            className="-m-1 p-1 inline-flex items-center justify-center text-white/50 hover:text-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="focus-ring -m-1 p-1 inline-flex items-center justify-center text-ink-quiet hover:text-ink-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {checking ? <Spinner size={16} /> : <RefreshCw size={16} />}
           </button>
@@ -91,9 +92,9 @@ export default function UpdatesPage() {
       </PageHeader>
 
       {errorMessage && (
-        <div className="flex items-start gap-2.5 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3">
-          <AlertTriangle size={16} className="text-red-400/80 shrink-0 mt-0.5" />
-          <span className="text-[13px] text-red-300/90">{errorMessage}</span>
+        <div className="flex items-start gap-2.5 rounded-card border border-danger/30 bg-danger/10 px-4 py-3">
+          <AlertTriangle size={16} className="text-danger shrink-0 mt-0.5" />
+          <span className="text-dense text-danger">{errorMessage}</span>
         </div>
       )}
 
@@ -101,7 +102,7 @@ export default function UpdatesPage() {
         <div className="flex flex-col gap-1">
           {restartRequired && (
             <Row
-              icon={<AlertTriangle size={20} className="text-amber-400" />}
+              icon={<AlertTriangle size={20} className="text-warning" />}
               title="Restart required"
               detail="Restart your device to finish installing Windows updates."
               action={
@@ -115,7 +116,7 @@ export default function UpdatesPage() {
 
           {!restartRequired && alpineActionable && (
             <Row
-              icon={<AppWindow size={20} className="text-white/70" />}
+              icon={<AppWindow size={20} className="text-ink-secondary" />}
               title="Alpine Shell"
               detail={alpineDetail(alpine.state)}
               action={
@@ -135,7 +136,7 @@ export default function UpdatesPage() {
               return (
                 <Row
                   key={`${update.updateId || update.kb || update.title}-${i}`}
-                  icon={<Download size={18} className="text-white/35" />}
+                  icon={<Download size={18} className="text-ink-faint" />}
                   title={update.title}
                   detail={[
                     update.kb,
@@ -167,13 +168,13 @@ export default function UpdatesPage() {
           {checking ? (
             <Spinner size={22} />
           ) : (
-            <CheckCircle2 size={26} className="text-emerald-400" />
+            <CheckCircle2 size={26} className="text-success" />
           )}
-          <span className="text-[13px] text-white/70">
+          <span className="text-dense text-ink-secondary">
             {checking ? 'Checking for updates…' : "You're up to date"}
           </span>
           {!checking && (
-            <span className="text-[11px] text-white/40">
+            <span className="text-[11px] text-ink-quiet">
               Alpine Shell {alpine.state.currentVersion}
               {windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''}
             </span>
@@ -223,11 +224,11 @@ function Row({
   action?: React.ReactNode
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-neutral-900 border border-white/5 px-3 min-h-14 py-2">
+    <div className="flex items-center gap-3 rounded-card bg-surface-2 border border-line-hairline px-3 min-h-14 py-2">
       <span className="w-7 flex justify-center shrink-0">{icon}</span>
       <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-[13px] text-white/90 truncate">{title}</span>
-        {detail && <span className="text-[11px] text-white/45 truncate">{detail}</span>}
+        <span className="text-dense text-ink-primary truncate">{title}</span>
+        {detail && <span className="text-[11px] text-ink-quiet truncate">{detail}</span>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -294,13 +295,9 @@ function SecondaryButton({
   children: React.ReactNode
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 text-white/90 text-[12px] font-medium hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-    >
+    <Button variant="outline" size="sm" onClick={onClick} disabled={disabled} className="font-medium">
       {children}
-    </button>
+    </Button>
   )
 }
 
@@ -308,10 +305,10 @@ function ProgressBar({ percent }: { percent: number }) {
   const clamped = Math.min(100, Math.max(0, percent))
   return (
     <div className="flex items-center gap-2.5 w-40">
-      <div className="relative flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
-        <div className="absolute left-0 top-0 bottom-0 bg-blue-500 transition-all" style={{ width: `${clamped}%` }} />
+      <div className="relative flex-1 h-1.5 rounded-full bg-fill-track overflow-hidden">
+        <div className="absolute left-0 top-0 bottom-0 bg-fill-solid transition-all" style={{ width: `${clamped}%` }} />
       </div>
-      <span className="text-xs text-white/50 shrink-0 tabular-nums">{Math.round(clamped)}%</span>
+      <span className="text-xs text-ink-quiet shrink-0 tabular-nums">{Math.round(clamped)}%</span>
     </div>
   )
 }
@@ -326,12 +323,8 @@ function PrimaryButton({
   children: React.ReactNode
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md bg-white hover:bg-neutral-200 text-neutral-950 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-    >
+    <Button size="sm" onClick={onClick} disabled={disabled} className="font-medium">
       {children}
-    </button>
+    </Button>
   )
 }
