@@ -574,9 +574,26 @@ function noteObservedBrightness(monitor, observed) {
   forgetBatterySaverBaseline(monitor.stableKey)
 }
 
-async function dimForBatterySaver(reductionPercent, includeExternalDisplays) {
+async function restoreBaselines(stableKeys) {
   let changed = false
-  for (const target of displaysToDim(monitors, includeExternalDisplays)) {
+  for (const stableKey of stableKeys) {
+    const target = monitors.find(m => m.stableKey === stableKey)
+    if (!target) continue
+    const { accepted } = await writeMonitorBrightness(target.id, batterySaverBaselines.baselineFor(stableKey))
+    if (batterySaverBaselines.finishRestoreAttempt(stableKey, accepted)) changed = true
+  }
+  return changed
+}
+
+function baselinesOutsideDimSet(dimTargets) {
+  const dimmedKeys = new Set(dimTargets.map(m => m.stableKey))
+  return batterySaverBaselines.keys().filter(stableKey => !dimmedKeys.has(stableKey))
+}
+
+async function dimForBatterySaver(reductionPercent, includeExternalDisplays) {
+  const dimTargets = displaysToDim(monitors, includeExternalDisplays)
+  let changed = await restoreBaselines(baselinesOutsideDimSet(dimTargets))
+  for (const target of dimTargets) {
     const stableKey = target.stableKey
     const { isFirstAttempt, baseline } = batterySaverBaselines.beginDimAttempt(stableKey, target.brightness)
     const dimmedTo = dimmedBrightness(baseline, reductionPercent)
@@ -591,14 +608,7 @@ async function dimForBatterySaver(reductionPercent, includeExternalDisplays) {
 }
 
 async function restoreFromBatterySaver() {
-  let changed = false
-  for (const stableKey of batterySaverBaselines.keys()) {
-    const target = monitors.find(m => m.stableKey === stableKey)
-    if (!target) continue
-    const { accepted } = await writeMonitorBrightness(target.id, batterySaverBaselines.baselineFor(stableKey))
-    if (batterySaverBaselines.finishRestoreAttempt(stableKey, accepted)) changed = true
-  }
-  if (changed) {
+  if (await restoreBaselines(batterySaverBaselines.keys())) {
     persistBatterySaverBaselines()
     publishMonitors()
   }
