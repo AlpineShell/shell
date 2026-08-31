@@ -330,6 +330,48 @@ declare global {
     hasBattery: boolean
   }
 
+  interface PerfProbeSwitchLatency {
+    count: number
+    timedOutCount: number
+    p50Ms: number | null
+    p95Ms: number | null
+    minMs: number | null
+    maxMs: number | null
+  }
+
+  interface PerfProbeHardFaults {
+    count: number
+    p50PerSecond: number | null
+    p95PerSecond: number | null
+    maxPerSecond: number | null
+    meanPerSecond: number | null
+  }
+
+  interface PerfProbeMemory {
+    count: number
+    totalBytes: number | null
+    availableBytes: number | null
+    standbyBytes: number | null
+    minAvailableBytes: number | null
+    minStandbyBytes: number | null
+  }
+
+  interface PerfProbeDwmFrames {
+    supported: boolean
+    refreshRateHz: number | null
+    framesLate: number | null
+    framesDropped: number | null
+  }
+
+  interface PerfProbeSummary {
+    sampledAt: number
+    windowMs: number
+    foregroundSwitch: PerfProbeSwitchLatency
+    hardFaults: PerfProbeHardFaults
+    memory: PerfProbeMemory
+    dwmFrames: PerfProbeDwmFrames
+  }
+
   interface MonitorInfo {
     id: string
     name: string
@@ -992,6 +1034,11 @@ declare global {
         state: () => Promise<BatterySaverState>
         setOverride: (override: BatterySaverOverride) => Promise<BatterySaverState>
         onStateChanged: (callback: (state: BatterySaverState) => void) => () => void
+      }
+      perfProbe: {
+        summary: () => Promise<PerfProbeSummary>
+        reset: () => Promise<PerfProbeSummary>
+        onSummaryChanged: (callback: (summary: PerfProbeSummary) => void) => () => void
       }
       media: {
         session: () => Promise<MediaPlayback>

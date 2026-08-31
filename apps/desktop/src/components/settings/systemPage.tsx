@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BatteryLow, Check, MonitorCog, RotateCcw } from 'lucide-react'
+import { BatteryLow, Check, Gauge, MonitorCog, RotateCcw } from 'lucide-react'
 import PageTitle from '../ui/pageTitle'
 import NavRow from '../ui/navRow'
 import Button from '../ui/button'
@@ -14,6 +14,12 @@ const ROWS = [
     label: 'Battery',
     description: 'Battery saver, when it turns on and what it changes',
     icon: BatteryLow,
+  },
+  {
+    path: 'system/performance',
+    label: 'Performance probe',
+    description: 'Foreground switch latency, hard fault rate and memory headroom',
+    icon: Gauge,
   },
   {
     path: 'system/revert',

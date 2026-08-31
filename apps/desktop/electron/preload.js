@@ -433,6 +433,15 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('battery-saver/state-changed', handler)
     },
   },
+  perfProbe: {
+    summary: () => ipcRenderer.invoke('perf-probe/summary-get'),
+    reset: () => ipcRenderer.invoke('perf-probe/reset'),
+    onSummaryChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('perf-probe/summary-changed', handler)
+      return () => ipcRenderer.removeListener('perf-probe/summary-changed', handler)
+    },
+  },
   media: {
     session: () => ipcRenderer.invoke('media/session'),
     onSessionChanged: (callback) => {

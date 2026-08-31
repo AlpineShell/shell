@@ -43,6 +43,10 @@ describe('dispatchPriority', () => {
   it('sends unknown subscribers last', () => {
     expect(dispatchPriority('somethingElse')).toBe(DISPATCH_ORDER.length)
   })
+
+  it('ranks perfProbe first so it stamps the event before other subscribers do native work', () => {
+    expect(dispatchPriority('perfProbe')).toBeLessThan(dispatchPriority('tiling'))
+  })
 })
 
 describe('addSubscriber', () => {

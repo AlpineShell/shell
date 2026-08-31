@@ -11,7 +11,7 @@ const SYSTEM_WINDOW_EVENTS = Object.freeze(
   )
 )
 
-const DISPATCH_ORDER = Object.freeze(['tiling', 'windowCorners', 'minimizeToTopbar'])
+const DISPATCH_ORDER = Object.freeze(['perfProbe', 'tiling', 'windowCorners', 'minimizeToTopbar'])
 
 function dispatchPriority(name) {
   const index = DISPATCH_ORDER.indexOf(name)

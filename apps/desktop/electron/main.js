@@ -24,6 +24,7 @@ const mediaSession = require('./modules/mediaSession')
 const microphone = require('./modules/microphone')
 const battery = require('./modules/battery')
 const batterySaver = require('./modules/batterySaver')
+const perfProbe = require('./modules/perfProbe')
 const systemInfo = require('./modules/systemInfo')
 const launcher = require('./modules/launcher')
 const frecency = require('./modules/frecency')
@@ -763,7 +764,7 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, theme, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, perfProbe, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, theme, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
 
   setup.setShellShutdown(gracefulShutdown)
 
