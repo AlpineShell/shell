@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, AppWindow, House, Monitor, MonitorCog, Paintbrush, Plug, Puzzle, RefreshCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, AppWindow, Gauge, House, Monitor, MonitorCog, Paintbrush, Plug, Puzzle, RefreshCw, X } from 'lucide-react'
 import AboutPage from './aboutPage'
 import PersonalizationHub from './personalizationHub'
 import WallpaperPage from './wallpaperPage'
@@ -15,6 +15,7 @@ import WifiSettingsPage from './wifiSettingsPage'
 import SystemPage from './systemPage'
 import BatteryPage from './batteryPage'
 import SystemRevertPage from './systemRevertPage'
+import PerformancePage from './performancePage'
 import AppsHub from './appsHub'
 import AppsRunningPage from './appsRunningPage'
 import AppsInstalledPage from './appsInstalledPage'
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { path: 'devices', label: 'Devices & Connections', icon: Plug },
   { path: 'apps', label: 'Apps', icon: AppWindow },
   { path: 'system', label: 'System', icon: MonitorCog },
+  { path: 'performance', label: 'Performance', icon: Gauge },
   { path: 'plugins', label: 'Plugins', icon: Puzzle },
   { path: 'updates', label: 'Updates', icon: RefreshCw },
 ]
@@ -214,6 +216,7 @@ function PageRouter({ path, navigate }: { path: string; navigate: (p: string) =>
   if (path === 'system') return <SystemPage onNavigate={navigate} />
   if (path === 'system/battery') return <BatteryPage />
   if (path === 'system/revert') return <SystemRevertPage />
+  if (path === 'performance') return <PerformancePage />
   if (path === 'plugins') return <PluginsPage />
   if (path === 'updates') return <UpdatesPage />
   return null
@@ -240,6 +243,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   system: 'System',
   battery: 'Battery',
   revert: 'Revert back to Windows',
+  performance: 'Performance',
   plugins: 'Plugins',
   updates: 'Updates',
 }

@@ -4,7 +4,10 @@ import winEventDispatch from './winEventDispatch.js'
 const {
   EVENT_SYSTEM_FOREGROUND,
   EVENT_SYSTEM_MINIMIZEEND,
+  EVENT_OBJECT_DESTROY,
   EVENT_OBJECT_SHOW,
+  EVENT_OBJECT_HIDE,
+  OBJECT_WINDOW_EVENTS,
   SYSTEM_WINDOW_EVENTS,
   DISPATCH_ORDER,
   dispatchPriority,
@@ -12,7 +15,7 @@ const {
   removeSubscriber,
   dispatchWinEvent,
   needsSystemRangeHook,
-  needsObjectShowHook,
+  needsObjectRangeHook,
 } = winEventDispatch
 
 const OBJID_WINDOW = 0
@@ -164,11 +167,25 @@ describe('hook requirements', () => {
     expect(needsSystemRangeHook(subscribers)).toBe(false)
   })
 
-  it('asks for the object-show hook only when that id is subscribed', () => {
+  it('asks for the object-range hook only when one of those ids is subscribed', () => {
     const subscribers = []
     addSubscriber(subscribers, 'windowCorners', SYSTEM_WINDOW_EVENTS, () => {})
-    expect(needsObjectShowHook(subscribers)).toBe(false)
+    expect(needsObjectRangeHook(subscribers)).toBe(false)
     addSubscriber(subscribers, 'tiling', [EVENT_OBJECT_SHOW], () => {})
-    expect(needsObjectShowHook(subscribers)).toBe(true)
+    expect(needsObjectRangeHook(subscribers)).toBe(true)
+  })
+
+  it('asks for the object-range hook for destroy and hide as well as show', () => {
+    for (const event of OBJECT_WINDOW_EVENTS) {
+      const subscribers = []
+      addSubscriber(subscribers, 'processGovernor', [event], () => {})
+      expect(needsObjectRangeHook(subscribers)).toBe(true)
+    }
+  })
+
+  it('spans destroy, show and hide in one contiguous range', () => {
+    expect(OBJECT_WINDOW_EVENTS).toEqual([EVENT_OBJECT_DESTROY, EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE])
+    expect(EVENT_OBJECT_DESTROY).toBeLessThan(EVENT_OBJECT_SHOW)
+    expect(EVENT_OBJECT_SHOW).toBeLessThan(EVENT_OBJECT_HIDE)
   })
 })

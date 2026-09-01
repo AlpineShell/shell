@@ -330,6 +330,84 @@ declare global {
     hasBattery: boolean
   }
 
+  type GovernedProcessState = 'interactive' | 'visible' | 'occluded' | 'napping'
+
+  type GovernorExclusionReason = 'shell' | 'audio' | 'pinned' | 'untouchable' | 'busy-io' | 'fullscreen'
+
+  interface ProcessGovernorConfig {
+    enabled: boolean
+    deepNap: boolean
+    lowerMemoryPriority: boolean
+    interactiveGraceMs: number
+    occludedDwellMs: number
+    nappingDwellMs: number
+    audioHoldMs: number
+    busyIoBytesPerSec: number
+    memoryPressurePercent: number
+    pinnedPaths: string[]
+  }
+
+  interface ProcessGovernorCapabilities {
+    build: number
+    ecoQos: boolean
+    powerThrottlingReadback: boolean
+    ignoreTimerResolution: boolean
+    memoryPriority: boolean
+    ioPriority: boolean
+    cpuSets: boolean
+    efficientCpuSetIds: number[]
+  }
+
+  interface GovernedProcessLevers {
+    ecoQos: boolean
+    ignoreTimerResolution: boolean
+    memoryPriority: number | null
+    efficientCpuSet: boolean
+    belowNormalPriority: boolean
+    lowIoPriority: boolean
+  }
+
+  interface GovernedProcess {
+    pid: number
+    name: string | null
+    path: string | null
+    windowCount: number
+    state: GovernedProcessState
+    rawState: GovernedProcessState
+    since: number
+    rawSince: number
+    excluded: boolean
+    reason: GovernorExclusionReason | null
+    explanation: string
+    levers: GovernedProcessLevers
+  }
+
+  interface ProcessGovernorState {
+    config: ProcessGovernorConfig
+    capabilities: ProcessGovernorCapabilities
+    processes: GovernedProcess[]
+    governedCount: number
+  }
+
+  interface PerfProbeMetricSummary {
+    count: number
+    mean: number | null
+    min: number | null
+    max: number | null
+    p50: number | null
+    p95: number | null
+  }
+
+  interface PerfProbeState {
+    recording: boolean
+    label: string | null
+    name: string | null
+    startedAt: number | null
+    recordCount: number
+    frameStatsAvailable: boolean
+    sessions: string[]
+  }
+
   interface MonitorInfo {
     id: string
     name: string
@@ -992,6 +1070,21 @@ declare global {
         state: () => Promise<BatterySaverState>
         setOverride: (override: BatterySaverOverride) => Promise<BatterySaverState>
         onStateChanged: (callback: (state: BatterySaverState) => void) => () => void
+      }
+      processGovernor: {
+        state: () => Promise<ProcessGovernorState>
+        setConfig: (partial: Partial<ProcessGovernorConfig>) => Promise<ProcessGovernorState>
+        pin: (imagePath: string, pinned: boolean) => Promise<ProcessGovernorState>
+        revertAll: () => Promise<ProcessGovernorState>
+        onStateChanged: (callback: (state: ProcessGovernorState) => void) => () => void
+      }
+      perfProbe: {
+        state: () => Promise<PerfProbeState>
+        start: (label: string) => Promise<PerfProbeState>
+        stop: () => Promise<PerfProbeState>
+        summary: (name: string) => Promise<unknown>
+        compare: (before: string, after: string) => Promise<unknown>
+        onStateChanged: (callback: (state: PerfProbeState) => void) => () => void
       }
       media: {
         session: () => Promise<MediaPlayback>

@@ -1,6 +1,10 @@
 const EVENT_SYSTEM_FOREGROUND = 0x0003
 const EVENT_SYSTEM_MINIMIZEEND = 0x0017
+const EVENT_OBJECT_DESTROY = 0x8001
 const EVENT_OBJECT_SHOW = 0x8002
+const EVENT_OBJECT_HIDE = 0x8003
+
+const OBJECT_WINDOW_EVENTS = Object.freeze([EVENT_OBJECT_DESTROY, EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE])
 const OBJID_WINDOW = 0
 const CHILDID_SELF = 0
 
@@ -54,14 +58,17 @@ function needsSystemRangeHook(subscribers) {
   return subscribers.some((subscriber) => SYSTEM_WINDOW_EVENTS.some((event) => subscriber.events.has(event)))
 }
 
-function needsObjectShowHook(subscribers) {
-  return subscribers.some((subscriber) => subscriber.events.has(EVENT_OBJECT_SHOW))
+function needsObjectRangeHook(subscribers) {
+  return subscribers.some((subscriber) => OBJECT_WINDOW_EVENTS.some((event) => subscriber.events.has(event)))
 }
 
 module.exports = {
   EVENT_SYSTEM_FOREGROUND,
   EVENT_SYSTEM_MINIMIZEEND,
+  EVENT_OBJECT_DESTROY,
   EVENT_OBJECT_SHOW,
+  EVENT_OBJECT_HIDE,
+  OBJECT_WINDOW_EVENTS,
   SYSTEM_WINDOW_EVENTS,
   DISPATCH_ORDER,
   dispatchPriority,
@@ -69,5 +76,5 @@ module.exports = {
   removeSubscriber,
   dispatchWinEvent,
   needsSystemRangeHook,
-  needsObjectShowHook,
+  needsObjectRangeHook,
 }

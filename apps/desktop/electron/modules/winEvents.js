@@ -1,13 +1,15 @@
 const {
   EVENT_SYSTEM_FOREGROUND,
   EVENT_SYSTEM_MINIMIZEEND,
-  EVENT_OBJECT_SHOW,
+  EVENT_OBJECT_DESTROY,
+  EVENT_OBJECT_HIDE,
+  OBJECT_WINDOW_EVENTS,
   SYSTEM_WINDOW_EVENTS,
   addSubscriber,
   removeSubscriber,
   dispatchWinEvent,
   needsSystemRangeHook,
-  needsObjectShowHook,
+  needsObjectRangeHook,
 } = require('./winEventDispatch')
 
 const WINEVENT_OUTOFCONTEXT = 0x0000
@@ -19,7 +21,7 @@ const subscribers = []
 let native = null
 let procPointer = null
 let systemRangeHook = null
-let objectShowHook = null
+let objectRangeHook = null
 
 function toExactHandle(value) {
   if (typeof value !== 'bigint') return value
@@ -73,9 +75,9 @@ function releaseProcPointer() {
 
 function syncNativeHooks() {
   const wantsSystemRange = needsSystemRangeHook(subscribers)
-  const wantsObjectShow = needsObjectShowHook(subscribers)
+  const wantsObjectRange = needsObjectRangeHook(subscribers)
   try {
-    if (wantsSystemRange || wantsObjectShow) ensureProcPointer()
+    if (wantsSystemRange || wantsObjectRange) ensureProcPointer()
 
     if (wantsSystemRange && !systemRangeHook) {
       systemRangeHook = installHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND)
@@ -84,14 +86,14 @@ function syncNativeHooks() {
       systemRangeHook = null
     }
 
-    if (wantsObjectShow && !objectShowHook) {
-      objectShowHook = installHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW)
-    } else if (!wantsObjectShow && objectShowHook) {
-      removeHook(objectShowHook)
-      objectShowHook = null
+    if (wantsObjectRange && !objectRangeHook) {
+      objectRangeHook = installHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE)
+    } else if (!wantsObjectRange && objectRangeHook) {
+      removeHook(objectRangeHook)
+      objectRangeHook = null
     }
 
-    if (!systemRangeHook && !objectShowHook) releaseProcPointer()
+    if (!systemRangeHook && !objectRangeHook) releaseProcPointer()
   } catch (e) {
     console.error('[winEvents] hook sync error:', e.message)
   }
@@ -108,5 +110,6 @@ function subscribe(name, eventIds, listener) {
 
 module.exports = {
   SYSTEM_WINDOW_EVENTS,
+  OBJECT_WINDOW_EVENTS,
   subscribe,
 }

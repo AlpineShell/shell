@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   Leaf,
   MonitorCog,
+  Moon,
   Package,
   PanelTop,
   Power,
@@ -248,6 +249,18 @@ export const SETTING_COMMANDS: SettingCommand[] = [
       kind: "toggle",
       get: () => window.shell.batterySaver.config().then((c) => c.throttleProcesses),
       set: (v) => window.shell.batterySaver.setConfig({ throttleProcesses: v }),
+    },
+  },
+  {
+    id: "process-governor",
+    label: "Ease off unused apps",
+    hint: "Quiet apps whose windows are covered or put away",
+    icon: Moon,
+    keywords: ["napping", "nap", "performance", "ease off", "background apps", "throttle", "idle apps", "cpu"],
+    control: {
+      kind: "toggle",
+      get: () => window.shell.processGovernor.state().then((s) => s.config.enabled),
+      set: (v) => window.shell.processGovernor.setConfig({ enabled: v }),
     },
   },
   {

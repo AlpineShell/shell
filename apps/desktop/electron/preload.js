@@ -433,6 +433,29 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('battery-saver/state-changed', handler)
     },
   },
+  processGovernor: {
+    state: () => ipcRenderer.invoke('process-governor/state'),
+    setConfig: (partial) => ipcRenderer.invoke('process-governor/config-set', partial),
+    pin: (imagePath, pinned) => ipcRenderer.invoke('process-governor/pin', imagePath, pinned),
+    revertAll: () => ipcRenderer.invoke('process-governor/revert-all'),
+    onStateChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('process-governor/state-changed', handler)
+      return () => ipcRenderer.removeListener('process-governor/state-changed', handler)
+    },
+  },
+  perfProbe: {
+    state: () => ipcRenderer.invoke('perf-probe/state'),
+    start: (label) => ipcRenderer.invoke('perf-probe/start', label),
+    stop: () => ipcRenderer.invoke('perf-probe/stop'),
+    summary: (name) => ipcRenderer.invoke('perf-probe/summary', name),
+    compare: (before, after) => ipcRenderer.invoke('perf-probe/compare', before, after),
+    onStateChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('perf-probe/state-changed', handler)
+      return () => ipcRenderer.removeListener('perf-probe/state-changed', handler)
+    },
+  },
   media: {
     session: () => ipcRenderer.invoke('media/session'),
     onSessionChanged: (callback) => {
