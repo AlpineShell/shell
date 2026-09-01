@@ -14,6 +14,8 @@ const POWER_THROTTLING_VERSION = 1
 const POWER_THROTTLING_EXECUTION_SPEED = 0x1
 const POWER_THROTTLING_IGNORE_TIMER_RESOLUTION = 0x4
 
+const PRIORITY_CLASS_BELOW_NORMAL = 0x00004000
+
 const MEMORY_PRIORITY_SIZE = 4
 const PROCESS_IO_PRIORITY_CLASS = 33
 const IO_PRIORITY_SIZE = 4
@@ -57,6 +59,8 @@ function loadBindings() {
       GetLastError: kernel32.func('__stdcall', 'GetLastError', 'uint32', []),
       GetProcessInformation: kernel32.func('__stdcall', 'GetProcessInformation', 'int', ['uintptr_t', 'int', 'void *', 'uint32']),
       SetProcessInformation: kernel32.func('__stdcall', 'SetProcessInformation', 'int', ['uintptr_t', 'int', 'void *', 'uint32']),
+      SetPriorityClass: kernel32.func('__stdcall', 'SetPriorityClass', 'int', ['uintptr_t', 'uint32']),
+      SetProcessDefaultCpuSets: kernel32.func('__stdcall', 'SetProcessDefaultCpuSets', 'int', ['uintptr_t', 'void *', 'uint32']),
       GetPriorityClass: kernel32.func('__stdcall', 'GetPriorityClass', 'uint32', ['uintptr_t']),
       GetProcessTimes: kernel32.func('__stdcall', 'GetProcessTimes', 'int', ['uintptr_t', 'void *', 'void *', 'void *', 'void *']),
       GetProcessIoCounters: kernel32.func('__stdcall', 'GetProcessIoCounters', 'int', ['uintptr_t', 'void *']),
@@ -72,6 +76,7 @@ function loadBindings() {
     const ntdll = koffi.load('ntdll.dll')
     bindings.ntdll = {
       NtQueryInformationProcess: ntdll.func('__stdcall', 'NtQueryInformationProcess', 'int32', ['uintptr_t', 'int', 'void *', 'uint32', 'void *']),
+      NtSetInformationProcess: ntdll.func('__stdcall', 'NtSetInformationProcess', 'int32', ['uintptr_t', 'int', 'void *', 'uint32']),
     }
   } catch (e) {
     console.error('[processGovernorLevers] ntdll bind failed:', e?.message ?? e)
@@ -153,6 +158,23 @@ function readIoPriority(handle) {
   return value.readUInt32LE(0)
 }
 
+
+function writeIoPriority(handle, priority) {
+  const { ntdll } = loadBindings()
+  if (!ntdll || !capabilities?.ioPriority) return false
+  const value = Buffer.alloc(IO_PRIORITY_SIZE)
+  value.writeUInt32LE(priority, 0)
+  return ntdll.NtSetInformationProcess(handle, PROCESS_IO_PRIORITY_CLASS, value, IO_PRIORITY_SIZE) === STATUS_SUCCESS
+}
+
+function writeDefaultCpuSets(handle, ids) {
+  const { kernel32 } = loadBindings()
+  if (!kernel32) return false
+  if (!ids || ids.length === 0) return Boolean(kernel32.SetProcessDefaultCpuSets(handle, null, 0))
+  const buffer = Buffer.alloc(ids.length * 4)
+  ids.forEach((id, index) => buffer.writeUInt32LE(id, index * 4))
+  return Boolean(kernel32.SetProcessDefaultCpuSets(handle, buffer, ids.length))
+}
 
 function readEfficientCpuSetIds() {
   const { kernel32 } = loadBindings()
@@ -293,6 +315,8 @@ function captureOriginal(pid) {
       powerThrottling,
       selfManaged: selfManagedFlags(powerThrottling),
       memoryPriority: readMemoryPriority(opened.handle),
+      ioPriority: readIoPriority(opened.handle),
+      priorityClass: loadBindings().kernel32.GetPriorityClass(opened.handle) || null,
       cpuSetsAllowed: opened.cpuSetsAllowed,
     }
   }, null)
@@ -337,11 +361,35 @@ function applyMemoryPriority(handle, original, target) {
   return writeMemoryPriority(handle, wanted)
 }
 
+function applyPriorityClass(handle, original, wantBelowNormal) {
+  const { kernel32 } = loadBindings()
+  const wanted = wantBelowNormal ? PRIORITY_CLASS_BELOW_NORMAL : original?.priorityClass
+  if (!kernel32 || !Number.isFinite(wanted) || wanted <= 0) return false
+  if (kernel32.GetPriorityClass(handle) === wanted) return true
+  return Boolean(kernel32.SetPriorityClass(handle, wanted))
+}
+
+function applyIoPriority(handle, original, wantLow) {
+  if (!capabilities.ioPriority) return false
+  const wanted = wantLow ? IO_PRIORITY_LOW : original?.ioPriority
+  if (!Number.isFinite(wanted)) return false
+  if (readIoPriority(handle) === wanted) return true
+  return writeIoPriority(handle, wanted)
+}
+
+function applyCpuSets(handle, allowed, wantEfficient) {
+  if (!capabilities.cpuSets || !allowed) return false
+  return writeDefaultCpuSets(handle, wantEfficient ? capabilities.efficientCpuSetIds : null)
+}
+
 function applyLevers(pid, targetLevers, original) {
   detectCapabilities()
   return withProcess(pid, (opened) => ({
     ecoQos: applyPowerThrottling(opened.handle, original, targetLevers.ecoQos, targetLevers.ignoreTimerResolution),
     memoryPriority: applyMemoryPriority(opened.handle, original, targetLevers.memoryPriority),
+    priorityClass: applyPriorityClass(opened.handle, original, targetLevers.belowNormalPriority),
+    ioPriority: applyIoPriority(opened.handle, original, targetLevers.lowIoPriority),
+    cpuSet: applyCpuSets(opened.handle, original?.cpuSetsAllowed, targetLevers.efficientCpuSet),
   }), null)
 }
 
@@ -350,6 +398,9 @@ function restoreOriginal(pid, original) {
   return withProcess(pid, (opened) => {
     applyPowerThrottling(opened.handle, original, false, false)
     applyMemoryPriority(opened.handle, original, null)
+    applyPriorityClass(opened.handle, original, false)
+    applyIoPriority(opened.handle, original, false)
+    applyCpuSets(opened.handle, original?.cpuSetsAllowed ?? true, false)
     return true
   }, false)
 }
