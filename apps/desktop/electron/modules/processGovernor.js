@@ -79,18 +79,29 @@ let pinnedPaths = new Set()
 let imagePaths = new Map()
 let lastDecisions = []
 let evaluating = false
+let lastReportedSummary = null
 
 function userDataFile(name) {
   const { app } = require('electron')
   return path.join(app.getPath('userData'), name)
 }
 
-function readJsonFile(file, fallback) {
+function readTextFile(file) {
   try {
-    if (!fs.existsSync(file)) return fallback
-    return JSON.parse(fs.readFileSync(file, 'utf8'))
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trimStart() : ''
   } catch (e) {
     console.error('[processGovernor] cannot read', file, '-', e?.message ?? e)
+    return ''
+  }
+}
+
+function readJsonFile(file, fallback) {
+  const raw = readTextFile(file)
+  if (!raw.trim()) return fallback
+  try {
+    return JSON.parse(raw)
+  } catch (e) {
+    console.error('[processGovernor] cannot parse', file, '-', e?.message ?? e)
     return fallback
   }
 }
@@ -112,15 +123,6 @@ function loadConfig() {
 
 function saveConfig() {
   writeFileSafely(configPath, JSON.stringify({ ...config, pinnedPaths: [...pinnedPaths] }, null, 2))
-}
-
-function readTextFile(file) {
-  try {
-    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
-  } catch (e) {
-    console.error('[processGovernor] cannot read', file, '-', e?.message ?? e)
-    return ''
-  }
 }
 
 function persistJournal() {
@@ -390,6 +392,22 @@ function wake(pid) {
   markSettledAsInteractive(pid, now)
 }
 
+function stateHistogram() {
+  const counts = {}
+  for (const decision of lastDecisions) {
+    const key = decision.excluded ? 'excluded:' + decision.reason : decision.state
+    counts[key] = (counts[key] ?? 0) + 1
+  }
+  return Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([key, count]) => key + '=' + count).join(' ')
+}
+
+function reportStateChanges() {
+  const summary = stateHistogram() + ' governed=' + appliedLevers.size
+  if (summary === lastReportedSummary) return
+  lastReportedSummary = summary
+  console.log('[processGovernor]', summary)
+}
+
 function evaluate() {
   if (evaluating) return
   evaluating = true
@@ -415,6 +433,7 @@ function evaluate() {
       name: imageNameForPid(decision.pid)?.name ?? null,
       path: imageNameForPid(decision.pid)?.path ?? null,
     }))
+    reportStateChanges()
     publishState()
   } catch (e) {
     console.error('[processGovernor] evaluation failed:', e?.message ?? e)
