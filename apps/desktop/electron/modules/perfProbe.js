@@ -183,7 +183,6 @@ function startSession(label) {
   unsubscribeWinEvents = winEvents.subscribe('perfProbe', [EVENT_SYSTEM_FOREGROUND], recordForegroundSwitch)
   counterTimer = setInterval(sampleCounters, COUNTER_INTERVAL_MS)
   flushTimer = setInterval(flush, FLUSH_INTERVAL_MS)
-  sampleCounters()
   publishState()
   return getState()
 }

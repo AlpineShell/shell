@@ -14,10 +14,15 @@ const POWER_THROTTLING_VERSION = 1
 const POWER_THROTTLING_EXECUTION_SPEED = 0x1
 const POWER_THROTTLING_IGNORE_TIMER_RESOLUTION = 0x4
 
+const PRIORITY_CLASS_NORMAL = 0x00000020
 const PRIORITY_CLASS_BELOW_NORMAL = 0x00004000
 
 const MEMORY_PRIORITY_SIZE = 4
+const MEMORY_PRIORITY_FLOOR = 3
+const MEMORY_PRIORITY_NORMAL = 5
 const PROCESS_IO_PRIORITY_CLASS = 33
+const IO_PRIORITY_LOW = 1
+const IO_PRIORITY_NORMAL = 2
 const IO_PRIORITY_SIZE = 4
 const STATUS_SUCCESS = 0
 
@@ -158,6 +163,15 @@ function readIoPriority(handle) {
   return value.readUInt32LE(0)
 }
 
+
+function writeMemoryPriority(handle, priority) {
+  const { kernel32 } = loadBindings()
+  if (!kernel32) return false
+  const clamped = Math.max(MEMORY_PRIORITY_FLOOR, Math.min(MEMORY_PRIORITY_NORMAL, Math.round(priority)))
+  const value = Buffer.alloc(MEMORY_PRIORITY_SIZE)
+  value.writeUInt32LE(clamped, 0)
+  return Boolean(kernel32.SetProcessInformation(handle, PROCESS_INFORMATION_MEMORY_PRIORITY, value, MEMORY_PRIORITY_SIZE))
+}
 
 function writeIoPriority(handle, priority) {
   const { ntdll } = loadBindings()
@@ -325,7 +339,8 @@ function captureOriginal(pid) {
 function applyPowerThrottling(handle, original, wantEco, wantIgnoreTimers) {
   const baseline = original?.powerThrottling ?? { controlMask: 0, stateMask: 0 }
   const selfManaged = original?.selfManaged ?? selfManagedFlags(baseline)
-  const current = readPowerThrottling(handle) ?? baseline
+  const observed = readPowerThrottling(handle)
+  const current = observed ?? baseline
   let controlMask = current.controlMask
   let stateMask = current.stateMask
 
@@ -349,13 +364,13 @@ function applyPowerThrottling(handle, original, wantEco, wantIgnoreTimers) {
     }
   }
 
-  if (controlMask === current.controlMask && stateMask === current.stateMask) return true
+  if (observed && controlMask === observed.controlMask && stateMask === observed.stateMask) return true
   return writePowerThrottling(handle, controlMask, stateMask)
 }
 
 function applyMemoryPriority(handle, original, target) {
   if (!capabilities.memoryPriority) return false
-  const wanted = target ?? original?.memoryPriority
+  const wanted = target ?? original?.memoryPriority ?? MEMORY_PRIORITY_NORMAL
   if (!Number.isFinite(wanted)) return false
   if (readMemoryPriority(handle) === wanted) return true
   return writeMemoryPriority(handle, wanted)
@@ -363,7 +378,7 @@ function applyMemoryPriority(handle, original, target) {
 
 function applyPriorityClass(handle, original, wantBelowNormal) {
   const { kernel32 } = loadBindings()
-  const wanted = wantBelowNormal ? PRIORITY_CLASS_BELOW_NORMAL : original?.priorityClass
+  const wanted = wantBelowNormal ? PRIORITY_CLASS_BELOW_NORMAL : (original?.priorityClass ?? PRIORITY_CLASS_NORMAL)
   if (!kernel32 || !Number.isFinite(wanted) || wanted <= 0) return false
   if (kernel32.GetPriorityClass(handle) === wanted) return true
   return Boolean(kernel32.SetPriorityClass(handle, wanted))
@@ -371,14 +386,15 @@ function applyPriorityClass(handle, original, wantBelowNormal) {
 
 function applyIoPriority(handle, original, wantLow) {
   if (!capabilities.ioPriority) return false
-  const wanted = wantLow ? IO_PRIORITY_LOW : original?.ioPriority
+  const wanted = wantLow ? IO_PRIORITY_LOW : (original?.ioPriority ?? IO_PRIORITY_NORMAL)
   if (!Number.isFinite(wanted)) return false
   if (readIoPriority(handle) === wanted) return true
   return writeIoPriority(handle, wanted)
 }
 
-function applyCpuSets(handle, allowed, wantEfficient) {
+function applyCpuSets(handle, allowed, wantEfficient, hadLeversApplied) {
   if (!capabilities.cpuSets || !allowed) return false
+  if (!wantEfficient && !hadLeversApplied) return false
   return writeDefaultCpuSets(handle, wantEfficient ? capabilities.efficientCpuSetIds : null)
 }
 
@@ -389,18 +405,36 @@ function applyLevers(pid, targetLevers, original) {
     memoryPriority: applyMemoryPriority(opened.handle, original, targetLevers.memoryPriority),
     priorityClass: applyPriorityClass(opened.handle, original, targetLevers.belowNormalPriority),
     ioPriority: applyIoPriority(opened.handle, original, targetLevers.lowIoPriority),
-    cpuSet: applyCpuSets(opened.handle, original?.cpuSetsAllowed, targetLevers.efficientCpuSet),
+    cpuSet: applyCpuSets(opened.handle, original?.cpuSetsAllowed, targetLevers.efficientCpuSet, true),
   }), null)
+}
+
+function clearOurPowerThrottlingBits(handle) {
+  const observed = readPowerThrottling(handle)
+  if (!observed) return writePowerThrottling(handle, 0, 0)
+  const controlMask = observed.controlMask & ~(POWER_THROTTLING_EXECUTION_SPEED | POWER_THROTTLING_IGNORE_TIMER_RESOLUTION)
+  const stateMask = observed.stateMask & ~(POWER_THROTTLING_EXECUTION_SPEED | POWER_THROTTLING_IGNORE_TIMER_RESOLUTION)
+  if (controlMask === observed.controlMask && stateMask === observed.stateMask) return true
+  return writePowerThrottling(handle, controlMask, stateMask)
 }
 
 function restoreOriginal(pid, original) {
   detectCapabilities()
+  if (!original) {
+    return withProcess(pid, (opened) => {
+      clearOurPowerThrottlingBits(opened.handle)
+      if (capabilities.memoryPriority) writeMemoryPriority(opened.handle, MEMORY_PRIORITY_NORMAL)
+      loadBindings().kernel32.SetPriorityClass(opened.handle, PRIORITY_CLASS_NORMAL)
+      if (capabilities.ioPriority) writeIoPriority(opened.handle, IO_PRIORITY_NORMAL)
+      return true
+    }, false)
+  }
   return withProcess(pid, (opened) => {
     applyPowerThrottling(opened.handle, original, false, false)
     applyMemoryPriority(opened.handle, original, null)
     applyPriorityClass(opened.handle, original, false)
     applyIoPriority(opened.handle, original, false)
-    applyCpuSets(opened.handle, original?.cpuSetsAllowed ?? true, false)
+    applyCpuSets(opened.handle, original?.cpuSetsAllowed ?? true, false, Boolean(original))
     return true
   }, false)
 }

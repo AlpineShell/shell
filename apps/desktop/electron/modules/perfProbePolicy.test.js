@@ -23,12 +23,20 @@ const {
   sanitizeLabel,
   labelFromCommandLine,
   DEFAULT_LABEL,
+  WARMUP_MS,
+  withoutWarmup,
 } = perfProbePolicy
+
+const SETTLED_AT = 60 * 1000
+
+function settledSession(records) {
+  return [{ kind: LOAD_RECORD, at: 0, cpuPercent: null, windowCount: null, processCount: null }, ...records]
+}
 
 function switchSample(overrides) {
   return {
     kind: SWITCH_RECORD,
-    at: 1000,
+    at: SETTLED_AT,
     hwnd: 42,
     pid: 100,
     process: 'code',
@@ -43,7 +51,7 @@ function switchSample(overrides) {
 function counterSample(overrides) {
   return {
     kind: COUNTER_RECORD,
-    at: 1000,
+    at: SETTLED_AT,
     values: {
       pageReadsPerSec: 0,
       pagesInputPerSec: 0,
@@ -257,14 +265,15 @@ describe('sessionWindow', () => {
 
 describe('summarizeSession', () => {
   it('produces every section for a mixed record stream', () => {
+    const base = WARMUP_MS
     const summary = summarizeSession(
-      [
-        switchSample({ at: 0, latencyMs: 2 }),
-        switchSample({ at: 1000, latencyMs: 8 }),
-        counterSample({ at: 2000 }),
-        { kind: FRAME_RECORD, at: 3000, displayed: 60, dropped: 0, late: 0 },
-        { kind: LOAD_RECORD, at: 4000, cpuPercent: 12, windowCount: 9, processCount: 280 },
-      ],
+      settledSession([
+        switchSample({ at: base, latencyMs: 2 }),
+        switchSample({ at: base + 1000, latencyMs: 8 }),
+        counterSample({ at: base + 2000 }),
+        { kind: FRAME_RECORD, at: base + 3000, displayed: 60, dropped: 0, late: 0 },
+        { kind: LOAD_RECORD, at: base + 4000, cpuPercent: 12, windowCount: 9, processCount: 280 },
+      ]),
       'before'
     )
     expect(summary.label).toBe('before')
@@ -274,6 +283,22 @@ describe('summarizeSession', () => {
     expect(summary.counters.availableMBytes.mean).toBe(40000)
     expect(summary.frames.available).toBe(true)
     expect(summary.load.cpuPercent.mean).toBe(12)
+  })
+
+  it('discards the warm-up window so shell startup cannot skew the result', () => {
+    const summary = summarizeSession(
+      [
+        counterSample({ at: 0, values: { pageReadsPerSec: 5000 } }),
+        counterSample({ at: WARMUP_MS - 1, values: { pageReadsPerSec: 4000 } }),
+        counterSample({ at: WARMUP_MS, values: { pageReadsPerSec: 10 } }),
+        counterSample({ at: WARMUP_MS + 5000, values: { pageReadsPerSec: 20 } }),
+      ],
+      'before'
+    )
+    expect(summary.discardedWarmupRecords).toBe(2)
+    expect(summary.recordCount).toBe(2)
+    expect(summary.counters.pageReadsPerSec.mean).toBe(15)
+    expect(summary.durationMs).toBe(5000)
   })
 
   it('tolerates a non-array input', () => {
@@ -290,8 +315,8 @@ describe('compareSessions', () => {
   })
 
   it('reports absolute and relative movement per metric', () => {
-    const before = summarizeSession([switchSample({ latencyMs: 10 })], 'before')
-    const after = summarizeSession([switchSample({ latencyMs: 5 })], 'after')
+    const before = summarizeSession(settledSession([switchSample({ latencyMs: 10 })]), 'before')
+    const after = summarizeSession(settledSession([switchSample({ latencyMs: 5 })]), 'after')
     const comparison = compareSessions(before, after)
     expect(comparison.switchLatencyP50.before).toBe(10)
     expect(comparison.switchLatencyP50.after).toBe(5)
@@ -300,24 +325,24 @@ describe('compareSessions', () => {
   })
 
   it('leaves the relative change null when the baseline was zero and moved', () => {
-    const before = summarizeSession([switchSample({ latencyMs: 0 })], 'before')
-    const after = summarizeSession([switchSample({ latencyMs: 4 })], 'after')
+    const before = summarizeSession(settledSession([switchSample({ latencyMs: 0 })]), 'before')
+    const after = summarizeSession(settledSession([switchSample({ latencyMs: 4 })]), 'after')
     expect(compareSessions(before, after).switchLatencyP50.percentChange).toBe(null)
   })
 
   it('reports no relative change when both sides are zero', () => {
-    const before = summarizeSession([switchSample({ latencyMs: 0 })], 'before')
-    const after = summarizeSession([switchSample({ latencyMs: 0 })], 'after')
+    const before = summarizeSession(settledSession([switchSample({ latencyMs: 0 })]), 'before')
+    const after = summarizeSession(settledSession([switchSample({ latencyMs: 0 })]), 'after')
     expect(compareSessions(before, after).switchLatencyP50.percentChange).toBe(0)
   })
 })
 
 describe('isReportableSession', () => {
   function sessionOfLength(durationMs, switchCount) {
-    const records = [switchSample({ at: 0 })]
-    for (let index = 1; index < switchCount; index++) records.push(switchSample({ at: index }))
-    records.push({ kind: LOAD_RECORD, at: durationMs, cpuPercent: 1, windowCount: 1, processCount: 1 })
-    return summarizeSession(records, 'sample')
+    const records = []
+    for (let index = 0; index < switchCount; index++) records.push(switchSample({ at: WARMUP_MS + index }))
+    records.push({ kind: LOAD_RECORD, at: WARMUP_MS + durationMs, cpuPercent: 1, windowCount: 1, processCount: 1 })
+    return summarizeSession(settledSession(records), 'sample')
   }
 
   it('rejects a session shorter than the useful minimum', () => {
@@ -372,5 +397,25 @@ describe('labelFromCommandLine', () => {
 
   it('tolerates a non-array argument list', () => {
     expect(labelFromCommandLine(null)).toBe(null)
+  })
+})
+
+describe('withoutWarmup', () => {
+  it('keeps records once the warm-up window has elapsed', () => {
+    const rows = [{ at: 0 }, { at: WARMUP_MS - 1 }, { at: WARMUP_MS }, { at: WARMUP_MS + 1 }]
+    expect(withoutWarmup(rows)).toEqual([{ at: WARMUP_MS }, { at: WARMUP_MS + 1 }])
+  })
+
+  it('returns everything when no record carries a stamp', () => {
+    const rows = [{ kind: 'switch' }, { kind: 'load' }]
+    expect(withoutWarmup(rows)).toEqual(rows)
+  })
+
+  it('drops a session that never outlived its warm-up', () => {
+    expect(withoutWarmup([{ at: 0 }, { at: 100 }])).toEqual([])
+  })
+
+  it('tolerates a non-array input', () => {
+    expect(withoutWarmup(null)).toEqual([])
   })
 })

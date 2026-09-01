@@ -332,7 +332,7 @@ declare global {
 
   type GovernedProcessState = 'interactive' | 'visible' | 'occluded' | 'napping'
 
-  type GovernorExclusionReason = 'shell' | 'audio' | 'pinned' | 'untouchable' | 'busy-io' | 'fullscreen'
+  type GovernorExclusionReason = 'shell' | 'audio' | 'pinned' | 'untouchable' | 'busy-io' | 'busy-cpu' | 'fullscreen'
 
   interface ProcessGovernorConfig {
     enabled: boolean
@@ -344,6 +344,8 @@ declare global {
     audioHoldMs: number
     busyIoBytesPerSec: number
     memoryPressurePercent: number
+    busyCpuPercent: number
+    busyHoldMs: number
     pinnedPaths: string[]
   }
 

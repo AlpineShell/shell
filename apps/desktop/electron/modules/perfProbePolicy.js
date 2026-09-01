@@ -130,6 +130,8 @@ function sessionWindow(records) {
   return { startedAt, endedAt, durationMs: endedAt - startedAt }
 }
 
+const WARMUP_MS = 60 * 1000
+
 const COUNTER_FIELDS = {
   pageReadsPerSec: 2,
   pagesInputPerSec: 2,
@@ -138,11 +140,22 @@ const COUNTER_FIELDS = {
   committedPercent: 2,
 }
 
-function summarizeSession(records, label) {
+function withoutWarmup(records) {
   const rows = Array.isArray(records) ? records : []
+  const { startedAt } = sessionWindow(rows)
+  if (startedAt === null) return rows
+  const settledAt = startedAt + WARMUP_MS
+  return rows.filter((record) => isFiniteNumber(record?.at) && record.at >= settledAt)
+}
+
+function summarizeSession(records, label) {
+  const all = Array.isArray(records) ? records : []
+  const rows = withoutWarmup(all)
   return {
     label: label ?? null,
     ...sessionWindow(rows),
+    warmupMs: WARMUP_MS,
+    discardedWarmupRecords: all.length - rows.length,
     recordCount: rows.length,
     switchLatency: summarizeSwitchLatencies(rows.filter((record) => record && record.kind === SWITCH_RECORD)),
     counters: summarizeCounters(rows, COUNTER_FIELDS),
@@ -220,6 +233,8 @@ module.exports = {
   LOAD_RECORD,
   LATENCY_PERCENTILES,
   COUNTER_FIELDS,
+  WARMUP_MS,
+  withoutWarmup,
   MINIMUM_USEFUL_DURATION_MS,
   MINIMUM_USEFUL_SWITCHES,
   percentile,

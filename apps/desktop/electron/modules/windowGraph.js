@@ -54,25 +54,29 @@ function readRect(buffer, offset) {
   }
 }
 
+let collectedMonitors = []
+let monitorEnumProcPointer = null
+
+function onMonitorEnumerated(monitor) {
+  const info = Buffer.alloc(MONITORINFO_SIZE)
+  info.writeUInt32LE(MONITORINFO_SIZE, 0)
+  if (GetMonitorInfoW(monitor, info)) collectedMonitors.push(readRect(info, 4))
+  return 1
+}
+
+function ensureMonitorEnumProc() {
+  if (!monitorEnumProcPointer) monitorEnumProcPointer = koffi.register(onMonitorEnumerated, koffi.pointer(MONITOR_ENUM_PROC))
+  return monitorEnumProcPointer
+}
+
 function listMonitors() {
-  const monitors = []
-  let callback = null
+  collectedMonitors = []
   try {
-    callback = koffi.register((monitor) => {
-      const info = Buffer.alloc(MONITORINFO_SIZE)
-      info.writeUInt32LE(MONITORINFO_SIZE, 0)
-      if (GetMonitorInfoW(monitor, info)) monitors.push(readRect(info, 4))
-      return 1
-    }, koffi.pointer(MONITOR_ENUM_PROC))
-    EnumDisplayMonitors(0, null, callback, 0)
+    EnumDisplayMonitors(0, null, ensureMonitorEnumProc(), 0)
   } catch (e) {
     console.error('[windowGraph] monitor enumeration failed:', e?.message ?? e)
-  } finally {
-    if (callback) {
-      try { koffi.unregister(callback) } catch (_) {}
-    }
   }
-  return monitors
+  return collectedMonitors
 }
 
 function isCloaked(hwnd) {

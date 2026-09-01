@@ -264,6 +264,30 @@ export const SETTING_COMMANDS: SettingCommand[] = [
     },
   },
   {
+    id: "process-governor-memory",
+    label: "Napping: also ease off memory",
+    hint: "Lower memory priority for covered apps when memory runs short",
+    icon: Moon,
+    keywords: ["napping", "memory", "ram", "memory priority", "pressure", "standby"],
+    control: {
+      kind: "toggle",
+      get: () => window.shell.processGovernor.state().then((s) => s.config.lowerMemoryPriority),
+      set: (v) => window.shell.processGovernor.setConfig({ lowerMemoryPriority: v }),
+    },
+  },
+  {
+    id: "process-governor-deep-nap",
+    label: "Napping: deep nap",
+    hint: "Efficiency cores and lower CPU and disk priority for apps put away a while",
+    icon: Moon,
+    keywords: ["napping", "deep nap", "efficiency cores", "e-cores", "priority", "io", "disk"],
+    control: {
+      kind: "toggle",
+      get: () => window.shell.processGovernor.state().then((s) => s.config.deepNap),
+      set: (v) => window.shell.processGovernor.setConfig({ deepNap: v }),
+    },
+  },
+  {
     id: "wallpaper",
     label: "Wallpaper",
     hint: "Change your desktop wallpaper",

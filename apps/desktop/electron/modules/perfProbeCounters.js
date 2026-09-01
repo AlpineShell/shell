@@ -2,6 +2,8 @@ const koffi = require('koffi')
 
 const PDH_FMT_DOUBLE = 0x00000200
 const PDH_SUCCESS = 0
+const PDH_CSTATUS_NEW_DATA = 1
+const PDH_VALID_STATUSES = new Set([PDH_SUCCESS, PDH_CSTATUS_NEW_DATA])
 
 const MEMORYSTATUSEX_SIZE = 64
 const MEMORYSTATUSEX_TOTAL_PAGEFILE_OFFSET = 24
@@ -105,7 +107,7 @@ function readCounter(handle) {
   if (!pdh || !handle) return null
   const value = Buffer.alloc(16)
   if (pdh.PdhGetFormattedCounterValue(handle, PDH_FMT_DOUBLE, null, value) !== PDH_SUCCESS) return null
-  if (value.readUInt32LE(0) !== PDH_SUCCESS) return null
+  if (!PDH_VALID_STATUSES.has(value.readUInt32LE(0))) return null
   return value.readDoubleLE(8)
 }
 

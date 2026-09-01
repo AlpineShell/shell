@@ -9,8 +9,10 @@ const DEFAULT_CONFIG: ProcessGovernorConfig = {
   occludedDwellMs: 20000,
   nappingDwellMs: 60000,
   audioHoldMs: 15000,
-  busyIoBytesPerSec: 2 * 1024 * 1024,
+  busyIoBytesPerSec: 512 * 1024,
   memoryPressurePercent: 75,
+  busyCpuPercent: 15,
+  busyHoldMs: 20000,
   pinnedPaths: [],
 }
 

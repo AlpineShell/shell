@@ -48,12 +48,15 @@ function parseProcessIds(raw) {
 }
 
 async function readActiveAudioPids() {
+  let raw = ''
   try {
-    return parseProcessIds(await getRunner().run(QUERY))
+    raw = await getRunner().run(QUERY)
   } catch (e) {
     console.error('[audioSessions] scan failed:', e?.message ?? e)
-    return []
+    return null
   }
+  if (typeof raw !== 'string' || raw.trim().length === 0) return null
+  return parseProcessIds(raw)
 }
 
 function warm() {

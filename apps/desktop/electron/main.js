@@ -1001,8 +1001,17 @@ function undimDisplays() {
   }
 }
 
+function revertProcessGovernorBeforeExit() {
+  try {
+    processGovernor.stop()
+  } catch (e) {
+    console.error('[main] process governor teardown failed:', e && e.message)
+  }
+}
+
 function gracefulShutdown() {
   try { unregisterAll() } catch {}
+  revertProcessGovernorBeforeExit()
   undimDisplays()
   try { if (shellWindow) shellWindow.destroy() } catch {}
   try { frecency.flush() } catch {}

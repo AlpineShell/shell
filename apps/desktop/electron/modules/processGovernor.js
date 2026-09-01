@@ -48,6 +48,10 @@ const NEVER_GOVERNED_IMAGE_NAMES = new Set([
   'sihost',
   'ctfmon',
   'textinputhost',
+  'applicationframehost',
+  'shellexperiencehost',
+  'searchhost',
+  'startmenuexperiencehost',
 ])
 
 let broadcastRef = null
@@ -65,6 +69,7 @@ let previousStates = new Map()
 const appliedLevers = new Map()
 const originals = new Map()
 const selfManagedPids = new Set()
+const governablePids = new Set()
 const lastBusyIoAt = new Map()
 const lastBusyCpuAt = new Map()
 const cpuPercents = new Map()
@@ -80,6 +85,7 @@ let imagePaths = new Map()
 let lastDecisions = []
 let evaluating = false
 let lastReportedSummary = null
+let lastPublishedFingerprint = null
 
 function userDataFile(name) {
   const { app } = require('electron')
@@ -236,8 +242,9 @@ function refreshActivityRates(pids) {
 
 function probeUntouchable(pids) {
   for (const pid of pids) {
-    if (untouchablePids.has(pid) || originals.has(pid)) continue
+    if (untouchablePids.has(pid) || governablePids.has(pid)) continue
     if (isNeverGoverned(pid) || !levers.canGovern(pid)) untouchablePids.add(pid)
+    else governablePids.add(pid)
   }
 }
 
@@ -308,7 +315,7 @@ function forgetDeadProcesses(livePids) {
       if (!livePids.has(pid) && !appliedLevers.has(pid)) tracker.delete(pid)
     }
   }
-  for (const set of [untouchablePids, selfManagedPids]) {
+  for (const set of [untouchablePids, selfManagedPids, governablePids]) {
     for (const pid of [...set]) {
       if (!livePids.has(pid)) set.delete(pid)
     }
@@ -319,7 +326,9 @@ function forgetDeadProcesses(livePids) {
 }
 
 function captureOriginalFor(pid) {
-  if (originals.has(pid)) return originals.get(pid)
+  const remembered = originals.get(pid)
+  if (remembered && remembered.startTime && remembered.startTime === startTimes.get(pid)) return remembered
+  if (remembered) originals.delete(pid)
   const captured = levers.captureOriginal(pid)
   if (!captured) {
     untouchablePids.add(pid)
@@ -457,6 +466,7 @@ function onWindowEvent(hwnd, event) {
 
 async function scanAudioSessions() {
   const pids = await audioSessions.readActiveAudioPids()
+  if (pids === null) return
   const now = Date.now()
   let wokeSomething = false
   for (const pid of pids) {
@@ -482,7 +492,12 @@ function getState() {
 }
 
 function publishState() {
-  if (broadcastRef) broadcastRef('process-governor/state-changed', getState())
+  if (!broadcastRef) return
+  const state = getState()
+  const fingerprint = JSON.stringify(state)
+  if (fingerprint === lastPublishedFingerprint) return
+  lastPublishedFingerprint = fingerprint
+  broadcastRef('process-governor/state-changed', state)
 }
 
 function setConfig(partial) {
@@ -490,7 +505,8 @@ function setConfig(partial) {
   config = policy.mergeConfig(config, partial)
   saveConfig()
   if (wasEnabled && !config.enabled) revertEverything()
-  evaluate()
+  syncWatchers()
+  if (!config.enabled) publishState()
   return getState()
 }
 
@@ -501,6 +517,43 @@ function setPinned(imagePath, pinned) {
   saveConfig()
   evaluate()
   return getState()
+}
+
+function armWatchers() {
+  if (unsubscribeWinEvents) return
+  unsubscribeWinEvents = winEvents.subscribe('processGovernor', GOVERNOR_EVENTS, onWindowEvent)
+  sweepTimer = setInterval(() => {
+    refreshActivityRates(new Set(lastDecisions.map((decision) => decision.pid)))
+    evaluate()
+  }, SWEEP_INTERVAL_MS)
+  audioTimer = setInterval(() => {
+    scanAudioSessions().catch((e) => console.error('[processGovernor] audio scan failed:', e?.message ?? e))
+  }, AUDIO_SCAN_INTERVAL_MS)
+  audioSessions.warm()
+  scanAudioSessions().catch(() => {})
+  evaluate()
+}
+
+function disarmWatchers() {
+  if (unsubscribeWinEvents) {
+    unsubscribeWinEvents()
+    unsubscribeWinEvents = null
+  }
+  clearTimeout(evaluateTimer)
+  clearInterval(sweepTimer)
+  clearInterval(audioTimer)
+  evaluateTimer = null
+  sweepTimer = null
+  audioTimer = null
+  audioSessions.dispose()
+  lastDecisions = []
+  previousStates = new Map()
+  lastReportedSummary = null
+}
+
+function syncWatchers() {
+  if (config.enabled) armWatchers()
+  else disarmWatchers()
 }
 
 function stop() {
@@ -537,16 +590,7 @@ module.exports = {
     broadcastRef = broadcast
     loadConfig()
     recoverFromPreviousRun()
-    audioSessions.warm()
-    unsubscribeWinEvents = winEvents.subscribe('processGovernor', GOVERNOR_EVENTS, onWindowEvent)
-    sweepTimer = setInterval(() => {
-      refreshActivityRates(new Set(lastDecisions.map((decision) => decision.pid)))
-      evaluate()
-    }, SWEEP_INTERVAL_MS)
-    audioTimer = setInterval(() => {
-      scanAudioSessions().catch((e) => console.error('[processGovernor] audio scan failed:', e?.message ?? e))
-    }, AUDIO_SCAN_INTERVAL_MS)
-    scanAudioSessions().catch(() => {})
+    syncWatchers()
     for (const event of ['resume', 'unlock-screen']) {
       try {
         powerMonitor.on(event, restartEveryDwell)
