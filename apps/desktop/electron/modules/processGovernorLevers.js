@@ -56,6 +56,7 @@ function loadBindings() {
       CloseHandle: kernel32.func('__stdcall', 'CloseHandle', 'int', ['uintptr_t']),
       GetLastError: kernel32.func('__stdcall', 'GetLastError', 'uint32', []),
       GetProcessInformation: kernel32.func('__stdcall', 'GetProcessInformation', 'int', ['uintptr_t', 'int', 'void *', 'uint32']),
+      SetProcessInformation: kernel32.func('__stdcall', 'SetProcessInformation', 'int', ['uintptr_t', 'int', 'void *', 'uint32']),
       GetPriorityClass: kernel32.func('__stdcall', 'GetPriorityClass', 'uint32', ['uintptr_t']),
       GetProcessTimes: kernel32.func('__stdcall', 'GetProcessTimes', 'int', ['uintptr_t', 'void *', 'void *', 'void *', 'void *']),
       GetProcessIoCounters: kernel32.func('__stdcall', 'GetProcessIoCounters', 'int', ['uintptr_t', 'void *']),
@@ -123,6 +124,16 @@ function readPowerThrottling(handle) {
   return { controlMask: state.readUInt32LE(4), stateMask: state.readUInt32LE(8) }
 }
 
+
+function writePowerThrottling(handle, controlMask, stateMask) {
+  const { kernel32 } = loadBindings()
+  if (!kernel32) return false
+  const state = Buffer.alloc(POWER_THROTTLING_STATE_SIZE)
+  state.writeUInt32LE(POWER_THROTTLING_VERSION, 0)
+  state.writeUInt32LE(controlMask, 4)
+  state.writeUInt32LE(stateMask, 8)
+  return Boolean(kernel32.SetProcessInformation(handle, PROCESS_INFORMATION_POWER_THROTTLING, state, POWER_THROTTLING_STATE_SIZE))
+}
 
 function readMemoryPriority(handle) {
   const { kernel32 } = loadBindings()
@@ -244,12 +255,89 @@ function detectCapabilities() {
 
 
 
+function readProcessCpuTimeMs(handle) {
+  const { kernel32 } = loadBindings()
+  if (!kernel32) return null
+  const creation = Buffer.alloc(8)
+  const exit = Buffer.alloc(8)
+  const kernel = Buffer.alloc(8)
+  const user = Buffer.alloc(8)
+  if (!kernel32.GetProcessTimes(handle, creation, exit, kernel, user)) return null
+  return Number((kernel.readBigUInt64LE(0) + user.readBigUInt64LE(0)) / 10000n)
+}
+
 function readProcessSnapshot(pid) {
   return withProcess(pid, (opened) => ({
     pid,
     startTime: readProcessStartTime(opened.handle),
     ioTransferTotal: readIoTransferTotal(opened.handle),
+    cpuTimeMs: readProcessCpuTimeMs(opened.handle),
   }), null)
+}
+
+function selfManagedFlags(powerThrottling) {
+  const controlMask = powerThrottling?.controlMask ?? 0
+  return {
+    executionSpeed: (controlMask & POWER_THROTTLING_EXECUTION_SPEED) !== 0,
+    timerResolution: (controlMask & POWER_THROTTLING_IGNORE_TIMER_RESOLUTION) !== 0,
+  }
+}
+
+function captureOriginal(pid) {
+  detectCapabilities()
+  return withProcess(pid, (opened) => {
+    const powerThrottling = readPowerThrottling(opened.handle)
+    return {
+      pid,
+      startTime: readProcessStartTime(opened.handle),
+      powerThrottling,
+      selfManaged: selfManagedFlags(powerThrottling),
+      cpuSetsAllowed: opened.cpuSetsAllowed,
+    }
+  }, null)
+}
+
+function applyPowerThrottling(handle, original, wantEco, wantIgnoreTimers) {
+  const baseline = original?.powerThrottling ?? { controlMask: 0, stateMask: 0 }
+  const selfManaged = original?.selfManaged ?? selfManagedFlags(baseline)
+  const current = readPowerThrottling(handle) ?? baseline
+  let controlMask = current.controlMask
+  let stateMask = current.stateMask
+
+  if (!selfManaged.executionSpeed) {
+    if (wantEco) {
+      controlMask |= POWER_THROTTLING_EXECUTION_SPEED
+      stateMask |= POWER_THROTTLING_EXECUTION_SPEED
+    } else {
+      controlMask &= ~POWER_THROTTLING_EXECUTION_SPEED
+      stateMask &= ~POWER_THROTTLING_EXECUTION_SPEED
+    }
+  }
+
+  if (capabilities.ignoreTimerResolution && !selfManaged.timerResolution) {
+    if (wantIgnoreTimers) {
+      controlMask |= POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+      stateMask |= POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+    } else {
+      controlMask &= ~POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+      stateMask &= ~POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+    }
+  }
+
+  if (controlMask === current.controlMask && stateMask === current.stateMask) return true
+  return writePowerThrottling(handle, controlMask, stateMask)
+}
+
+function applyLevers(pid, targetLevers, original) {
+  detectCapabilities()
+  return withProcess(pid, (opened) => ({
+    ecoQos: applyPowerThrottling(opened.handle, original, targetLevers.ecoQos, targetLevers.ignoreTimerResolution),
+  }), null)
+}
+
+function restoreOriginal(pid, original) {
+  detectCapabilities()
+  return withProcess(pid, (opened) => applyPowerThrottling(opened.handle, original, false, false), false)
 }
 
 function describeCapabilities() {
@@ -261,6 +349,10 @@ module.exports = {
   windowsBuildNumber,
   memoryPressurePercent,
   canGovern,
+  selfManagedFlags,
+  captureOriginal,
+  applyLevers,
+  restoreOriginal,
   readProcessSnapshot,
   readEfficientCpuSetIds,
   describeCapabilities,

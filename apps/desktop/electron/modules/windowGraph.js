@@ -183,6 +183,17 @@ function monitorBoundsForWindow(hwnd) {
   return readRect(info, 4)
 }
 
+function fullscreenPids(graph, shellPids) {
+  const covering = new Set()
+  for (const window of graph?.windows ?? []) {
+    if (window.minimized || window.cloaked || window.toolWindow) continue
+    if (shellPids?.has?.(window.pid)) continue
+    if (!window.pid || !window.bounds) continue
+    if (occlusionPolicy.coversMonitor(window.bounds, graph.monitors)) covering.add(window.pid)
+  }
+  return covering
+}
+
 function fullscreenForegroundPid(shellPids) {
   const hwnd = foregroundWindow()
   if (!hwnd) return null
@@ -203,6 +214,7 @@ module.exports = {
   collectWindows,
   isGovernable,
   snapshot,
+  fullscreenPids,
   foregroundWindow,
   monitorBoundsForWindow,
   fullscreenForegroundPid,
