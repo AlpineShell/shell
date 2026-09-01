@@ -370,7 +370,7 @@ async function main() {
   explorerTask.done()
 
   const electronTask = swap.task('Starting Electron backend')
-  electronProc = spawn(electronPath, ['.'], {
+  electronProc = spawn(electronPath, ['.', ...process.argv.slice(2)], {
     cwd: projectRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: false,

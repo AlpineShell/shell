@@ -35,6 +35,7 @@ const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const windowCorners = require('./modules/windowCorners')
+const perfProbe = require('./modules/perfProbe')
 const plugins = require('./modules/plugins')
 const pluginBackendHost = require('./pluginBackendHost')
 const pluginWindows = require('./pluginWindows')
@@ -763,7 +764,7 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, theme, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, perfProbe, displayConfig, updater, windowsUpdate, clockPrefs, theme, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
 
   setup.setShellShutdown(gracefulShutdown)
 
