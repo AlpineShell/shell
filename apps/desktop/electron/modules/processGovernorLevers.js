@@ -292,6 +292,7 @@ function captureOriginal(pid) {
       startTime: readProcessStartTime(opened.handle),
       powerThrottling,
       selfManaged: selfManagedFlags(powerThrottling),
+      memoryPriority: readMemoryPriority(opened.handle),
       cpuSetsAllowed: opened.cpuSetsAllowed,
     }
   }, null)
@@ -328,16 +329,29 @@ function applyPowerThrottling(handle, original, wantEco, wantIgnoreTimers) {
   return writePowerThrottling(handle, controlMask, stateMask)
 }
 
+function applyMemoryPriority(handle, original, target) {
+  if (!capabilities.memoryPriority) return false
+  const wanted = target ?? original?.memoryPriority
+  if (!Number.isFinite(wanted)) return false
+  if (readMemoryPriority(handle) === wanted) return true
+  return writeMemoryPriority(handle, wanted)
+}
+
 function applyLevers(pid, targetLevers, original) {
   detectCapabilities()
   return withProcess(pid, (opened) => ({
     ecoQos: applyPowerThrottling(opened.handle, original, targetLevers.ecoQos, targetLevers.ignoreTimerResolution),
+    memoryPriority: applyMemoryPriority(opened.handle, original, targetLevers.memoryPriority),
   }), null)
 }
 
 function restoreOriginal(pid, original) {
   detectCapabilities()
-  return withProcess(pid, (opened) => applyPowerThrottling(opened.handle, original, false, false), false)
+  return withProcess(pid, (opened) => {
+    applyPowerThrottling(opened.handle, original, false, false)
+    applyMemoryPriority(opened.handle, original, null)
+    return true
+  }, false)
 }
 
 function describeCapabilities() {
