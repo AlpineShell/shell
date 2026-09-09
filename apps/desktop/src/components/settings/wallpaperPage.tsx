@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Upload, X } from 'lucide-react'
 import { useWallpaper } from '../../hooks/useWallpaper'
-import PageTitle from '../ui/pageTitle'
+import IconButton from '../ui/iconButton'
+import PageHeader from '../ui/pageHeader'
+import PickerTile from '../ui/pickerTile'
 import Segmented from '../ui/segmented'
 
 type Tab = 'mine' | 'marketplace'
 
-const TABS: { value: Tab; label: string }[] = [
+const TABS: SegmentedOption<Tab>[] = [
   { value: 'mine', label: 'Mine' },
   { value: 'marketplace', label: 'Marketplace' },
 ]
@@ -35,7 +37,9 @@ function readCache(key: string): WallpaperItem[] | null {
 function writeCache(key: string, list: WallpaperItem[]) {
   try {
     localStorage.setItem(key, JSON.stringify(list))
-  } catch {}
+  } catch {
+    return
+  }
 }
 
 export default function WallpaperPage() {
@@ -95,29 +99,28 @@ export default function WallpaperPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5 w-full">
-      <div className="flex items-center justify-between">
-        <PageTitle title="Wallpaper" />
+    <div className="flex w-full flex-col gap-5">
+      <PageHeader title="Wallpaper">
         <Segmented label="Wallpaper source" options={TABS} value={tab} onChange={setTab} />
-      </div>
+      </PageHeader>
 
       {tab === 'mine' && (
         <div className="flex flex-wrap gap-3">
-          <button
+          <PickerTile
+            label="Upload a wallpaper"
             onClick={uploadWallpaper}
-            className="focus-ring w-44 aspect-video rounded-card bg-surface-2 border border-line-hairline hover:border-line-strong hover:bg-surface-3 transition-colors flex items-center justify-center gap-2 cursor-pointer text-ink-secondary hover:text-ink-primary"
+            className="aspect-video w-44 gap-2 bg-surface-2 text-ink-secondary hover:bg-surface-3 hover:text-ink-primary"
           >
             <Upload size={15} />
             <span className="text-dense">Upload</span>
-          </button>
+          </PickerTile>
 
           {!loadedMine
-            ? [0, 1, 2].map((i) => (
-                <div key={i} className="w-44 aspect-video rounded-card bg-surface-2 border border-line-hairline animate-pulse" />
-              ))
+            ? [0, 1, 2].map((i) => <TileSkeleton key={i} />)
             : mine.map((p) => (
                 <WallpaperTile
                   key={p.path}
+                  name={p.name}
                   src={p.thumbnail}
                   selected={isSelected(p)}
                   onClick={() => applyWallpaper(p)}
@@ -130,17 +133,16 @@ export default function WallpaperPage() {
       {tab === 'marketplace' && (
         <div className="flex flex-wrap gap-3">
           {!loadedPresets ? (
-            [0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="w-44 aspect-video rounded-card bg-surface-2 border border-line-hairline animate-pulse" />
-            ))
+            [0, 1, 2, 3, 4, 5].map((i) => <TileSkeleton key={i} />)
           ) : presets.length === 0 ? (
-            <div className="text-sm text-ink-quiet py-6">
-              No presets yet. Drop image files into the <code className="px-1 bg-fill-ghost rounded font-mono text-ink-primary">wallpapers/</code> folder of the project.
+            <div className="py-6 text-sm text-ink-quiet">
+              No presets yet. Drop image files into the <code className="rounded bg-fill-ghost px-1 font-mono text-ink-primary">wallpapers/</code> folder of the project.
             </div>
           ) : (
             presets.map((p) => (
               <WallpaperTile
                 key={p.path}
+                name={p.name}
                 src={p.thumbnail}
                 label={p.name}
                 selected={isSelected(p)}
@@ -154,13 +156,19 @@ export default function WallpaperPage() {
   )
 }
 
+function TileSkeleton() {
+  return <div className="aspect-video w-44 animate-pulse rounded-card border border-line-hairline bg-surface-2" />
+}
+
 function WallpaperTile({
+  name,
   src,
   label,
   selected,
   onClick,
   onDelete,
 }: {
+  name: string
   src: string
   label?: string
   selected?: boolean
@@ -168,33 +176,21 @@ function WallpaperTile({
   onDelete?: () => void
 }) {
   return (
-    <div
-      className={`group relative w-44 aspect-video rounded-card overflow-hidden bg-surface-2 border-2 transition-colors ${
-        selected ? 'border-focus-ring' : 'border-line-hairline hover:border-line-strong'
-      }`}
-    >
-      <button
-        onClick={onClick}
-        className="focus-ring block w-full h-full cursor-pointer"
-      >
-        <img src={src} alt={label ?? ''} className="w-full h-full object-cover" draggable={false} />
+    <div className="group relative">
+      <PickerTile label={name} selected={selected} onClick={onClick} className="aspect-video w-44 bg-surface-2">
+        <img src={src} alt="" className="h-full w-full object-cover" draggable={false} />
         {label && (
-          <div className="absolute left-0 right-0 bottom-0 px-2 py-1 bg-linear-to-t from-black/70 to-transparent">
-            <span className="text-[11px] text-white truncate block text-left">{label}</span>
-          </div>
+          <span className="absolute inset-x-0 bottom-0 truncate bg-linear-to-t from-black/70 to-transparent px-2 py-1 text-left text-xs text-white">
+            {label}
+          </span>
         )}
-      </button>
+      </PickerTile>
       {onDelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete()
-          }}
-          className="focus-ring absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-black/80 transition-opacity cursor-pointer"
-          aria-label="Delete wallpaper"
-        >
-          <X size={13} strokeWidth={2.5} />
-        </button>
+        <div className="absolute top-1.5 right-1.5 rounded-field bg-surface-1/90 opacity-0 transition-opacity group-hover:opacity-100">
+          <IconButton label="Delete wallpaper" variant="danger" onClick={onDelete}>
+            <X size={14} strokeWidth={2.5} />
+          </IconButton>
+        </div>
       )}
     </div>
   )

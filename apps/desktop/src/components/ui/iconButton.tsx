@@ -1,18 +1,25 @@
-export default function IconButton({ onClick, label, children, disabled }: IconButtonProps) {
+import Spinner from './spinner'
+
+const VARIANT_CLASSES: Record<IconButtonVariant, string> = {
+  ghost: 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary',
+  danger: 'text-ink-quiet hover:bg-danger/10 hover:text-danger',
+}
+
+export default function IconButton({ onClick, label, children, variant = 'ghost', busy, disabled, className }: IconButtonProps) {
+  const inert = disabled || busy
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
+      disabled={inert}
+      aria-busy={busy}
       aria-label={label}
       title={label}
-      className={`focus-ring flex h-7 w-7 items-center justify-center rounded-field transition-colors ${
-        disabled
-          ? 'cursor-not-allowed text-ink-faint'
-          : 'cursor-pointer text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
-      }`}
+      className={`focus-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-field transition-colors ${
+        inert ? 'cursor-not-allowed text-ink-faint' : `cursor-pointer ${VARIANT_CLASSES[variant]}`
+      } ${className ?? ''}`}
     >
-      {children}
+      {busy ? <Spinner size={15} /> : children}
     </button>
   )
 }

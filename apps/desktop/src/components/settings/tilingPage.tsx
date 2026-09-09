@@ -13,7 +13,7 @@ const MODE_OPTIONS: SegmentedOption<TilingMode>[] = [
   { value: 'dynamic', label: 'Auto-tile' },
 ]
 
-const DYNAMIC_LAYOUT_OPTIONS: SegmentedOption<TilingDynamicLayout>[] = [
+const DYNAMIC_LAYOUT_OPTIONS: SelectOption<TilingDynamicLayout>[] = [
   { value: 'bsp', label: 'Spiral (BSP)' },
   { value: 'columns', label: 'Columns' },
   { value: 'master-stack', label: 'Master + stack' },

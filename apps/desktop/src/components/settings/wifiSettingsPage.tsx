@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Lock, RefreshCw, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from 'lucide-react'
-import PageTitle from '../ui/pageTitle'
-import Toggle from '../ui/toggle'
+import { Lock, RefreshCw, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from 'lucide-react'
+import Button from '../ui/button'
+import EmptyState from '../ui/emptyState'
 import IconButton from '../ui/iconButton'
+import ListRow from '../ui/listRow'
+import PageHeader from '../ui/pageHeader'
+import Spinner from '../ui/spinner'
+import TextField from '../ui/textField'
+import Toggle from '../ui/toggle'
 
 function SignalIcon({ signal, className, size }: { signal: number; className: string; size: number }) {
   if (signal >= 70) return <Wifi className={className} size={size} />
@@ -81,25 +86,22 @@ export default function WifiSettingsPage() {
   }
 
   return (
-    <div className="w-full flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <PageTitle title="Wi-Fi" />
-        <div className="flex items-center gap-2">
-          <IconButton onClick={scan} disabled={scanning || !enabled} label="Rescan">
-            <RefreshCw size={15} className={scanning ? 'animate-spin' : ''} />
-          </IconButton>
-          <Toggle label="Wi-Fi" checked={enabled} onChange={toggleRadio} />
-        </div>
-      </div>
+    <div className="flex w-full flex-col gap-5">
+      <PageHeader title="Wi-Fi">
+        <IconButton onClick={scan} disabled={scanning || !enabled} label="Rescan">
+          <RefreshCw size={15} className={scanning ? 'animate-spin' : ''} />
+        </IconButton>
+        <Toggle label="Wi-Fi" checked={enabled} onChange={toggleRadio} />
+      </PageHeader>
 
       {!enabled ? (
-        <EmptyState icon={<WifiOff size={20} />} text="Wi-Fi off" />
+        <EmptyState icon={<WifiOff size={20} />} title="Wi-Fi off" />
       ) : scanning && networks.length === 0 ? (
-        <EmptyState icon={<Loader2 size={20} className="animate-spin" />} text="Scanning..." />
+        <EmptyState icon={<Spinner size={20} />} title="Scanning…" />
       ) : networks.length === 0 ? (
-        <EmptyState icon={<WifiOff size={20} />} text="No networks found" />
+        <EmptyState icon={<WifiOff size={20} />} title="No networks found" />
       ) : (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-1">
           {networks.map((n) => (
             <NetworkRow
               key={n.ssid}
@@ -151,7 +153,6 @@ function NetworkRow({
   onPasswordChange: (v: string) => void
   onPasswordSubmit: () => void
 }) {
-  const iconClass = network.connected ? 'text-ink-primary shrink-0' : 'text-ink-quiet shrink-0'
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -159,64 +160,48 @@ function NetworkRow({
   }, [passwordOpen])
 
   return (
-    <div className="relative after:content-[''] after:absolute after:bottom-0 after:left-2 after:right-2 after:h-px after:bg-line-hairline last:after:hidden hover:after:hidden [&:has(+*:hover)]:after:hidden">
-      <button
-        onClick={onClick}
-        className="focus-ring w-full flex items-center justify-between gap-4 py-3 px-2 rounded-field cursor-pointer hover:bg-fill-ghost transition-colors text-left"
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <SignalIcon signal={network.signal} className={iconClass} size={16} />
-          <div className="flex flex-col min-w-0">
-            <span className={`text-sm truncate text-ink-primary ${network.connected ? 'font-medium' : ''}`}>{network.ssid}</span>
-            {(network.connected || disconnecting) && (
-              <span className="text-xs text-ink-quiet">{disconnecting ? 'Disconnecting…' : 'Connected'}</span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {(connecting || disconnecting) && <Loader2 size={13} className="text-ink-secondary animate-spin" />}
-          {network.security !== 'Open' && <Lock size={13} className="text-ink-quiet" />}
-        </div>
-      </button>
+    <ListRow
+      icon={
+        <SignalIcon
+          signal={network.signal}
+          size={16}
+          className={network.connected ? 'text-ink-primary' : 'text-ink-quiet'}
+        />
+      }
+      title={network.ssid}
+      detail={network.connected || disconnecting ? (disconnecting ? 'Disconnecting…' : 'Connected') : undefined}
+      onActivate={onClick}
+      activateLabel={network.connected ? `Disconnect from ${network.ssid}` : `Connect to ${network.ssid}`}
+      actions={
+        <>
+          {(connecting || disconnecting) && <Spinner size={13} />}
+          {network.security !== 'Open' && <Lock size={13} className="shrink-0 text-ink-quiet" />}
+        </>
+      }
+    >
       <div
-        className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+        className="grid transition-all duration-200 ease-out"
         style={{ gridTemplateRows: passwordOpen ? '1fr' : '0fr', opacity: passwordOpen ? 1 : 0 }}
       >
-        <div className="min-h-0 overflow-hidden">
-          <div className="flex gap-2 items-center pl-7 pr-1 pb-3 pt-1">
-            <input
+        <div className="min-h-0 overflow-hidden" inert={!passwordOpen}>
+          <div className="flex items-center gap-2 border-t border-line-hairline bg-surface-0 px-3 py-3">
+            <TextField
               ref={inputRef}
               type="password"
-              value={password}
-              tabIndex={passwordOpen ? 0 : -1}
-              onChange={(e) => onPasswordChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onPasswordSubmit()
-              }}
+              label={`Password for ${network.ssid}`}
               placeholder="Password"
-              className={`focus-ring flex-1 max-w-xs h-8 text-dense px-2.5 rounded-field outline-none border border-line-hairline bg-surface-2 text-ink-primary placeholder:text-ink-faint ${
-                error ? 'border-danger' : ''
-              }`}
+              value={password}
+              invalid={error}
+              onChange={onPasswordChange}
+              onSubmit={onPasswordSubmit}
+              className="max-w-xs flex-1"
             />
-            <button
-              onClick={onPasswordSubmit}
-              tabIndex={passwordOpen ? 0 : -1}
-              className="focus-ring h-8 px-3 rounded-full text-[12px] bg-fill-solid text-on-solid hover:bg-fill-solid-hover cursor-pointer transition-colors"
-            >
+            <Button size="sm" onClick={onPasswordSubmit}>
               Connect
-            </button>
+            </Button>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-2 py-12 text-ink-faint">
-      {icon}
-      <span className="text-sm">{text}</span>
-    </div>
+    </ListRow>
   )
 }

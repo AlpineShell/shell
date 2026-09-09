@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { processKey, bandLabel, bandClass } from './appsShared'
+import { processKey, bandLabel, bandTone } from './appsShared'
 
 describe('processKey', () => {
   it('returns null for nullish or empty targets', () => {
@@ -36,10 +36,10 @@ describe('bandLabel', () => {
   })
 })
 
-describe('bandClass', () => {
+describe('bandTone', () => {
   it('highlights only the heavy band', () => {
-    expect(bandClass('heavy')).toBe('text-warning')
-    expect(bandClass('light')).toBe('text-ink-quiet')
-    expect(bandClass('moderate')).toBe('text-ink-quiet')
+    expect(bandTone('heavy')).toBe('warning')
+    expect(bandTone('light')).toBe('neutral')
+    expect(bandTone('moderate')).toBe('neutral')
   })
 })
