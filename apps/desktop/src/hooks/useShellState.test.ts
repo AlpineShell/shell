@@ -37,6 +37,16 @@ describe('useShellState', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 
+  it('starts a later mount from the last value seen on the same channel', async () => {
+    const fetch = vi.fn().mockResolvedValue('resolved')
+    const first = renderHook(() => useShellState('initial', fetch, vi.fn()))
+    await waitFor(() => expect(first.result.current).toBe('resolved'))
+    first.unmount()
+
+    const second = renderHook(() => useShellState('initial', fetch, vi.fn()))
+    expect(second.result.current).toBe('resolved')
+  })
+
   it('ignores a pushed update after unmount', async () => {
     let pushed: ((value: string) => void) | undefined
     const subscribe = vi.fn((callback: (value: string) => void) => {
