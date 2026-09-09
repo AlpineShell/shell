@@ -7,6 +7,7 @@ import {
   settingsEntry,
   settingsEntryHint,
   settingsPage,
+  settingsPageByRoute,
   settingsPageRoute,
 } from './registry'
 
@@ -33,8 +34,9 @@ const LAUNCHER_SETTING_IDS = [
   'battery-saver-throttling',
   'wallpaper',
   'emoji',
-  'topbar',
-  'hotkeys',
+  'appearance',
+  'search',
+  'theme',
   'updates',
   'apps-running',
   'apps-installed',
@@ -57,6 +59,7 @@ const PAGE_ONLY_IDS = [
   'updates',
   'tray-icons',
   'revert',
+  'apps-defaults',
 ]
 
 describe('settings pages', () => {
@@ -80,17 +83,32 @@ describe('settings pages', () => {
     }
   })
 
-  it('starts every routed page path with its section path', () => {
-    for (const page of SETTINGS_PAGES) {
-      if (page.route === null) continue
-      expect(page.route.split('/')[0]).toBe(page.section === 'home' ? 'home' : page.section)
+  it('gives every routed page a route of its own', () => {
+    const routes = SETTINGS_PAGES.map((page) => page.route).filter((route) => route !== null)
+    expect(new Set(routes).size).toBe(routes.length)
+  })
+
+  it('declares every ancestor of a nested route as a page in its own right', () => {
+    const routes = new Set(SETTINGS_PAGES.map((page) => page.route).filter((route) => route !== null))
+    for (const route of routes) {
+      const segments = route.split('/')
+      for (let depth = 1; depth < segments.length; depth++) {
+        expect(routes.has(segments.slice(0, depth).join('/'))).toBe(true)
+      }
     }
   })
 
   it('resolves pages and routes by id', () => {
     expect(settingsPage('battery')?.label).toBe('Battery')
-    expect(settingsPageRoute('battery')).toBe('system/battery')
+    expect(settingsPageRoute('battery')).toBe('battery')
+    expect(settingsPageRoute('tray-icons')).toBe('tray/icons')
     expect(settingsPageRoute('quick-actions')).toBeNull()
+  })
+
+  it('resolves pages by the route the settings window navigates to', () => {
+    expect(settingsPageByRoute('tray/icons')?.id).toBe('tray-icons')
+    expect(settingsPageByRoute('home/revert')?.label).toBe('Revert to Windows')
+    expect(settingsPageByRoute('nowhere')).toBeNull()
   })
 })
 

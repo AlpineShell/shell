@@ -7,7 +7,7 @@ let bootSettingsIcon = null
 let bootSettingsPage = null
 let bootClockPrefs = null
 let bootTopbarLayout = null
-let bootTheme = { name: 'dark', background: '#1a1a19' }
+let bootTheme = { name: 'dark', background: '#1a1a19', preference: 'system' }
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
 try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
@@ -292,6 +292,7 @@ contextBridge.exposeInMainWorld('shell', {
   theme: {
     initial: bootTheme,
     get: () => ipcRenderer.invoke('theme/get'),
+    setPreference: (value) => ipcRenderer.invoke('theme/set-preference', value),
     onChanged: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('theme/changed', handler)

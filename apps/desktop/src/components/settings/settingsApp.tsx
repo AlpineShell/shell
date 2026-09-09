@@ -1,48 +1,34 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, AppWindow, House, Monitor, MonitorCog, Paintbrush, Plug, Puzzle, RefreshCw, X } from 'lucide-react'
-import AboutPage from './aboutPage'
-import PersonalizationHub from './personalizationHub'
-import WallpaperPage from './wallpaperPage'
-import TopBarPage from './topBarPage'
-import CalendarPage from './calendarPage'
-import TrayPage from './trayPage'
-import TrayIconsPage from './trayIconsPage'
-import HotkeysPage from './hotkeysPage'
-import TilingPage from './tilingPage'
-import DevicesHub from './devicesHub'
-import BluetoothSettingsPage from './bluetoothSettingsPage'
-import WifiSettingsPage from './wifiSettingsPage'
-import SystemPage from './systemPage'
-import BatteryPage from './batteryPage'
-import SystemRevertPage from './systemRevertPage'
-import AppsHub from './appsHub'
-import AppsRunningPage from './appsRunningPage'
-import AppsInstalledPage from './appsInstalledPage'
-import AppsStartupPage from './appsStartupPage'
-import UpdatesPage from './updatesPage'
-import PluginsPage from './pluginsPage'
-import DisplaysPage from './displaysPage'
+import { ArrowLeft, ArrowRight, X } from 'lucide-react'
+import { SETTINGS_PAGES, SETTINGS_SECTIONS, settingsPageByRoute } from '../../settings/registry'
+import { SETTINGS_ROUTES } from './settingsRoutes'
 import { useTheme } from '../../hooks/useTheme'
-
-interface NavItem {
-  path: string
-  label: string
-  icon: typeof House
-}
-
-const NAV: NavItem[] = [
-  { path: 'home', label: 'Home', icon: House },
-  { path: 'personalization', label: 'Personalization', icon: Paintbrush },
-  { path: 'displays', label: 'Displays', icon: Monitor },
-  { path: 'devices', label: 'Devices & Connections', icon: Plug },
-  { path: 'apps', label: 'Apps', icon: AppWindow },
-  { path: 'system', label: 'System', icon: MonitorCog },
-  { path: 'plugins', label: 'Plugins', icon: Puzzle },
-  { path: 'updates', label: 'Updates', icon: RefreshCw },
-]
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
+
+interface NavSection {
+  id: SettingsSectionId
+  label: string
+  pages: SettingsPage[]
+}
+
+function navSections(): NavSection[] {
+  return [...SETTINGS_SECTIONS]
+    .sort((a, b) => a.order - b.order)
+    .map((section) => ({
+      id: section.id,
+      label: section.label,
+      pages: SETTINGS_PAGES.filter(
+        (page) => page.section === section.id && page.route !== null && !page.route.includes('/')
+      ).sort((a, b) => a.order - b.order),
+    }))
+    .filter((section) => section.pages.length > 0)
+}
+
+function routeLabel(route: string): string {
+  return settingsPageByRoute(route)?.label ?? route
+}
 
 export default function SettingsApp() {
   useTheme()
@@ -54,10 +40,10 @@ export default function SettingsApp() {
   const [historyIndex, setHistoryIndex] = useState(() => history.length - 1)
 
   const currentPath = history[historyIndex]
-  const segments = currentPath.split('/')
-  const topSegment = segments[0]
+  const topSegment = currentPath.split('/')[0]
   const canBack = historyIndex > 0
   const canForward = historyIndex < history.length - 1
+  const sections = navSections()
 
   function navigate(path: string) {
     if (path === currentPath) return
@@ -76,7 +62,10 @@ export default function SettingsApp() {
   }
 
   const navigateRef = useRef(navigate)
-  navigateRef.current = navigate
+
+  useEffect(() => {
+    navigateRef.current = navigate
+  })
 
   useEffect(() => {
     return window.shell.windows.onSettingsNavigate((page) => navigateRef.current(page))
@@ -94,8 +83,7 @@ export default function SettingsApp() {
   }, [])
 
   useEffect(() => {
-    const leaf = segments[segments.length - 1]
-    window.shell.windows.setSettingsPage(SEGMENT_LABELS[leaf] ?? leaf)
+    window.shell.windows.setSettingsPage(routeLabel(currentPath))
   }, [currentPath])
 
   return (
@@ -104,23 +92,30 @@ export default function SettingsApp() {
         <div className="h-14 flex items-center px-5 shrink-0">
           <span className="font-display text-base font-normal tracking-tight text-ink-primary">Settings</span>
         </div>
-        <nav className="flex-1 px-2 flex flex-col gap-0.5 overflow-auto" style={noDragRegion}>
-          {NAV.map((p) => {
-            const Icon = p.icon
-            const active = p.path === topSegment
-            return (
-              <button
-                key={p.path}
-                onClick={() => navigate(p.path)}
-                className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
-                  active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
-                }`}
-              >
-                <Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />
-                {p.label}
-              </button>
-            )
-          })}
+        <nav className="flex-1 px-2 pb-3 flex flex-col gap-0.5 overflow-auto" style={noDragRegion}>
+          {sections.map((section) => (
+            <div key={section.id} className="flex flex-col gap-0.5">
+              {section.pages.length > 1 && (
+                <span className="px-3 pt-3 pb-1 text-eyebrow uppercase text-ink-faint select-none">{section.label}</span>
+              )}
+              {section.pages.map((page) => {
+                const Icon = page.icon
+                const active = page.route === topSegment
+                return (
+                  <button
+                    key={page.id}
+                    onClick={() => navigate(page.route as string)}
+                    className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
+                      active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
+                    }`}
+                  >
+                    <Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />
+                    {page.label}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
         </nav>
       </aside>
 
@@ -194,75 +189,31 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boo
 }
 
 function PageRouter({ path, navigate }: { path: string; navigate: (p: string) => void }) {
-  if (path === 'home') return <AboutPage onNavigate={navigate} />
-  if (path === 'personalization') return <PersonalizationHub onNavigate={navigate} />
-  if (path === 'personalization/wallpaper') return <WallpaperPage />
-  if (path === 'personalization/topbar') return <TopBarPage />
-  if (path === 'personalization/calendar') return <CalendarPage />
-  if (path === 'personalization/tray') return <TrayPage onNavigate={navigate} />
-  if (path === 'personalization/tray/icons') return <TrayIconsPage />
-  if (path === 'personalization/hotkeys') return <HotkeysPage />
-  if (path === 'personalization/tiling') return <TilingPage />
-  if (path === 'displays') return <DisplaysPage />
-  if (path === 'devices') return <DevicesHub onNavigate={navigate} />
-  if (path === 'devices/bluetooth') return <BluetoothSettingsPage />
-  if (path === 'devices/wifi') return <WifiSettingsPage />
-  if (path === 'apps') return <AppsHub onNavigate={navigate} />
-  if (path === 'apps/running') return <AppsRunningPage />
-  if (path === 'apps/installed') return <AppsInstalledPage />
-  if (path === 'apps/startup') return <AppsStartupPage />
-  if (path === 'system') return <SystemPage onNavigate={navigate} />
-  if (path === 'system/battery') return <BatteryPage />
-  if (path === 'system/revert') return <SystemRevertPage />
-  if (path === 'plugins') return <PluginsPage />
-  if (path === 'updates') return <UpdatesPage />
-  return null
+  return <>{SETTINGS_ROUTES[path]?.(navigate) ?? null}</>
 }
 
-const SEGMENT_LABELS: Record<string, string> = {
-  home: 'Home',
-  apps: 'Apps',
-  running: 'Running',
-  installed: 'Installed',
-  startup: 'Startup',
-  personalization: 'Personalization',
-  displays: 'Displays',
-  wallpaper: 'Wallpaper',
-  topbar: 'Top Bar',
-  calendar: 'Calendar',
-  tray: 'System Tray',
-  icons: 'Manage Icons',
-  hotkeys: 'Hotkeys',
-  tiling: 'Window Tiling',
-  devices: 'Devices & Connections',
-  bluetooth: 'Bluetooth',
-  wifi: 'Wi-Fi',
-  system: 'System',
-  battery: 'Battery',
-  revert: 'Revert back to Windows',
-  plugins: 'Plugins',
-  updates: 'Updates',
+function breadcrumbTrail(path: string): string[] {
+  const segments = path.split('/')
+  return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
 }
 
 function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string) => void }) {
-  const segments = path.split('/')
+  const trail = breadcrumbTrail(path)
   return (
     <div className="flex items-center gap-1 select-none">
-      {segments.map((seg, i) => {
-        const isLast = i === segments.length - 1
-        const subpath = segments.slice(0, i + 1).join('/')
-        const label = SEGMENT_LABELS[seg] ?? seg
+      {trail.map((subpath, index) => {
+        const isLast = index === trail.length - 1
         return (
           <span key={subpath} className="flex items-center gap-1">
-            {i > 0 && <span className="text-dense text-ink-faint">/</span>}
+            {index > 0 && <span className="text-dense text-ink-faint">/</span>}
             {isLast ? (
-              <span className="text-dense text-ink-primary underline decoration-line-strong underline-offset-4">{label}</span>
+              <span className="text-dense text-ink-primary underline decoration-line-strong underline-offset-4">{routeLabel(subpath)}</span>
             ) : (
               <button
                 onClick={() => onNavigate(subpath)}
                 className="focus-ring cursor-pointer text-dense text-ink-quiet underline-offset-4 decoration-line-strong hover:text-ink-primary hover:underline"
               >
-                {label}
+                {routeLabel(subpath)}
               </button>
             )}
           </span>
