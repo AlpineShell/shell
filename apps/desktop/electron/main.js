@@ -35,6 +35,8 @@ const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const windowCorners = require('./modules/windowCorners')
+const windowSystemMenu = require('./modules/windowSystemMenu')
+const winEvents = require('./modules/winEvents')
 const plugins = require('./modules/plugins')
 const pluginBackendHost = require('./pluginBackendHost')
 const pluginWindows = require('./pluginWindows')
@@ -544,6 +546,15 @@ function createSetupWindow() {
 let settingsWin = null
 let currentSettingsPage = null
 let pendingSettingsPage = null
+
+function exposedOwnWindowHandles() {
+  const handles = pluginWindows.nativeHandles()
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    try { handles.push(settingsWin.getNativeWindowHandle().readUInt32LE(0)) } catch {}
+  }
+  return handles
+}
+
 function createSettingsWindow() {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.focus()
@@ -569,6 +580,7 @@ function createSettingsWindow() {
     },
   })
   settingsWin.on('page-title-updated', (e) => e.preventDefault())
+  windowSystemMenu.enableSystemMenu(settingsWin)
   loadAppURL(settingsWin, getURL('settings'))
   settingsWin.once('ready-to-show', () => {
     if (settingsWin && !settingsWin.isDestroyed()) settingsWin.show()
@@ -881,17 +893,11 @@ function startShellMode() {
   if (shellWindow && takeover.actingAsShell) shellWindow.register()
 
   if (altTab) altTab.setShells(shells)
-  if (altTab && altTab.setExposedOwnWindows) {
-    altTab.setExposedOwnWindows(() => {
-      const handles = pluginWindows.nativeHandles()
-      if (settingsWin && !settingsWin.isDestroyed()) {
-        try { handles.push(settingsWin.getNativeWindowHandle().readUInt32LE(0)) } catch {}
-      }
-      return handles
-    })
-  }
+  if (altTab && altTab.setExposedOwnWindows) altTab.setExposedOwnWindows(exposedOwnWindowHandles)
 
   tiling.setShells(shells)
+  tiling.setExposedOwnWindows(exposedOwnWindowHandles)
+  winEvents.setExposedOwnWindows(exposedOwnWindowHandles)
   if (altTab && altTab.onTilingKey) {
     altTab.onTilingKey((direction, shift) => tiling.handleHotkey(direction, shift))
   }
