@@ -48,7 +48,7 @@ declare global {
 
   interface SegmentedOption<T> {
     value: T
-    label: string
+    label: import('react').ReactNode
   }
 
   interface SegmentedProps<T extends string | number> {
@@ -58,8 +58,13 @@ declare global {
     label?: string
   }
 
+  interface SelectOption<T> {
+    value: T
+    label: string
+  }
+
   interface SelectProps<T extends string> {
-    options: SegmentedOption<T>[]
+    options: SelectOption<T>[]
     value: T
     onChange: (value: T) => void
     label: string
@@ -84,15 +89,90 @@ declare global {
     children: import('react').ReactNode
     variant?: ButtonVariant
     size?: ButtonSize
+    icon?: import('react').ReactNode
+    busy?: boolean
     disabled?: boolean
     className?: string
   }
+
+  type IconButtonVariant = 'ghost' | 'danger'
 
   interface IconButtonProps {
     onClick: () => void
     label: string
     children: import('react').ReactNode
+    variant?: IconButtonVariant
+    busy?: boolean
     disabled?: boolean
+    className?: string
+  }
+
+  interface SpinnerProps {
+    size?: number
+  }
+
+  type AvatarSize = 'sm' | 'md'
+
+  interface AvatarProps {
+    src?: string | null
+    alt: string
+    fallback: import('react').ReactNode
+    size?: AvatarSize
+  }
+
+  type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger'
+
+  interface BadgeProps {
+    tone?: BadgeTone
+    children: import('react').ReactNode
+  }
+
+  interface EmptyStateProps {
+    icon?: import('react').ReactNode
+    title: string
+    detail?: import('react').ReactNode
+    action?: import('react').ReactNode
+  }
+
+  interface PageHeaderProps {
+    title: string
+    subtitle?: string
+    children?: import('react').ReactNode
+  }
+
+  interface ListRowProps {
+    icon?: import('react').ReactNode
+    title: string
+    badges?: import('react').ReactNode
+    detail?: import('react').ReactNode
+    actions?: import('react').ReactNode
+    onActivate?: () => void
+    activateLabel?: string
+    expanded?: boolean
+    disabled?: boolean
+    muted?: boolean
+    children?: import('react').ReactNode
+  }
+
+  interface TextFieldProps {
+    value: string
+    onChange: (value: string) => void
+    label: string
+    placeholder?: string
+    type?: 'text' | 'password'
+    icon?: import('react').ReactNode
+    invalid?: boolean
+    onSubmit?: () => void
+    className?: string
+    ref?: import('react').Ref<HTMLInputElement>
+  }
+
+  interface PickerTileProps {
+    onClick: () => void
+    label: string
+    selected?: boolean
+    className?: string
+    children: import('react').ReactNode
   }
 
   type SetupOutcomeTone = 'success' | 'danger'
@@ -858,12 +938,12 @@ declare global {
 
   interface SettingsSelectControl {
     kind: 'select'
-    options: readonly SegmentedOption<string>[]
+    options: readonly SelectOption<string>[]
   }
 
   interface SettingsSegmentedControl {
     kind: 'segmented'
-    options: readonly SegmentedOption<string | number>[]
+    options: readonly SelectOption<string | number>[]
   }
 
   interface SettingsColorControl {
