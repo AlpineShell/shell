@@ -2,6 +2,7 @@ const { app, screen, nativeImage } = require('electron')
 const koffi = require('koffi')
 const appIcons = require('./appIcons')
 const { friendlyAppName } = require('../appNames')
+const exposedOwnWindows = require('./exposedOwnWindows')
 
 const user32 = koffi.load('user32.dll')
 const gdi32 = koffi.load('gdi32.dll')
@@ -23,6 +24,7 @@ const UnhookWinEvent = user32.func('__stdcall', 'UnhookWinEvent', 'int', ['uintp
 const UnhookWindowsHookEx = user32.func('__stdcall', 'UnhookWindowsHookEx', 'int', ['uintptr_t'])
 const CallNextHookEx = user32.func('__stdcall', 'CallNextHookEx', 'intptr_t', ['uintptr_t', 'int', 'uintptr_t', 'intptr_t'])
 const GetKeyState = user32.func('__stdcall', 'GetKeyState', 'int16', ['int'])
+const GetAsyncKeyState = user32.func('__stdcall', 'GetAsyncKeyState', 'int16', ['int'])
 
 const EnumWindows = user32.func('__stdcall', 'EnumWindows', 'int', ['WNDENUMPROC *', 'intptr_t'])
 const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
@@ -172,13 +174,7 @@ function isShellWindow(hwnd) {
 }
 
 function isExposedOwnWindow(hwnd) {
-  if (!exposedOwnWindowsProvider) return false
-  try {
-    const allowed = exposedOwnWindowsProvider()
-    return Array.isArray(allowed) && allowed.includes(hwnd)
-  } catch {
-    return false
-  }
+  return exposedOwnWindows.isExposedOwnWindow(hwnd, exposedOwnWindowsProvider)
 }
 
 function readWideString(buf, maxChars) {
@@ -714,6 +710,18 @@ function handleEmojiCaptureKey(vkCode, scanCode, isKeyDown, isKeyUp) {
 const LLKHF_INJECTED = 0x10
 const KEYEVENTF_KEYUP = 0x0002
 
+function keyHeld(vkCode) {
+  return (GetAsyncKeyState(vkCode) & 0x8000) !== 0
+}
+
+function winKeyHeld() {
+  return keyHeld(VK_LWIN) || keyHeld(VK_RWIN)
+}
+
+function shiftKeyHeld() {
+  return keyHeld(VK_SHIFT)
+}
+
 function hookCallback(nCode, wParam, lParam) {
   try {
     if (nCode < 0) return CallNextHookEx(hookHandle, nCode, wParam, lParam)
@@ -733,9 +741,9 @@ function hookCallback(nCode, wParam, lParam) {
     }
 
     if (isKeyDown && tilingKeyCallback && (vkCode === VK_LEFT || vkCode === VK_RIGHT || vkCode === VK_UP || vkCode === VK_DOWN)) {
-      const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      const winHeld = winKeyHeld()
       if (winHeld) {
-        const shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) !== 0
+        const shiftDown = shiftKeyHeld()
         const direction = vkCode === VK_LEFT ? 'left' : vkCode === VK_RIGHT ? 'right' : vkCode === VK_UP ? 'up' : 'down'
         let handled = false
         try { handled = tilingKeyCallback(direction, shiftDown) } catch (e) { console.error('[altTab] tiling key error:', e.message) }
@@ -747,7 +755,7 @@ function hookCallback(nCode, wParam, lParam) {
     }
 
     if (isKeyDown && vkCode === VK_E && explorerKeyCallback) {
-      const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      const winHeld = winKeyHeld()
       if (winHeld) {
         winTapped = false
         try { explorerKeyCallback() } catch (e) { console.error('[altTab] explorer key error:', e.message) }
@@ -756,7 +764,7 @@ function hookCallback(nCode, wParam, lParam) {
     }
 
     if (isKeyDown && vkCode === VK_I && settingsKeyCallback) {
-      const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      const winHeld = winKeyHeld()
       if (winHeld) {
         winTapped = false
         setImmediate(() => {
@@ -767,7 +775,7 @@ function hookCallback(nCode, wParam, lParam) {
     }
 
     if (isKeyDown && vkCode === VK_OEM_PERIOD && emojiKeyCallback) {
-      const winHeld = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      const winHeld = winKeyHeld()
       if (winHeld) {
         winTapped = false
         setImmediate(() => {
@@ -803,7 +811,7 @@ function hookCallback(nCode, wParam, lParam) {
     }
 
     if (vkCode === VK_TAB && isKeyDown && altIsDown) {
-      const shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) !== 0
+      const shiftDown = shiftKeyHeld()
       if (!switcherActive) {
         showSwitcher()
       } else {
@@ -827,8 +835,8 @@ function hookCallback(nCode, wParam, lParam) {
     }
 
     if (vkCode === VK_S && isKeyDown) {
-      const shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) !== 0
-      const winDown = (GetKeyState(VK_LWIN) & 0x8000) !== 0 || (GetKeyState(VK_RWIN) & 0x8000) !== 0
+      const shiftDown = shiftKeyHeld()
+      const winDown = winKeyHeld()
       if (shiftDown && winDown && screenshotCallback) {
         setImmediate(() => screenshotCallback())
         return 1

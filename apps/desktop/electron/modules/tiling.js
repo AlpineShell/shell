@@ -3,6 +3,8 @@ const path = require('path')
 const fs = require('fs')
 const koffi = require('koffi')
 const winEvents = require('./winEvents')
+const { isExposedOwnWindow } = require('./exposedOwnWindows')
+const { isCrossDisplayMove, allowsWindow, snapHotkeyConfigured, acceptsSnapHotkey } = require('./tilingPolicy')
 
 const user32 = koffi.load('user32.dll')
 let dwmapi = null
@@ -81,6 +83,7 @@ let config = { ...DEFAULT_CONFIG }
 let storePath = null
 let broadcastRef = null
 let shellsRef = null
+let exposedOwnWindowsProvider = null
 let dynamicTimer = null
 let lastDynamicSnapshot = ''
 const snapStateByHwnd = new Map()
@@ -270,11 +273,19 @@ function windowPid(hwnd) {
   return buf.readUInt32LE(0)
 }
 
+function isTileable(hwnd) {
+  return allowsWindow({
+    exists: !!hwnd && !!IsWindow(hwnd),
+    ownProcess: windowPid(hwnd) === ownPid(),
+    exposed: isExposedOwnWindow(hwnd, exposedOwnWindowsProvider),
+  })
+}
+
 function isManageable(hwnd) {
-  if (!IsWindow(hwnd) || !IsWindowVisible(hwnd)) return false
+  if (!isTileable(hwnd)) return false
+  if (!IsWindowVisible(hwnd)) return false
   if (IsIconic(hwnd)) return false
   if (GetWindowTextLengthW(hwnd) <= 0) return false
-  if (windowPid(hwnd) === ownPid()) return false
   const style = GetWindowLongW(hwnd, GWL_STYLE)
   if (style & WS_CHILD) return false
   if (!(style & WS_THICKFRAME)) return false
@@ -579,9 +590,9 @@ function neighborDisplay(display, direction) {
   return displays[target]
 }
 
-function doSnap(direction, shift) {
-  const hwnd = toNum(GetForegroundWindow())
-  if (!hwnd || !IsWindow(hwnd) || windowPid(hwnd) === ownPid()) return
+function doSnap(direction, shift, requestedHwnd) {
+  const hwnd = requestedHwnd || toNum(GetForegroundWindow())
+  if (!isTileable(hwnd)) return
   const display = displayForWindow(hwnd)
 
   if (shift && (direction === 'left' || direction === 'right')) {
@@ -933,7 +944,7 @@ function armDragWatchdog() {
 function handleDragStart(hwnd) {
   if (!config.enabled) return
   if (dragActive && dragHwnd !== hwnd) resetDragState()
-  if (!hwnd || windowPid(hwnd) === ownPid() || !isManageable(hwnd)) return
+  if (!isManageable(hwnd)) return
   if (config.mode === 'dynamic') {
     dragActive = true
     dragHwnd = hwnd
@@ -1333,11 +1344,25 @@ function uninstallWinEventHook() {
   unsubscribeWinEvents = null
 }
 
+function describeHotkeyTarget(hwnd, direction, shift) {
+  const target = {
+    exists: !!hwnd && !!IsWindow(hwnd),
+    ownProcess: windowPid(hwnd) === ownPid(),
+    exposed: isExposedOwnWindow(hwnd, exposedOwnWindowsProvider),
+    hasNeighborDisplay: false,
+  }
+  if (target.exists && isCrossDisplayMove(direction, shift)) {
+    target.hasNeighborDisplay = !!neighborDisplay(displayForWindow(hwnd), direction)
+  }
+  return target
+}
+
 function handleHotkey(direction, shift) {
-  if (!config.enabled || !config.hotkeys || config.mode !== 'snap') return false
-  if (shift && direction !== 'left' && direction !== 'right') return false
+  if (!snapHotkeyConfigured(config, direction, shift)) return false
+  const hwnd = toNum(GetForegroundWindow())
+  if (!acceptsSnapHotkey(config, direction, shift, describeHotkeyTarget(hwnd, direction, shift))) return false
   setImmediate(() => {
-    try { doSnap(direction, shift) } catch (e) { console.error('[tiling] snap error:', e.message) }
+    try { doSnap(direction, shift, hwnd) } catch (e) { console.error('[tiling] snap error:', e.message) }
   })
   return true
 }
@@ -1367,6 +1392,10 @@ module.exports = {
 
   setShells(shells) {
     shellsRef = shells
+  },
+
+  setExposedOwnWindows(provider) {
+    exposedOwnWindowsProvider = typeof provider === 'function' ? provider : null
   },
 
   handleHotkey,
