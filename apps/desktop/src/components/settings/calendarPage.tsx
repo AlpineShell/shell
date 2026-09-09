@@ -1,97 +1,79 @@
 import { Check, Loader2, LogOut } from 'lucide-react'
 import { useClockPrefs } from '../../hooks/useClockPrefs'
 import { useCalendar } from '../../hooks/useCalendar'
-import PageTitle from '../ui/pageTitle'
-import Section from '../ui/section'
-import Row from '../ui/row'
-import Toggle from '../ui/toggle'
-import Segmented from '../ui/segmented'
+import { settingsValueEntry } from '../../settings/registry'
+import { useSettingsValue } from '../../hooks/useSettingsValue'
+import RegistryPage from './registryPage'
 import Button from '../ui/button'
 import Card from '../ui/card'
 
-const TIME_FORMAT_OPTIONS: { value: TimeFormat; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: '12h', label: '12-hour' },
-  { value: '24h', label: '24-hour' },
-]
+const ACCOUNT_GROUP = 'Google account'
+const CLOCK_GROUP = 'Clock'
 
-const DAY_OPTIONS: { value: CalendarDayCount; label: string }[] = [
-  { value: 1, label: '1 day' },
-  { value: 2, label: '2 days' },
-  { value: 3, label: '3 days' },
-]
+const TIME_FORMAT = settingsValueEntry('clock-time-format')
 
 export default function CalendarPage() {
-  const { prefs, setPrefs } = useClockPrefs()
+  const { prefs } = useClockPrefs()
   const { state, connect, disconnect } = useCalendar()
+  const timeFormat = useSettingsValue(TIME_FORMAT).value
 
   const systemLabel = prefs.systemTimeFormat === '12h' ? '12-hour' : '24-hour'
 
+  const slots: SettingsPageSlot[] = [
+    {
+      group: ACCOUNT_GROUP,
+      order: 0,
+      content: <GoogleAccount state={state} onConnect={connect} onDisconnect={disconnect} />,
+    },
+  ]
+
   return (
-    <div className="flex w-full flex-col gap-section">
-      <PageTitle title="Calendar" />
+    <RegistryPage
+      page="calendar"
+      slots={slots}
+      hidden={state.connected ? [] : ['calendar-days', 'calendar-show-tasks']}
+      groupSubtitles={{
+        [ACCOUNT_GROUP]: "Connect Google Calendar to show today's schedule and tasks when you hover the clock.",
+        ...(timeFormat === 'auto' ? { [CLOCK_GROUP]: `Following Windows (${systemLabel}).` } : {}),
+      }}
+    />
+  )
+}
 
-      <Section title="Google account" subtitle="Connect Google Calendar to show today's schedule and tasks when you hover the clock.">
-        {state.connected ? (
-          <Card className="flex h-16 items-center justify-between gap-4 px-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-hairline text-success">
-                <Check size={16} />
-              </span>
-              <div className="flex min-w-0 flex-col">
-                <span className="text-dense text-ink-primary">Connected</span>
-                <span className="truncate text-xs text-ink-quiet">{state.email ?? 'Google account'}</span>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => disconnect()}>
-              <LogOut size={14} /> Disconnect
-            </Button>
-          </Card>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <Button onClick={() => connect()} disabled={state.connecting} className="font-medium">
-              {state.connecting ? (<><Loader2 size={15} className="animate-spin" /> Waiting for browser…</>) : 'Connect Google Calendar'}
-            </Button>
-            {state.error && !state.connecting && <ErrorNote error={state.error} />}
+function GoogleAccount({
+  state,
+  onConnect,
+  onDisconnect,
+}: {
+  state: CalendarConnection
+  onConnect: () => void
+  onDisconnect: () => void
+}) {
+  if (state.connected) {
+    return (
+      <Card className="flex h-16 items-center justify-between gap-4 px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-hairline text-success">
+            <Check size={16} />
+          </span>
+          <div className="flex min-w-0 flex-col">
+            <span className="text-dense text-ink-primary">Connected</span>
+            <span className="truncate text-xs text-ink-quiet">{state.email ?? 'Google account'}</span>
           </div>
-        )}
-      </Section>
+        </div>
+        <Button variant="outline" size="sm" onClick={onDisconnect}>
+          <LogOut size={14} /> Disconnect
+        </Button>
+      </Card>
+    )
+  }
 
-      <Section title="Time format" subtitle={prefs.timeFormat === 'auto' ? `Following Windows (${systemLabel}).` : undefined}>
-        <Segmented
-          label="Time format"
-          options={TIME_FORMAT_OPTIONS}
-          value={prefs.timeFormat}
-          onChange={(value) => setPrefs({ timeFormat: value })}
-        />
-      </Section>
-
-      {state.connected && (
-        <>
-          <Section title="Days shown" subtitle="How many days the hover calendar shows at once.">
-            <Segmented
-              label="Days shown"
-              options={DAY_OPTIONS}
-              value={prefs.calendarDays}
-              onChange={(value) => setPrefs({ calendarDays: value })}
-            />
-          </Section>
-
-          <Section title="Tasks">
-            <Row
-              label="Show Google Tasks"
-              description="Display tasks with a due date alongside your events, like Google Calendar."
-            >
-              <Toggle
-                label="Show Google Tasks"
-                checked={prefs.showTasks}
-                onChange={(value) => setPrefs({ showTasks: value })}
-              />
-            </Row>
-          </Section>
-        </>
-      )}
-
+  return (
+    <div className="flex flex-col gap-3">
+      <Button onClick={onConnect} disabled={state.connecting} className="font-medium">
+        {state.connecting ? (<><Loader2 size={15} className="animate-spin" /> Waiting for browser…</>) : 'Connect Google Calendar'}
+      </Button>
+      {state.error && !state.connecting && <ErrorNote error={state.error} />}
     </div>
   )
 }

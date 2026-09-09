@@ -14,9 +14,10 @@ everything below.
 
 | Page | Setting | Stored in |
 |---|---|---|
-| Top Bar | colour override, automatic colour, show search icon, show media visualizer | `electron/modules/topbarColor.js` → `topbar-color.json` |
+| Appearance | theme (system / light / dark) | `electron/modules/theme.js` → `theme.json` |
+| Appearance | colour override, automatic colour, show search icon, show media visualizer | `electron/modules/topbarColor.js` → `topbar-color.json` |
 | Calendar | time format (auto/12h/24h), days shown (1/2/3), show Google Tasks | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
-| Hotkeys (really *Search*) | Search hotkey, show recent apps, show bookmarks, show browser tabs, maximum results | `electron/modules/launcherHotkey.js` → `launcher-hotkey.json`, `electron/modules/launcherPrefs.js` → `launcher-prefs.json` |
+| Search | Search hotkey, show recent apps, show bookmarks, show browser tabs, maximum results | `electron/modules/launcherHotkey.js` → `launcher-hotkey.json`, `electron/modules/launcherPrefs.js` → `launcher-prefs.json` |
 | System Tray | show tray, show overflow arrow, show on all monitors | `electron/modules/trayLayout.js` → `tray-layout.json` |
 | Window Tiling | enabled, mode, Win+Arrow snapping, drag-to-zone, dynamic layout, split ratios, gap, outer margin, keep-oversized, placement | `electron/modules/tiling.js` → `tiling.json` |
 | Battery | force battery saver, automatic, threshold %, dim displays, dim by %, dim external monitors, reduce background polling, throttle processes | `electron/modules/batterySaver.js` + `batterySaverPolicy.js` → `battery-saver-prefs.json` |
@@ -32,14 +33,62 @@ settings. They are lists of things that exist outside Alpine, with per-item acti
 
 ### The page order this implies
 
-The registry declares 23 pages: the 22 routes `settingsApp.tsx` actually renders, plus one
-launcher-only page (below). Section order follows the existing nav — Home, Personalization,
-Displays, Devices & Connections, Apps, System, Plugins, Updates — and within Personalization
-the leaf order follows `personalizationHub.tsx`: Wallpaper, Top Bar, Calendar, System Tray,
-Manage tray icons, Hotkeys, Window Tiling.
+The registry declares 21 pages: the 20 routes `settingsApp.tsx` renders, plus one
+launcher-only page (below). The sidebar has four groups — Home, Personal, Devices, System —
+and every page in it is one click away.
 
-That order is **not changed by this card**, and the argument for it is in the evidence
-section below, not in a claim about what people use.
+The order comes out of the A/B split above, not out of a claim about what people use.
+
+**Group A is what you tune; group B is what you set up.** A scalar setting is a preference
+that follows taste and context, and taste changes: the theme changes with the light in the
+room, the top bar colour with the wallpaper, the tiling gap when you get a second monitor,
+battery saver when you unplug. A manager is a list of things that exist outside Alpine, and
+you touch it when something outside Alpine changes — you bought a monitor, you installed an
+app, you want an app gone. That is the difference the inventory makes visible, and step
+count should follow it.
+
+Measured against that, the old layout was inverted. All seven tunable pages sat two clicks
+deep behind a Personalization hub that existed only to list them, and behind a System hub
+that held Battery next to Revert to Windows. Meanwhile Displays, Plugins and Updates — a
+one-time arrangement, an occasional install, and a page whose whole job is to tell you when
+there is nothing to do — were each one click from the sidebar. Three hubs (Personalization,
+Devices & Connections, System) added a step and contributed nothing but a list of links that
+the sidebar can hold directly.
+
+So:
+
+**One click, in the Personal group, in this order:** Appearance, Wallpaper, Search, Calendar,
+System tray, Window tiling, Battery. These are the seven pages that own scalar settings.
+Within the group the order is by how much of the shell the setting governs, widest first:
+Appearance and Wallpaper change every surface, Search and Calendar change one surface each,
+System tray and Window tiling change one behaviour each, and Battery only matters on a
+machine that has one.
+
+**One click, in the Devices group:** Displays, Wi-Fi, Bluetooth. These are managers, but they
+are the ones you reach for when hardware changes under you, and Alpine already has no other
+route to them — the top bar menus connect to a network, they do not forget one.
+
+**One click to the group, two to the page, in the System group:** Apps (→ Installed, Startup,
+Running, Default apps), Plugins, Updates. Four app managers behind one Apps entry is the one
+place where a hub still earns its step: the four pages are variations on one list, they are
+each used rarely, and collapsing them keeps the sidebar readable.
+
+**Two clicks, from the page they belong to:** Manage tray icons (from System tray) and Revert
+to Windows (from Home). Neither is a destination you go looking for; both make sense only in
+the context of the page above them.
+
+Three renames fall out of the same argument:
+
+- **Hotkeys is now Search.** The page never held hotkeys in general — it holds the Search
+  hotkey, show recent apps, show bookmarks, show browser tabs and maximum results. Four of
+  its five settings are about what Search puts in its results. The registry entry id changed
+  from `hotkeys` to `search` with it.
+- **Top Bar is now Appearance.** Theme belongs next to the top bar colour, not on a page of
+  its own holding one control, and "Appearance" is the honest name for a page that holds
+  the theme and the colour and contents of the bar. The entry id changed from `topbar` to
+  `appearance`; the individual top bar settings keep their ids.
+- **Home absorbed System.** With Battery moved into Personal, the System page held a default
+  shell card and a link to Revert. Both describe this PC, which is what Home already is.
 
 ## Why a registry, and not more hand-written pages
 
@@ -98,9 +147,13 @@ that switches on the mode. The registry carries static `label`, `description` an
 `state.connected`. This is a rendering concern, not a property of the setting, and encoding
 it as a predicate on every entry would put page layout back into the data.
 
-**Theme, keyboard layout and default file handlers.** These are configurable in the shell but
-have no UI at all today. They are not in the registry because they are not settings yet;
-adding them is a card of its own.
+**Keyboard layout.** Configurable in the shell, with no UI. It is not in the registry
+because it is not a settings page yet; adding it is a card of its own.
+
+Theme and default file handlers *were* in this paragraph and are no longer. Theme is now a
+registry entry (`theme`, on the Appearance page) backed by a stored preference in
+`electron/modules/theme.js`; default file handlers now have a page (`apps/defaults`) with a
+page-level entry so search can reach it.
 
 Three shapes were chosen deliberately and are worth naming, because each trades something:
 
@@ -181,5 +234,44 @@ retro-fitted.
 
 The registry and this record landed together with exactly one consumer rewired: the launcher.
 `launcherSettings.tsx` was deleted and `launcherPanel.tsx` now scores registry entries. The
-22 settings pages were left untouched and keep working exactly as they did. Rewriting them
-from the registry is a separate card, which is what makes both reviewable.
+22 settings pages were left untouched and kept working exactly as they did. Rewriting them
+from the registry was a separate card, which is what made both reviewable.
+
+## What the follow-up changed
+
+The six scalar pages — Appearance (was Top Bar), Calendar, Search (was Hotkeys), System tray,
+Window tiling and Battery — now render from the registry through
+`src/components/settings/registryPage.tsx`. It reads the entries for a page, groups them,
+renders each `control` kind with the shared components in `src/components/ui/`, and reads and
+writes through the entry's own `read` / `subscribe` / `write` via `hooks/useSettingsValue.ts`.
+
+Two escape hatches keep the bespoke pieces bespoke, and they are worth naming because they
+are the whole reason the registry did not have to grow a control kind per one-off:
+
+- **A slot adds content to a group.** The Google connect card, the Manage icons link, the
+  tiling mode explainer and the "no battery detected" note are page-supplied nodes filed
+  under a group and an order, sitting in the same list as the registry-driven rows.
+- **A slot can `replace` entries.** The top bar swatch picker replaces `topbar-color` and
+  `topbar-color-automatic`; the three-way battery override replaces `battery-saver`. The
+  entries stay in the registry, so search still finds them and the launcher still renders its
+  inline toggle — the page just draws a richer control in their place.
+
+Conditional visibility stayed a page concern, as this record argued it should: a page passes
+the ids it wants hidden. It computes them from the same registry values the rows use, through
+`hooks/useSettingsValue.ts`, which keeps one store per entry rather than one per component.
+That is what makes a reveal optimistic: flipping *Enable window tiling* shows the sections it
+gates in the same frame, because the row's write and the page's visibility read the same
+value. It also means one `read()` and one `subscribe()` per entry however many rows use it,
+a value that survives a row unmounting and remounting, and a pending-write guard so an echoed
+broadcast cannot drag a slider backwards under the user's thumb.
+
+The route table moved into `src/components/settings/settingsRoutes.tsx` and is checked against
+`SETTINGS_PAGES` by a test. Before, a route could be renamed in the registry and forgotten in
+`PageRouter`, and nothing — not typecheck, not a test — would say so; the page just rendered
+blank. `SEGMENT_LABELS` is gone: the breadcrumb, the sidebar and the taskbar entry all read
+their labels from `settingsPageByRoute`.
+
+One invariant was replaced rather than kept. `starts every routed page path with its section
+path` described the old structure, where a route's first segment had to be its section id.
+The routes are flat now, so the useful invariant is the one the breadcrumb actually depends
+on: every ancestor path of a nested route is itself a declared page.

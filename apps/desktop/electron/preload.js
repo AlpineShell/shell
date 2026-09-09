@@ -7,7 +7,7 @@ let bootSettingsIcon = null
 let bootSettingsPage = null
 let bootClockPrefs = null
 let bootTopbarLayout = null
-let bootTheme = { name: 'dark', background: '#1a1a19' }
+let bootTheme = { name: 'dark', background: '#1a1a19', preference: 'system' }
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
 try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
@@ -220,7 +220,9 @@ contextBridge.exposeInMainWorld('launcher', {
   setHotkey: (hotkey) => ipcRenderer.invoke('launcher/hotkey-set', hotkey),
   defaultHotkey: () => ipcRenderer.invoke('launcher/hotkey-default'),
   onHotkeyChanged: (callback) => {
-    ipcRenderer.on('launcher/hotkey-changed', (_, data) => callback(data))
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('launcher/hotkey-changed', handler)
+    return () => ipcRenderer.removeListener('launcher/hotkey-changed', handler)
   },
   onShow: (callback) => {
     ipcRenderer.on('launcher/show', (_, data) => callback(data))
@@ -292,6 +294,7 @@ contextBridge.exposeInMainWorld('shell', {
   theme: {
     initial: bootTheme,
     get: () => ipcRenderer.invoke('theme/get'),
+    setPreference: (value) => ipcRenderer.invoke('theme/set-preference', value),
     onChanged: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('theme/changed', handler)
@@ -462,12 +465,16 @@ contextBridge.exposeInMainWorld('shell', {
     display: () => ipcRenderer.invoke('tray/display-get'),
     setDisplay: (showOnAllMonitors) => ipcRenderer.invoke('tray/display-set', showOnAllMonitors),
     onDisplayChanged: (callback) => {
-      ipcRenderer.on('tray/display-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('tray/display-changed', handler)
+      return () => ipcRenderer.removeListener('tray/display-changed', handler)
     },
     settings: () => ipcRenderer.invoke('tray/settings-get'),
     setSettings: (partial) => ipcRenderer.invoke('tray/settings-set', partial),
     onSettingsChanged: (callback) => {
-      ipcRenderer.on('tray/settings-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('tray/settings-changed', handler)
+      return () => ipcRenderer.removeListener('tray/settings-changed', handler)
     },
   },
   run: {

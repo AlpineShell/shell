@@ -3,9 +3,12 @@ export {}
 declare global {
   type ThemeName = 'light' | 'dark'
 
+  type ThemePreference = 'system' | 'light' | 'dark'
+
   interface ThemeState {
     name: ThemeName
     background: string
+    preference: ThemePreference
   }
 
   interface SectionProps {
@@ -868,37 +871,27 @@ declare global {
 
   type SettingsApplies = 'instant' | 'confirm' | 'restart' | 'draft'
 
-  type SettingsSectionId =
-    | 'home'
-    | 'personalization'
-    | 'displays'
-    | 'devices'
-    | 'apps'
-    | 'system'
-    | 'plugins'
-    | 'updates'
+  type SettingsSectionId = 'home' | 'personalization' | 'devices' | 'system'
 
   type SettingsPageId =
     | 'home'
-    | 'personalization'
+    | 'revert'
+    | 'appearance'
     | 'wallpaper'
-    | 'topbar'
+    | 'search'
     | 'calendar'
     | 'tray'
     | 'tray-icons'
-    | 'hotkeys'
     | 'tiling'
+    | 'battery'
     | 'displays'
-    | 'devices'
-    | 'bluetooth'
     | 'wifi'
+    | 'bluetooth'
     | 'apps'
-    | 'apps-running'
     | 'apps-installed'
     | 'apps-startup'
-    | 'system'
-    | 'battery'
-    | 'revert'
+    | 'apps-running'
+    | 'apps-defaults'
     | 'plugins'
     | 'updates'
     | 'quick-actions'
@@ -999,6 +992,7 @@ declare global {
     write(value: SettingsValue): Promise<unknown>
     subscribe?(listener: (value: SettingsValue) => void): (() => void) | void
     defaultValue: SettingsValue
+    initial?(): SettingsValue
     validate?(value: unknown): SettingsValue
   }
 
@@ -1007,6 +1001,31 @@ declare global {
   }
 
   type SettingsEntry = SettingsValueEntry | SettingsPanelEntry
+
+  interface SettingsPageSlot {
+    group: string
+    order: number
+    replaces?: string[]
+    content: import('react').ReactNode
+  }
+
+  interface RegistryPageProps {
+    page: SettingsPageId
+    slots?: SettingsPageSlot[]
+    hidden?: string[]
+    lead?: import('react').ReactNode
+    groupSubtitles?: Record<string, string>
+    entryDescriptions?: Record<string, string>
+  }
+
+  type SettingsRouteView = (navigate: (path: string) => void) => import('react').ReactNode
+
+  interface HotkeyRecorderProps {
+    value: string
+    fallback: string
+    onChange: (hotkey: string) => void
+    disabled?: boolean
+  }
 
   interface Window {
     fileHandlers: {
@@ -1075,7 +1094,7 @@ declare global {
       getHotkey: () => Promise<string>
       setHotkey: (hotkey: string) => Promise<string>
       defaultHotkey: () => Promise<string>
-      onHotkeyChanged: (callback: (hotkey: string) => void) => void
+      onHotkeyChanged: (callback: (hotkey: string) => void) => () => void
       onShow: (callback: (data: { displayId: number; mode?: string }) => void) => void
       onStartClose: (callback: () => void) => () => void
       onHide: (callback: () => void) => () => void
@@ -1133,6 +1152,7 @@ declare global {
       theme: {
         initial: ThemeState
         get: () => Promise<ThemeState>
+        setPreference: (value: ThemePreference) => Promise<ThemeState>
         onChanged: (callback: (theme: ThemeState) => void) => () => void
       }
       windows: {
@@ -1263,10 +1283,10 @@ declare global {
         onLayoutChanged: (callback: (data: TrayLayout) => void) => void
         display: () => Promise<TrayDisplaySetting>
         setDisplay: (showOnAllMonitors: boolean) => Promise<TrayDisplaySetting>
-        onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => void
+        onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => () => void
         settings: () => Promise<TraySettings>
         setSettings: (partial: Partial<TraySettings>) => Promise<TraySettings>
-        onSettingsChanged: (callback: (data: TraySettings) => void) => void
+        onSettingsChanged: (callback: (data: TraySettings) => void) => () => void
       }
       updates: {
         getState: () => Promise<UpdateState>
