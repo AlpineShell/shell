@@ -573,6 +573,21 @@ contextBridge.exposeInMainWorld('shell', {
     },
     initial: bootClockPrefs,
   },
+  keyboard: {
+    availableLayouts: () => ipcRenderer.invoke('keyboard/layouts-available'),
+    languages: () => ipcRenderer.invoke('keyboard/languages-get'),
+    addLayout: (tag, layoutId) => ipcRenderer.invoke('keyboard/layout-add', { tag, layoutId }),
+    removeLayout: (tag, tip) => ipcRenderer.invoke('keyboard/layout-remove', { tag, tip }),
+    reorderLayouts: (tag, tips) => ipcRenderer.invoke('keyboard/layouts-reorder', { tag, tips }),
+    defaultInputMethod: () => ipcRenderer.invoke('keyboard/default-input-method-get'),
+    setDefaultInputMethod: (tip) => ipcRenderer.invoke('keyboard/default-input-method-set', tip),
+    activateNow: (tip) => ipcRenderer.invoke('keyboard/activate-now', tip),
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('keyboard/changed', handler)
+      return () => ipcRenderer.removeListener('keyboard/changed', handler)
+    },
+  },
   calendar: {
     state: () => ipcRenderer.invoke('calendar/state-get'),
     onStateChanged: (callback) => {

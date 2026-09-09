@@ -1,5 +1,6 @@
 const HKEY_CURRENT_USER = 0x80000001
 const KEY_READ = 0x20019
+const REG_NOTIFY_CHANGE_NAME = 0x00000001
 const REG_NOTIFY_CHANGE_LAST_SET = 0x00000004
 const REG_NOTIFY_THREAD_AGNOSTIC = 0x10000000
 const NOTIFY_ASYNCHRONOUSLY = 1
@@ -68,11 +69,11 @@ function readStringValue(api, keyHandle, valueName) {
   return null
 }
 
-function armChangeNotification(api, keyHandle, eventHandle) {
+function armChangeNotification(api, keyHandle, eventHandle, changeFilter, watchSubtree) {
   return api.RegNotifyChangeKeyValue(
     keyHandle,
-    0,
-    REG_NOTIFY_CHANGE_LAST_SET | REG_NOTIFY_THREAD_AGNOSTIC,
+    watchSubtree ? 1 : 0,
+    changeFilter | REG_NOTIFY_THREAD_AGNOSTIC,
     eventHandle,
     NOTIFY_ASYNCHRONOUSLY
   ) === ERROR_SUCCESS
@@ -90,24 +91,16 @@ function readCurrentUserStringValue(subKey, valueName) {
   }
 }
 
-function watchCurrentUserStringValue({ subKey, valueName, checkIntervalMs, onChange }) {
+function watchCurrentUserKeyChanges({ subKey, label, checkIntervalMs, changeFilter = REG_NOTIFY_CHANGE_LAST_SET, watchSubtree = false, onNotify }) {
   const api = loadRegistryApi()
   const keyHandle = api ? openCurrentUserKey(api, subKey) : null
   if (!api || !keyHandle) {
-    console.error(`[registryWatch] cannot open HKCU\\${subKey}, ${valueName} changes will go unnoticed`)
+    console.error(`[registryWatch] cannot open HKCU\\${subKey}, ${label} changes will go unnoticed`)
     return { stop: () => {} }
   }
 
-  let lastValue = readStringValue(api, keyHandle, valueName)
   let eventHandle = null
   let timer = null
-
-  function emitChange() {
-    const value = readStringValue(api, keyHandle, valueName)
-    if (value === lastValue) return
-    lastValue = value
-    onChange(value)
-  }
 
   function releaseEvent() {
     if (!eventHandle) return
@@ -115,27 +108,31 @@ function watchCurrentUserStringValue({ subKey, valueName, checkIntervalMs, onCha
     eventHandle = null
   }
 
-  function fallBackToValuePoll(reason) {
-    console.error(`[registryWatch] HKCU\\${subKey}\\${valueName}: ${reason}, falling back to a ${FALLBACK_POLL_INTERVAL_MS} ms value poll`)
+  function arm() {
+    return armChangeNotification(api, keyHandle, eventHandle, changeFilter, watchSubtree)
+  }
+
+  function fallBackToPoll(reason) {
+    console.error(`[registryWatch] HKCU\\${subKey} (${label}): ${reason}, falling back to a ${FALLBACK_POLL_INTERVAL_MS} ms poll`)
     if (timer) clearInterval(timer)
-    timer = setInterval(emitChange, FALLBACK_POLL_INTERVAL_MS)
+    timer = setInterval(onNotify, FALLBACK_POLL_INTERVAL_MS)
   }
 
   function checkNotification() {
     if (api.WaitForSingleObject(eventHandle, 0) !== WAIT_OBJECT_0) return
-    const rearmed = armChangeNotification(api, keyHandle, eventHandle)
-    emitChange()
+    const rearmed = arm()
+    onNotify()
     if (rearmed) return
     releaseEvent()
-    fallBackToValuePoll('re-arming the change notification failed')
+    fallBackToPoll('re-arming the change notification failed')
   }
 
   eventHandle = api.CreateEventW(0, 0, 0, null)
   if (!eventHandle) {
-    fallBackToValuePoll('CreateEventW failed')
-  } else if (!armChangeNotification(api, keyHandle, eventHandle)) {
+    fallBackToPoll('CreateEventW failed')
+  } else if (!arm()) {
     releaseEvent()
-    fallBackToValuePoll('RegNotifyChangeKeyValue failed')
+    fallBackToPoll('RegNotifyChangeKeyValue failed')
   } else {
     timer = setInterval(checkNotification, checkIntervalMs)
   }
@@ -152,4 +149,24 @@ function watchCurrentUserStringValue({ subKey, valueName, checkIntervalMs, onCha
   return { stop }
 }
 
-module.exports = { decodeRegistryString, readCurrentUserStringValue, watchCurrentUserStringValue }
+function watchCurrentUserStringValue({ subKey, valueName, checkIntervalMs, onChange }) {
+  let lastValue = readCurrentUserStringValue(subKey, valueName)
+
+  function emitChange() {
+    const value = readCurrentUserStringValue(subKey, valueName)
+    if (value === lastValue) return
+    lastValue = value
+    onChange(value)
+  }
+
+  return watchCurrentUserKeyChanges({ subKey, label: valueName, checkIntervalMs, onNotify: emitChange })
+}
+
+module.exports = {
+  REG_NOTIFY_CHANGE_NAME,
+  REG_NOTIFY_CHANGE_LAST_SET,
+  decodeRegistryString,
+  readCurrentUserStringValue,
+  watchCurrentUserKeyChanges,
+  watchCurrentUserStringValue,
+}
