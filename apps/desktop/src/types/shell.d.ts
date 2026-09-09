@@ -754,6 +754,150 @@ declare global {
     isDefault: boolean
   }
 
+  type SettingsIcon = import('lucide-react').LucideIcon
+
+  type SettingsApplies = 'instant' | 'confirm' | 'restart' | 'draft'
+
+  type SettingsSectionId =
+    | 'home'
+    | 'personalization'
+    | 'displays'
+    | 'devices'
+    | 'apps'
+    | 'system'
+    | 'plugins'
+    | 'updates'
+
+  type SettingsPageId =
+    | 'home'
+    | 'personalization'
+    | 'wallpaper'
+    | 'topbar'
+    | 'calendar'
+    | 'tray'
+    | 'tray-icons'
+    | 'hotkeys'
+    | 'tiling'
+    | 'displays'
+    | 'devices'
+    | 'bluetooth'
+    | 'wifi'
+    | 'apps'
+    | 'apps-running'
+    | 'apps-installed'
+    | 'apps-startup'
+    | 'system'
+    | 'battery'
+    | 'revert'
+    | 'plugins'
+    | 'updates'
+    | 'quick-actions'
+
+  type SettingsPageKind = 'settings' | 'hub' | 'manager' | 'launcher'
+
+  interface SettingsSection {
+    id: SettingsSectionId
+    label: string
+    icon: SettingsIcon
+    order: number
+  }
+
+  interface SettingsPage {
+    id: SettingsPageId
+    route: string | null
+    label: string
+    description: string
+    keywords: string[]
+    icon: SettingsIcon
+    section: SettingsSectionId | null
+    kind: SettingsPageKind
+    order: number
+  }
+
+  interface SettingsToggleControl {
+    kind: 'toggle'
+  }
+
+  interface SettingsSliderControl {
+    kind: 'slider'
+    min: number
+    max: number
+    step: number
+    unit?: string
+  }
+
+  interface SettingsSelectControl {
+    kind: 'select'
+    options: readonly SegmentedOption<string>[]
+  }
+
+  interface SettingsSegmentedControl {
+    kind: 'segmented'
+    options: readonly SegmentedOption<string | number>[]
+  }
+
+  interface SettingsColorControl {
+    kind: 'color'
+  }
+
+  interface SettingsHotkeyControl {
+    kind: 'hotkey'
+    fallback: string
+  }
+
+  type SettingsValueControl =
+    | SettingsToggleControl
+    | SettingsSliderControl
+    | SettingsSelectControl
+    | SettingsSegmentedControl
+    | SettingsColorControl
+    | SettingsHotkeyControl
+
+  type SettingsPanelControl =
+    | { kind: 'navigate'; path: string }
+    | { kind: 'action'; actionLabel: string; run(): Promise<unknown> }
+    | { kind: 'brightness' }
+    | { kind: 'wallpaper' }
+    | { kind: 'wifi' }
+    | { kind: 'bluetooth' }
+    | { kind: 'tray' }
+    | { kind: 'tiling' }
+    | { kind: 'startup' }
+    | { kind: 'power' }
+    | { kind: 'emoji' }
+
+  type SettingsControl = SettingsValueControl | SettingsPanelControl
+
+  type SettingsValue = boolean | number | string | TopBarColor | null
+
+  interface SettingsEntryBase {
+    id: string
+    label: string
+    description: string
+    hint?: string
+    keywords: string[]
+    icon: SettingsIcon
+    page: SettingsPageId
+    group: string
+    order: number
+    applies: SettingsApplies
+  }
+
+  interface SettingsValueEntry extends SettingsEntryBase {
+    control: SettingsValueControl
+    read(): Promise<SettingsValue>
+    write(value: SettingsValue): Promise<unknown>
+    subscribe?(listener: (value: SettingsValue) => void): (() => void) | void
+    defaultValue: SettingsValue
+    validate?(value: unknown): SettingsValue
+  }
+
+  interface SettingsPanelEntry extends SettingsEntryBase {
+    control: SettingsPanelControl
+  }
+
+  type SettingsEntry = SettingsValueEntry | SettingsPanelEntry
+
   interface Window {
     fileHandlers: {
       state: () => Promise<FileHandlerState[]>
