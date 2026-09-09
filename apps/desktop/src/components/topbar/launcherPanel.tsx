@@ -9,6 +9,7 @@ import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
 import { SETTING_COMMANDS, type SettingCommand } from "./launcherSettings"
 import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type SearchFields } from "../../lib/launcherSearch"
+import { useApps } from "../../hooks/useApps"
 import { useFrecencyScores } from "../../hooks/useFrecencyScores"
 import { useLauncherRecentApps } from "../../hooks/useLauncherRecentApps"
 import { useLauncherMaxResults } from "../../hooks/useLauncherMaxResults"
@@ -210,7 +211,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const selectedBg = darkText ? "bg-black/10" : "bg-white/10"
   const placeholderColor = darkText ? "placeholder:text-black/40" : "placeholder:text-white/40"
 
-  const [items, setItems] = useState<LauncherItem[]>([])
+  const items = useApps()
   const [openApps, setOpenApps] = useState<OpenApp[]>([])
   const scores = useFrecencyScores()
   const showRecentApps = useLauncherRecentApps()
@@ -443,8 +444,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   }
 
   useEffect(() => {
-    window.shell.apps.catalog().then(setItems)
-    const offCatalog = window.shell.apps.onCatalogChanged(setItems)
     window.shell.windows.openApps().then(setOpenApps)
     const offOpenApps = window.shell.windows.onOpenAppsChanged(setOpenApps)
     Promise.all([
@@ -457,7 +456,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     loadSettingValues()
     requestAnimationFrame(() => inputRef.current?.focus())
     return () => {
-      offCatalog()
       offOpenApps()
     }
   }, [loadSettingValues])

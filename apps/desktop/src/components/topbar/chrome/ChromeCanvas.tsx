@@ -70,15 +70,18 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
         const allocate = (heightCss: number) => {
             const deviceWidth = Math.round(window.innerWidth * dpr);
             const deviceHeight = Math.round(heightCss * dpr);
+            let wiped = false;
             if (canvas.width !== deviceWidth || canvas.height !== deviceHeight) {
                 canvas.width = deviceWidth;
                 canvas.height = deviceHeight;
                 lastClearH = 0;
+                wiped = true;
             }
             if (allocatedHeight !== heightCss) {
                 allocatedHeight = heightCss;
                 canvas.style.height = `${heightCss}px`;
             }
+            return wiped;
         };
 
         const growFor = (fullHeight: number) => allocate(Math.max(allocatedHeight, surfaceHeight(fullHeight)));
@@ -107,12 +110,12 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                 morphFrom = null;
                 animateOpen(0, CLOSE_MS, "in");
             }
-            if (surface) growFor(surface.fullHeight);
+            if (surface && growFor(surface.fullHeight)) draw();
             kick();
         };
 
         const resize = () => {
-            allocate(Math.max(allocatedHeight, restingHeight()));
+            if (allocate(Math.max(allocatedHeight, restingHeight()))) draw();
             kick();
         };
 
