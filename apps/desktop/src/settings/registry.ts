@@ -416,7 +416,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     id: 'appearance',
     label: 'Appearance',
     description: 'Theme, top bar color and what the top bar shows',
-    keywords: ['appearance', 'theme', 'top bar', 'topbar', 'color', 'colour'],
+    keywords: ['appearance', 'top bar', 'topbar', 'color', 'colour'],
     icon: Palette,
     page: 'appearance',
     group: 'Page',
@@ -436,6 +436,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     order: 1,
     applies: 'instant',
     defaultValue: 'system',
+    initial: () => window.shell.theme.initial.preference,
     validate: toThemePreference,
     read: () => window.shell.theme.get().then((theme) => theme.preference),
     write: (value: string) => window.shell.theme.setPreference(toThemePreference(value)),
@@ -539,6 +540,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     order: 1,
     applies: 'instant',
     defaultValue: 'auto',
+    initial: () => toTimeFormat(window.shell.clock.initial?.timeFormat),
     validate: toTimeFormat,
     read: () => window.shell.clock.prefs().then((prefs) => prefs.timeFormat),
     write: (value: string | number) => window.shell.clock.setPrefs({ timeFormat: toTimeFormat(value) }),
@@ -564,6 +566,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     order: 2,
     applies: 'instant',
     defaultValue: 1,
+    initial: () => toCalendarDayCount(window.shell.clock.initial?.calendarDays),
     validate: toCalendarDayCount,
     read: () => window.shell.clock.prefs().then((prefs) => prefs.calendarDays),
     write: (value: string | number) => window.shell.clock.setPrefs({ calendarDays: toCalendarDayCount(value) }),
@@ -589,6 +592,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     order: 3,
     applies: 'instant',
     defaultValue: true,
+    initial: () => window.shell.clock.initial?.showTasks ?? true,
     read: () => window.shell.clock.prefs().then((prefs) => prefs.showTasks),
     write: (value: boolean) => window.shell.clock.setPrefs({ showTasks: value }),
     subscribe: (listener: (value: boolean) => void) =>
@@ -1300,6 +1304,12 @@ export function settingsEntry(id: string): SettingsEntry | null {
 
 export function isSettingsValueEntry(entry: SettingsEntry): entry is SettingsValueEntry {
   return 'read' in entry
+}
+
+export function settingsValueEntry(id: string): SettingsValueEntry {
+  const entry = ENTRIES_BY_ID.get(id)
+  if (!entry || !isSettingsValueEntry(entry)) throw new Error(`no settings value entry named ${id}`)
+  return entry
 }
 
 export function settingsEntryHint(entry: SettingsEntry): string {

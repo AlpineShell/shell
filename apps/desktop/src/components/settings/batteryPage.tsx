@@ -1,5 +1,7 @@
 import { BatteryCharging, BatteryLow, Leaf } from 'lucide-react'
 import { useBatterySaver } from '../../hooks/useBatterySaver'
+import { settingsValueEntry } from '../../settings/registry'
+import { useSettingsValue } from '../../hooks/useSettingsValue'
 import RegistryPage from './registryPage'
 import Row from '../ui/row'
 import Segmented from '../ui/segmented'
@@ -8,6 +10,10 @@ const SAVER_GROUP = 'Battery saver'
 const AUTOMATIC_GROUP = 'Automatic'
 const EFFECTS_GROUP = 'What battery saver does'
 
+const AUTOMATIC = settingsValueEntry('battery-saver-automatic')
+const THRESHOLD = settingsValueEntry('battery-saver-threshold')
+const DIMMING = settingsValueEntry('battery-saver-dimming')
+
 const OVERRIDE_CHOICES: SegmentedOption<BatterySaverOverride>[] = [
   { value: 'auto', label: 'Automatic' },
   { value: 'on', label: 'On' },
@@ -15,7 +21,10 @@ const OVERRIDE_CHOICES: SegmentedOption<BatterySaverOverride>[] = [
 ]
 
 export default function BatteryPage() {
-  const { config, state, setOverride } = useBatterySaver()
+  const { state, setOverride } = useBatterySaver()
+  const automatic = useSettingsValue(AUTOMATIC).value === true
+  const threshold = useSettingsValue(THRESHOLD).value
+  const dimming = useSettingsValue(DIMMING).value === true
 
   const slots: SettingsPageSlot[] = [
     {
@@ -41,7 +50,7 @@ export default function BatteryPage() {
   if (!state.hasBattery) {
     slots.push({
       group: AUTOMATIC_GROUP,
-      order: 3,
+      order: 2.5,
       content: (
         <p className="text-xs text-ink-quiet">
           No battery was detected on this PC, so battery saver will never turn on by itself. You can still switch it on manually.
@@ -51,15 +60,21 @@ export default function BatteryPage() {
   }
 
   const hidden: string[] = []
-  if (!config.automaticEnabled) hidden.push('battery-saver-threshold')
-  if (!config.dimDisplays) hidden.push('battery-saver-dim-amount', 'battery-saver-dim-externals')
+  if (!automatic) hidden.push('battery-saver-threshold')
+  if (!dimming) hidden.push('battery-saver-dim-amount', 'battery-saver-dim-externals')
 
   return (
     <RegistryPage
       page="battery"
       slots={slots}
       hidden={hidden}
-      lead={<StatusCard state={state} thresholdPercent={config.thresholdPercent} automaticEnabled={config.automaticEnabled} />}
+      lead={
+        <StatusCard
+          state={state}
+          thresholdPercent={typeof threshold === 'number' ? threshold : 20}
+          automaticEnabled={automatic}
+        />
+      }
       groupSubtitles={{ [EFFECTS_GROUP]: 'Each of these applies only while battery saver is active.' }}
     />
   )

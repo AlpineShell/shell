@@ -9,7 +9,7 @@ export default function SearchPage() {
   const slots: SettingsPageSlot[] = [
     {
       group: HOTKEYS_GROUP,
-      order: 2,
+      order: 1.5,
       content: (
         <Row label="Screenshot" description="Create a screenshot">
           <HotkeyRecorder value={SCREENSHOT_HOTKEY} fallback={SCREENSHOT_HOTKEY} onChange={() => {}} disabled />

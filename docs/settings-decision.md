@@ -257,7 +257,13 @@ are the whole reason the registry did not have to grow a control kind per one-of
   inline toggle — the page just draws a richer control in their place.
 
 Conditional visibility stayed a page concern, as this record argued it should: a page passes
-the ids it wants hidden, computed from its own live state.
+the ids it wants hidden. It computes them from the same registry values the rows use, through
+`hooks/useSettingsValue.ts`, which keeps one store per entry rather than one per component.
+That is what makes a reveal optimistic: flipping *Enable window tiling* shows the sections it
+gates in the same frame, because the row's write and the page's visibility read the same
+value. It also means one `read()` and one `subscribe()` per entry however many rows use it,
+a value that survives a row unmounting and remounting, and a pending-write guard so an echoed
+broadcast cannot drag a slider backwards under the user's thumb.
 
 The route table moved into `src/components/settings/settingsRoutes.tsx` and is checked against
 `SETTINGS_PAGES` by a test. Before, a route could be renamed in the registry and forgotten in

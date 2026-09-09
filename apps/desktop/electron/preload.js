@@ -220,7 +220,9 @@ contextBridge.exposeInMainWorld('launcher', {
   setHotkey: (hotkey) => ipcRenderer.invoke('launcher/hotkey-set', hotkey),
   defaultHotkey: () => ipcRenderer.invoke('launcher/hotkey-default'),
   onHotkeyChanged: (callback) => {
-    ipcRenderer.on('launcher/hotkey-changed', (_, data) => callback(data))
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('launcher/hotkey-changed', handler)
+    return () => ipcRenderer.removeListener('launcher/hotkey-changed', handler)
   },
   onShow: (callback) => {
     ipcRenderer.on('launcher/show', (_, data) => callback(data))
@@ -463,12 +465,16 @@ contextBridge.exposeInMainWorld('shell', {
     display: () => ipcRenderer.invoke('tray/display-get'),
     setDisplay: (showOnAllMonitors) => ipcRenderer.invoke('tray/display-set', showOnAllMonitors),
     onDisplayChanged: (callback) => {
-      ipcRenderer.on('tray/display-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('tray/display-changed', handler)
+      return () => ipcRenderer.removeListener('tray/display-changed', handler)
     },
     settings: () => ipcRenderer.invoke('tray/settings-get'),
     setSettings: (partial) => ipcRenderer.invoke('tray/settings-set', partial),
     onSettingsChanged: (callback) => {
-      ipcRenderer.on('tray/settings-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('tray/settings-changed', handler)
+      return () => ipcRenderer.removeListener('tray/settings-changed', handler)
     },
   },
   run: {

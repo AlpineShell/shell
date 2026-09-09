@@ -1,20 +1,23 @@
 import { LayoutGrid } from 'lucide-react'
 import { useTrayIcons } from '../../hooks/useTrayIcons'
 import { useTrayLayout } from '../../hooks/useTrayLayout'
-import { useTraySettings } from '../../hooks/useTraySettings'
+import { settingsValueEntry } from '../../settings/registry'
+import { useSettingsValue } from '../../hooks/useSettingsValue'
 import { composeTray } from '../topbar/tray/composeTray'
 import RegistryPage from './registryPage'
 import NavRow from '../ui/navRow'
 
 const ICONS_GROUP = 'Icons'
 
+const TRAY_ENABLED = settingsValueEntry('tray-enabled')
+
 export default function TrayPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   const icons = useTrayIcons()
   const { layout } = useTrayLayout()
-  const { settings } = useTraySettings()
+  const enabled = useSettingsValue(TRAY_ENABLED).value === true
   const { visible, overflow } = composeTray(icons, layout)
 
-  const slots: SettingsPageSlot[] = settings.enabled
+  const slots: SettingsPageSlot[] = enabled
     ? [
         {
           group: ICONS_GROUP,
@@ -35,7 +38,7 @@ export default function TrayPage({ onNavigate }: { onNavigate: (path: string) =>
     <RegistryPage
       page="tray"
       slots={slots}
-      hidden={settings.enabled ? [] : ['tray-overflow', 'tray-all-monitors']}
+      hidden={enabled ? [] : ['tray-overflow', 'tray-all-monitors']}
     />
   )
 }

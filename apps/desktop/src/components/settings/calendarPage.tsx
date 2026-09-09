@@ -1,6 +1,8 @@
 import { Check, Loader2, LogOut } from 'lucide-react'
 import { useClockPrefs } from '../../hooks/useClockPrefs'
 import { useCalendar } from '../../hooks/useCalendar'
+import { settingsValueEntry } from '../../settings/registry'
+import { useSettingsValue } from '../../hooks/useSettingsValue'
 import RegistryPage from './registryPage'
 import Button from '../ui/button'
 import Card from '../ui/card'
@@ -8,9 +10,12 @@ import Card from '../ui/card'
 const ACCOUNT_GROUP = 'Google account'
 const CLOCK_GROUP = 'Clock'
 
+const TIME_FORMAT = settingsValueEntry('clock-time-format')
+
 export default function CalendarPage() {
   const { prefs } = useClockPrefs()
   const { state, connect, disconnect } = useCalendar()
+  const timeFormat = useSettingsValue(TIME_FORMAT).value
 
   const systemLabel = prefs.systemTimeFormat === '12h' ? '12-hour' : '24-hour'
 
@@ -29,7 +34,7 @@ export default function CalendarPage() {
       hidden={state.connected ? [] : ['calendar-days', 'calendar-show-tasks']}
       groupSubtitles={{
         [ACCOUNT_GROUP]: "Connect Google Calendar to show today's schedule and tasks when you hover the clock.",
-        ...(prefs.timeFormat === 'auto' ? { [CLOCK_GROUP]: `Following Windows (${systemLabel}).` } : {}),
+        ...(timeFormat === 'auto' ? { [CLOCK_GROUP]: `Following Windows (${systemLabel}).` } : {}),
       }}
     />
   )

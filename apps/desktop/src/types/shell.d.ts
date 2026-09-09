@@ -992,6 +992,7 @@ declare global {
     write(value: SettingsValue): Promise<unknown>
     subscribe?(listener: (value: SettingsValue) => void): (() => void) | void
     defaultValue: SettingsValue
+    initial?(): SettingsValue
     validate?(value: unknown): SettingsValue
   }
 
@@ -1093,7 +1094,7 @@ declare global {
       getHotkey: () => Promise<string>
       setHotkey: (hotkey: string) => Promise<string>
       defaultHotkey: () => Promise<string>
-      onHotkeyChanged: (callback: (hotkey: string) => void) => void
+      onHotkeyChanged: (callback: (hotkey: string) => void) => () => void
       onShow: (callback: (data: { displayId: number; mode?: string }) => void) => void
       onStartClose: (callback: () => void) => () => void
       onHide: (callback: () => void) => () => void
@@ -1282,10 +1283,10 @@ declare global {
         onLayoutChanged: (callback: (data: TrayLayout) => void) => void
         display: () => Promise<TrayDisplaySetting>
         setDisplay: (showOnAllMonitors: boolean) => Promise<TrayDisplaySetting>
-        onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => void
+        onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => () => void
         settings: () => Promise<TraySettings>
         setSettings: (partial: Partial<TraySettings>) => Promise<TraySettings>
-        onSettingsChanged: (callback: (data: TraySettings) => void) => void
+        onSettingsChanged: (callback: (data: TraySettings) => void) => () => void
       }
       updates: {
         getState: () => Promise<UpdateState>
