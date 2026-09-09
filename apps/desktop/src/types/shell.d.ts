@@ -691,6 +691,36 @@ declare global {
     showTasks: boolean
   }
 
+  interface KeyboardLayoutOption {
+    id: string
+    name: string
+  }
+
+  interface KeyboardInputMethod {
+    tip: string
+    localeId: string
+    layoutId: string
+    name: string
+  }
+
+  interface KeyboardLanguage {
+    tag: string
+    autonym: string
+    name: string
+    localeId: string | null
+    layouts: KeyboardInputMethod[]
+  }
+
+  interface KeyboardLayoutState {
+    languages: KeyboardLanguage[]
+    defaultInputMethod: string | null
+  }
+
+  interface OptimisticKeyboardLayout {
+    publishedWhenWritten: KeyboardLayoutState
+    state: KeyboardLayoutState
+  }
+
   interface CalendarConnection {
     connected: boolean
     email: string | null
@@ -1185,6 +1215,17 @@ declare global {
         setPrefs: (partial: Partial<ClockPrefs>) => Promise<ClockPrefs>
         onPrefsChanged: (callback: (data: ClockPrefs) => void) => () => void
         initial: ClockPrefs | null
+      }
+      keyboard: {
+        availableLayouts: () => Promise<KeyboardLayoutOption[]>
+        languages: () => Promise<KeyboardLanguage[]>
+        addLayout: (tag: string, layoutId: string) => Promise<KeyboardLayoutState>
+        removeLayout: (tag: string, tip: string) => Promise<KeyboardLayoutState>
+        reorderLayouts: (tag: string, tips: string[]) => Promise<KeyboardLayoutState>
+        defaultInputMethod: () => Promise<string | null>
+        setDefaultInputMethod: (tip: string | null) => Promise<KeyboardLayoutState>
+        activateNow: (tip: string) => Promise<{ ok: boolean }>
+        onChanged: (callback: (state: KeyboardLayoutState) => void) => () => void
       }
       calendar: {
         state: () => Promise<CalendarConnection>
