@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 import {
   SETTINGS_PAGES,
@@ -47,6 +50,35 @@ const LAUNCHER_SETTING_IDS = [
 ]
 
 const APPLIES = ['instant', 'confirm', 'restart', 'draft']
+
+const DECISION_RECORD = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'docs', 'settings-decision.md')
+
+const NEWLINE = /\r?\n/
+
+const TABLE_ROW = /^\|\s*`([a-z0-9-]+)`\s*\|\s*(instant|confirm|restart|draft)\s*\|\s*(\S.*?)\s*\|\s*$/
+
+const EXCEPTIONS: Record<string, SettingsApplies> = {
+  displays: 'draft',
+  'keyboard-layout-remove': 'confirm',
+  'language-pack': 'restart',
+  'app-force-close': 'confirm',
+  'app-uninstall': 'confirm',
+  startup: 'confirm',
+  'apps-defaults': 'confirm',
+  'plugin-uninstall': 'confirm',
+  updates: 'restart',
+  revert: 'confirm',
+  power: 'confirm',
+}
+
+function decisionTableRows(): Map<string, string> {
+  const rows = new Map<string, string>()
+  for (const line of readFileSync(DECISION_RECORD, 'utf8').split(NEWLINE)) {
+    const match = TABLE_ROW.exec(line)
+    if (match) rows.set(match[1], match[2] + '|' + match[3])
+  }
+  return rows
+}
 
 const PAGE_ONLY_IDS = [
   'input',
@@ -151,8 +183,36 @@ describe('settings registry', () => {
 
   it('declares how every entry applies', () => {
     for (const entry of SETTINGS_REGISTRY) {
+      expect(Object.prototype.hasOwnProperty.call(entry, 'applies')).toBe(true)
       expect(APPLIES).toContain(entry.applies)
     }
+  })
+
+  it('keeps the exception on every entry that has one', () => {
+    for (const [id, applies] of Object.entries(EXCEPTIONS)) {
+      expect(settingsEntry(id)?.applies).toBe(applies)
+    }
+  })
+
+  it('declares nothing else as an exception without arguing it first', () => {
+    const nonInstant = SETTINGS_REGISTRY.filter((entry) => entry.applies !== 'instant').map((entry) => entry.id)
+    expect(nonInstant.sort()).toEqual(Object.keys(EXCEPTIONS).sort())
+  })
+
+  it('leaves draft to pages that own an apply and revert flow', () => {
+    for (const entry of SETTINGS_REGISTRY) {
+      if (entry.applies !== 'draft') continue
+      expect(isSettingsValueEntry(entry)).toBe(false)
+    }
+  })
+
+  it('argues every entry in the decision record', () => {
+    const rows = decisionTableRows()
+    for (const entry of SETTINGS_REGISTRY) {
+      expect(rows.get(entry.id)?.split('|')[0]).toBe(entry.applies)
+      expect((rows.get(entry.id)?.split('|')[1] ?? '').length).toBeGreaterThan(20)
+    }
+    expect([...rows.keys()].sort()).toEqual(SETTINGS_REGISTRY.map((entry) => entry.id).sort())
   })
 
   it('gives every entry a label and a description', () => {

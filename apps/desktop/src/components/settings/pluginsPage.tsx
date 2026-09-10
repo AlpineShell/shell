@@ -13,6 +13,7 @@ import {
 import Avatar from '../ui/avatar'
 import Badge from '../ui/badge'
 import Button from '../ui/button'
+import ConfirmButton from '../ui/confirmButton'
 import EmptyState from '../ui/emptyState'
 import IconButton from '../ui/iconButton'
 import ListRow from '../ui/listRow'
@@ -74,9 +75,14 @@ function InstalledCard({
         actions={
           <>
             {!plugin.preset && (
-              <IconButton label="Uninstall" variant="danger" onClick={() => onUninstall(plugin)} busy={removing}>
-                <Trash2 size={16} />
-              </IconButton>
+              <ConfirmButton
+                iconOnly
+                label="Uninstall"
+                confirmLabel={`Uninstall ${plugin.name}`}
+                icon={<Trash2 size={16} />}
+                onConfirm={() => onUninstall(plugin)}
+                busy={removing}
+              />
             )}
             <Toggle label={`Enable ${plugin.name}`} checked={enabled} onChange={() => onToggle(plugin)} />
           </>

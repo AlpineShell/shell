@@ -41,6 +41,7 @@ import {
   Scaling,
   Search,
   SeparatorHorizontal,
+  SkullIcon,
   Smile,
   Sparkles,
   Sun,
@@ -384,6 +385,11 @@ function toTopBarColorOverride(value: unknown): TopBarColor | null {
   return { r: candidate.r, g: candidate.g, b: candidate.b, darkText: candidate.darkText === true }
 }
 
+function refuseUnboundHotkey(result: HotkeyBindResult): HotkeyBindResult {
+  if (!result.ok) throw new Error('Alpine could not use that shortcut. Search still opens with the old one — try another combination.')
+  return result
+}
+
 function freezeAutomaticTopBarColor(): Promise<unknown> {
   return window.topbar.color().then((color) => {
     if (!color) return null
@@ -665,7 +671,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     applies: 'instant',
     defaultValue: 'Win',
     read: () => window.launcher.getHotkey(),
-    write: (value: string) => window.launcher.setHotkey(value),
+    write: (value: string) => window.launcher.setHotkey(value).then(refuseUnboundHotkey),
     subscribe: (listener: (value: string) => void) => window.launcher.onHotkeyChanged(listener),
     control: { kind: 'hotkey', fallback: 'Win' },
   },
@@ -1298,6 +1304,19 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     control: { kind: 'navigate', path: 'apps/running' },
   },
   {
+    id: 'app-force-close',
+    label: 'Force close an app',
+    description: 'Kill an app that is still running. It gets no chance to save, so this asks first.',
+    hint: 'Kill a running app',
+    keywords: ['force close', 'end task', 'kill app', 'quit app', 'running apps', 'not responding'],
+    icon: SkullIcon,
+    page: 'apps-running',
+    group: 'Running apps',
+    order: 1,
+    applies: 'confirm',
+    control: { kind: 'navigate', path: 'apps/running' },
+  },
+  {
     id: 'apps-installed',
     label: 'Installed apps',
     description: 'Open or uninstall apps',
@@ -1306,6 +1325,19 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     page: 'apps-installed',
     group: 'Page',
     order: 0,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'apps/installed' },
+  },
+  {
+    id: 'app-uninstall',
+    label: 'Uninstall an app',
+    description: 'Hand an app to its own uninstaller and take it off this PC. Asks first, and cannot be undone.',
+    hint: 'Remove an app from this PC',
+    keywords: ['uninstall app', 'remove app', 'delete app', 'installed apps', 'programs'],
+    icon: Trash2,
+    page: 'apps-installed',
+    group: 'Installed apps',
+    order: 1,
     applies: 'confirm',
     control: { kind: 'navigate', path: 'apps/installed' },
   },
@@ -1342,7 +1374,20 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     page: 'plugins',
     group: 'Page',
     order: 0,
-    applies: 'restart',
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'plugins' },
+  },
+  {
+    id: 'plugin-uninstall',
+    label: 'Uninstall a plugin',
+    description: 'Delete a plugin and everything it put on disk. Asks first, and cannot be undone.',
+    hint: 'Remove a plugin from Alpine',
+    keywords: ['uninstall plugin', 'remove plugin', 'delete plugin', 'plugins', 'extensions'],
+    icon: Trash2,
+    page: 'plugins',
+    group: 'Plugins',
+    order: 1,
+    applies: 'confirm',
     control: { kind: 'navigate', path: 'plugins' },
   },
   {

@@ -8,6 +8,7 @@ import { useMonitors } from "../../hooks/useMonitors"
 import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
 import { SETTINGS_REGISTRY, isSettingsValueEntry, settingsEntryHint, settingsPageRoute } from "../../settings/registry"
+import { useSettingsValues, writeSettingsValue } from "../../hooks/useSettingsValue"
 import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type SearchFields } from "../../lib/launcherSearch"
 import { useApps } from "../../hooks/useApps"
 import { useFrecencyScores } from "../../hooks/useFrecencyScores"
@@ -36,6 +37,10 @@ const EMOJI_GRID_PADDING = 8
 const EMOJI_GRID_MAX_HEIGHT = 264
 const EMOJI_OVERSCAN_ROWS = 2
 const EMOJI_BY_CHAR = new Map(EMOJIS.map((e) => [e.c, e]))
+const LAUNCHER_VALUE_ENTRIES = SETTINGS_REGISTRY.filter(
+  (entry): entry is SettingsValueEntry =>
+    isSettingsValueEntry(entry) && (entry.control.kind === "toggle" || entry.control.kind === "slider")
+)
 const WALLPAPER_TILE_WIDTH = 200
 const WALLPAPER_TILE_GAP = 12
 const WALLPAPER_PANEL_PADDING_X = 16
@@ -226,7 +231,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const [contextSelected, setContextSelected] = useState(0)
   const [notice, setNotice] = useState<{ text: string; busy: boolean } | null>(null)
   const [activeCommand, setActiveCommand] = useState<string | null>(null)
-  const [settingValues, setSettingValues] = useState<Record<string, SettingsValue>>({})
+  const settingValues = useSettingsValues(LAUNCHER_VALUE_ENTRIES)
   const [subView, setSubView] = useState<{ title: string; back: () => void } | null>(null)
   const [wallpapers, setWallpapers] = useState<WallpaperItem[]>([])
   const [previewIndex, setPreviewIndex] = useState(0)
@@ -389,20 +394,13 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     window.launcher.hide()
   }
 
-  const loadSettingValues = useCallback(() => {
-    for (const cmd of SETTINGS_REGISTRY) {
-      if (!isSettingsValueEntry(cmd)) continue
-      if (cmd.control.kind !== "toggle" && cmd.control.kind !== "slider") continue
-      cmd.read().then((v) => setSettingValues((prev) => ({ ...prev, [cmd.id]: v }))).catch(() => {})
-    }
-  }, [])
-
   function toggleSetting(cmd: SettingsEntry) {
     if (!isSettingsValueEntry(cmd) || cmd.control.kind !== "toggle") return
-    const current = settingValues[cmd.id] === true
-    const next = !current
-    setSettingValues((prev) => ({ ...prev, [cmd.id]: next }))
-    Promise.resolve(cmd.write(next)).catch(() => setSettingValues((prev) => ({ ...prev, [cmd.id]: current })))
+    if (cmd.applies !== "instant") {
+      openSettingPage(cmd)
+      return
+    }
+    writeSettingsValue(cmd, settingValues[cmd.id] !== true)
   }
 
   function adjustSetting(cmd: SettingsEntry, direction: number) {
@@ -420,14 +418,12 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     const current = typeof settingValues[cmd.id] === "number" ? (settingValues[cmd.id] as number) : c.min
     const next = Math.max(c.min, Math.min(c.max, current + direction * c.step))
     if (next === current) return
-    setSettingValues((prev) => ({ ...prev, [cmd.id]: next }))
-    Promise.resolve(cmd.write(next)).catch(() => {})
+    writeSettingsValue(cmd, next)
   }
 
   function setSliderValue(cmd: SettingsEntry, value: number) {
     if (!isSettingsValueEntry(cmd) || cmd.control.kind !== "slider") return
-    setSettingValues((prev) => ({ ...prev, [cmd.id]: value }))
-    Promise.resolve(cmd.write(value)).catch(() => {})
+    writeSettingsValue(cmd, value)
   }
 
   function openSettingPage(cmd: SettingsEntry) {
@@ -460,12 +456,11 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       const list: WallpaperItem[] = [...mine, ...presets].map(({ name, path, thumbnail, url }) => ({ name, path, thumbnail, url }))
       setWallpapers(list)
     })
-    loadSettingValues()
     requestAnimationFrame(() => inputRef.current?.focus())
     return () => {
       offOpenApps()
     }
-  }, [loadSettingValues])
+  }, [])
 
   function registerSurface() {
     const body = bodyRef.current

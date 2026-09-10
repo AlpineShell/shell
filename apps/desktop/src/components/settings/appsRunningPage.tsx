@@ -4,7 +4,7 @@ import { useRunningApps } from '../../hooks/useRunningApps'
 import { bandLabel, bandTone } from './appsShared'
 import Avatar from '../ui/avatar'
 import Badge from '../ui/badge'
-import Button from '../ui/button'
+import ConfirmButton from '../ui/confirmButton'
 import EmptyState from '../ui/emptyState'
 import ListRow from '../ui/listRow'
 import PageHeader from '../ui/pageHeader'
@@ -98,9 +98,14 @@ function RunningRow({ app }: { app: RunningApp }) {
         </>
       }
       actions={
-        <Button variant="ghost" size="sm" onClick={close} busy={busy} className="w-20">
-          Close
-        </Button>
+        <ConfirmButton
+          variant="ghost"
+          label="Close"
+          confirmLabel="Force close"
+          onConfirm={close}
+          busy={busy}
+          className="min-w-20"
+        />
       }
     />
   )
