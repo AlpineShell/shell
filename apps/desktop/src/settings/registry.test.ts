@@ -49,6 +49,11 @@ const LAUNCHER_SETTING_IDS = [
 const APPLIES = ['instant', 'confirm', 'restart', 'draft']
 
 const PAGE_ONLY_IDS = [
+  'input',
+  'keyboard-layouts',
+  'keyboard-layout-remove',
+  'switch-input-method',
+  'default-input-method',
   'wifi',
   'bluetooth',
   'displays',

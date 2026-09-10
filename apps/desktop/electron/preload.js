@@ -589,6 +589,7 @@ contextBridge.exposeInMainWorld('shell', {
     defaultInputMethod: () => ipcRenderer.invoke('keyboard/default-input-method-get'),
     setDefaultInputMethod: (tip) => ipcRenderer.invoke('keyboard/default-input-method-set', tip),
     activateNow: (tip) => ipcRenderer.invoke('keyboard/activate-now', tip),
+    openLanguageSettings: () => ipcRenderer.invoke('keyboard/language-settings-open'),
     onChanged: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('keyboard/changed', handler)

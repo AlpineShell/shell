@@ -9,6 +9,7 @@ import BatteryPage from './batteryPage'
 import BluetoothSettingsPage from './bluetoothSettingsPage'
 import CalendarPage from './calendarPage'
 import DisplaysPage from './displaysPage'
+import InputPage from './inputPage'
 import PluginsPage from './pluginsPage'
 import SearchPage from './searchPage'
 import SystemRevertPage from './systemRevertPage'
@@ -26,6 +27,7 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'wallpaper': () => <WallpaperPage />,
   'search': () => <SearchPage />,
   'calendar': () => <CalendarPage />,
+  'input': () => <InputPage />,
   'tray': (navigate) => <TrayPage onNavigate={navigate} />,
   'tray/icons': () => <TrayIconsPage />,
   'tiling': () => <TilingPage />,
