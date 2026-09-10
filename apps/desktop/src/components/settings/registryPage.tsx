@@ -115,6 +115,10 @@ function HighlightedEntry({ entry, description }: { entry: SettingsEntry; descri
   )
 }
 
+export function registryPageRendersEntry(entry: SettingsEntry): boolean {
+  return entryRowContent(entry, '') !== null
+}
+
 function entryRowContent(entry: SettingsEntry, description: string): ReactNode {
   if (isSettingsValueEntry(entry)) return entry.applies === 'draft' ? null : <ValueRow entry={entry} description={description} />
   if (entry.control.kind === 'action') return <ActionRow entry={entry} description={description} run={entry.control.run} actionLabel={entry.control.actionLabel} />

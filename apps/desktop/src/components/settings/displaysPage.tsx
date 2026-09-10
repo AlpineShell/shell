@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { RotateCw, Star, MonitorCheck } from 'lucide-react'
 import { useDisplays } from '../../hooks/useDisplays'
+import { useMonitors } from '../../hooks/useMonitors'
+import { useHighlightedSetting } from '../../hooks/useHighlightedSetting'
 import PageTitle from '../ui/pageTitle'
 import Section from '../ui/section'
+import Row from '../ui/row'
+import Slider from '../ui/slider'
 import Button from '../ui/button'
 
 const SNAP_SCREEN_PX = 16
@@ -30,6 +34,11 @@ function orientationLabel(orientation: DisplayOrientation): string {
   if (orientation === 180) return 'Landscape (flipped)'
   if (orientation === 270) return 'Portrait (flipped)'
   return 'Landscape'
+}
+
+function monitorSourceLabel(monitor: MonitorInfo): string {
+  const source = monitor.type === 'internal' ? 'Built-in display' : 'External display over DDC/CI'
+  return monitor.brightnessWritable ? source : `${source} · not responding`
 }
 
 function applyErrorMessage(code: number | null): string {
@@ -212,7 +221,52 @@ export default function DisplaysPage() {
           )}
         </>
       )}
+
+      <BrightnessSection />
     </div>
+  )
+}
+
+function BrightnessSection() {
+  const { monitors, setBrightness } = useMonitors()
+  const highlighted = useHighlightedSetting('brightness')
+  const anchor = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (highlighted) anchor.current?.scrollIntoView({ block: 'center' })
+  }, [highlighted])
+
+  return (
+    <Section title="Brightness" subtitle="Applies straight away, one level per display.">
+      <div
+        ref={anchor}
+        className={`-mx-2 rounded-field px-2 py-1.5 transition-colors duration-300 ${
+          highlighted ? 'bg-fill-ghost ring-1 ring-line-strong' : ''
+        }`}
+      >
+        {monitors.length === 0 ? (
+          <p className="text-sm text-ink-quiet">
+            No display on this PC reports a brightness control Alpine can drive.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {monitors.map((monitor) => (
+              <Row key={monitor.id} label={monitor.name} description={monitorSourceLabel(monitor)}>
+                <Slider
+                  label={`${monitor.name} brightness`}
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={monitor.brightness}
+                  suffix="%"
+                  onChange={(value) => setBrightness(monitor.id, value)}
+                />
+              </Row>
+            ))}
+          </div>
+        )}
+      </div>
+    </Section>
   )
 }
 

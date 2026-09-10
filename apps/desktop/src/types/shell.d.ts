@@ -1079,6 +1079,11 @@ declare global {
     | { kind: 'navigate'; route: string; highlight: string | null }
     | { kind: 'launcher' }
 
+  interface SettingsRouteCoverage {
+    registryRows: boolean
+    renderedByThePage: string[]
+  }
+
   interface SettingsSearchTarget {
     id: string
     label: string
