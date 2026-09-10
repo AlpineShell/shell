@@ -8,7 +8,7 @@ import {
 } from '../../settings/registry'
 import { SETTINGS_SEARCH_TARGETS } from '../../settings/settingsSearch'
 import { SETTINGS_ROUTES, SETTINGS_ROUTE_COVERAGE } from './settingsRoutes'
-import { registryPageRendersEntry } from './registryPage'
+import { registryPageRendersEntry } from './registryRowContent'
 
 const declaredRoutes = SETTINGS_PAGES.map((page) => page.route).filter((route): route is string => route !== null)
 
