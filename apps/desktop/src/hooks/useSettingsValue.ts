@@ -45,6 +45,10 @@ function writeSettingsValue(entry: SettingsValueEntry, next: SettingsValue) {
     })
 }
 
+export function toggleSettingsValue(entry: SettingsValueEntry) {
+  writeSettingsValue(entry, settingsValueStore(entry).value !== true)
+}
+
 export function useSettingsValue(entry: SettingsValueEntry) {
   const store = settingsValueStore(entry)
 
