@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react'
+import { settingsPage } from '../../settings/registry'
 import { useTrayIcons } from '../../hooks/useTrayIcons'
 import { useTrayLayout } from '../../hooks/useTrayLayout'
 import { composeTray } from '../topbar/tray/composeTray'
@@ -35,7 +36,7 @@ export default function TrayIconsPage() {
 
   return (
     <div className="flex w-full flex-col gap-section">
-      <PageTitle title="Tray Icons" />
+      <PageTitle title={settingsPage('tray-icons')?.label ?? ''} />
 
       {icons.length === 0 && (
         <p className="text-sm text-ink-quiet">No tray icons are currently running. App icons appear here once their apps add them to the notification area.</p>
