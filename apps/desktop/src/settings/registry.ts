@@ -348,10 +348,10 @@ export function settingsPageRoute(id: SettingsPageId): string | null {
   return PAGES_BY_ID.get(id)?.route ?? null
 }
 
-const THEME_PREFERENCES: ThemePreference[] = ['system', 'light', 'dark']
+const THEME_PREFERENCES: ThemePreference[] = ['topbar', 'system', 'light', 'dark']
 
 function toThemePreference(value: unknown): ThemePreference {
-  return THEME_PREFERENCES.includes(value as ThemePreference) ? (value as ThemePreference) : 'system'
+  return THEME_PREFERENCES.includes(value as ThemePreference) ? (value as ThemePreference) : 'topbar'
 }
 
 function toTimeFormat(value: unknown): TimeFormat {
@@ -474,15 +474,15 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'theme',
     label: 'Theme',
-    description: "Follow Windows, or force light or dark for Alpine's own windows.",
-    hint: 'Light, dark, or follow Windows',
-    keywords: ['theme', 'dark mode', 'light mode', 'appearance', 'night mode', 'colour scheme', 'color scheme'],
+    description: "Follow the top bar, follow Windows, or force light or dark for Alpine's own windows.",
+    hint: 'Follow the top bar or Windows, or force light or dark',
+    keywords: ['theme', 'dark mode', 'light mode', 'appearance', 'night mode', 'colour scheme', 'color scheme', 'top bar', 'topbar'],
     icon: Contrast,
     page: 'appearance',
     group: 'Theme',
     order: 1,
     applies: 'instant',
-    defaultValue: 'system',
+    defaultValue: 'topbar',
     initial: () => window.shell.theme.initial.preference,
     validate: toThemePreference,
     read: () => window.shell.theme.get().then((theme) => theme.preference),
@@ -492,6 +492,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     control: {
       kind: 'segmented',
       options: [
+        { value: 'topbar', label: 'Top bar' },
         { value: 'system', label: 'System' },
         { value: 'light', label: 'Light' },
         { value: 'dark', label: 'Dark' },

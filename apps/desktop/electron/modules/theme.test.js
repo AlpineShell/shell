@@ -27,6 +27,24 @@ nodeRequire.cache[electronModuleId] = {
 const LIGHT_THEME = { name: 'light', background: '#f9fafb' }
 const DARK_THEME = { name: 'dark', background: '#1a1a19' }
 
+const DARK_BAR = { r: 30, g: 30, b: 30, darkText: false }
+const LIGHT_BAR = { r: 235, g: 235, b: 235, darkText: true }
+
+function createTopbarColorSource(color) {
+  const listeners = []
+  return {
+    getEffectiveColor: () => color,
+    onEffectiveColorChange: (listener) => {
+      listeners.push(listener)
+      return () => listeners.splice(listeners.indexOf(listener), 1)
+    },
+    repaintBarAs: (next) => {
+      color = next
+      listeners.forEach((listener) => listener(next))
+    },
+  }
+}
+
 function createNativeTheme(systemThemeName) {
   const updatedListeners = []
   const notifyUpdated = () => updatedListeners.forEach((listener) => listener())
@@ -69,6 +87,12 @@ async function startModule() {
   return { theme, broadcasts }
 }
 
+async function startFollowing(source) {
+  const started = await startModule()
+  started.theme.followTopbarColor(source)
+  return started
+}
+
 const setPreference = (theme, value) => theme.handlers['theme/set-preference'](null, value)
 
 beforeEach(() => {
@@ -107,29 +131,32 @@ describe('windowBackgroundFor', () => {
 })
 
 describe('toThemePreference', () => {
-  it('lets the three real preferences through', async () => {
+  it('lets the four real preferences through', async () => {
     const theme = await loadModule()
+    expect(theme.toThemePreference('topbar')).toBe('topbar')
     expect(theme.toThemePreference('system')).toBe('system')
     expect(theme.toThemePreference('light')).toBe('light')
     expect(theme.toThemePreference('dark')).toBe('dark')
   })
 
-  it('falls back to following the system for anything that is not a preference', async () => {
+  it('falls back to following the top bar for anything that is not a preference', async () => {
     const theme = await loadModule()
     const rejected = ['sepia', 'Dark', '', null, undefined, 0, 1, {}, ['light']]
-    rejected.forEach((value) => expect(theme.toThemePreference(value)).toBe('system'))
+    rejected.forEach((value) => expect(theme.toThemePreference(value)).toBe('topbar'))
   })
 })
 
 describe('the theme getTheme reports', () => {
   it('follows a dark system theme while the preference is system', async () => {
     nativeTheme = createNativeTheme('dark')
+    writePreference('system')
     const theme = await loadModule()
     expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'system' })
   })
 
   it('follows a light system theme while the preference is system', async () => {
     nativeTheme = createNativeTheme('light')
+    writePreference('system')
     const theme = await loadModule()
     expect(theme.getTheme()).toEqual({ ...LIGHT_THEME, preference: 'system' })
   })
@@ -148,8 +175,8 @@ describe('the theme getTheme reports', () => {
     expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'dark' })
   })
 
-  it('never names the resolved theme after the system preference', async () => {
-    for (const preference of ['system', 'light', 'dark']) {
+  it('names the resolved theme light or dark whatever the preference is', async () => {
+    for (const preference of ['topbar', 'system', 'light', 'dark']) {
       writePreference(preference)
       const theme = await loadModule()
       expect(['light', 'dark']).toContain(theme.getTheme().name)
@@ -158,6 +185,7 @@ describe('the theme getTheme reports', () => {
 
   it('falls back to the dark theme when the nativeTheme bridge is unavailable', async () => {
     nativeTheme = undefined
+    writePreference('system')
     const theme = await loadModule()
     expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'system' })
     expect(theme.getWindowBackground()).toBe('#1a1a19')
@@ -165,10 +193,11 @@ describe('the theme getTheme reports', () => {
 })
 
 describe('loading the stored preference', () => {
-  it('follows the system when nothing has been stored', async () => {
+  it('follows the top bar rather than the system when nothing has been stored', async () => {
     nativeTheme = createNativeTheme('light')
     const theme = await loadModule()
-    expect(theme.getTheme()).toEqual({ ...LIGHT_THEME, preference: 'system' })
+    theme.followTopbarColor(createTopbarColorSource(DARK_BAR))
+    expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'topbar' })
   })
 
   it('colours the window from the stored preference before start has been called', async () => {
@@ -186,18 +215,20 @@ describe('loading the stored preference', () => {
     expect(nativeTheme.themeSource).toBe('light')
   })
 
-  it('falls back to following the system when the store is corrupt', async () => {
+  it('falls back to following the top bar when the store is corrupt', async () => {
     nativeTheme = createNativeTheme('light')
     writeStore('{ preference: not json')
     const theme = await loadModule()
-    expect(theme.getTheme()).toEqual({ ...LIGHT_THEME, preference: 'system' })
+    theme.followTopbarColor(createTopbarColorSource(DARK_BAR))
+    expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'topbar' })
   })
 
-  it('falls back to following the system when the stored value is not a preference', async () => {
+  it('falls back to following the top bar when the stored value is not a preference', async () => {
     nativeTheme = createNativeTheme('light')
     writePreference('sepia')
     const theme = await loadModule()
-    expect(theme.getTheme()).toEqual({ ...LIGHT_THEME, preference: 'system' })
+    theme.followTopbarColor(createTopbarColorSource(DARK_BAR))
+    expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'topbar' })
   })
 })
 
@@ -208,10 +239,11 @@ describe('choosing a preference', () => {
     expect(readStore()).toEqual({ preference: 'dark' })
   })
 
-  it('stores a value that is not a preference as following the system', async () => {
+  it('stores a value that is not a preference as following the top bar', async () => {
     const { theme } = await startModule()
+    setPreference(theme, 'dark')
     setPreference(theme, 'sepia')
-    expect(readStore()).toEqual({ preference: 'system' })
+    expect(readStore()).toEqual({ preference: 'topbar' })
   })
 
   it('gives the next session the preference the last one chose', async () => {
@@ -241,6 +273,7 @@ describe('choosing a preference', () => {
 describe('broadcasting a chosen preference', () => {
   it('broadcasts once when the choice changes the resolved theme', async () => {
     nativeTheme = createNativeTheme('light')
+    writePreference('light')
     const { theme, broadcasts } = await startModule()
 
     setPreference(theme, 'dark')
@@ -250,6 +283,7 @@ describe('broadcasting a chosen preference', () => {
 
   it('broadcasts a choice that pins the theme the system already shows', async () => {
     nativeTheme = createNativeTheme('light')
+    writePreference('system')
     const { theme, broadcasts } = await startModule()
 
     setPreference(theme, 'light')
@@ -259,7 +293,7 @@ describe('broadcasting a chosen preference', () => {
 
   it('broadcasts nothing when the preference is set to the one already in use', async () => {
     const { theme, broadcasts } = await startModule()
-    setPreference(theme, 'system')
+    setPreference(theme, 'topbar')
     expect(broadcasts).toEqual([])
   })
 
@@ -274,6 +308,7 @@ describe('broadcasting a chosen preference', () => {
 describe('a system theme change', () => {
   it('carries through while the preference is system', async () => {
     nativeTheme = createNativeTheme('light')
+    writePreference('system')
     const { theme, broadcasts } = await startModule()
 
     nativeTheme.switchSystemTo('dark')
@@ -302,6 +337,87 @@ describe('a system theme change', () => {
 
     expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'dark' })
     expect(broadcasts).toEqual([])
+  })
+})
+
+describe('following the top bar', () => {
+  it('takes the dark theme from a dark top bar', async () => {
+    nativeTheme = createNativeTheme('light')
+    const { theme } = await startFollowing(createTopbarColorSource(DARK_BAR))
+    expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'topbar' })
+  })
+
+  it('takes the light theme from a light top bar', async () => {
+    nativeTheme = createNativeTheme('dark')
+    const { theme } = await startFollowing(createTopbarColorSource(LIGHT_BAR))
+    expect(theme.getTheme()).toEqual({ ...LIGHT_THEME, preference: 'topbar' })
+  })
+
+  it('holds the dark theme until the top bar has a colour to read', async () => {
+    nativeTheme = createNativeTheme('light')
+    const { theme } = await startFollowing(createTopbarColorSource(null))
+    expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'topbar' })
+  })
+
+  it('ignores a system theme change while it follows the top bar', async () => {
+    nativeTheme = createNativeTheme('dark')
+    const { theme, broadcasts } = await startFollowing(createTopbarColorSource(LIGHT_BAR))
+
+    nativeTheme.switchSystemTo('light')
+
+    expect(theme.getTheme()).toEqual({ ...LIGHT_THEME, preference: 'topbar' })
+    expect(broadcasts.filter((entry) => entry.payload.name === 'dark')).toEqual([])
+  })
+
+  it('follows the bar across the line between a dark and a light colour', async () => {
+    const source = createTopbarColorSource(DARK_BAR)
+    const { theme, broadcasts } = await startFollowing(source)
+
+    source.repaintBarAs(LIGHT_BAR)
+
+    expect(theme.getTheme()).toEqual({ ...LIGHT_THEME, preference: 'topbar' })
+    expect(broadcasts).toEqual([{ channel: 'theme/changed', payload: { ...LIGHT_THEME, preference: 'topbar' } }])
+  })
+
+  it('broadcasts nothing for a bar colour that stays on the same side of the line', async () => {
+    const source = createTopbarColorSource(DARK_BAR)
+    const { broadcasts } = await startFollowing(source)
+
+    source.repaintBarAs({ r: 60, g: 60, b: 70, darkText: false })
+
+    expect(broadcasts).toEqual([])
+  })
+
+  it('hands the theme the bar resolves to over to nativeTheme', async () => {
+    nativeTheme = createNativeTheme('dark')
+    await startFollowing(createTopbarColorSource(LIGHT_BAR))
+    expect(nativeTheme.themeSource).toBe('light')
+  })
+
+  it('leaves a chosen theme alone when the bar colour changes', async () => {
+    writePreference('light')
+    const source = createTopbarColorSource(LIGHT_BAR)
+    const { theme, broadcasts } = await startFollowing(source)
+
+    source.repaintBarAs(DARK_BAR)
+
+    expect(theme.getTheme()).toEqual({ ...LIGHT_THEME, preference: 'light' })
+    expect(broadcasts).toEqual([])
+  })
+
+  it('picks the bar up again when the preference returns to it', async () => {
+    writePreference('light')
+    const { theme, broadcasts } = await startFollowing(createTopbarColorSource(DARK_BAR))
+
+    setPreference(theme, 'topbar')
+
+    expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'topbar' })
+    expect(broadcasts).toEqual([{ channel: 'theme/changed', payload: { ...DARK_THEME, preference: 'topbar' } }])
+  })
+
+  it('colours the window from the bar', async () => {
+    const { theme } = await startFollowing(createTopbarColorSource(LIGHT_BAR))
+    expect(theme.getWindowBackground()).toBe('#f9fafb')
   })
 })
 

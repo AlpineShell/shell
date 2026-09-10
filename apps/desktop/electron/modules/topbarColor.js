@@ -13,6 +13,7 @@ let showSearchIcon = false
 let mediaShowVisualizer = false
 let storePath = null
 let broadcastRef = null
+const effectiveColorListeners = new Set()
 
 function getStorePath() {
   if (!storePath) storePath = path.join(app.getPath('userData'), STORE_FILE)
@@ -184,6 +185,23 @@ function getEffectiveColor() {
   return lastColor
 }
 
+function onEffectiveColorChange(listener) {
+  effectiveColorListeners.add(listener)
+  return () => effectiveColorListeners.delete(listener)
+}
+
+function notifyEffectiveColorChange() {
+  const color = getEffectiveColor()
+  if (!color) return
+  for (const listener of effectiveColorListeners) {
+    try {
+      listener(color)
+    } catch (e) {
+      console.error('[topbarColor] effective colour listener error:', e.message)
+    }
+  }
+}
+
 function applyColorForPath(wallpaperPath, broadcast) {
   if (wallpaperPath === lastWallpaperPath && lastColor) return
   lastWallpaperPath = wallpaperPath
@@ -195,6 +213,7 @@ function applyColorForPath(wallpaperPath, broadcast) {
     lastColor = color
     if (!userOverride) {
       broadcast('topbar/color-changed', color)
+      notifyEffectiveColorChange()
     }
   }
 }
@@ -204,6 +223,8 @@ function updateColor(broadcast) {
 }
 
 module.exports = {
+  getEffectiveColor,
+  onEffectiveColorChange,
   handlers: {
     'topbar/color': () => {
       if (userOverride) return userOverride
@@ -214,6 +235,7 @@ module.exports = {
           lastColor = result.color
           lastPalette = buildPalette(result.clusters)
           lastWallpaperPath = p
+          notifyEffectiveColorChange()
         }
         return userOverride || lastColor
       })
@@ -228,6 +250,7 @@ module.exports = {
       saveOverride()
       const effective = getEffectiveColor()
       if (effective && broadcastRef) broadcastRef('topbar/color-changed', effective)
+      notifyEffectiveColorChange()
       return effective
     },
     'topbar/color-palette': () => lastPalette,
