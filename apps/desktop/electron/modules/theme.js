@@ -3,8 +3,8 @@ const path = require('path')
 
 const STORE_FILE = 'theme.json'
 const DEFAULT_THEME = 'dark'
-const DEFAULT_PREFERENCE = 'system'
-const THEME_PREFERENCES = ['system', 'light', 'dark']
+const DEFAULT_PREFERENCE = 'topbar'
+const THEME_PREFERENCES = ['topbar', 'system', 'light', 'dark']
 
 const WINDOW_BACKGROUNDS = {
   light: '#f9fafb',
@@ -16,6 +16,7 @@ let lastBroadcast = null
 let preference = DEFAULT_PREFERENCE
 let loadedPreference = false
 let storePath = null
+let topbarColorSource = null
 
 function resolveThemeName(shouldUseDarkColors) {
   return shouldUseDarkColors ? 'dark' : 'light'
@@ -61,7 +62,7 @@ function save() {
 function applyPreference() {
   try {
     const { nativeTheme } = require('electron')
-    nativeTheme.themeSource = preference
+    nativeTheme.themeSource = preference === 'topbar' ? readTopbarThemeName() : preference
   } catch {}
 }
 
@@ -81,8 +82,32 @@ function readSystemThemeName() {
   }
 }
 
+function readTopbarThemeName() {
+  try {
+    const color = topbarColorSource && topbarColorSource.getEffectiveColor()
+    if (!color) return DEFAULT_THEME
+    return color.darkText ? 'light' : 'dark'
+  } catch {
+    return DEFAULT_THEME
+  }
+}
+
 function readResolvedThemeName() {
-  return preference === 'system' ? readSystemThemeName() : preference
+  if (preference === 'topbar') return readTopbarThemeName()
+  if (preference === 'system') return readSystemThemeName()
+  return preference
+}
+
+function refreshResolvedTheme() {
+  ensureLoaded()
+  applyPreference()
+  publishIfChanged()
+}
+
+function followTopbarColor(source) {
+  topbarColorSource = source
+  source.onEffectiveColorChange(refreshResolvedTheme)
+  refreshResolvedTheme()
 }
 
 function getTheme() {
@@ -122,6 +147,7 @@ module.exports = {
   toThemePreference,
   getTheme,
   getWindowBackground,
+  followTopbarColor,
   handlers: {
     'theme/get': () => getTheme(),
     'theme/set-preference': (_event, value) => setPreference(value),

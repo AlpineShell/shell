@@ -3,7 +3,7 @@ export {}
 declare global {
   type ThemeName = 'light' | 'dark'
 
-  type ThemePreference = 'system' | 'light' | 'dark'
+  type ThemePreference = 'topbar' | 'system' | 'light' | 'dark'
 
   interface ThemeState {
     name: ThemeName

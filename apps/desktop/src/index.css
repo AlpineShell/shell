@@ -67,6 +67,7 @@
   --alpine-fill-subtle: #f9fafb;
   --alpine-fill-ghost: rgba(0, 0, 0, 0.05);
   --alpine-fill-track: #d1d5db;
+  --alpine-toggle-knob: #ffffff;
 
   --alpine-focus-ring: #333332;
   --alpine-danger: #dc2626;
@@ -101,6 +102,7 @@
   --alpine-fill-subtle: #292928;
   --alpine-fill-ghost: rgba(255, 255, 255, 0.07);
   --alpine-fill-track: #4b4b49;
+  --alpine-toggle-knob: #b8b8b2;
 
   --alpine-focus-ring: #ebebe7;
   --alpine-danger: #f87171;
@@ -135,6 +137,7 @@
   --color-fill-subtle: var(--alpine-fill-subtle);
   --color-fill-ghost: var(--alpine-fill-ghost);
   --color-fill-track: var(--alpine-fill-track);
+  --color-toggle-knob: var(--alpine-toggle-knob);
 
   --color-focus-ring: var(--alpine-focus-ring);
   --color-danger: var(--alpine-danger);
@@ -240,6 +243,28 @@
 
 .cc-slider-light::-moz-range-track {
   background: rgba(0, 0, 0, 0.08);
+}
+
+.ui-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--alpine-fill-solid) var(--slider-progress, 50%),
+    var(--alpine-fill-track) var(--slider-progress, 50%)
+  );
+  outline: none;
+  cursor: pointer;
+  transition: --slider-progress 0.15s ease-out;
+}
+
+.ui-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0;
+  height: 0;
 }
 
 @keyframes menu-slide-in  { from { transform: translateY(-26px); } to { transform: translateY(0); } }

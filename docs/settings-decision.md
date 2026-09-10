@@ -14,7 +14,7 @@ everything below.
 
 | Page | Setting | Stored in |
 |---|---|---|
-| Appearance | theme (system / light / dark) | `electron/modules/theme.js` → `theme.json` |
+| Appearance | theme (top bar / system / light / dark) | `electron/modules/theme.js` → `theme.json` |
 | Appearance | colour override, automatic colour, show search icon, show media visualizer | `electron/modules/topbarColor.js` → `topbar-color.json` |
 | Calendar | time format (auto/12h/24h), days shown (1/2/3), show Google Tasks | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
 | Search | Search hotkey, show recent apps, show bookmarks, show browser tabs, maximum results | `electron/modules/launcherHotkey.js` → `launcher-hotkey.json`, `electron/modules/launcherPrefs.js` → `launcher-prefs.json` |
@@ -387,7 +387,7 @@ test failure too.
 | `brightness` | instant | A slider you can see the effect of while dragging, and drag back. |
 | `wallpaper` | instant | Visible immediately, reversible by picking another. |
 | `appearance` | instant | A page-level entry; the page's own settings each declare their own. |
-| `theme` | instant | Repaints Alpine's windows and nothing else. Reversible by picking the other option. |
+| `theme` | instant | Repaints Alpine's windows and nothing else. Reversible by picking another option. Its default, `topbar`, reads the light or dark of the bar's own colour so the windows match the bar rather than Windows. |
 | `topbar-color` | instant | A colour. Clearing the override restores the automatic one. |
 | `topbar-color-automatic` | instant | Freezes or resumes wallpaper-following. Both directions are one click. |
 | `topbar-search-icon` | instant | Shows or hides one button. The hotkey works either way, so it cannot strand you. |
