@@ -43,3 +43,21 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'plugins': () => <PluginsPage />,
   'updates': () => <UpdatesPage />,
 }
+
+export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
+  'appearance': { registryRows: true, renderedByThePage: ['topbar-color', 'topbar-color-automatic'] },
+  'wallpaper': { registryRows: false, renderedByThePage: ['wallpaper'] },
+  'search': { registryRows: true, renderedByThePage: [] },
+  'calendar': { registryRows: true, renderedByThePage: [] },
+  'input': {
+    registryRows: true,
+    renderedByThePage: ['keyboard-layouts', 'keyboard-layout-remove', 'switch-input-method', 'default-input-method'],
+  },
+  'tray': { registryRows: true, renderedByThePage: [] },
+  'tiling': { registryRows: true, renderedByThePage: [] },
+  'battery': { registryRows: true, renderedByThePage: ['battery-saver'] },
+  'displays': { registryRows: false, renderedByThePage: ['brightness'] },
+  'apps/installed': { registryRows: false, renderedByThePage: ['app-uninstall'] },
+  'apps/running': { registryRows: false, renderedByThePage: ['app-force-close'] },
+  'plugins': { registryRows: false, renderedByThePage: ['plugin-uninstall'] },
+}
