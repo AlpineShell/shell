@@ -47,6 +47,8 @@ import {
   Wifi,
 } from 'lucide-react'
 
+export const SETTINGS_PAGE_GROUP = 'Page'
+
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'home', label: 'Home', icon: House, order: 0 },
   { id: 'personalization', label: 'Personal', icon: Paintbrush, order: 1 },
@@ -288,11 +290,18 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   },
 ]
 
+const SECTIONS_BY_ID = new Map(SETTINGS_SECTIONS.map((section) => [section.id, section]))
+
 const PAGES_BY_ID = new Map(SETTINGS_PAGES.map((page) => [page.id, page]))
 
 const PAGES_BY_ROUTE = new Map(
   SETTINGS_PAGES.filter((page) => page.route !== null).map((page) => [page.route as string, page])
 )
+
+export function settingsSectionLabel(id: SettingsSectionId | null): string {
+  if (id === null) return ''
+  return SECTIONS_BY_ID.get(id)?.label ?? ''
+}
 
 export function settingsPage(id: SettingsPageId): SettingsPage | null {
   return PAGES_BY_ID.get(id) ?? null

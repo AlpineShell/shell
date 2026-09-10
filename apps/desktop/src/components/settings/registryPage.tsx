@@ -1,5 +1,6 @@
-import { Fragment, type ReactNode } from 'react'
-import { SETTINGS_REGISTRY, isSettingsValueEntry, settingsPage } from '../../settings/registry'
+import { Fragment, useEffect, useRef, type ReactNode } from 'react'
+import { SETTINGS_PAGE_GROUP, SETTINGS_REGISTRY, isSettingsValueEntry, settingsPage } from '../../settings/registry'
+import { useHighlightedSetting } from '../../hooks/useHighlightedSetting'
 import { useSettingsValue } from '../../hooks/useSettingsValue'
 import PageTitle from '../ui/pageTitle'
 import Section from '../ui/section'
@@ -10,8 +11,6 @@ import Select from '../ui/select'
 import Segmented from '../ui/segmented'
 import Button from '../ui/button'
 import HotkeyRecorder from './hotkeyRecorder'
-
-const PAGE_LEVEL_GROUP = 'Page'
 
 interface PlacedItem {
   key: string
@@ -60,12 +59,12 @@ export default function RegistryPage({
 
 function entryItems(page: SettingsPageId, omitted: Set<string>, descriptions: Record<string, string>): PlacedItem[] {
   return SETTINGS_REGISTRY.filter(
-    (entry) => entry.page === page && entry.group !== PAGE_LEVEL_GROUP && !omitted.has(entry.id)
+    (entry) => entry.page === page && entry.group !== SETTINGS_PAGE_GROUP && !omitted.has(entry.id)
   ).map((entry) => ({
     key: entry.id,
     group: entry.group,
     order: entry.order,
-    content: <EntryRow entry={entry} description={descriptions[entry.id] ?? entry.description} />,
+    content: <HighlightedEntry entry={entry} description={descriptions[entry.id] ?? entry.description} />,
   }))
 }
 
@@ -93,7 +92,30 @@ function groupItems(items: PlacedItem[]): PlacedGroup[] {
     .sort((a, b) => a.order - b.order)
 }
 
-function EntryRow({ entry, description }: { entry: SettingsEntry; description: string }) {
+function HighlightedEntry({ entry, description }: { entry: SettingsEntry; description: string }) {
+  const highlighted = useHighlightedSetting(entry.id)
+  const anchor = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (highlighted) anchor.current?.scrollIntoView({ block: 'center' })
+  }, [highlighted])
+
+  const content = entryRowContent(entry, description)
+  if (content === null) return null
+
+  return (
+    <div
+      ref={anchor}
+      className={`-mx-2 rounded-field px-2 py-1.5 transition-colors duration-300 ${
+        highlighted ? 'bg-fill-ghost ring-1 ring-line-strong' : ''
+      }`}
+    >
+      {content}
+    </div>
+  )
+}
+
+function entryRowContent(entry: SettingsEntry, description: string): ReactNode {
   if (isSettingsValueEntry(entry)) return <ValueRow entry={entry} description={description} />
   if (entry.control.kind === 'action') return <ActionRow entry={entry} description={description} run={entry.control.run} actionLabel={entry.control.actionLabel} />
   return null

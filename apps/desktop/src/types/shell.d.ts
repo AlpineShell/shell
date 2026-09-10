@@ -170,6 +170,18 @@ declare global {
     ref?: import('react').Ref<HTMLInputElement>
   }
 
+  interface SearchFieldProps {
+    value: string
+    onChange: (value: string) => void
+    label: string
+    placeholder?: string
+    hint?: string
+    onKeyDown?: (event: import('react').KeyboardEvent<HTMLInputElement>) => void
+    controls?: string
+    activeDescendant?: string
+    ref?: import('react').Ref<HTMLInputElement>
+  }
+
   interface PickerTileProps {
     onClick: () => void
     label: string
@@ -1016,6 +1028,37 @@ declare global {
     lead?: import('react').ReactNode
     groupSubtitles?: Record<string, string>
     entryDescriptions?: Record<string, string>
+  }
+
+  type SettingsSearchAction =
+    | { kind: 'toggle'; entry: SettingsValueEntry }
+    | { kind: 'navigate'; route: string; highlight: string | null }
+    | { kind: 'launcher' }
+
+  interface SettingsSearchTarget {
+    id: string
+    label: string
+    description: string
+    keywords: string[]
+    icon: SettingsIcon
+    context: string
+    action: SettingsSearchAction
+  }
+
+  interface SettingsSearchMatch {
+    target: SettingsSearchTarget
+    score: number
+  }
+
+  interface SettingsSearchResultsProps {
+    query: string
+    matches: SettingsSearchMatch[]
+    total: number
+    selected: number
+    listId: string
+    rowId: (index: number) => string
+    onPoint: (index: number) => void
+    onActivate: (target: SettingsSearchTarget) => void
   }
 
   type SettingsRouteView = (navigate: (path: string) => void) => import('react').ReactNode
