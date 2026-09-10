@@ -7,7 +7,8 @@ interface StubOptions {
   stored?: SettingsValue
   initial?: () => SettingsValue
   validate?: (value: unknown) => SettingsValue
-  writeFails?: boolean
+  writeFails?: string | boolean
+  applies?: SettingsApplies
 }
 
 function stubEntry(options: StubOptions = {}) {
@@ -23,12 +24,12 @@ function stubEntry(options: StubOptions = {}) {
     page: 'appearance',
     group: 'Stub',
     order: 0,
-    applies: 'instant',
+    applies: options.applies ?? 'instant',
     defaultValue: false,
     control: { kind: 'toggle' },
     read: vi.fn(() => Promise.resolve(stored)),
     write: vi.fn((value: SettingsValue) => {
-      if (options.writeFails) return Promise.reject(new Error('refused'))
+      if (options.writeFails) return Promise.reject(new Error(String(options.writeFails)))
       stored = value
       return Promise.resolve(value)
     }),
@@ -127,6 +128,88 @@ describe('useSettingsValue', () => {
     act(() => broadcast(35))
 
     expect(result.current.value).toBe(35)
+  })
+
+  it('writes an instant entry the moment the control changes', () => {
+    const { entry } = stubEntry()
+    const { result } = renderHook(() => useSettingsValue(entry))
+
+    act(() => result.current.write(true))
+
+    expect(entry.write).toHaveBeenCalledWith(true)
+    expect(result.current.value).toBe(true)
+  })
+
+  it('does not write a confirm entry until it is confirmed', async () => {
+    const { entry } = stubEntry({ applies: 'confirm' })
+    const { result } = renderHook(() => useSettingsValue(entry))
+    await waitFor(() => expect(result.current.value).toBe(false))
+
+    act(() => result.current.write(true))
+
+    expect(entry.write).not.toHaveBeenCalled()
+    expect(result.current.value).toBe(false)
+    expect(result.current.staged).toBe(true)
+
+    act(() => result.current.confirm())
+
+    expect(entry.write).toHaveBeenCalledWith(true)
+    expect(result.current.value).toBe(true)
+    expect(result.current.staged).toBeUndefined()
+  })
+
+  it('drops the staged value of a confirm entry when it is cancelled', () => {
+    const { entry } = stubEntry({ applies: 'confirm' })
+    const { result } = renderHook(() => useSettingsValue(entry))
+
+    act(() => result.current.write(true))
+    act(() => result.current.cancel())
+
+    expect(entry.write).not.toHaveBeenCalled()
+    expect(result.current.staged).toBeUndefined()
+    expect(result.current.value).toBe(false)
+  })
+
+  it('confirms nothing when a confirm entry has nothing staged', () => {
+    const { entry } = stubEntry({ applies: 'confirm' })
+    const { result } = renderHook(() => useSettingsValue(entry))
+
+    act(() => result.current.confirm())
+
+    expect(entry.write).not.toHaveBeenCalled()
+  })
+
+  it('leaves a draft entry for the page to apply', () => {
+    const { entry } = stubEntry({ applies: 'draft' })
+    const { result } = renderHook(() => useSettingsValue(entry))
+
+    act(() => result.current.write(true))
+
+    expect(entry.write).not.toHaveBeenCalled()
+    expect(result.current.staged).toBe(true)
+  })
+
+  it('writes a restart entry and asks for a restart once it lands', async () => {
+    const { entry } = stubEntry({ applies: 'restart' })
+    const { result } = renderHook(() => useSettingsValue(entry))
+
+    act(() => result.current.write(true))
+
+    expect(entry.write).toHaveBeenCalledWith(true)
+    expect(result.current.value).toBe(true)
+    await waitFor(() => expect(result.current.restartRequired).toBe(true))
+  })
+
+  it('reverts the optimistic value and says why when a write is refused', async () => {
+    const { entry } = stubEntry({ stored: false, writeFails: 'Another app already owns that shortcut.' })
+    const { result } = renderHook(() => useSettingsValue(entry))
+    await waitFor(() => expect(result.current.value).toBe(false))
+
+    act(() => result.current.write(true))
+    expect(result.current.value).toBe(true)
+
+    await waitFor(() => expect(result.current.value).toBe(false))
+    expect(result.current.error).toBe('Another app already owns that shortcut.')
   })
 
   it('falls back to what the entry reads when a write is refused', async () => {

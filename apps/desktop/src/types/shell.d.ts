@@ -98,6 +98,20 @@ declare global {
     className?: string
   }
 
+  interface ConfirmButtonProps {
+    label: string
+    confirmLabel: string
+    onConfirm: () => void
+    variant?: ButtonVariant
+    confirmVariant?: ButtonVariant
+    size?: ButtonSize
+    icon?: import('react').ReactNode
+    iconOnly?: boolean
+    busy?: boolean
+    disabled?: boolean
+    className?: string
+  }
+
   type IconButtonVariant = 'ghost' | 'danger'
 
   interface IconButtonProps {
@@ -1031,6 +1045,19 @@ declare global {
 
   type SettingsEntry = SettingsValueEntry | SettingsPanelEntry
 
+  interface SettingsValueSnapshot {
+    value: SettingsValue
+    staged: SettingsValue | undefined
+    restartRequired: boolean
+    error: string | null
+  }
+
+  interface SettingsValueBinding extends SettingsValueSnapshot {
+    write(next: SettingsValue): void
+    confirm(): void
+    cancel(): void
+  }
+
   interface SettingsPageSlot {
     group: string
     order: number
@@ -1079,6 +1106,11 @@ declare global {
   }
 
   type SettingsRouteView = (navigate: (path: string) => void) => import('react').ReactNode
+
+  interface HotkeyBindResult {
+    ok: boolean
+    hotkey: string
+  }
 
   interface HotkeyRecorderProps {
     value: string
@@ -1152,7 +1184,7 @@ declare global {
       addRecentEmoji: (char: string) => Promise<string[]>
       onEmojiKey: (callback: (message: EmojiKeyMessage) => void) => () => void
       getHotkey: () => Promise<string>
-      setHotkey: (hotkey: string) => Promise<string>
+      setHotkey: (hotkey: string) => Promise<HotkeyBindResult>
       defaultHotkey: () => Promise<string>
       onHotkeyChanged: (callback: (hotkey: string) => void) => () => void
       onShow: (callback: (data: { displayId: number; mode?: string }) => void) => void

@@ -316,3 +316,151 @@ better trigger for the confirmation, but the module publishes the *declared* def
 active layout of whatever thread has focus, and the active layout of the settings window is
 not a useful answer to the question. The default input method is the closest thing the
 contract exposes, so that is what the page checks.
+
+## Instant apply: one write path, and the exceptions argued individually
+
+Everything in the settings window takes effect and persists the moment it is made, through one
+function. The handful of places where instant is the wrong answer are declared on the entry, in
+`applies`, and argued in the table below — one row per registry entry, so a setting that is
+instant says so rather than being instant by omission.
+
+### The write path
+
+`src/hooks/useSettingsValue.ts` is the only thing that writes a registry-driven value. Every
+surface goes through it: the settings pages via `registryPage.tsx`, the settings search results,
+and — as of this change — the launcher, which had a second copy of the optimistic-write logic
+that reverted a failed toggle but silently swallowed a failed slider write and never reconciled
+against a backend broadcast at all.
+
+It does four things, and the order matters:
+
+1. **It dispatches on `applies`.** `instant` writes immediately. `restart` writes immediately and
+   then raises a flag the row renders as *Restart Alpine Shell to finish applying this*.
+   `confirm` and `draft` do **not** write: they stage the value, and it reaches `entry.write`
+   only when something calls `confirm()`. For `confirm` that is the row's own Apply button. For
+   `draft` it is the page, which owns an apply/keep/revert flow the registry cannot describe —
+   `registryPage.tsx` deliberately renders nothing for a `draft` value entry, and a test holds
+   the line that every `draft` entry is a panel entry whose page implements the flow.
+2. **It makes partial application impossible.** The store update and the effect are the same
+   call — `entry.write` is the IPC that both persists and applies — so there is no window in
+   which one has happened and the other has not. If that call rejects, the path re-reads the
+   entry and publishes what the backend actually holds, so the control snaps back to the truth
+   instead of sitting on the optimistic value, and the rejection message is rendered under the
+   row.
+3. **It keeps the optimistic update**, because that is what makes the surface feel instant, and
+   reconciles it against the broadcast the backend sends — the fetch-then-subscribe shape
+   `useShellState` already uses. A pending-write counter drops echoed broadcasts while a write is
+   in flight, so a stale echo cannot drag a slider backwards under the user's thumb.
+4. **It holds one store per entry**, not one per component, so the launcher row, the page row and
+   the search result for the same setting cannot disagree.
+
+### One write that could half-apply, and no longer can
+
+`launcherHotkey.js` was the real instance of the failure mode this card exists to prevent.
+`setHotkey` unregistered the old binding, saved the new hotkey to `launcher-hotkey.json`,
+broadcast it as applied, and *then* called `globalShortcut.register`. When registration failed —
+which is what happens when another app already owns the combination — it logged
+`register returned false` and carried on. The result was a shell with no launcher hotkey bound at
+all, a store that claimed otherwise, and a settings row showing the new combination: neither the
+old state nor the new one, and it survived a restart.
+
+It now binds first and only persists what bound. `rebind` tries the requested combination, and on
+failure puts the previous one back and reports `{ ok: false }`; `setHotkey` writes the store and
+broadcasts only on success. `launcher/hotkey-set` returns that result, and the registry entry's
+`write` rejects when `ok` is false, so the recorder snaps back to the hotkey that is actually
+bound and says why. Search keeps working throughout.
+
+### The table
+
+`applies` is a required field on `SettingsEntry`, so omitting it is a compile error, and
+`registry.test.ts` fails if an entry carries anything other than one of the four values — a new
+dangerous setting cannot fall into instant by being forgotten. A second test pins every
+non-instant entry below, so downgrading one to instant fails the suite rather than passing
+review. A third test checks this table against the registry, so an entry with no row here is a
+test failure too.
+
+| Entry | `applies` | Why |
+|---|---|---|
+| `wifi` | instant | Connecting to a network is a manager action with an obvious undo: connect to another, or turn Wi-Fi off. |
+| `bluetooth` | instant | Same as Wi-Fi. Pairing is reversible from the same list that did it. |
+| `displays` | draft | The one change that can leave you unable to undo it, because the undo is on a screen that just went black. Edit a draft, press Apply, and a 15-second countdown reverts unless you confirm — `displaysPage.tsx` against `applyDisplayLayout` / `keepDisplayLayout` / `revertDisplayLayout`. This is the model for `draft`. |
+| `brightness` | instant | A slider you can see the effect of while dragging, and drag back. |
+| `wallpaper` | instant | Visible immediately, reversible by picking another. |
+| `appearance` | instant | A page-level entry; the page's own settings each declare their own. |
+| `theme` | instant | Repaints Alpine's windows and nothing else. Reversible by picking the other option. |
+| `topbar-color` | instant | A colour. Clearing the override restores the automatic one. |
+| `topbar-color-automatic` | instant | Freezes or resumes wallpaper-following. Both directions are one click. |
+| `topbar-search-icon` | instant | Shows or hides one button. The hotkey works either way, so it cannot strand you. |
+| `media-visualizer` | instant | Swaps one top bar glyph for another. |
+| `clock-time-format` | instant | Reformats the clock string and nothing else. |
+| `calendar-days` | instant | Changes how many days the hover calendar draws. |
+| `calendar-show-tasks` | instant | Adds or removes a section of the hover calendar. |
+| `search` | instant | A page-level entry; its settings declare their own. |
+| `launcher-hotkey` | instant | Instant, but atomic — see above. Binding is attempted before anything is written, and a combination another app owns is refused with the old one left bound, rather than half-applied. Instant is right because the outcome is now either fully applied or fully rejected, and Search stays reachable in both cases. |
+| `recent-apps` | instant | Changes what Search shows before you type. |
+| `browser-bookmarks` | instant | Adds or removes one source of Search results. Nothing outside Alpine changes. |
+| `browser-tabs` | instant | Adds or removes one source of Search results. No tab is touched either way. |
+| `launcher-max-results` | instant | A row count between 3 and 8, visible the next time you search. |
+| `input` | instant | A page-level entry; the page's controls disagree about `applies` and each declares its own. |
+| `keyboard-layouts` | instant | Adding a layout or reordering the list is a per-user `Set-WinUserLanguageList` write that needs no sign-out and is undone by doing the opposite. |
+| `keyboard-layout-remove` | confirm | Removing a spare layout goes straight through. Removing the last layout of a language, or the one that is the default input method, stops and names which case it is first — those two leave you with nothing to type in, or silently hand the default to whatever is first in the list. |
+| `switch-input-method` | instant | Best effort by construction: it posts `WM_INPUTLANGCHANGEREQUEST` to the foreground window, which Windows may ignore. Nothing is persisted, so there is nothing to half-apply. |
+| `default-input-method` | instant | `Set-WinDefaultInputMethodOverride`, per-user, no elevation, no sign-out, undone by choosing another. |
+| `language-pack` | restart | Alpine does not do this at all — installing a language needs elevation and a sign-out — so the entry is an action that opens `ms-settings:regionlanguage`. `restart` is the honest declaration: what you do there does not take effect until you sign out. |
+| `tray` | instant | A page-level entry; the tray's own settings each declare their own. |
+| `tray-enabled` | instant | The story flagged this as possibly removing the way people reach settings. It does not, and this was checked rather than assumed: the setting hides other apps' tray icons (`trayLayout.js`), and the top bar renders `tray` and `status` as separate elements (`topbarLayout.ts`). The Settings gear lives in the status pop-over (`controlCenter.tsx`), and Search reaches Settings whatever the tray is doing. Nothing about turning it off is one-way. |
+| `tray-overflow` | instant | Shows or hides the overflow chevron; the icons behind it are still there. |
+| `tray-icons` | instant | Reordering and hiding icons; every move has an opposite move on the same page. |
+| `tray-all-monitors` | instant | Draws the tray on one monitor or all of them. |
+| `tiling` | instant | A page-level entry; the tiling settings each declare their own. |
+| `tiling-enabled` | instant | Flipping this does rearrange every open window at once, which is why it is on the list of things to argue rather than assume. It is still instant, because it is symmetrical: turning it off stops managing windows and turning it on tiles them again, nothing is destroyed, and no window closes. A confirmation here would buy nothing that the same click in reverse does not. |
+| `tiling-mode` | instant | Same argument. Snap and dynamic are two ways of arranging the same windows, and switching back rearranges them again. The page already explains what each mode does before you pick. |
+| `tiling-hotkeys` | instant | Enables or disables Win+Arrow snapping, and nothing already snapped moves. |
+| `tiling-drag-to-zone` | instant | Enables or disables drag-to-edge. |
+| `tiling-dynamic-layout` | instant | Picks which layout the dynamic mode arranges into; picking another rearranges. |
+| `tiling-split-sizes` | instant | Picks the ratios a split uses; every value has another value. |
+| `tiling-gap` | instant | The pixels between tiles, and you watch it change as you drag. |
+| `tiling-margin` | instant | The pixels around the outside, and you watch it change as you drag. |
+| `tiling-handle-oversized` | instant | Whether oversized windows are kept on screen. |
+| `tiling-oversized-placement` | instant | Where an oversized window sits; the other choice puts it back. |
+| `battery-saver` | instant | Forces battery saver on or off. Both directions are one control. |
+| `battery-saver-automatic` | instant | Whether the threshold applies at all. |
+| `battery-saver-threshold` | instant | The percentage battery saver switches on at. |
+| `battery-saver-dimming` | instant | Whether displays dim while saving. |
+| `battery-saver-dim-amount` | instant | How much they dim; baselines are stored so the original brightness comes back. |
+| `battery-saver-dim-externals` | instant | Whether external monitors dim too. |
+| `battery-saver-polling` | instant | Slows Alpine's own background checks. |
+| `battery-saver-throttling` | instant | The story flagged this because it changes process priorities. Checked: `powerThrottling.js` sets the EcoQoS execution-speed bit over `app.getAppMetrics()`, which is Alpine's own processes only — not the machine's — and turning it off writes the same bit back to zero on the same processes. One flag, scoped to us, exactly reversible. Instant. |
+| `apps-running` | instant | A page-level entry; the page lists processes and the one action on it declares its own. |
+| `app-force-close` | confirm | `apps/end-task` is `taskkill /F` — a forced kill with no chance to save, on somebody else's app. It was firing on one click of a button labelled Close. It now asks, and the confirmation says Force close so the label stops understating what happens. |
+| `apps-installed` | instant | A page-level entry. Opening an app or its folder is instant; the destructive action below is not. |
+| `app-uninstall` | confirm | Irreversible, and it was firing on one click. Removing an app means reinstalling it to undo, if you can still find it. Now a two-step confirm naming the app. |
+| `startup` | confirm | Not a UI choice. Windows puts a change to a system-owned startup entry into a `pending` state that needs explicit approval before it takes effect; `Toggle` renders `pending` with a warning ring and the page offers Approve. Documented rather than changed. |
+| `apps-defaults` | confirm | Alpine does not write file associations — the page hands off to the Windows default-apps picker, which asks before changing one. The confirmation exists; it belongs to Windows. Declared so the next person does not add an Alpine control that skips it. |
+| `plugins` | instant | Was `restart`, and that was wrong: `plugins/set-enabled` calls `triggerReload()`, which broadcasts `plugins/reload` and re-reads contributions live. Installing and enabling take effect without restarting anything. |
+| `plugin-uninstall` | confirm | Irreversible — it deletes the plugin's directory — and it was firing on one click of a trash icon. Now a two-step confirm naming the plugin. |
+| `updates` | restart | An update installs and then needs a restart to run. `updatesPage.tsx` already surfaces that and offers the restart. |
+| `revert` | confirm | The shell replaces itself with Explorer, and one of the three actions deletes Alpine entirely. Two-step confirm, already correct, now on the shared confirm affordance so it looks like every other confirmation. |
+| `system` | instant | A page-level entry for a page that only reports what this PC is; it writes nothing. |
+| `volume` | instant | A slider whose result you hear while dragging, and can drag back. |
+| `mute` | instant | One click each way, and you hear which way it went. |
+| `emoji` | instant | Inserts a character into whatever has focus. Nothing is stored. |
+| `power` | confirm | Shut down, restart, sign out and lock all end the session and can lose unsaved work in every app. The launcher's power submenu already asks a second time before running one. |
+
+### What is not covered
+
+The write path covers registry-driven values. The device and app managers keep their own state —
+a Wi-Fi list, a plugin list, a display arrangement — and the registry only declares how their
+actions apply, which is what the `confirm` rows above are for. The confirmation itself is a
+shared component (`src/components/ui/confirmButton.tsx`) so that a `confirm` declaration and the
+thing the user actually sees stay the same shape wherever they appear.
+
+### Persistence
+
+Every entry in the table writes through an IPC handler whose module owns one JSON file under
+`app.getPath('userData')` and writes it inside the same handler that applies the effect:
+`topbar-color.json`, `topbar-layout.json`, `clock-prefs.json`, `launcher-prefs.json`,
+`launcher-hotkey.json`, `tray-layout.json`, `tiling.json`, `battery-saver-prefs.json`,
+`wallpaper.json`, `theme.json`. That is what makes the guarantee in point 2 above hold: there is
+no separate save step that could be skipped, so a value that reached the store is a value that
+survives a restart.

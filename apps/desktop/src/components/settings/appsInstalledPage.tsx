@@ -4,6 +4,7 @@ import { useInstalledApps } from '../../hooks/useInstalledApps'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import Avatar from '../ui/avatar'
 import Button from '../ui/button'
+import ConfirmButton from '../ui/confirmButton'
 import EmptyState from '../ui/emptyState'
 import ListRow from '../ui/listRow'
 import PageHeader from '../ui/pageHeader'
@@ -137,16 +138,15 @@ function InstalledRow({ app, startupEntry }: { app: InstalledApp; startupEntry?:
               </Button>
             )}
             {app.canUninstall && (
-              <Button
+              <ConfirmButton
                 variant="dangerOutline"
-                size="sm"
-                onClick={() => act('uninstall', () => window.shell.apps.uninstall(app.id))}
+                label="Remove"
+                confirmLabel={`Uninstall ${app.name}`}
+                onConfirm={() => act('uninstall', () => window.shell.apps.uninstall(app.id))}
                 disabled={!!pending}
                 busy={pending === 'uninstall'}
                 icon={<Trash2 size={14} />}
-              >
-                Remove
-              </Button>
+              />
             )}
           </div>
         </div>
