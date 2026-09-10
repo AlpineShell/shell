@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { settingsPage } from '../../settings/registry'
 import PageTitle from '../ui/pageTitle'
 import ConfirmButton from '../ui/confirmButton'
 
@@ -85,7 +86,7 @@ export default function SystemRevertPage() {
 
   return (
     <div className="flex flex-col gap-6 w-full">
-      <PageTitle title="Revert back to Windows" />
+      <PageTitle title={settingsPage('revert')?.label ?? ''} />
 
       {state.phase === 'done' && (
         <Banner

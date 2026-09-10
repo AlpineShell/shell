@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AppWindow, Boxes, ExternalLink, FolderOpen, Search, Trash2 } from 'lucide-react'
+import { settingsPage } from '../../settings/registry'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import Avatar from '../ui/avatar'
@@ -38,7 +39,7 @@ export default function AppsInstalledPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Installed" subtitle="The apps on your PC. Click one to manage it.">
+      <PageHeader title={settingsPage('apps-installed')?.label ?? ''} subtitle="The apps on your PC. Click one to manage it.">
         <TextField
           label="Search installed apps"
           value={query}

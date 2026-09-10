@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AppWindow, Boxes, Search } from 'lucide-react'
+import { settingsPage } from '../../settings/registry'
 import { useRunningApps } from '../../hooks/useRunningApps'
 import { bandLabel, bandTone } from './appsShared'
 import Avatar from '../ui/avatar'
@@ -30,7 +31,7 @@ export default function AppsRunningPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Running" subtitle="Apps using your computer right now. You can close ones you're not using.">
+      <PageHeader title={settingsPage('apps-running')?.label ?? ''} subtitle="Apps using your computer right now. You can close ones you're not using.">
         <TextField
           label="Search running apps"
           value={query}
