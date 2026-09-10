@@ -22,18 +22,20 @@ everything below.
 | Window Tiling | enabled, mode, Win+Arrow snapping, drag-to-zone, dynamic layout, split ratios, gap, outer margin, keep-oversized, placement | `electron/modules/tiling.js` → `tiling.json` |
 | Battery | force battery saver, automatic, threshold %, dim displays, dim by %, dim external monitors, reduce background polling, throttle processes | `electron/modules/batterySaver.js` + `batterySaverPolicy.js` → `battery-saver-prefs.json` |
 | Wallpaper | wallpaper source and selection | `electron/modules/wallpaper.js` → `wallpaper.json` |
+| Input and language | default input method | Windows, `HKCU\Control Panel\International\User Profile`, through `electron/modules/keyboardLayout.js` |
 | — (Search only) | volume, mute, emoji, power | live system state, not a prefs file |
 
 ### B. Device and app managers — lists with actions
 
 Wi-Fi networks, Bluetooth devices, the Displays canvas, Running apps, Installed apps,
-Startup apps, Plugins, Updates, Tray icon ordering, Revert to Windows. These are not
-settings. They are lists of things that exist outside Alpine, with per-item actions
-(connect, pair, uninstall, apply, revert). A registry cannot own them.
+Startup apps, Plugins, Updates, Tray icon ordering, Revert to Windows, and the keyboard
+layouts attached to each of your languages. These are not settings. They are lists of things
+that exist outside Alpine, with per-item actions (connect, pair, uninstall, apply, revert,
+add a layout, drop a layout, move one up the list). A registry cannot own them.
 
 ### The page order this implies
 
-The registry declares 21 pages: the 20 routes `settingsApp.tsx` renders, plus one
+The registry declares 22 pages: the 21 routes `settingsApp.tsx` renders, plus one
 launcher-only page (below). The sidebar has four groups — Home, Personal, Devices, System —
 and every page in it is one click away.
 
@@ -58,11 +60,17 @@ the sidebar can hold directly.
 So:
 
 **One click, in the Personal group, in this order:** Appearance, Wallpaper, Search, Calendar,
-System tray, Window tiling, Battery. These are the seven pages that own scalar settings.
-Within the group the order is by how much of the shell the setting governs, widest first:
-Appearance and Wallpaper change every surface, Search and Calendar change one surface each,
-System tray and Window tiling change one behaviour each, and Battery only matters on a
-machine that has one.
+Input and language, System tray, Window tiling, Battery. Seven of the eight own scalar
+settings outright; Input and language owns one — the default input method — wrapped around a
+list Windows owns. It is filed here rather than under Devices because you open it for the
+same reason you open the rest of the group: to change something to taste. Nobody adds a
+French layout because their hardware changed, which is the test the Devices group is for.
+
+Within the group the order is by how much the setting governs, widest first: Appearance and
+Wallpaper change every surface, Search and Calendar change one surface each, Input and
+language changes one thing — what your keys type — but changes it in every window on the
+machine rather than only in Alpine's, System tray and Window tiling change one behaviour of
+the shell each, and Battery only matters on a machine that has one.
 
 **One click, in the Devices group:** Displays, Wi-Fi, Bluetooth. These are managers, but they
 are the ones you reach for when hardware changes under you, and Alpine already has no other
@@ -147,13 +155,13 @@ that switches on the mode. The registry carries static `label`, `description` an
 `state.connected`. This is a rendering concern, not a property of the setting, and encoding
 it as a predicate on every entry would put page layout back into the data.
 
-**Keyboard layout.** Configurable in the shell, with no UI. It is not in the registry
-because it is not a settings page yet; adding it is a card of its own.
-
-Theme and default file handlers *were* in this paragraph and are no longer. Theme is now a
-registry entry (`theme`, on the Appearance page) backed by a stored preference in
-`electron/modules/theme.js`; default file handlers now have a page (`apps/defaults`) with a
-page-level entry so search can reach it.
+Theme, default file handlers and keyboard layout *were* in this paragraph and are no longer.
+Theme is now a registry entry (`theme`, on the Appearance page) backed by a stored preference
+in `electron/modules/theme.js`; default file handlers now have a page (`apps/defaults`) with a
+page-level entry so search can reach it; keyboard layout has a page (`input`) whose entries
+carry the search synonyms and the `applies` of each control, and whose lists come from
+`electron/modules/keyboardLayout.js` rather than from a value the registry can read and
+write.
 
 Three shapes were chosen deliberately and are worth naming, because each trades something:
 
@@ -275,3 +283,36 @@ One invariant was replaced rather than kept. `starts every routed page path with
 path` described the old structure, where a route's first segment had to be its section id.
 The routes are flat now, so the useful invariant is the one the breadcrumb actually depends
 on: every ancestor path of a nested route is itself a declared page.
+
+## Input and language: the first page whose entries disagree about `applies`
+
+Until now every entry on a page shared one value of `applies`, and the field read as
+documentation. The `input` page is the first where it had to be argued per control, because
+the controls genuinely differ:
+
+- **`keyboard-layouts`** (add a layout, move one up or down) and **`default-input-method`**
+  are `instant`. Both are per-user HKCU writes — `Set-WinUserLanguageList` and
+  `Set-WinDefaultInputMethodOverride` from the PowerShell `International` module — both take
+  effect without a sign-out, neither asks for elevation, and undoing either is doing the
+  opposite.
+- **`keyboard-layout-remove`** is `confirm`, and the page only spends the confirmation where
+  it is owed. Dropping a spare layout from a language that has several is exactly as
+  reversible as adding it, so it goes straight through. Two removals are not: the *last*
+  layout of a language leaves that language with nothing to type in, and the layout that is
+  the *default input method* silently hands the default to whatever is first in the list.
+  Those stop in the row and name which case it is before doing anything.
+- **`switch-input-method`** is `instant` and best effort. Changing the active layout affects
+  the calling thread, so a shell can only ask: it posts `WM_INPUTLANGCHANGEREQUEST` to the
+  foreground window. Windows may ignore it, and the foreground window is the settings window
+  while you are clicking in it. The page says both.
+- **`language-pack`** is `restart`, and Alpine does not do it at all. Installing a language
+  or changing the display language needs elevation and a sign-out, so the entry is an action
+  that opens `ms-settings:regionlanguage` instead of a control that would fail. Copying the
+  settings to the sign-in screen and system accounts
+  (`Copy-UserInternationalSettingsToSystem`) needs elevation too and is not offered.
+
+The honest limit in that list is the second one. "The layout currently in use" would be the
+better trigger for the confirmation, but the module publishes the *declared* default, not the
+active layout of whatever thread has focus, and the active layout of the settings window is
+not a useful answer to the question. The default input method is the closest thing the
+contract exposes, so that is what the page checks.

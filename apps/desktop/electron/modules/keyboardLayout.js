@@ -30,6 +30,8 @@ const LANGUAGE_LIST_COMMAND =
   "$list = Get-WinUserLanguageList; foreach ($language in $list) { $lcid = 0; try { $lcid = [System.Globalization.CultureInfo]::GetCultureInfo($language.LanguageTag).LCID } catch { }; $language.LanguageTag + [char]9 + $language.Autonym + [char]9 + $language.EnglishName + [char]9 + ('{0:x4}' -f $lcid) + [char]9 + ($language.InputMethodTips -join ',') }"
 const DEFAULT_INPUT_METHOD_COMMAND = '(Get-WinDefaultInputMethodOverride).InputMethodTip'
 
+const WINDOWS_LANGUAGE_SETTINGS = 'ms-settings:regionlanguage'
+
 const WM_INPUTLANGCHANGEREQUEST = 0x0050
 const KLF_NOTELLSHELL = 0x0080
 
@@ -176,6 +178,17 @@ function activateNow(tip) {
   return { ok: api.PostMessageW(hwnd, WM_INPUTLANGCHANGEREQUEST, 0, handle) !== 0 }
 }
 
+function openWindowsLanguageSettings() {
+  const { shell } = require('electron')
+  return shell
+    .openExternal(WINDOWS_LANGUAGE_SETTINGS)
+    .then(() => ({ ok: true }))
+    .catch((e) => {
+      console.error('[keyboardLayout] opening the Windows language settings failed:', e?.message ?? e)
+      return { ok: false }
+    })
+}
+
 function scheduleRefresh() {
   if (refreshTimer) clearTimeout(refreshTimer)
   refreshTimer = setTimeout(() => {
@@ -211,6 +224,7 @@ module.exports = {
     'keyboard/default-input-method-get': () => readDefaultInputMethod(),
     'keyboard/default-input-method-set': (_event, tip) => setDefaultInputMethod(tip),
     'keyboard/activate-now': (_event, tip) => activateNow(tip),
+    'keyboard/language-settings-open': () => openWindowsLanguageSettings(),
   },
 
   start(publish) {

@@ -98,7 +98,25 @@ describe('settings search ranking', () => {
     ] as [SettingsPageId, string][]) {
       const targets = settingsSearchTargets([inputLanguageEntry(page, group)], SETTINGS_PAGES)
       const matches = searchSettings('keyboard layout', targets)
-      expect(labels(matches)).toEqual(['Input language'])
+      expect(labels(matches)).toContain('Input language')
+    }
+  })
+
+  it('finds the Input and language page whichever word you reach for', () => {
+    for (const query of [
+      'keyboard layout',
+      'input language',
+      'input method',
+      'azerty',
+      'qwertz',
+      'locale',
+      'region',
+      'ime',
+    ]) {
+      const found = shown(query).some(
+        (match) => match.target.action.kind === 'navigate' && match.target.action.route === 'input'
+      )
+      expect(found, `no result for "${query}" leads to the input page`).toBe(true)
     }
   })
 

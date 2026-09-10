@@ -182,6 +182,22 @@ declare global {
     ref?: import('react').Ref<HTMLInputElement>
   }
 
+  interface SearchPickerOption {
+    value: string
+    label: string
+    detail?: string
+    disabled?: boolean
+  }
+
+  interface SearchPickerProps {
+    options: SearchPickerOption[]
+    onSelect: (value: string) => void
+    onDismiss: () => void
+    label: string
+    placeholder?: string
+    emptyMessage?: string
+  }
+
   interface PickerTileProps {
     onClick: () => void
     label: string
@@ -892,6 +908,7 @@ declare global {
     | 'wallpaper'
     | 'search'
     | 'calendar'
+    | 'input'
     | 'tray'
     | 'tray-icons'
     | 'tiling'
@@ -1368,6 +1385,7 @@ declare global {
         defaultInputMethod: () => Promise<string | null>
         setDefaultInputMethod: (tip: string | null) => Promise<KeyboardLayoutState>
         activateNow: (tip: string) => Promise<{ ok: boolean }>
+        openLanguageSettings: () => Promise<{ ok: boolean }>
         onChanged: (callback: (state: KeyboardLayoutState) => void) => () => void
       }
       calendar: {
