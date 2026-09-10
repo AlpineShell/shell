@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AppWindow, FolderOpen, Lock, Search, ShieldAlert } from 'lucide-react'
+import { settingsPage } from '../../settings/registry'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import { useRunningApps } from '../../hooks/useRunningApps'
 import { processKey } from './appsShared'
@@ -47,7 +48,7 @@ export default function AppsStartupPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Startup" subtitle="Apps that open automatically when you start your PC.">
+      <PageHeader title={settingsPage('apps-startup')?.label ?? ''} subtitle="Apps that open automatically when you start your PC.">
         <TextField
           label="Search startup apps"
           value={query}
