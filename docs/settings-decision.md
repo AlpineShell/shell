@@ -14,11 +14,15 @@ everything below.
 
 | Page | Setting | Stored in |
 |---|---|---|
-| Appearance | theme (top bar / system / light / dark) | `electron/modules/theme.js` → `theme.json` |
-| Appearance | colour override, automatic colour, show search icon, show media visualizer | `electron/modules/topbarColor.js` → `topbar-color.json` |
-| Calendar | time format (auto/12h/24h), days shown (1/2/3), show Google Tasks | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
+| Appearance | theme (Ridge / system / light / dark) | `electron/modules/theme.js` → `theme.json` |
+| Appearance | colour override, automatic colour | `electron/modules/topbarColor.js` → `topbar-color.json` |
+| Ridge | which items are hidden, and the side and place of each one | `electron/modules/topbarLayout.js` → `topbar-layout.json` |
+| Ridge | show search button, show media visualizer | `electron/modules/topbarColor.js` → `topbar-color.json` |
+| Ridge | time format (auto/12h/24h) | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
+| Ridge | show tray, show overflow arrow, show on all monitors | `electron/modules/trayLayout.js` → `tray-layout.json` |
+| Ridge | confirm power menu actions | `electron/modules/power.js` → `power-prefs.json` |
+| Calendar | days shown (1/2/3), show Google Tasks | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
 | Search | Search hotkey, show recent apps, show bookmarks, show browser tabs, maximum results | `electron/modules/launcherHotkey.js` → `launcher-hotkey.json`, `electron/modules/launcherPrefs.js` → `launcher-prefs.json` |
-| System Tray | show tray, show overflow arrow, show on all monitors | `electron/modules/trayLayout.js` → `tray-layout.json` |
 | Window Tiling | enabled, mode, Win+Arrow snapping, drag-to-zone, dynamic layout, split ratios, gap, outer margin, keep-oversized, placement | `electron/modules/tiling.js` → `tiling.json` |
 | Battery | force battery saver, automatic, threshold %, dim displays, dim by %, dim external monitors, reduce background polling, throttle processes | `electron/modules/batterySaver.js` + `batterySaverPolicy.js` → `battery-saver-prefs.json` |
 | Wallpaper | wallpaper source and selection | `electron/modules/wallpaper.js` → `wallpaper.json` |
@@ -33,17 +37,23 @@ layouts attached to each of your languages. These are not settings. They are lis
 that exist outside Alpine, with per-item actions (connect, pair, uninstall, apply, revert,
 add a layout, drop a layout, move one up the list). A registry cannot own them.
 
+The arrangement of the items on Ridge sits with them. It is the one list here that Alpine owns
+rather than Windows, but it has the same shape: per-item actions (move to another side, move
+along, hide, bring back) and no single value a row could edit. So it gets its own canvas, and
+the registry holds only the entries search needs to reach it.
+
 ### The page order this implies
 
-The registry declares 22 pages: the 21 routes `settingsApp.tsx` renders, plus one
-launcher-only page (below). The sidebar has four groups — Home, Personal, Devices, System —
+The registry declares 22 pages: the 21 routes `settingsRoutes.tsx` renders, plus one
+launcher-only page (below). Ridge added a page and System tray, folded into it, took one away,
+so the count did not move. The sidebar has four groups — Home, Personal, Devices, System —
 and every page in it is one click away.
 
 The order comes out of the A/B split above, not out of a claim about what people use.
 
 **Group A is what you tune; group B is what you set up.** A scalar setting is a preference
 that follows taste and context, and taste changes: the theme changes with the light in the
-room, the top bar colour with the wallpaper, the tiling gap when you get a second monitor,
+room, the Ridge colour with the wallpaper, the tiling gap when you get a second monitor,
 battery saver when you unplug. A manager is a list of things that exist outside Alpine, and
 you touch it when something outside Alpine changes — you bought a monitor, you installed an
 app, you want an app gone. That is the difference the inventory makes visible, and step
@@ -59,42 +69,56 @@ the sidebar can hold directly.
 
 So:
 
-**One click, in the Personal group, in this order:** Appearance, Wallpaper, Search, Calendar,
-Input and language, System tray, Window tiling, Battery. Seven of the eight own scalar
+**One click, in the Personal group, in this order:** Appearance, Wallpaper, Ridge, Search,
+Calendar, Input and language, Window tiling, Battery. Seven of the eight own scalar
 settings outright; Input and language owns one — the default input method — wrapped around a
 list Windows owns. It is filed here rather than under Devices because you open it for the
 same reason you open the rest of the group: to change something to taste. Nobody adds a
 French layout because their hardware changed, which is the test the Devices group is for.
 
 Within the group the order is by how much the setting governs, widest first: Appearance and
-Wallpaper change every surface, Search and Calendar change one surface each, Input and
-language changes one thing — what your keys type — but changes it in every window on the
-machine rather than only in Alpine's, System tray and Window tiling change one behaviour of
-the shell each, and Battery only matters on a machine that has one.
+Wallpaper change every surface, Ridge is the one surface on every screen and holds everything
+on it, Search and Calendar change one surface each, Input and language changes one thing —
+what your keys type — but changes it in every window on the machine rather than only in
+Alpine's, Window tiling changes one behaviour of the shell, and Battery only matters on a
+machine that has one.
 
 **One click, in the Devices group:** Displays, Wi-Fi, Bluetooth. These are managers, but they
 are the ones you reach for when hardware changes under you, and Alpine already has no other
-route to them — the top bar menus connect to a network, they do not forget one.
+route to them — Ridge's menus connect to a network, they do not forget one.
 
 **One click to the group, two to the page, in the System group:** Apps (→ Installed, Startup,
 Running, Default apps), Plugins, Updates. Four app managers behind one Apps entry is the one
 place where a hub still earns its step: the four pages are variations on one list, they are
 each used rarely, and collapsing them keeps the sidebar readable.
 
-**Two clicks, from the page they belong to:** Manage tray icons (from System tray) and Revert
-to Windows (from Home). Neither is a destination you go looking for; both make sense only in
-the context of the page above them.
+**From the page they belong to:** Manage tray icons (from the System tray item's callout on
+Ridge) and Revert to Windows (from Home). Neither is a destination you go looking for; both
+make sense only in the context of the page above them.
 
-Three renames fall out of the same argument:
+Four renames fall out of the same argument:
 
 - **Hotkeys is now Search.** The page never held hotkeys in general — it holds the Search
   hotkey, show recent apps, show bookmarks, show browser tabs and maximum results. Four of
   its five settings are about what Search puts in its results. The registry entry id changed
   from `hotkeys` to `search` with it.
-- **Top Bar is now Appearance.** Theme belongs next to the top bar colour, not on a page of
-  its own holding one control, and "Appearance" is the honest name for a page that holds
-  the theme and the colour and contents of the bar. The entry id changed from `topbar` to
-  `appearance`; the individual top bar settings keep their ids.
+- **Top Bar is now Appearance.** Theme belongs next to the bar colour, not on a page of its
+  own holding one control, and "Appearance" is the honest name for a page that holds the theme
+  and the colour of the bar. What the bar shows, and where, has since moved to Ridge (below).
+  The entry id changed from `topbar` to `appearance`; the individual bar settings keep their
+  ids.
+- **The top bar is now Ridge, and it has one page.** "Ridge" is the bar's name in everything a
+  reader sees. Ids, IPC channels, files and `topbar-layout.json` keep their `topbar` names, so
+  no store migrates. The Ridge page draws an editable copy of the bar: items move within and
+  between its left, centre and right, hide and come back through "+", and each opens a
+  callout holding that item's settings. The brief asked for one page for the bar, so two
+  pages folded into it. System tray's three switches are filed on `ridge` and live in the
+  System tray item's callout; Manage tray icons moved to `ridge/tray-icons` with its page id
+  kept; and the `tray` entry the launcher opens its tray submenu from is re-filed under
+  `ridge`, so the launcher keeps it. The clock's time format moved from Calendar too, because
+  it governs the bar's clock; Calendar keeps the Google account and the hover calendar. The
+  colour stays on Appearance, with links both ways, because moving it would leave Appearance a
+  one-control page again, which is the reason Top Bar became Appearance in the first place.
 - **Home absorbed System.** With Battery moved into Personal, the System page held a default
   shell card and a link to Revert. Both describe this PC, which is what Home already is.
 
@@ -145,7 +169,7 @@ A Wi-Fi network list is not a setting with a value, and pretending otherwise wou
 inventing a control kind that only ever has one implementation.
 
 **Copy that depends on state.** Several descriptions in the current pages are computed:
-the Calendar time-format subtitle names the detected system format, the tiling Placement
+the Clock callout on Ridge names the detected system format, the tiling Placement
 description changes with the selected value, and the tiling Mode explainer is a paragraph
 that switches on the mode. The registry carries static `label`, `description` and optional
 `hint`. Dynamic copy stays in the page that renders it.
@@ -166,16 +190,16 @@ write.
 Three shapes were chosen deliberately and are worth naming, because each trades something:
 
 - **`hint` alongside `description`.** The launcher's copy and the pages' copy had diverged and
-  both were good for their surface — "Show the search button in the top bar" reads correctly
-  in a one-line result row, "Display the search button in the top bar. The hotkey still works
-  either way." reads correctly under a page heading. Rather than pick one and lose the other,
+  both were good for their surface — "Show the search button on Ridge" reads correctly in a
+  one-line result row, "Display the search button on Ridge. The hotkey still works either
+  way." reads correctly under a page heading. Rather than pick one and lose the other,
   `description` carries the page copy and the optional `hint` carries the short line. The
-  launcher renders `hint ?? description`, so every existing result row is byte-identical to
-  what it showed before.
+  launcher renders `hint ?? description`, so each surface reads the line written for it.
 - **Labels are context-free.** A registry entry is read in search results with no surrounding
-  page, so its label has to stand alone: "Top bar search icon", not "Show search icon". Where
-  the launcher already had a context-free label, it is kept verbatim — which also means the
-  fuzzy scorer sees exactly the strings it saw before.
+  page, so its label has to stand alone: "Show search button on Ridge", not "Show search
+  icon". The same rule names the Ridge item entries "Clock on Ridge" rather than "Clock", so a
+  result says where the clock is. Where the launcher already had a context-free label, it is
+  kept verbatim.
 - **A `quick-actions` page with a null route.** Volume, mute, emoji and power are reachable
   from Search and have no settings route, because Alpine has no Sound page and power is an
   action rather than a preference. Rather than invent a page or carve an exception into
@@ -247,8 +271,8 @@ from the registry was a separate card, which is what made both reviewable.
 
 ## What the follow-up changed
 
-The six scalar pages — Appearance (was Top Bar), Calendar, Search (was Hotkeys), System tray,
-Window tiling and Battery — now render from the registry through
+The six scalar pages — Appearance (was Top Bar), Calendar, Search (was Hotkeys), System tray
+(since folded into Ridge), Window tiling and Battery — now render from the registry through
 `src/components/settings/registryPage.tsx`. It reads the entries for a page, groups them,
 renders each `control` kind with the shared components in `src/components/ui/`, and reads and
 writes through the entry's own `read` / `subscribe` / `write` via `hooks/useSettingsValue.ts`.
@@ -259,7 +283,7 @@ are the whole reason the registry did not have to grow a control kind per one-of
 - **A slot adds content to a group.** The Google connect card, the Manage icons link, the
   tiling mode explainer and the "no battery detected" note are page-supplied nodes filed
   under a group and an order, sitting in the same list as the registry-driven rows.
-- **A slot can `replace` entries.** The top bar swatch picker replaces `topbar-color` and
+- **A slot can `replace` entries.** The Ridge colour swatch picker replaces `topbar-color` and
   `topbar-color-automatic`; the three-way battery override replaces `battery-saver`. The
   entries stay in the registry, so search still finds them and the launcher still renders its
   inline toggle — the page just draws a richer control in their place.
@@ -349,6 +373,18 @@ It does four things, and the order matters:
 4. **It holds one store per entry**, not one per component, so the launcher row, the page row and
    the search result for the same setting cannot disagree.
 
+**Ridge's actions span two stores, so they are ordered to fail hidden.** The Search button and
+the tray are shown by their own flags (`topbar-search-icon`, `tray-enabled`), and every other
+item by `topbar-layout.json`. Bringing a hidden Search button back therefore clears its hidden
+mark in the layout and then turns its flag on, and Reset turns the search flag off, writes the
+default layout, then turns the tray flag on. Each of those writes is still one `entry.write`
+or one `setLayout`, so no store is ever half-written as point 2 promises, but the action as a
+whole could stop between two of them. The order makes stopping early harmless: writes that
+hide come first, writes that show come last, and the sequence stops at the first rejection,
+so a failure leaves an item hidden rather than half-shown. `writeSettingsValue` resolves to
+whether its write landed so that `useRidgeEditor` can await each step before the next. Hiding
+the Search button or the tray writes only its flag.
+
 ### One write that could half-apply, and no longer can
 
 `launcherHotkey.js` was the real instance of the failure mode this card exists to prevent.
@@ -381,13 +417,24 @@ test failure too.
 | `displays` | draft | The one change that can leave you unable to undo it, because the undo is on a screen that just went black. Edit a draft, press Apply, and a 15-second countdown reverts unless you confirm — `displaysPage.tsx` against `applyDisplayLayout` / `keepDisplayLayout` / `revertDisplayLayout`. This is the model for `draft`. |
 | `brightness` | instant | A slider you can see the effect of while dragging, and drag back. |
 | `wallpaper` | instant | Visible immediately, reversible by picking another. |
+| `ridge` | instant | A page-level entry. The Ridge page writes each move as it is made, and every move is undone by moving the item back; the settings in its callouts each declare their own. |
+| `ridge-item-system-menu` | instant | A search entry for the Power menu on Ridge. It opens the item's callout and writes nothing itself. |
+| `ridge-item-plugins-left` | instant | A search entry for the Left plugins group on Ridge. It opens the group's callout and writes nothing itself. |
+| `ridge-item-notice` | instant | A search entry for Notices on Ridge. It opens the item's callout and writes nothing itself. |
+| `ridge-item-media` | instant | A search entry for Media on Ridge. It opens the item's callout and writes nothing itself. |
+| `ridge-item-microphone` | instant | A search entry for the Microphone on Ridge. It opens the item's callout and writes nothing itself. |
+| `ridge-item-status` | instant | A search entry for the Status icons on Ridge. It opens the item's callout and writes nothing itself. |
+| `ridge-item-plugins-right` | instant | A search entry for the Right plugins group on Ridge. It opens the group's callout and writes nothing itself. |
+| `ridge-item-clock` | instant | A search entry for the Clock on Ridge. It opens the item's callout and writes nothing itself. |
+| `ridge-layout-reset` | confirm | Throws the whole arrangement away: every item back on its first side and in its first place, shown, with the Search button off and the tray on. Nothing restores the arrangement you had, so it asks once, on the shared confirm button. It writes the search flag, then the layout, then the tray flag, and stops at the first one that is refused (see the write path above). |
+| `power-confirm` | instant | Whether Ridge's power menu asks a second time before Log Out, Restart or Shut Down. On by default, because those actions can lose unsaved work (see `power`). Turning it off only removes a second click and turning it on adds it back; nothing runs when it flips. One Enter on its search row flips it, which is acceptable because that row shows a switch and says which way it went. Search's own power submenu always asks, whatever this is set to. |
 | `appearance` | instant | A page-level entry; the page's own settings each declare their own. |
 | `theme` | instant | Repaints Alpine's windows and nothing else. Reversible by picking another option. Its default, `topbar`, reads the light or dark of the bar's own colour so the windows match the bar rather than Windows. Whichever side is chosen, the window's ground takes the bar's hue, so Settings is drawn in the same material as the bar and its flyouts. |
 | `topbar-color` | instant | A colour. Clearing the override restores the automatic one. |
 | `topbar-color-automatic` | instant | Freezes or resumes wallpaper-following. Both directions are one click. |
-| `topbar-search-icon` | instant | Shows or hides one button. The hotkey works either way, so it cannot strand you. |
-| `media-visualizer` | instant | Swaps one top bar glyph for another. |
-| `clock-time-format` | instant | Reformats the clock string and nothing else. |
+| `topbar-search-icon` | instant | Shows or hides the Search button on Ridge, and is its only visibility switch: hiding the button from Ridge writes this and nothing else. The hotkey works either way, so it cannot strand you. |
+| `media-visualizer` | instant | Swaps one glyph of the Media item on Ridge for another. |
+| `clock-time-format` | instant | Reformats the clock on Ridge and nothing else. Filed on Ridge rather than Calendar because it governs the bar's clock; its search result opens the Clock callout with the row picked out. |
 | `calendar-days` | instant | Changes how many days the hover calendar draws. |
 | `calendar-show-tasks` | instant | Adds or removes a section of the hover calendar. |
 | `search` | instant | A page-level entry; its settings declare their own. |
@@ -401,11 +448,11 @@ test failure too.
 | `keyboard-layout-remove` | confirm | Removing a spare layout goes straight through. Removing the last layout of a language, or the one that is the default input method, stops and names which case it is first — those two leave you with nothing to type in, or silently hand the default to whatever is first in the list. |
 | `switch-input-method` | instant | Best effort by construction: it posts `WM_INPUTLANGCHANGEREQUEST` to the foreground window, which Windows may ignore. Nothing is persisted, so there is nothing to half-apply. |
 | `default-input-method` | instant | `Set-WinDefaultInputMethodOverride`, per-user, no elevation, no sign-out, undone by choosing another. |
-| `tray` | instant | A page-level entry; the tray's own settings each declare their own. |
-| `tray-enabled` | instant | The story flagged this as possibly removing the way people reach settings. It does not, and this was checked rather than assumed: the setting hides other apps' tray icons (`trayLayout.js`), and the top bar renders `tray` and `status` as separate elements (`topbarLayout.ts`). The Settings gear lives in the status pop-over (`controlCenter.tsx`), and Search reaches Settings whatever the tray is doing. Nothing about turning it off is one-way. |
-| `tray-overflow` | instant | Shows or hides the overflow chevron; the icons behind it are still there. |
-| `tray-icons` | instant | Reordering and hiding icons; every move has an opposite move on the same page. |
-| `tray-all-monitors` | instant | Draws the tray on one monitor or all of them. |
+| `tray` | instant | A page-level entry, filed under Ridge now that the System tray page has folded into it. The launcher opens its tray submenu from it, and the tray's own settings each declare their own. |
+| `tray-enabled` | instant | Shows or hides the System tray item on Ridge, and is the tray's only visibility switch. The story flagged hiding things on the bar as a way to lose the route to settings, and Ridge sharpens that: Status, the power menu and the tray can each be hidden, and hiding Status takes away the Settings gear in its pop-over (`controlCenter.tsx`). It still cannot strand anyone, and this was checked rather than assumed. The Search hotkey is always bound: a combination another app owns is refused with the old one left bound, and an empty one falls back to Win (`launcherHotkey.js`). Search opens Settings and has its own power submenu (`launcherPanel.tsx`) whatever Ridge shows, and Reset on the Ridge page puts every item back. Nothing about turning it off is one-way. |
+| `tray-overflow` | instant | Shows or hides the overflow chevron in the tray on Ridge; the icons behind it are still there, and Manage tray icons still lists them. |
+| `tray-icons` | instant | Reordering and hiding icons, one level below Ridge at `ridge/tray-icons`; every move has an opposite move on the same page. |
+| `tray-all-monitors` | instant | Draws the tray on Ridge on one monitor or on all of them. |
 | `tiling` | instant | A page-level entry; the tiling settings each declare their own. |
 | `tiling-enabled` | instant | Flipping this does rearrange every open window at once, which is why it is on the list of things to argue rather than assume. It is still instant, because it is symmetrical: turning it off stops managing windows and turning it on tiles them again, nothing is destroyed, and no window closes. A confirmation here would buy nothing that the same click in reverse does not. |
 | `tiling-mode` | instant | Same argument. Snap and dynamic are two ways of arranging the same windows, and switching back rearranges them again. The page already explains what each mode does before you pick. |
@@ -455,6 +502,6 @@ Every entry in the table writes through an IPC handler whose module owns one JSO
 `app.getPath('userData')` and writes it inside the same handler that applies the effect:
 `topbar-color.json`, `topbar-layout.json`, `clock-prefs.json`, `launcher-prefs.json`,
 `launcher-hotkey.json`, `tray-layout.json`, `tiling.json`, `battery-saver-prefs.json`,
-`wallpaper.json`, `theme.json`. That is what makes the guarantee in point 2 above hold: there is
-no separate save step that could be skipped, so a value that reached the store is a value that
-survives a restart.
+`wallpaper.json`, `theme.json`, `power-prefs.json`. That is what makes the guarantee in point 2
+above hold: there is no separate save step that could be skipped, so a value that reached the
+store is a value that survives a restart.

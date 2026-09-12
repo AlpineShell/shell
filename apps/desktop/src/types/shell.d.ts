@@ -1022,7 +1022,6 @@ declare global {
     | 'search'
     | 'calendar'
     | 'input'
-    | 'tray'
     | 'tray-icons'
     | 'tiling'
     | 'battery'
@@ -1485,6 +1484,10 @@ declare global {
   }
 
   interface RidgePageProps {
+    onNavigate: (path: string) => void
+  }
+
+  interface AppearancePageProps {
     onNavigate: (path: string) => void
   }
 

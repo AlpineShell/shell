@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
+import { settingsPage, settingsPageRoute } from '../../settings/registry'
 import RegistryPage from './registryPage'
+import NavRow from '../ui/navRow'
 
 const PRESET_COLORS = [
   { r: 48, g: 48, b: 48 },
@@ -19,17 +21,28 @@ const PRESET_COLORS = [
 
 const COLOR_GROUP = 'Color'
 
+const RIDGE_GROUP = settingsPage('ridge')?.label ?? ''
+
+const ARRANGE_RIDGE_LABEL = 'Arrange Ridge'
+
+const ARRANGE_RIDGE_DESCRIPTION = 'Move, hide and set up the items on Ridge'
+
 function colorMatch(a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }) {
   return a.r === b.r && a.g === b.g && a.b === b.b
 }
 
-export default function AppearancePage() {
+export default function AppearancePage({ onNavigate }: AppearancePageProps) {
   const slots: SettingsPageSlot[] = [
     {
       group: COLOR_GROUP,
       order: 2,
       replaces: ['topbar-color', 'topbar-color-automatic'],
       content: <TopBarColorPicker />,
+    },
+    {
+      group: RIDGE_GROUP,
+      order: 3,
+      content: <ArrangeRidgeRow onNavigate={onNavigate} />,
     },
   ]
 
@@ -38,6 +51,21 @@ export default function AppearancePage() {
       page="appearance"
       slots={slots}
       groupSubtitles={{ [COLOR_GROUP]: 'Pick a preset or use a color from your wallpaper.' }}
+    />
+  )
+}
+
+function ArrangeRidgeRow({ onNavigate }: AppearancePageProps) {
+  const ridge = settingsPage('ridge')
+  const route = settingsPageRoute('ridge')
+  if (!ridge || route === null) return null
+  const Icon = ridge.icon
+  return (
+    <NavRow
+      onClick={() => onNavigate(route)}
+      icon={<Icon size={18} />}
+      label={ARRANGE_RIDGE_LABEL}
+      description={ARRANGE_RIDGE_DESCRIPTION}
     />
   )
 }
