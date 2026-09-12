@@ -1,4 +1,5 @@
 const MINUTES_PER_DAY = 24 * 60
+const MONTH_ABBREVIATIONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export function resolveTimeFormat(prefs: Pick<ClockPrefs, 'timeFormat' | 'systemTimeFormat'>): ResolvedTimeFormat {
   return prefs.timeFormat === 'auto' ? prefs.systemTimeFormat : prefs.timeFormat
@@ -12,6 +13,10 @@ export function formatClock(date: Date, format: ResolvedTimeFormat): string {
     return `${hour}:${minutes} ${suffix}`
   }
   return `${String(date.getHours()).padStart(2, '0')}:${minutes}`
+}
+
+export function formatClockDate(date: Date): string {
+  return `${MONTH_ABBREVIATIONS[date.getMonth()]} ${date.getDate()}`
 }
 
 export function formatHourLabel(hour: number, format: ResolvedTimeFormat): string {
