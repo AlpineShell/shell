@@ -23,7 +23,7 @@ import WifiSettingsPage from './wifiSettingsPage'
 export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'home': (navigate) => <AboutPage onNavigate={navigate} />,
   'home/revert': () => <SystemRevertPage />,
-  'appearance': () => <AppearancePage />,
+  'appearance': (navigate) => <AppearancePage onNavigate={navigate} />,
   'wallpaper': () => <WallpaperPage />,
   'ridge': (navigate) => <RidgePage onNavigate={navigate} />,
   'ridge/tray-icons': () => <TrayIconsPage />,

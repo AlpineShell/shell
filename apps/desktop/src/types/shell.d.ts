@@ -1487,6 +1487,10 @@ declare global {
     onNavigate: (path: string) => void
   }
 
+  interface AppearancePageProps {
+    onNavigate: (path: string) => void
+  }
+
   interface Window {
     fileHandlers: {
       state: () => Promise<FileHandlerState[]>
