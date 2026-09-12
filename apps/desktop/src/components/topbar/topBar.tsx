@@ -14,6 +14,7 @@ import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
 import { useTopbarLayout } from "../../hooks/useTopbarLayout";
 import { visibleTopbarSlotItems } from "./layout/topbarLayout";
+import { topbarSurface } from "./topbarSurface";
 import ChromeCanvas from "./chrome/ChromeCanvas";
 import PluginSlot from "./pluginSlot";
 import NoticeStrip from "./noticeStrip";
@@ -44,14 +45,11 @@ export default function TopBar() {
     const wallpaperColor = useTopbarColor();
     const fgColor = useForegroundColor();
     const layout = useTopbarLayout();
-    const color = fgColor || wallpaperColor;
-    const bg = color ? `rgb(${color.r},${color.g},${color.b})` : "rgb(31,32,32)";
-    const darkText = color?.darkText ?? false;
+    const { bg, darkText, borderColor } = topbarSurface(fgColor || wallpaperColor);
     const fullscreenWindow = fgColor !== null;
     const [hovered, setHovered] = useState(false);
     const [launcherOpen, setLauncherOpen] = useState(false);
     const [launcherMode, setLauncherMode] = useState<string | undefined>(undefined);
-    const borderColor = darkText ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
 
     useEffect(() => {
         window.launcher.onShow((data) => { setLauncherMode(data?.mode); setLauncherOpen(true); });
@@ -77,7 +75,7 @@ export default function TopBar() {
                 <div className="flex items-center gap-1 relative z-1 self-stretch min-w-0">
                     {renderSlot(layout, "left")}
                 </div>
-                <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center z-1">
+                <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center gap-1 z-1">
                     {renderSlot(layout, "center")}
                 </div>
                 <div className="flex items-center gap-1 mr-1 relative z-1 self-stretch">

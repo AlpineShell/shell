@@ -4,7 +4,8 @@ import { useCalendar } from "../../hooks/useCalendar";
 import { useMinuteTick } from "../../hooks/useMinuteTick";
 import PopupMenu from "./shared/popupMenu";
 import CalendarFlyout from "./calendar/calendarFlyout";
-import { resolveTimeFormat, formatClock } from "./calendar/calendarLayout";
+import ClockFace from "./faces/clockFace";
+import { resolveTimeFormat, formatClock, formatClockDate } from "./calendar/calendarLayout";
 
 export default function Clock() {
     const darkText = useDarkText();
@@ -12,15 +13,7 @@ export default function Clock() {
     const { state } = useCalendar();
     const now = useMinuteTick();
 
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const time = formatClock(now, resolveTimeFormat(prefs));
-    const date = `${months[now.getMonth()]} ${now.getDate()}`;
-
-    const label = (
-        <div className={`${darkText ? "text-black" : "text-white"} text-[12px] flex hover:cursor-pointer rounded-full px-2 ${darkText ? "hover:bg-black/10" : "hover:bg-white/10"} h-4.5 items-center transition-colors duration-300`}>
-            {time} {date}
-        </div>
-    );
+    const label = <ClockFace time={formatClock(now, resolveTimeFormat(prefs))} date={formatClockDate(now)} darkText={darkText} />;
 
     if (!state.connected) return label;
 

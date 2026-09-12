@@ -1,16 +1,26 @@
 import { useEffect, useState } from 'react'
 
+const EMPTY_TRAY_LAYOUT: TrayLayout = { order: [], hidden: [] }
+
 export function useTrayLayout() {
-  const [layout, setLayoutState] = useState<TrayLayout>({ order: [], hidden: [] })
+  const [layout, setLayoutState] = useState<TrayLayout>(EMPTY_TRAY_LAYOUT)
 
   useEffect(() => {
-    window.shell?.tray?.layout?.()?.then?.(setLayoutState)
-    window.shell?.tray?.onLayoutChanged?.(setLayoutState)
+    let alive = true
+    const apply = (next: TrayLayout) => {
+      if (alive) setLayoutState(next)
+    }
+    window.shell.tray.layout().then(apply).catch(() => {})
+    const unsubscribe = window.shell.tray.onLayoutChanged(apply)
+    return () => {
+      alive = false
+      unsubscribe()
+    }
   }, [])
 
   const setLayout = (next: TrayLayout) => {
     setLayoutState(next)
-    window.shell?.tray?.setLayout?.(next)
+    window.shell.tray.setLayout(next)
   }
 
   return { layout, setLayout }

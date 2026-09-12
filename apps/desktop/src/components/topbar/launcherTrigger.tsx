@@ -1,29 +1,16 @@
-import { useEffect, useState } from 'react'
-import { Search } from 'lucide-react'
 import { useDarkText } from '../themeContext'
+import { useShellState } from '../../hooks/useShellState'
+import LauncherFace from './faces/launcherFace'
 
 export default function LauncherTrigger() {
   const darkText = useDarkText()
-  const color = darkText ? 'black' : 'white'
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    window.topbar.searchIcon().then(setVisible)
-    window.topbar.onSearchIconChanged(setVisible)
-  }, [])
+  const visible = useShellState<boolean>(false, window.topbar.searchIcon, window.topbar.onSearchIconChanged)
 
   if (!visible) return null
 
   return (
-    <button
-      onMouseEnter={() => window.launcher.show()}
-      className={`flex items-center gap-1.5 px-2 h-5 rounded-full cursor-pointer transition-colors ${
-        darkText ? 'hover:bg-black/10' : 'hover:bg-white/10'
-      }`}
-      aria-label="Search"
-    >
-      <Search color={color} size={12} />
-      <span className={`text-[11px] ${darkText ? 'text-black/70' : 'text-white/70'}`}>Search</span>
+    <button onMouseEnter={() => window.launcher.show()} className="flex items-center rounded-full" aria-label="Search">
+      <LauncherFace darkText={darkText} />
     </button>
   )
 }
