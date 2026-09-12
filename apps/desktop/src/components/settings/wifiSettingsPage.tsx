@@ -33,8 +33,9 @@ export default function WifiSettingsPage() {
     window.shell.network.wifiRadioGet().then((r) => {
       if (r.success) setEnabled(r.state === 'on')
     })
-    window.shell.network.onWifiScanUpdated(setNetworks)
+    const unsubscribe = window.shell.network.onWifiScanUpdated(setNetworks)
     scan()
+    return unsubscribe
   }, [])
 
   function scan() {
