@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Keyboard, Wifi } from 'lucide-react'
-import { SETTINGS_PAGES, SETTINGS_REGISTRY, settingsPageRoute } from './registry'
+import { SETTINGS_PAGES, SETTINGS_REGISTRY, settingsPage, settingsPageRoute } from './registry'
 import {
   SETTINGS_SEARCH_LIMIT,
   SETTINGS_SEARCH_TARGETS,
@@ -135,6 +135,38 @@ describe('settings search ranking', () => {
   it('ranks a title match above a description match', () => {
     const matches = searchSettings('gap')
     expect(matches[0].target.label).toBe('Gap')
+  })
+
+  it('ranks Ridge first for its own name and for the name the bar had before', () => {
+    for (const query of ['ridge', 'top bar', 'topbar']) {
+      const first = searchSettings(query)[0].target
+      expect(first.label, query).toBe(settingsPage('ridge')?.label)
+      expect(first.action, query).toEqual({ kind: 'navigate', route: settingsPageRoute('ridge'), highlight: null })
+    }
+  })
+
+  it('ranks the clock on Ridge first for clock', () => {
+    expect(searchSettings('clock')[0].target.label).toBe('Clock on Ridge')
+  })
+
+  it('opens Ridge with the time format picked out for time format', () => {
+    expect(searchSettings('time format')[0].target.action).toEqual({
+      kind: 'navigate',
+      route: settingsPageRoute('ridge'),
+      highlight: 'clock-time-format',
+    })
+  })
+
+  it('finds the power menu confirmation by the word the sketch used, as a switch', () => {
+    const match = shown('reassurance').find((candidate) => candidate.target.label === 'Confirm power menu actions')
+    expect(match?.target.action.kind).toBe('toggle')
+  })
+
+  it('finds the tray through its switch and the page it folded into, with no second System tray result', () => {
+    const found = labels(shown('system tray'))
+    expect(found[0]).toBe('Show system tray')
+    expect(found).toContain(settingsPage('ridge')?.label)
+    expect(found).not.toContain('System tray on Ridge')
   })
 
   it('returns nothing rather than everything when nothing matches', () => {

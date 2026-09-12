@@ -43,7 +43,7 @@ export default function TrayIconsPage() {
       )}
 
       {visible.length > 0 && (
-        <Section title="Shown" subtitle="Icons displayed in the top bar. Reorder them or move them to the hidden area.">
+        <Section title="Shown" subtitle="Icons displayed on Ridge. Reorder them or move them to the hidden area.">
           <div className="flex flex-col gap-1">
             {visible.map((icon, i) => (
               <Row key={icon.id} icon={icon}>

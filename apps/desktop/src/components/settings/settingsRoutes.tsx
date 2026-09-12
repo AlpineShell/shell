@@ -11,11 +11,11 @@ import CalendarPage from './calendarPage'
 import DisplaysPage from './displaysPage'
 import InputPage from './inputPage'
 import PluginsPage from './pluginsPage'
+import RidgePage from './ridgePage'
 import SearchPage from './searchPage'
 import SystemRevertPage from './systemRevertPage'
 import TilingPage from './tilingPage'
 import TrayIconsPage from './trayIconsPage'
-import TrayPage from './trayPage'
 import UpdatesPage from './updatesPage'
 import WallpaperPage from './wallpaperPage'
 import WifiSettingsPage from './wifiSettingsPage'
@@ -25,11 +25,11 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'home/revert': () => <SystemRevertPage />,
   'appearance': () => <AppearancePage />,
   'wallpaper': () => <WallpaperPage />,
+  'ridge': (navigate) => <RidgePage onNavigate={navigate} />,
+  'ridge/tray-icons': () => <TrayIconsPage />,
   'search': () => <SearchPage />,
   'calendar': () => <CalendarPage />,
   'input': () => <InputPage />,
-  'tray': (navigate) => <TrayPage onNavigate={navigate} />,
-  'tray/icons': () => <TrayIconsPage />,
   'tiling': () => <TilingPage />,
   'battery': () => <BatteryPage />,
   'displays': () => <DisplaysPage />,
@@ -47,13 +47,33 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
 export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
   'appearance': { registryRows: true, renderedByThePage: ['topbar-color', 'topbar-color-automatic'] },
   'wallpaper': { registryRows: false, renderedByThePage: ['wallpaper'] },
+  'ridge': {
+    registryRows: false,
+    renderedByThePage: [
+      'ridge-item-system-menu',
+      'ridge-item-plugins-left',
+      'ridge-item-notice',
+      'ridge-item-media',
+      'ridge-item-microphone',
+      'ridge-item-status',
+      'ridge-item-plugins-right',
+      'ridge-item-clock',
+      'ridge-layout-reset',
+      'power-confirm',
+      'topbar-search-icon',
+      'media-visualizer',
+      'tray-enabled',
+      'tray-overflow',
+      'tray-all-monitors',
+      'clock-time-format',
+    ],
+  },
   'search': { registryRows: true, renderedByThePage: [] },
   'calendar': { registryRows: true, renderedByThePage: [] },
   'input': {
     registryRows: true,
     renderedByThePage: ['keyboard-layouts', 'keyboard-layout-remove', 'switch-input-method', 'default-input-method'],
   },
-  'tray': { registryRows: true, renderedByThePage: [] },
   'tiling': { registryRows: true, renderedByThePage: [] },
   'battery': { registryRows: true, renderedByThePage: ['battery-saver'] },
   'displays': { registryRows: false, renderedByThePage: ['brightness'] },

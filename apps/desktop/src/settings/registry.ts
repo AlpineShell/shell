@@ -5,6 +5,7 @@ import {
   ArrowUpDown,
   AudioLines,
   BatteryLow,
+  Bell,
   Bluetooth,
   Bookmark,
   CalendarDays,
@@ -25,12 +26,15 @@ import {
   ListOrdered,
   ListTodo,
   Maximize2,
+  Mic,
   Monitor,
   MonitorCog,
   Move,
+  Music,
   Package,
   Paintbrush,
   Palette,
+  PanelTop,
   Plug,
   Power,
   Puzzle,
@@ -40,6 +44,7 @@ import {
   Scaling,
   Search,
   SeparatorHorizontal,
+  ShieldCheck,
   SkullIcon,
   Smile,
   Sparkles,
@@ -50,6 +55,7 @@ import {
   Wallpaper,
   Wifi,
 } from 'lucide-react'
+import { TOPBAR_ITEMS, TOPBAR_ITEM_SETTING_GATES, findTopbarItem } from '../components/topbar/layout/topbarLayout'
 
 export const SETTINGS_PAGE_GROUP = 'Page'
 
@@ -76,6 +82,12 @@ const INPUT_KEYWORDS = [
   'typing',
   'layout',
 ]
+
+const RIDGE_DESCRIPTION = 'Arrange the bar across the top of your screen, and set up each item on it'
+
+const RIDGE_KEYWORDS = ['ridge', 'top bar', 'topbar', 'menu bar', 'status bar', 'bar layout']
+
+const PAGES_FOLDED_INTO_RIDGE = ['system tray']
 
 export const SETTINGS_PAGES: SettingsPage[] = [
   {
@@ -104,8 +116,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     id: 'appearance',
     route: 'appearance',
     label: 'Appearance',
-    description: 'Light or dark theme, and the colour and contents of the top bar',
-    keywords: ['appearance', 'theme', 'dark mode', 'light mode', 'top bar', 'topbar', 'color', 'colour'],
+    description: 'Light or dark theme, and the colour of Ridge',
+    keywords: ['appearance', 'theme', 'dark mode', 'light mode', 'color', 'colour'],
     icon: Palette,
     section: 'personalization',
     kind: 'settings',
@@ -123,6 +135,17 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     order: 1,
   },
   {
+    id: 'ridge',
+    route: 'ridge',
+    label: 'Ridge',
+    description: RIDGE_DESCRIPTION,
+    keywords: [...RIDGE_KEYWORDS, ...PAGES_FOLDED_INTO_RIDGE],
+    icon: PanelTop,
+    section: 'personalization',
+    kind: 'settings',
+    order: 2,
+  },
+  {
     id: 'search',
     route: 'search',
     label: 'Search',
@@ -131,18 +154,18 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Search,
     section: 'personalization',
     kind: 'settings',
-    order: 2,
+    order: 3,
   },
   {
     id: 'calendar',
     route: 'calendar',
     label: 'Calendar',
-    description: 'Google account, clock format and what the hover calendar shows',
-    keywords: ['calendar', 'clock', 'time', 'google', 'agenda', 'schedule'],
+    description: 'Google account and what the hover calendar shows',
+    keywords: ['calendar', 'google', 'agenda', 'schedule'],
     icon: CalendarDays,
     section: 'personalization',
     kind: 'settings',
-    order: 3,
+    order: 4,
   },
   {
     id: 'input',
@@ -153,22 +176,11 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Keyboard,
     section: 'personalization',
     kind: 'settings',
-    order: 4,
-  },
-  {
-    id: 'tray',
-    route: 'tray',
-    label: 'System tray',
-    description: 'Show the tray, manage icons and options',
-    keywords: ['tray', 'system tray', 'notification area', 'icons', 'overflow'],
-    icon: LayoutGrid,
-    section: 'personalization',
-    kind: 'settings',
     order: 5,
   },
   {
     id: 'tray-icons',
-    route: 'tray/icons',
+    route: 'ridge/tray-icons',
     label: 'Manage tray icons',
     description: 'Reorder, show and hide the icons apps put in the tray',
     keywords: ['tray icons', 'manage icons', 'reorder', 'hide icons', 'notification area', 'overflow'],
@@ -396,6 +408,79 @@ function freezeAutomaticTopBarColor(): Promise<unknown> {
   })
 }
 
+const RIDGE_ITEMS_GROUP = 'Items'
+
+const RIDGE_ITEM_SEARCH: Record<
+  Exclude<TopbarItemId, TopbarGatedItemId>,
+  Pick<SettingsEntryBase, 'description' | 'keywords' | 'icon'>
+> = {
+  'system-menu': {
+    description: 'Move or hide the power menu on Ridge, and choose whether it asks before it logs out, restarts or shuts down.',
+    keywords: ['power menu', 'shut down button', 'restart button', 'log out button'],
+    icon: Power,
+  },
+  'plugins-left': {
+    description: 'Move or hide the widgets your plugins put on the left of Ridge.',
+    keywords: ['left plugins', 'plugin widgets', 'widgets'],
+    icon: Puzzle,
+  },
+  notice: {
+    description: 'Move or hide the place on Ridge where Alpine Shell shows its notices, such as an update that is ready.',
+    keywords: ['notices', 'notifications', 'alerts', 'shell messages'],
+    icon: Bell,
+  },
+  media: {
+    description: "Move or hide what is playing on Ridge, and choose between the playing app's icon and a visualizer.",
+    keywords: ['now playing', 'music', 'media controls', 'song'],
+    icon: Music,
+  },
+  microphone: {
+    description: 'Move or hide the sign on Ridge that shows while an app is using the microphone.',
+    keywords: ['microphone', 'mic', 'mic in use', 'recording'],
+    icon: Mic,
+  },
+  status: {
+    description: 'Move or hide the Wi-Fi, Bluetooth and battery icons on Ridge, which open the quick controls.',
+    keywords: ['status icons', 'wi-fi icon', 'bluetooth icon', 'battery icon', 'control center', 'quick settings'],
+    icon: Wifi,
+  },
+  'plugins-right': {
+    description: 'Move or hide the widgets your plugins put on the right of Ridge.',
+    keywords: ['right plugins', 'plugin widgets', 'widgets'],
+    icon: Puzzle,
+  },
+  clock: {
+    description: 'Move or hide the clock on Ridge, and choose how it shows the time.',
+    keywords: ['clock', 'time', 'date', 'time and date'],
+    icon: Clock,
+  },
+}
+
+function hasSettingGate(id: TopbarItemId): id is TopbarGatedItemId {
+  return Object.hasOwn(TOPBAR_ITEM_SETTING_GATES, id)
+}
+
+function topbarItemLabel(id: TopbarItemId): string {
+  return findTopbarItem(id)?.label ?? id
+}
+
+function ungatedTopbarItemIds(): Exclude<TopbarItemId, TopbarGatedItemId>[] {
+  return TOPBAR_ITEMS.flatMap((item) => (hasSettingGate(item.id) ? [] : [item.id]))
+}
+
+function ridgeItemEntry(id: Exclude<TopbarItemId, TopbarGatedItemId>, index: number): SettingsEntry {
+  return {
+    id: `ridge-item-${id}`,
+    label: `${topbarItemLabel(id)} on Ridge`,
+    ...RIDGE_ITEM_SEARCH[id],
+    page: 'ridge',
+    group: RIDGE_ITEMS_GROUP,
+    order: index + 1,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'ridge' },
+  }
+}
+
 export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'wifi',
@@ -459,10 +544,193 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
 
   {
+    id: 'ridge',
+    label: 'Ridge',
+    description: RIDGE_DESCRIPTION,
+    hint: 'Arrange the bar and set up its items',
+    keywords: RIDGE_KEYWORDS,
+    icon: PanelTop,
+    page: 'ridge',
+    group: 'Page',
+    order: 0,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'ridge' },
+  },
+  ...ungatedTopbarItemIds().map(ridgeItemEntry),
+  {
+    id: 'topbar-search-icon',
+    label: 'Show search button on Ridge',
+    description: 'Display the search button on Ridge. The hotkey still works either way.',
+    hint: 'Show the search button on Ridge',
+    keywords: ['search icon', 'top bar', 'launcher button'],
+    icon: Search,
+    page: 'ridge',
+    group: topbarItemLabel('launcher'),
+    order: 1,
+    applies: 'instant',
+    defaultValue: false,
+    read: () => window.topbar.searchIcon(),
+    write: (value: boolean) => window.topbar.setSearchIcon(value),
+    subscribe: (listener: (value: boolean) => void) => window.topbar.onSearchIconChanged(listener),
+    control: { kind: 'toggle' },
+  },
+  {
+    id: 'media-visualizer',
+    label: 'Media visualizer',
+    description:
+      "Show the audio visualizer instead of the playing app's icon. The bars only animate for audio playing on this PC, so leave this off if you often play to other devices.",
+    hint: 'Show the audio visualizer on Ridge',
+    keywords: ['media', 'visualizer', 'audio', 'top bar'],
+    icon: AudioLines,
+    page: 'ridge',
+    group: topbarItemLabel('media'),
+    order: 1,
+    applies: 'instant',
+    defaultValue: false,
+    read: () => window.topbar.mediaVisualizer(),
+    write: (value: boolean) => window.topbar.setMediaVisualizer(value),
+    subscribe: (listener: (value: boolean) => void) => window.topbar.onMediaVisualizerChanged(listener),
+    control: { kind: 'toggle' },
+  },
+  {
+    id: 'clock-time-format',
+    label: 'Time format',
+    description: 'Show the clock as a 12-hour or 24-hour time, or follow whatever Windows is set to.',
+    keywords: ['time format', 'clock', '12 hour', '24 hour', 'am pm', 'military time'],
+    icon: Clock,
+    page: 'ridge',
+    group: topbarItemLabel('clock'),
+    order: 1,
+    applies: 'instant',
+    defaultValue: 'auto',
+    initial: () => toTimeFormat(window.shell.clock.initial?.timeFormat),
+    validate: toTimeFormat,
+    read: () => window.shell.clock.prefs().then((prefs) => prefs.timeFormat),
+    write: (value: string | number) => window.shell.clock.setPrefs({ timeFormat: toTimeFormat(value) }),
+    subscribe: (listener: (value: string | number) => void) =>
+      window.shell.clock.onPrefsChanged((prefs) => listener(prefs.timeFormat)),
+    control: {
+      kind: 'segmented',
+      options: [
+        { value: 'auto', label: 'Auto' },
+        { value: '12h', label: '12-hour' },
+        { value: '24h', label: '24-hour' },
+      ],
+    },
+  },
+  {
+    id: 'tray',
+    label: 'System tray',
+    description: 'Show the tray, manage icons and options',
+    keywords: ['tray', 'system tray', 'notification area', 'icons', 'overflow'],
+    icon: LayoutGrid,
+    page: 'ridge',
+    group: 'Page',
+    order: 1,
+    applies: 'instant',
+    control: { kind: 'tray' },
+  },
+  {
+    id: 'tray-enabled',
+    label: 'Show system tray',
+    description: "Display running apps' tray icons on Ridge.",
+    keywords: ['show tray', 'system tray', 'notification area', 'hide tray', 'icons'],
+    icon: LayoutGrid,
+    page: 'ridge',
+    group: topbarItemLabel('tray'),
+    order: 1,
+    applies: 'instant',
+    defaultValue: true,
+    read: () => window.shell.tray.settings().then((settings) => settings.enabled),
+    write: (value: boolean) => window.shell.tray.setSettings({ enabled: value }),
+    subscribe: (listener: (value: boolean) => void) =>
+      window.shell.tray.onSettingsChanged((settings) => listener(settings.enabled)),
+    control: { kind: 'toggle' },
+  },
+  {
+    id: 'tray-overflow',
+    label: 'Show overflow arrow',
+    description:
+      'Show the chevron that holds hidden icons. When off, the arrow is hidden and hidden icons are managed only from Manage tray icons.',
+    keywords: ['overflow arrow', 'chevron', 'hidden icons', 'tray', 'expand'],
+    icon: ChevronUp,
+    page: 'ridge',
+    group: topbarItemLabel('tray'),
+    order: 2,
+    applies: 'instant',
+    defaultValue: true,
+    read: () => window.shell.tray.settings().then((settings) => settings.showOverflow),
+    write: (value: boolean) => window.shell.tray.setSettings({ showOverflow: value }),
+    subscribe: (listener: (value: boolean) => void) =>
+      window.shell.tray.onSettingsChanged((settings) => listener(settings.showOverflow)),
+    control: { kind: 'toggle' },
+  },
+  {
+    id: 'tray-icons',
+    label: 'Manage tray icons',
+    description: 'Reorder, show and hide tray icons',
+    keywords: ['tray icons', 'manage icons', 'reorder', 'hide icons', 'notification area'],
+    icon: ArrowUpDown,
+    page: 'tray-icons',
+    group: 'Page',
+    order: 0,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'ridge/tray-icons' },
+  },
+  {
+    id: 'tray-all-monitors',
+    label: 'Show tray on all monitors',
+    description: 'Mirror the tray onto Ridge on every display. When off, it appears only on your primary display.',
+    keywords: ['all monitors', 'every display', 'mirror tray', 'primary display', 'multi monitor'],
+    icon: Monitor,
+    page: 'ridge',
+    group: topbarItemLabel('tray'),
+    order: 3,
+    applies: 'instant',
+    defaultValue: false,
+    read: () => window.shell.tray.display().then((display) => display.showOnAllMonitors),
+    write: (value: boolean) => window.shell.tray.setDisplay(value),
+    subscribe: (listener: (value: boolean) => void) =>
+      window.shell.tray.onDisplayChanged((display) => listener(display.showOnAllMonitors)),
+    control: { kind: 'toggle' },
+  },
+  {
+    id: 'power-confirm',
+    label: 'Confirm power menu actions',
+    description: "Ask a second time before Log Out, Restart or Shut Down from Ridge's power menu. Search always asks.",
+    hint: "Ask a second time before Ridge's power menu acts",
+    keywords: ['reassurance dialog', 'confirm shut down', 'confirm restart', 'confirm log out', 'ask before shutting down'],
+    icon: ShieldCheck,
+    page: 'ridge',
+    group: topbarItemLabel('system-menu'),
+    order: 1,
+    applies: 'instant',
+    defaultValue: true,
+    read: () => window.shell.system.powerConfirm(),
+    write: (value: boolean) => window.shell.system.setPowerConfirm(value),
+    subscribe: (listener: (value: boolean) => void) => window.shell.system.onPowerConfirmChanged(listener),
+    control: { kind: 'toggle' },
+  },
+  {
+    id: 'ridge-layout-reset',
+    label: 'Reset Ridge',
+    description:
+      'Put every item back where it started, shown on its first side and in its first place, with the Search button off and the tray on. Asks first.',
+    hint: 'Put every item on Ridge back where it started',
+    keywords: ['reset ridge', 'reset layout', 'default layout', 'restore defaults', 'rearrange'],
+    icon: RotateCcw,
+    page: 'ridge',
+    group: 'Layout',
+    order: 1,
+    applies: 'confirm',
+    control: { kind: 'navigate', path: 'ridge' },
+  },
+
+  {
     id: 'appearance',
     label: 'Appearance',
-    description: 'Theme, top bar color and what the top bar shows',
-    keywords: ['appearance', 'top bar', 'topbar', 'color', 'colour'],
+    description: 'Theme and the Ridge color',
+    keywords: ['appearance', 'ridge color', 'top bar', 'topbar', 'color', 'colour'],
     icon: Palette,
     page: 'appearance',
     group: 'Page',
@@ -473,8 +741,8 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'theme',
     label: 'Theme',
-    description: "Follow the top bar, follow Windows, or force light or dark for Alpine's own windows.",
-    hint: 'Follow the top bar or Windows, or force light or dark',
+    description: "Follow Ridge, follow Windows, or force light or dark for Alpine's own windows.",
+    hint: 'Follow Ridge or Windows, or force light or dark',
     keywords: ['theme', 'dark mode', 'light mode', 'appearance', 'night mode', 'colour scheme', 'color scheme', 'top bar', 'topbar'],
     icon: Contrast,
     page: 'appearance',
@@ -491,7 +759,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     control: {
       kind: 'segmented',
       options: [
-        { value: 'topbar', label: 'Top bar' },
+        { value: 'topbar', label: 'Ridge' },
         { value: 'system', label: 'System' },
         { value: 'light', label: 'Light' },
         { value: 'dark', label: 'Dark' },
@@ -500,9 +768,9 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
   {
     id: 'topbar-color',
-    label: 'Top bar color',
+    label: 'Ridge color',
     description: 'Pick a preset or use a color from your wallpaper.',
-    hint: 'Override the top bar color',
+    hint: 'Override the Ridge color',
     keywords: ['top bar color', 'topbar colour', 'accent', 'preset', 'swatch', 'palette', 'tint'],
     icon: Palette,
     page: 'appearance',
@@ -522,8 +790,8 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
   {
     id: 'topbar-color-automatic',
-    label: 'Automatic top bar color',
-    description: 'Take the top bar color from your wallpaper and follow it when the wallpaper changes.',
+    label: 'Automatic Ridge color',
+    description: 'Take the Ridge color from your wallpaper and follow it when the wallpaper changes.',
     hint: 'Follow the wallpaper color',
     keywords: ['automatic color', 'automatic colour', 'auto', 'wallpaper color', 'top bar', 'follow wallpaper'],
     icon: Sparkles,
@@ -540,68 +808,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
       }),
     control: { kind: 'toggle' },
   },
-  {
-    id: 'topbar-search-icon',
-    label: 'Top bar search icon',
-    description: 'Display the search button in the top bar. The hotkey still works either way.',
-    hint: 'Show the search button in the top bar',
-    keywords: ['search icon', 'top bar', 'launcher button'],
-    icon: Search,
-    page: 'appearance',
-    group: 'Top bar',
-    order: 4,
-    applies: 'instant',
-    defaultValue: false,
-    read: () => window.topbar.searchIcon(),
-    write: (value: boolean) => window.topbar.setSearchIcon(value),
-    subscribe: (listener: (value: boolean) => void) => window.topbar.onSearchIconChanged(listener),
-    control: { kind: 'toggle' },
-  },
-  {
-    id: 'media-visualizer',
-    label: 'Media visualizer',
-    description:
-      "Show the audio visualizer instead of the playing app's icon. The bars only animate for audio playing on this PC, so leave this off if you often play to other devices.",
-    hint: 'Show the audio visualizer in the top bar',
-    keywords: ['media', 'visualizer', 'audio', 'top bar'],
-    icon: AudioLines,
-    page: 'appearance',
-    group: 'Top bar',
-    order: 5,
-    applies: 'instant',
-    defaultValue: false,
-    read: () => window.topbar.mediaVisualizer(),
-    write: (value: boolean) => window.topbar.setMediaVisualizer(value),
-    subscribe: (listener: (value: boolean) => void) => window.topbar.onMediaVisualizerChanged(listener),
-    control: { kind: 'toggle' },
-  },
 
-  {
-    id: 'clock-time-format',
-    label: 'Time format',
-    description: 'Show the clock as a 12-hour or 24-hour time, or follow whatever Windows is set to.',
-    keywords: ['time format', 'clock', '12 hour', '24 hour', 'am pm', 'military time'],
-    icon: Clock,
-    page: 'calendar',
-    group: 'Clock',
-    order: 1,
-    applies: 'instant',
-    defaultValue: 'auto',
-    initial: () => toTimeFormat(window.shell.clock.initial?.timeFormat),
-    validate: toTimeFormat,
-    read: () => window.shell.clock.prefs().then((prefs) => prefs.timeFormat),
-    write: (value: string | number) => window.shell.clock.setPrefs({ timeFormat: toTimeFormat(value) }),
-    subscribe: (listener: (value: string | number) => void) =>
-      window.shell.clock.onPrefsChanged((prefs) => listener(prefs.timeFormat)),
-    control: {
-      kind: 'segmented',
-      options: [
-        { value: 'auto', label: 'Auto' },
-        { value: '12h', label: '12-hour' },
-        { value: '24h', label: '24-hour' },
-      ],
-    },
-  },
   {
     id: 'calendar-days',
     label: 'Days shown',
@@ -834,83 +1041,6 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     order: 4,
     applies: 'instant',
     control: { kind: 'navigate', path: 'input' },
-  },
-  {
-    id: 'tray',
-    label: 'System tray',
-    description: 'Show the tray, manage icons and options',
-    keywords: ['tray', 'system tray', 'notification area', 'icons', 'overflow'],
-    icon: LayoutGrid,
-    page: 'tray',
-    group: 'Page',
-    order: 0,
-    applies: 'instant',
-    control: { kind: 'tray' },
-  },
-  {
-    id: 'tray-enabled',
-    label: 'Show system tray',
-    description: "Display running apps' tray icons in the top bar.",
-    keywords: ['show tray', 'system tray', 'notification area', 'hide tray', 'icons'],
-    icon: LayoutGrid,
-    page: 'tray',
-    group: 'General',
-    order: 1,
-    applies: 'instant',
-    defaultValue: true,
-    read: () => window.shell.tray.settings().then((settings) => settings.enabled),
-    write: (value: boolean) => window.shell.tray.setSettings({ enabled: value }),
-    subscribe: (listener: (value: boolean) => void) =>
-      window.shell.tray.onSettingsChanged((settings) => listener(settings.enabled)),
-    control: { kind: 'toggle' },
-  },
-  {
-    id: 'tray-overflow',
-    label: 'Show overflow arrow',
-    description:
-      'Show the chevron that holds hidden icons. When off, the arrow is hidden and hidden icons are managed only here.',
-    keywords: ['overflow arrow', 'chevron', 'hidden icons', 'tray', 'expand'],
-    icon: ChevronUp,
-    page: 'tray',
-    group: 'General',
-    order: 2,
-    applies: 'instant',
-    defaultValue: true,
-    read: () => window.shell.tray.settings().then((settings) => settings.showOverflow),
-    write: (value: boolean) => window.shell.tray.setSettings({ showOverflow: value }),
-    subscribe: (listener: (value: boolean) => void) =>
-      window.shell.tray.onSettingsChanged((settings) => listener(settings.showOverflow)),
-    control: { kind: 'toggle' },
-  },
-  {
-    id: 'tray-icons',
-    label: 'Manage tray icons',
-    description: 'Reorder, show and hide tray icons',
-    keywords: ['tray icons', 'manage icons', 'reorder', 'hide icons', 'notification area'],
-    icon: ArrowUpDown,
-    page: 'tray-icons',
-    group: 'Page',
-    order: 0,
-    applies: 'instant',
-    control: { kind: 'navigate', path: 'tray/icons' },
-  },
-  {
-    id: 'tray-all-monitors',
-    label: 'Show tray on all monitors',
-    description:
-      "Mirror the tray on every display's top bar. When off, it appears only on your primary display.",
-    keywords: ['all monitors', 'every display', 'mirror tray', 'primary display', 'multi monitor'],
-    icon: Monitor,
-    page: 'tray',
-    group: 'Monitors',
-    order: 4,
-    applies: 'instant',
-    defaultValue: false,
-    read: () => window.shell.tray.display().then((display) => display.showOnAllMonitors),
-    write: (value: boolean) => window.shell.tray.setDisplay(value),
-    subscribe: (listener: (value: boolean) => void) =>
-      window.shell.tray.onDisplayChanged((display) => listener(display.showOnAllMonitors)),
-    control: { kind: 'toggle' },
   },
 
   {
@@ -1231,7 +1361,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     id: 'battery-saver-polling',
     label: 'Battery saver background checks',
     description:
-      'Poll Bluetooth, Wi-Fi and window colours far less often. The top bar updates more slowly but wakes the CPU and the radios much less.',
+      'Poll Bluetooth, Wi-Fi and window colours far less often. Ridge updates more slowly but wakes the CPU and the radios much less.',
     hint: 'Slow background checks while battery saver is on',
     keywords: ['battery saver background', 'polling', 'bluetooth', 'wifi', 'power saving', 'checks'],
     icon: Activity,
@@ -1250,7 +1380,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     id: 'battery-saver-throttling',
     label: 'Battery saver process throttling',
     description:
-      'Ask Windows to run Alpine at efficiency speed (EcoQoS). Saves the most power, but the top bar and its menus can feel less smooth.',
+      'Ask Windows to run Alpine at efficiency speed (EcoQoS). Saves the most power, but Ridge and its menus can feel less smooth.',
     hint: 'Run Alpine at efficiency speed while battery saver is on',
     keywords: ['battery saver throttling', 'ecoqos', 'efficiency', 'power saving', 'cpu'],
     icon: Activity,

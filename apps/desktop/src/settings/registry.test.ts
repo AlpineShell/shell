@@ -68,6 +68,27 @@ const EXCEPTIONS: Record<string, SettingsApplies> = {
   updates: 'restart',
   revert: 'confirm',
   power: 'confirm',
+  'ridge-layout-reset': 'confirm',
+}
+
+const PERSONAL_SIDEBAR: SettingsPageId[] = [
+  'appearance',
+  'wallpaper',
+  'ridge',
+  'search',
+  'calendar',
+  'input',
+  'tiling',
+  'battery',
+]
+
+const OLD_BAR_NAME = /top ?bar/i
+
+function textsAReaderSees(entry: SettingsEntry): string[] {
+  const control = entry.control
+  const options = control.kind === 'select' || control.kind === 'segmented' ? control.options.map((option) => String(option.label)) : []
+  const actions = control.kind === 'action' ? [control.actionLabel] : []
+  return [entry.label, entry.description, entry.hint ?? '', ...options, ...actions]
 }
 
 function decisionTableRows(): Map<string, string> {
@@ -137,14 +158,35 @@ describe('settings pages', () => {
   it('resolves pages and routes by id', () => {
     expect(settingsPage('battery')?.label).toBe('Battery')
     expect(settingsPageRoute('battery')).toBe('battery')
-    expect(settingsPageRoute('tray-icons')).toBe('tray/icons')
+    expect(settingsPageRoute('tray-icons')).toBe('ridge/tray-icons')
     expect(settingsPageRoute('quick-actions')).toBeNull()
   })
 
   it('resolves pages by the route the settings window navigates to', () => {
-    expect(settingsPageByRoute('tray/icons')?.id).toBe('tray-icons')
+    expect(settingsPageByRoute('ridge/tray-icons')?.id).toBe('tray-icons')
     expect(settingsPageByRoute('home/revert')?.label).toBe('Revert to Windows')
     expect(settingsPageByRoute('nowhere')).toBeNull()
+  })
+
+  it('lists the Personal pages in the sidebar with Ridge after Wallpaper and no System tray page', () => {
+    const sidebar = SETTINGS_PAGES.filter(
+      (page) => page.section === 'personalization' && page.route !== null && !page.route.includes('/')
+    ).sort((a, b) => a.order - b.order)
+    expect(sidebar.map((page) => page.id)).toEqual(PERSONAL_SIDEBAR)
+  })
+
+  it('gives no two pages in a section the same place', () => {
+    for (const section of SETTINGS_SECTIONS) {
+      const orders = SETTINGS_PAGES.filter((page) => page.section === section.id).map((page) => page.order)
+      expect(new Set(orders).size, section.id).toBe(orders.length)
+    }
+  })
+
+  it('calls the bar Ridge in every page name and description', () => {
+    for (const page of SETTINGS_PAGES) {
+      expect(page.label, page.id).not.toMatch(OLD_BAR_NAME)
+      expect(page.description, page.id).not.toMatch(OLD_BAR_NAME)
+    }
   })
 })
 
@@ -212,6 +254,12 @@ describe('settings registry', () => {
       expect((rows.get(entry.id)?.split('|')[1] ?? '').length).toBeGreaterThan(20)
     }
     expect([...rows.keys()].sort()).toEqual(SETTINGS_REGISTRY.map((entry) => entry.id).sort())
+  })
+
+  it('calls the bar Ridge in everything an entry shows a reader, leaving the old name to keywords', () => {
+    for (const entry of SETTINGS_REGISTRY) {
+      for (const text of textsAReaderSees(entry)) expect(text, entry.id).not.toMatch(OLD_BAR_NAME)
+    }
   })
 
   it('gives every entry a label and a description', () => {

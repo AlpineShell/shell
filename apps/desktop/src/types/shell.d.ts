@@ -1022,7 +1022,6 @@ declare global {
     | 'search'
     | 'calendar'
     | 'input'
-    | 'tray'
     | 'tray-icons'
     | 'tiling'
     | 'battery'
