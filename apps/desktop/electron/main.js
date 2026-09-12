@@ -42,6 +42,7 @@ const pluginBackendHost = require('./pluginBackendHost')
 const pluginWindows = require('./pluginWindows')
 const { launchCommand } = require('./shellLaunch')
 const { isPointInMenuHotZone, shouldClickCloseMenu } = require('./menuHotZone')
+const { sanitizeInteractiveZones, isCursorInInteractiveZone } = require('./topbarInteractiveZones')
 const shellNotice = require('./modules/shellNotice')
 
 const OPEN_APP_TIMEOUT_MS = 300000
@@ -174,10 +175,6 @@ const CURSOR_POLL_FAST_MS = 50
 const CURSOR_POLL_SLOW_MS = 150
 const NEAR_BAR_MARGIN = 200
 
-const INTERACTIVE_RIGHT = 600
-const INTERACTIVE_LEFT = 300
-const INTERACTIVE_CENTER = 120
-
 const MENU_CLOSE_GRACE_MS = 300
 
 const shells = new Map()
@@ -214,16 +211,12 @@ function evaluateTopBarInteraction(win, state) {
 
   const inBarRow = cursor.y >= bounds.y && cursor.y < bounds.y + TOP_BAR_HEIGHT &&
                    cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width
-  const inLeftZone = cursor.x < bounds.x + INTERACTIVE_LEFT
-  const inRightZone = cursor.x >= bounds.x + bounds.width - INTERACTIVE_RIGHT
-  const centerX = bounds.x + bounds.width / 2
-  const inCenterZone = cursor.x >= centerX - INTERACTIVE_CENTER / 2 && cursor.x < centerX + INTERACTIVE_CENTER / 2
 
   let inInteractive
   if (state.activeRegion) {
     inInteractive = inBarRow || isPointInMenuHotZone(cursor, bounds, state.activeRegion)
   } else {
-    inInteractive = inBarRow && (inLeftZone || inRightZone || inCenterZone)
+    inInteractive = inBarRow && isCursorInInteractiveZone(cursor.x - bounds.x, state.interactiveZones, bounds.width)
   }
 
   if (inInteractive) {
@@ -338,7 +331,7 @@ function createTopBarWindow(display) {
   win.setIgnoreMouseEvents(true)
   loadAppURL(win, getURL('topbar', display.id))
 
-  const state = { ignoring: true, activeRegion: null, bounds: win.getBounds(), closeGraceTimer: null }
+  const state = { ignoring: true, activeRegion: null, interactiveZones: null, bounds: win.getBounds(), closeGraceTimer: null }
   win.topBarState = state
 
   win.refreshBarBounds = () => {
@@ -412,10 +405,19 @@ function createTopBarWindow(display) {
   }
   ipcMain.on('topbar/set-active-region', onSetActiveRegion)
 
+  const onSetInteractiveZones = (event, zones) => {
+    if (win.isDestroyed()) return
+    if (event.sender !== win.webContents) return
+    state.interactiveZones = sanitizeInteractiveZones(zones, state.bounds.width)
+    evaluateTopBarInteraction(win, state)
+  }
+  ipcMain.on('topbar/set-interactive-zones', onSetInteractiveZones)
+
   win.on('blur', () => launcher.handleBlur(win))
   win.on('closed', () => {
     clearCloseGrace(state)
     ipcMain.removeListener('topbar/set-active-region', onSetActiveRegion)
+    ipcMain.removeListener('topbar/set-interactive-zones', onSetInteractiveZones)
     settledTopBars.delete(win)
   })
 
