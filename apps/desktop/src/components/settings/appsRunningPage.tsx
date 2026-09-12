@@ -1,7 +1,16 @@
 import { useMemo, useState } from 'react'
-import { Boxes, ChevronDown, ChevronRight } from 'lucide-react'
+import { AppWindow, Boxes, Search } from 'lucide-react'
+import { settingsPage } from '../../settings/registry'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { AppIcon, PageHeader, SearchBox, Spinner, bandLabel, bandClass } from './appsShared'
+import { bandLabel, bandTone } from './appsShared'
+import Avatar from '../ui/avatar'
+import Badge from '../ui/badge'
+import ConfirmButton from '../ui/confirmButton'
+import EmptyState from '../ui/emptyState'
+import ListRow from '../ui/listRow'
+import PageHeader from '../ui/pageHeader'
+import Spinner from '../ui/spinner'
+import TextField from '../ui/textField'
 
 export default function AppsRunningPage() {
   const running = useRunningApps()
@@ -21,36 +30,45 @@ export default function AppsRunningPage() {
   const showBackground = backgroundOpen || q.length > 0
 
   return (
-    <div className="flex flex-col gap-5 w-full">
-      <PageHeader title="Running" description="Apps using your computer right now. You can close ones you're not using.">
-        <SearchBox value={query} onChange={setQuery} placeholder="Search for an app" />
+    <div className="flex w-full flex-col gap-5">
+      <PageHeader title={settingsPage('apps-running')?.label ?? ''} subtitle="Apps using your computer right now. You can close ones you're not using.">
+        <TextField
+          label="Search running apps"
+          value={query}
+          onChange={setQuery}
+          placeholder="Search for an app"
+          icon={<Search size={13} />}
+          className="w-56"
+        />
       </PageHeader>
 
       <div className="flex flex-col gap-1">
-        {running.length === 0 && <p className="text-sm text-ink-quiet">Looking at what's running…</p>}
-        {running.length > 0 && visible.length === 0 && <p className="text-sm text-ink-quiet">No apps match your search.</p>}
+        {running.length === 0 && <EmptyState icon={<Spinner size={20} />} title="Looking at what's running…" />}
+        {running.length > 0 && visible.length === 0 && (
+          <EmptyState icon={<Search size={20} />} title="No apps match your search." />
+        )}
 
         {foreground.map((app) => (
           <RunningRow key={app.name} app={app} />
         ))}
 
         {background.length > 0 && (
-          <div className="rounded-card bg-surface-2 border border-line-hairline mt-1 overflow-hidden">
-            <button onClick={() => setBackgroundOpen((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 cursor-pointer text-left hover:bg-fill-ghost transition-colors">
-              <Boxes size={18} className="text-ink-faint shrink-0" />
-              <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-dense text-ink-secondary">Running in the background ({background.length})</span>
-                <span className="text-[11px] text-ink-faint">Helpers and services running without a window — usually started by your apps.</span>
-              </div>
-              {showBackground ? <ChevronDown size={16} className="text-ink-faint shrink-0" /> : <ChevronRight size={16} className="text-ink-faint shrink-0" />}
-            </button>
-            {showBackground && (
-              <div className="flex flex-col gap-1 px-2 pb-2">
-                {background.map((app) => (
-                  <RunningRow key={app.name} app={app} />
-                ))}
-              </div>
-            )}
+          <div className="mt-1">
+            <ListRow
+              icon={<Boxes size={18} className="text-ink-faint" />}
+              title={`Running in the background (${background.length})`}
+              detail="Helpers and services running without a window — usually started by your apps."
+              onActivate={() => setBackgroundOpen((v) => !v)}
+              expanded={showBackground}
+            >
+              {showBackground && (
+                <div className="flex flex-col gap-1 px-2 pb-2">
+                  {background.map((app) => (
+                    <RunningRow key={app.name} app={app} />
+                  ))}
+                </div>
+              )}
+            </ListRow>
           </div>
         )}
       </div>
@@ -71,20 +89,25 @@ function RunningRow({ app }: { app: RunningApp }) {
   if (closed) return null
 
   return (
-    <div className="flex items-center gap-3 px-3 h-12 rounded-card bg-surface-2 border border-line-hairline">
-      <AppIcon icon={app.icon} name={app.friendlyName} size={24} />
-      <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="text-dense text-ink-primary truncate">{app.friendlyName}</span>
-        {app.count > 1 && <span className="text-[11px] text-ink-faint shrink-0">({app.count})</span>}
-      </div>
-      <span className={`text-[12px] shrink-0 w-20 text-right ${bandClass(app.band)}`}>{bandLabel(app.band)}</span>
-      <button
-        onClick={close}
-        disabled={busy}
-        className="h-7 w-16 flex items-center justify-center rounded-md text-[12px] text-ink-secondary hover:text-danger hover:bg-danger/10 cursor-pointer transition-colors shrink-0 disabled:cursor-default disabled:text-ink-secondary disabled:hover:bg-transparent"
-      >
-        {busy ? <Spinner size={13} /> : 'Close'}
-      </button>
-    </div>
+    <ListRow
+      icon={<Avatar src={app.icon} alt={app.friendlyName} size="sm" fallback={<AppWindow size={14} strokeWidth={1.75} />} />}
+      title={app.friendlyName}
+      badges={
+        <>
+          {app.count > 1 && <Badge>{app.count}</Badge>}
+          <Badge tone={bandTone(app.band)}>{bandLabel(app.band)}</Badge>
+        </>
+      }
+      actions={
+        <ConfirmButton
+          variant="ghost"
+          label="Close"
+          confirmLabel="Force close"
+          onConfirm={close}
+          busy={busy}
+          className="min-w-20"
+        />
+      }
+    />
   )
 }

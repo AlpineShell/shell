@@ -3,9 +3,12 @@ export {}
 declare global {
   type ThemeName = 'light' | 'dark'
 
+  type ThemePreference = 'topbar' | 'system' | 'light' | 'dark'
+
   interface ThemeState {
     name: ThemeName
     background: string
+    preference: ThemePreference
   }
 
   interface SectionProps {
@@ -48,7 +51,7 @@ declare global {
 
   interface SegmentedOption<T> {
     value: T
-    label: string
+    label: import('react').ReactNode
   }
 
   interface SegmentedProps<T extends string | number> {
@@ -58,8 +61,13 @@ declare global {
     label?: string
   }
 
+  interface SelectOption<T> {
+    value: T
+    label: string
+  }
+
   interface SelectProps<T extends string> {
-    options: SegmentedOption<T>[]
+    options: SelectOption<T>[]
     value: T
     onChange: (value: T) => void
     label: string
@@ -84,15 +92,132 @@ declare global {
     children: import('react').ReactNode
     variant?: ButtonVariant
     size?: ButtonSize
+    icon?: import('react').ReactNode
+    busy?: boolean
     disabled?: boolean
     className?: string
   }
+
+  interface ConfirmButtonProps {
+    label: string
+    confirmLabel: string
+    onConfirm: () => void
+    variant?: ButtonVariant
+    confirmVariant?: ButtonVariant
+    size?: ButtonSize
+    icon?: import('react').ReactNode
+    iconOnly?: boolean
+    busy?: boolean
+    disabled?: boolean
+    className?: string
+  }
+
+  type IconButtonVariant = 'ghost' | 'danger'
 
   interface IconButtonProps {
     onClick: () => void
     label: string
     children: import('react').ReactNode
+    variant?: IconButtonVariant
+    busy?: boolean
     disabled?: boolean
+    className?: string
+  }
+
+  interface SpinnerProps {
+    size?: number
+  }
+
+  type AvatarSize = 'sm' | 'md'
+
+  interface AvatarProps {
+    src?: string | null
+    alt: string
+    fallback: import('react').ReactNode
+    size?: AvatarSize
+  }
+
+  type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger'
+
+  interface BadgeProps {
+    tone?: BadgeTone
+    children: import('react').ReactNode
+  }
+
+  interface EmptyStateProps {
+    icon?: import('react').ReactNode
+    title: string
+    detail?: import('react').ReactNode
+    action?: import('react').ReactNode
+  }
+
+  interface PageHeaderProps {
+    title: string
+    subtitle?: string
+    children?: import('react').ReactNode
+  }
+
+  interface ListRowProps {
+    icon?: import('react').ReactNode
+    title: string
+    badges?: import('react').ReactNode
+    detail?: import('react').ReactNode
+    actions?: import('react').ReactNode
+    onActivate?: () => void
+    activateLabel?: string
+    expanded?: boolean
+    disabled?: boolean
+    muted?: boolean
+    children?: import('react').ReactNode
+  }
+
+  interface TextFieldProps {
+    value: string
+    onChange: (value: string) => void
+    label: string
+    placeholder?: string
+    type?: 'text' | 'password'
+    icon?: import('react').ReactNode
+    invalid?: boolean
+    onSubmit?: () => void
+    className?: string
+    ref?: import('react').Ref<HTMLInputElement>
+  }
+
+  interface SearchFieldProps {
+    value: string
+    onChange: (value: string) => void
+    label: string
+    placeholder?: string
+    hint?: string
+    onKeyDown?: (event: import('react').KeyboardEvent<HTMLInputElement>) => void
+    controls?: string
+    activeDescendant?: string
+    ref?: import('react').Ref<HTMLInputElement>
+  }
+
+  interface SearchPickerOption {
+    value: string
+    label: string
+    detail?: string
+    disabled?: boolean
+  }
+
+  interface SearchPickerProps {
+    options: SearchPickerOption[]
+    onSelect: (value: string) => void
+    onDismiss: () => void
+    label: string
+    placeholder?: string
+    emptyMessage?: string
+  }
+
+  interface PickerTileProps {
+    onClick: () => void
+    label: string
+    selected?: boolean
+    className?: string
+    children: import('react').ReactNode
   }
 
   type SetupOutcomeTone = 'success' | 'danger'
@@ -691,6 +816,36 @@ declare global {
     showTasks: boolean
   }
 
+  interface KeyboardLayoutOption {
+    id: string
+    name: string
+  }
+
+  interface KeyboardInputMethod {
+    tip: string
+    localeId: string
+    layoutId: string
+    name: string
+  }
+
+  interface KeyboardLanguage {
+    tag: string
+    autonym: string
+    name: string
+    localeId: string | null
+    layouts: KeyboardInputMethod[]
+  }
+
+  interface KeyboardLayoutState {
+    languages: KeyboardLanguage[]
+    defaultInputMethod: string | null
+  }
+
+  interface OptimisticKeyboardLayout {
+    publishedWhenWritten: KeyboardLayoutState
+    state: KeyboardLayoutState
+  }
+
   interface CalendarConnection {
     connected: boolean
     email: string | null
@@ -752,6 +907,221 @@ declare global {
     progId: string
     holder: string | null
     isDefault: boolean
+  }
+
+  type SettingsIcon = import('lucide-react').LucideIcon
+
+  type SettingsApplies = 'instant' | 'confirm' | 'restart' | 'draft'
+
+  type SettingsSectionId = 'home' | 'personalization' | 'devices' | 'system'
+
+  type SettingsPageId =
+    | 'home'
+    | 'revert'
+    | 'appearance'
+    | 'wallpaper'
+    | 'search'
+    | 'calendar'
+    | 'input'
+    | 'tray'
+    | 'tray-icons'
+    | 'tiling'
+    | 'battery'
+    | 'displays'
+    | 'wifi'
+    | 'bluetooth'
+    | 'apps'
+    | 'apps-installed'
+    | 'apps-startup'
+    | 'apps-running'
+    | 'apps-defaults'
+    | 'plugins'
+    | 'updates'
+    | 'quick-actions'
+
+  type SettingsPageKind = 'settings' | 'hub' | 'manager' | 'launcher'
+
+  interface SettingsSection {
+    id: SettingsSectionId
+    label: string
+    icon: SettingsIcon
+    order: number
+  }
+
+  interface SettingsPage {
+    id: SettingsPageId
+    route: string | null
+    label: string
+    description: string
+    keywords: string[]
+    icon: SettingsIcon
+    section: SettingsSectionId | null
+    kind: SettingsPageKind
+    order: number
+  }
+
+  interface SettingsToggleControl {
+    kind: 'toggle'
+  }
+
+  interface SettingsSliderControl {
+    kind: 'slider'
+    min: number
+    max: number
+    step: number
+    unit?: string
+  }
+
+  interface SettingsSelectControl {
+    kind: 'select'
+    options: readonly SelectOption<string>[]
+  }
+
+  interface SettingsSegmentedControl {
+    kind: 'segmented'
+    options: readonly SelectOption<string | number>[]
+  }
+
+  interface SettingsColorControl {
+    kind: 'color'
+  }
+
+  interface SettingsHotkeyControl {
+    kind: 'hotkey'
+    fallback: string
+  }
+
+  type SettingsValueControl =
+    | SettingsToggleControl
+    | SettingsSliderControl
+    | SettingsSelectControl
+    | SettingsSegmentedControl
+    | SettingsColorControl
+    | SettingsHotkeyControl
+
+  type SettingsPanelControl =
+    | { kind: 'navigate'; path: string }
+    | { kind: 'action'; actionLabel: string; run(): Promise<unknown> }
+    | { kind: 'brightness' }
+    | { kind: 'wallpaper' }
+    | { kind: 'wifi' }
+    | { kind: 'bluetooth' }
+    | { kind: 'tray' }
+    | { kind: 'tiling' }
+    | { kind: 'startup' }
+    | { kind: 'power' }
+    | { kind: 'emoji' }
+
+  type SettingsControl = SettingsValueControl | SettingsPanelControl
+
+  type SettingsValue = boolean | number | string | TopBarColor | null
+
+  interface SettingsEntryBase {
+    id: string
+    label: string
+    description: string
+    hint?: string
+    keywords: string[]
+    icon: SettingsIcon
+    page: SettingsPageId
+    group: string
+    order: number
+    applies: SettingsApplies
+  }
+
+  interface SettingsValueEntry extends SettingsEntryBase {
+    control: SettingsValueControl
+    read(): Promise<SettingsValue>
+    write(value: SettingsValue): Promise<unknown>
+    subscribe?(listener: (value: SettingsValue) => void): (() => void) | void
+    defaultValue: SettingsValue
+    initial?(): SettingsValue
+    validate?(value: unknown): SettingsValue
+  }
+
+  interface SettingsPanelEntry extends SettingsEntryBase {
+    control: SettingsPanelControl
+  }
+
+  type SettingsEntry = SettingsValueEntry | SettingsPanelEntry
+
+  interface SettingsValueSnapshot {
+    value: SettingsValue
+    staged: SettingsValue | undefined
+    restartRequired: boolean
+    error: string | null
+  }
+
+  interface SettingsValueBinding extends SettingsValueSnapshot {
+    write(next: SettingsValue): void
+    confirm(): void
+    cancel(): void
+  }
+
+  interface SettingsPageSlot {
+    group: string
+    order: number
+    replaces?: string[]
+    content: import('react').ReactNode
+  }
+
+  interface RegistryPageProps {
+    page: SettingsPageId
+    slots?: SettingsPageSlot[]
+    hidden?: string[]
+    lead?: import('react').ReactNode
+    groupSubtitles?: Record<string, string>
+    entryDescriptions?: Record<string, string>
+  }
+
+  type SettingsSearchAction =
+    | { kind: 'toggle'; entry: SettingsValueEntry }
+    | { kind: 'navigate'; route: string; highlight: string | null }
+    | { kind: 'launcher' }
+
+  interface SettingsRouteCoverage {
+    registryRows: boolean
+    renderedByThePage: string[]
+  }
+
+  interface SettingsSearchTarget {
+    id: string
+    label: string
+    description: string
+    keywords: string[]
+    icon: SettingsIcon
+    context: string
+    action: SettingsSearchAction
+  }
+
+  interface SettingsSearchMatch {
+    target: SettingsSearchTarget
+    score: number
+  }
+
+  interface SettingsSearchResultsProps {
+    query: string
+    matches: SettingsSearchMatch[]
+    total: number
+    selected: number
+    listId: string
+    rowId: (index: number) => string
+    onPoint: (index: number) => void
+    onActivate: (target: SettingsSearchTarget) => void
+  }
+
+  type SettingsRouteView = (navigate: (path: string) => void) => import('react').ReactNode
+
+  interface HotkeyBindResult {
+    ok: boolean
+    hotkey: string
+  }
+
+  interface HotkeyRecorderProps {
+    value: string
+    fallback: string
+    onChange: (hotkey: string) => void
+    disabled?: boolean
   }
 
   interface Window {
@@ -819,9 +1189,9 @@ declare global {
       addRecentEmoji: (char: string) => Promise<string[]>
       onEmojiKey: (callback: (message: EmojiKeyMessage) => void) => () => void
       getHotkey: () => Promise<string>
-      setHotkey: (hotkey: string) => Promise<string>
+      setHotkey: (hotkey: string) => Promise<HotkeyBindResult>
       defaultHotkey: () => Promise<string>
-      onHotkeyChanged: (callback: (hotkey: string) => void) => void
+      onHotkeyChanged: (callback: (hotkey: string) => void) => () => void
       onShow: (callback: (data: { displayId: number; mode?: string }) => void) => void
       onStartClose: (callback: () => void) => () => void
       onHide: (callback: () => void) => () => void
@@ -879,6 +1249,7 @@ declare global {
       theme: {
         initial: ThemeState
         get: () => Promise<ThemeState>
+        setPreference: (value: ThemePreference) => Promise<ThemeState>
         onChanged: (callback: (theme: ThemeState) => void) => () => void
       }
       windows: {
@@ -1009,10 +1380,10 @@ declare global {
         onLayoutChanged: (callback: (data: TrayLayout) => void) => void
         display: () => Promise<TrayDisplaySetting>
         setDisplay: (showOnAllMonitors: boolean) => Promise<TrayDisplaySetting>
-        onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => void
+        onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => () => void
         settings: () => Promise<TraySettings>
         setSettings: (partial: Partial<TraySettings>) => Promise<TraySettings>
-        onSettingsChanged: (callback: (data: TraySettings) => void) => void
+        onSettingsChanged: (callback: (data: TraySettings) => void) => () => void
       }
       updates: {
         getState: () => Promise<UpdateState>
@@ -1041,6 +1412,17 @@ declare global {
         setPrefs: (partial: Partial<ClockPrefs>) => Promise<ClockPrefs>
         onPrefsChanged: (callback: (data: ClockPrefs) => void) => () => void
         initial: ClockPrefs | null
+      }
+      keyboard: {
+        availableLayouts: () => Promise<KeyboardLayoutOption[]>
+        languages: () => Promise<KeyboardLanguage[]>
+        addLayout: (tag: string, layoutId: string) => Promise<KeyboardLayoutState>
+        removeLayout: (tag: string, tip: string) => Promise<KeyboardLayoutState>
+        reorderLayouts: (tag: string, tips: string[]) => Promise<KeyboardLayoutState>
+        defaultInputMethod: () => Promise<string | null>
+        setDefaultInputMethod: (tip: string | null) => Promise<KeyboardLayoutState>
+        activateNow: (tip: string) => Promise<{ ok: boolean }>
+        onChanged: (callback: (state: KeyboardLayoutState) => void) => () => void
       }
       calendar: {
         state: () => Promise<CalendarConnection>

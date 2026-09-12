@@ -4,16 +4,25 @@ import {
   Download,
   ExternalLink,
   FolderOpen,
-  Loader2,
   Puzzle,
   RefreshCw,
   ShieldCheck,
   Store,
   Trash2,
 } from 'lucide-react'
-import PageTitle from '../ui/pageTitle'
-import Toggle from '../ui/toggle'
+import Avatar from '../ui/avatar'
+import Badge from '../ui/badge'
 import Button from '../ui/button'
+import ConfirmButton from '../ui/confirmButton'
+import EmptyState from '../ui/emptyState'
+import IconButton from '../ui/iconButton'
+import ListRow from '../ui/listRow'
+import PageHeader from '../ui/pageHeader'
+import Segmented from '../ui/segmented'
+import Spinner from '../ui/spinner'
+import Toggle from '../ui/toggle'
+
+type PluginTab = 'installed' | 'browse'
 
 function assetUrl(id: string, rel?: string | null): string | null {
   if (!rel || rel.startsWith('lucide:')) return null
@@ -21,8 +30,6 @@ function assetUrl(id: string, rel?: string | null): string | null {
   return `alpine-plugin://${id}/${rel}`
 }
 
-// Only report an update when the catalog version is strictly newer, so a
-// rolled-back / mis-published catalog can't advertise a downgrade as an "Update".
 function semverGt(a: string, b: string): boolean {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0)
   const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0)
@@ -33,7 +40,9 @@ function semverGt(a: string, b: string): boolean {
   return false
 }
 
-/* ─────────────────────────── Installed tab ─────────────────────────── */
+function versionLabel(version?: string | null): string | null {
+  return version && version !== '0.0.0' ? `v${version}` : null
+}
 
 function InstalledCard({
   plugin,
@@ -49,53 +58,46 @@ function InstalledCard({
   const enabled = plugin.enabled !== false
   const logo = assetUrl(plugin.id, plugin.marketplace?.logo || plugin.icon)
   const subtitle = plugin.marketplace?.shortDescription || plugin.description
+  const version = versionLabel(plugin.version)
 
   return (
-    <li className="rounded-card border border-line-hairline bg-surface-2 overflow-hidden">
-      <div className="flex items-center gap-3 px-3 h-14">
-        {logo ? (
-          <img src={logo} alt="" className="w-8 h-8 rounded shrink-0 object-cover" />
-        ) : (
-          <Puzzle size={18} className="text-ink-faint shrink-0" />
-        )}
-        <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-dense text-ink-primary truncate flex items-center gap-2">
-            {plugin.name}
-            <span className="text-[11px] text-ink-faint">
-              {plugin.version && plugin.version !== '0.0.0' ? `v${plugin.version}` : ''}
-            </span>
-            {plugin.preset && (
-              <span className="text-eyebrow uppercase text-ink-quiet bg-fill-ghost rounded px-1.5 py-0.5">
-                Preset
-              </span>
+    <li>
+      <ListRow
+        icon={<Avatar src={logo} alt={plugin.name} fallback={<Puzzle size={16} />} />}
+        title={plugin.name}
+        badges={
+          <>
+            {version && <Badge>{version}</Badge>}
+            {plugin.preset && <Badge>Preset</Badge>}
+          </>
+        }
+        detail={subtitle || plugin.id}
+        actions={
+          <>
+            {!plugin.preset && (
+              <ConfirmButton
+                iconOnly
+                label="Uninstall"
+                confirmLabel={`Uninstall ${plugin.name}`}
+                icon={<Trash2 size={16} />}
+                onConfirm={() => onUninstall(plugin)}
+                busy={removing}
+              />
             )}
-          </span>
-          <span className="text-[11px] text-ink-quiet truncate">{subtitle || plugin.id}</span>
-        </div>
-        {!plugin.preset && (
-          <button
-            onClick={() => onUninstall(plugin)}
-            disabled={removing}
-            aria-label="Uninstall"
-            className="focus-ring text-ink-quiet hover:text-danger transition-colors p-1 cursor-pointer disabled:opacity-50 disabled:cursor-default"
-          >
-            {removing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-          </button>
+            <Toggle label={`Enable ${plugin.name}`} checked={enabled} onChange={() => onToggle(plugin)} />
+          </>
+        }
+      >
+        {!plugin.loadable && (
+          <div className="flex items-center gap-2 border-t border-line-hairline bg-warning/10 px-3 py-2 text-xs text-warning">
+            <AlertTriangle size={12} className="shrink-0" />
+            {plugin.compat?.reason || (plugin.errors[0] ?? 'Cannot load this plugin.')}
+          </div>
         )}
-        <Toggle label={`Enable ${plugin.name}`} checked={enabled} onChange={() => onToggle(plugin)} />
-      </div>
-
-      {!plugin.loadable && (
-        <div className="flex items-center gap-2 px-3 pb-2 -mt-1 text-[11px] text-warning">
-          <AlertTriangle size={12} /> {plugin.compat?.reason || (plugin.errors[0] ?? 'Cannot load this plugin.')}
-        </div>
-      )}
-
+      </ListRow>
     </li>
   )
 }
-
-/* ─────────────────────────── Browse tab ─────────────────────────── */
 
 type BrowseState =
   | { status: 'loading' }
@@ -113,57 +115,43 @@ function BrowseCard({
   installing: boolean
   onInstall: (p: MarketplacePlugin) => void
 }) {
-  const logo = plugin.iconUrl
   const installed = installedVersion !== null
   const canUpdate = installed && semverGt(plugin.version, installedVersion)
 
   return (
-    <li className="rounded-card border border-line-hairline bg-surface-2 overflow-hidden">
-      <div className="flex items-center gap-3 px-3 py-2.5">
-        {logo ? (
-          <img src={logo} alt="" className="w-9 h-9 rounded-lg shrink-0 object-cover" />
-        ) : (
-          <div className="w-9 h-9 rounded-field shrink-0 bg-surface-3 flex items-center justify-center">
-            <Puzzle size={18} className="text-ink-faint" />
-          </div>
-        )}
-        <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-dense text-ink-primary truncate flex items-center gap-2">
-            {plugin.name}
-            <span className="text-[11px] text-ink-faint">v{plugin.version}</span>
-          </span>
-          <span className="text-[11px] text-ink-quiet truncate">{plugin.shortDescription || plugin.id}</span>
-        </div>
-        <button
-          onClick={() => window.plugins.marketplace.openWeb(plugin.id)}
-          className="focus-ring text-ink-quiet hover:text-ink-primary transition-colors p-1 cursor-pointer shrink-0"
-          aria-label="View on the web"
-          title="View on the web"
-        >
-          <ExternalLink size={15} />
-        </button>
-        {installing ? (
-          <span className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-fill-subtle text-[12px] text-ink-quiet shrink-0">
-            <Loader2 size={13} className="animate-spin" /> Installing…
-          </span>
-        ) : installed && !canUpdate ? (
-          <span className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-fill-subtle text-[12px] text-ink-quiet shrink-0">
-            <ShieldCheck size={13} /> Installed
-          </span>
-        ) : (
-          <Button size="sm" onClick={() => onInstall(plugin)} className="font-medium shrink-0">
-            <Download size={13} /> {installed ? 'Update' : 'Install'}
-          </Button>
-        )}
-      </div>
+    <li>
+      <ListRow
+        icon={<Avatar src={plugin.iconUrl} alt={plugin.name} fallback={<Puzzle size={16} />} />}
+        title={plugin.name}
+        badges={<Badge>v{plugin.version}</Badge>}
+        detail={plugin.shortDescription || plugin.id}
+        actions={
+          <>
+            <IconButton label="View on the web" onClick={() => window.plugins.marketplace.openWeb(plugin.id)}>
+              <ExternalLink size={15} />
+            </IconButton>
+            {installing ? (
+              <Badge>
+                <Spinner size={13} /> Installing…
+              </Badge>
+            ) : installed && !canUpdate ? (
+              <Badge tone="success">
+                <ShieldCheck size={13} /> Installed
+              </Badge>
+            ) : (
+              <Button size="sm" onClick={() => onInstall(plugin)} icon={<Download size={13} />}>
+                {installed ? 'Update' : 'Install'}
+              </Button>
+            )}
+          </>
+        }
+      />
     </li>
   )
 }
 
-/* ─────────────────────────── Page ─────────────────────────── */
-
 export default function PluginsPage() {
-  const [tab, setTab] = useState<'installed' | 'browse'>('installed')
+  const [tab, setTab] = useState<PluginTab>('installed')
   const [plugins, setPlugins] = useState<PluginRecord[]>([])
   const [reloading, setReloading] = useState(false)
   const [browse, setBrowse] = useState<BrowseState>({ status: 'loading' })
@@ -173,11 +161,8 @@ export default function PluginsPage() {
   const installedById = new Map(plugins.map((p) => [p.id, p]))
 
   const refreshInstalled = useCallback(async () => {
-    try {
-      setPlugins(await window.plugins.list())
-    } catch {
-      /* ignore */
-    }
+    const list = await window.plugins.list().catch(() => null)
+    if (list) setPlugins(list)
   }, [])
 
   const loadBrowse = useCallback(async () => {
@@ -186,12 +171,7 @@ export default function PluginsPage() {
       const index = await window.plugins.marketplace.list()
       setBrowse({ status: 'ready', plugins: index.plugins, base: index.base })
     } catch (e) {
-      let base = ''
-      try {
-        base = await window.plugins.marketplace.base()
-      } catch {
-        /* ignore */
-      }
+      const base = await window.plugins.marketplace.base().catch(() => '')
       setBrowse({ status: 'error', message: e instanceof Error ? e.message : 'Unknown error', base })
     }
   }, [])
@@ -215,7 +195,6 @@ export default function PluginsPage() {
     [installingId, refreshInstalled],
   )
 
-  // Forward-compat seam for the website "Install in Alpine Shell" deep link.
   const installRef = useRef(install)
   installRef.current = install
   const browseRef = useRef(browse)
@@ -261,48 +240,48 @@ export default function PluginsPage() {
     else console.error(`[plugins] uninstall ${plugin.id} failed:`, res.error)
   }
 
-  return (
-    <div className="w-full">
-      <div className="mb-4">
-        <PageTitle
-          title="Plugins"
-          subtitle="Browse the marketplace and install with one click, or drop a plugin folder into your plugins directory."
-        />
-      </div>
+  const tabs: SegmentedOption<PluginTab>[] = [
+    {
+      value: 'installed',
+      label: (
+        <span className="flex items-center gap-1.5">
+          <Puzzle size={14} /> Installed
+          {plugins.length > 0 && <span className="opacity-70">{plugins.length}</span>}
+        </span>
+      ),
+    },
+    {
+      value: 'browse',
+      label: (
+        <span className="flex items-center gap-1.5">
+          <Store size={14} /> Browse
+        </span>
+      ),
+    },
+  ]
 
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-1 rounded-full border border-line-hairline p-1 w-fit">
-          <button
-            onClick={() => setTab('installed')}
-            className={`focus-ring flex items-center gap-1.5 h-8 px-3.5 rounded-full text-dense cursor-pointer transition-colors ${
-              tab === 'installed' ? 'bg-fill-solid text-on-solid' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
-            }`}
-          >
-            <Puzzle size={14} /> Installed
-            {plugins.length > 0 && <span className="text-[11px] opacity-70">{plugins.length}</span>}
-          </button>
-          <button
-            onClick={() => setTab('browse')}
-            className={`focus-ring flex items-center gap-1.5 h-8 px-3.5 rounded-full text-dense cursor-pointer transition-colors ${
-              tab === 'browse' ? 'bg-fill-solid text-on-solid' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
-            }`}
-          >
-            <Store size={14} /> Browse
-          </button>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+  return (
+    <div className="flex w-full flex-col gap-5">
+      <PageHeader
+        title="Plugins"
+        subtitle="Browse the marketplace and install with one click, or drop a plugin folder into your plugins directory."
+      />
+
+      <div className="flex items-center justify-between gap-3">
+        <Segmented label="Plugin view" options={tabs} value={tab} onChange={setTab} />
+        <div className="flex shrink-0 items-center gap-2">
           {tab === 'installed' ? (
             <>
-              <Button variant="outline" size="sm" onClick={() => window.plugins.openFolder()}>
-                <FolderOpen size={14} /> Open plugins folder
+              <Button variant="outline" size="sm" onClick={() => window.plugins.openFolder()} icon={<FolderOpen size={14} />}>
+                Open plugins folder
               </Button>
-              <Button variant="ghost" size="sm" onClick={reload}>
-                <RefreshCw size={14} className={reloading ? 'animate-spin' : ''} /> Reload
+              <Button variant="ghost" size="sm" onClick={reload} busy={reloading} icon={<RefreshCw size={14} />}>
+                Reload
               </Button>
             </>
           ) : (
-            <Button variant="ghost" size="sm" onClick={loadBrowse}>
-              <RefreshCw size={14} className={browse.status === 'loading' ? 'animate-spin' : ''} /> Refresh
+            <Button variant="ghost" size="sm" onClick={loadBrowse} busy={browse.status === 'loading'} icon={<RefreshCw size={14} />}>
+              Refresh
             </Button>
           )}
         </div>
@@ -310,16 +289,15 @@ export default function PluginsPage() {
 
       {tab === 'installed' ? (
         plugins.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 text-center border border-line-hairline rounded-card py-10 px-6">
-            <Puzzle size={22} className="text-ink-faint" />
-            <span className="text-dense text-ink-quiet">No plugins installed yet.</span>
-            <button
-              onClick={() => setTab('browse')}
-              className="focus-ring mt-1 cursor-pointer text-[12px] text-ink-primary underline decoration-line-strong underline-offset-4 transition-colors hover:decoration-ink-primary"
-            >
-              Browse the marketplace →
-            </button>
-          </div>
+          <EmptyState
+            icon={<Puzzle size={22} />}
+            title="No plugins installed yet."
+            action={
+              <Button variant="outline" size="sm" onClick={() => setTab('browse')} icon={<Store size={14} />}>
+                Browse the marketplace
+              </Button>
+            }
+          />
         ) : (
           <ul className="flex flex-col gap-1.5">
             {plugins.map((plugin) => (
@@ -334,23 +312,20 @@ export default function PluginsPage() {
           </ul>
         )
       ) : browse.status === 'loading' ? (
-        <div className="flex items-center justify-center gap-2 py-12 text-dense text-ink-quiet">
-          <Loader2 size={16} className="animate-spin" /> Loading marketplace…
-        </div>
+        <EmptyState icon={<Spinner size={22} />} title="Loading marketplace…" />
       ) : browse.status === 'error' ? (
-        <div className="flex flex-col items-center gap-2 text-center border border-line-hairline rounded-card py-10 px-6">
-          <AlertTriangle size={22} className="text-warning" />
-          <span className="text-dense text-ink-secondary">Couldn&apos;t reach the marketplace.</span>
-          {browse.base && <span className="text-[11px] text-ink-faint font-mono break-all">{browse.base}</span>}
-          <button onClick={loadBrowse} className="focus-ring mt-1 cursor-pointer text-[12px] text-ink-primary underline decoration-line-strong underline-offset-4 transition-colors hover:decoration-ink-primary">
-            Try again
-          </button>
-        </div>
+        <EmptyState
+          icon={<AlertTriangle size={22} className="text-warning" />}
+          title="Couldn't reach the marketplace."
+          detail={browse.base && <span className="font-mono break-all">{browse.base}</span>}
+          action={
+            <Button variant="outline" size="sm" onClick={loadBrowse} icon={<RefreshCw size={14} />}>
+              Try again
+            </Button>
+          }
+        />
       ) : browse.plugins.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 text-center border border-line-hairline rounded-card py-10 px-6">
-          <Store size={22} className="text-ink-faint" />
-          <span className="text-dense text-ink-quiet">No plugins published yet.</span>
-        </div>
+        <EmptyState icon={<Store size={22} />} title="No plugins published yet." />
       ) : (
         <ul className="flex flex-col gap-1.5">
           {browse.plugins.map((plugin) => (

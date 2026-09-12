@@ -8,10 +8,5 @@ export function useTrayDisplay() {
     window.shell?.tray?.onDisplayChanged?.(setDisplay)
   }, [])
 
-  const setShowOnAllMonitors = (value: boolean) => {
-    setDisplay((d) => ({ ...d, showOnAllMonitors: value }))
-    window.shell?.tray?.setDisplay?.(value)
-  }
-
-  return { display, setShowOnAllMonitors }
+  return { display }
 }

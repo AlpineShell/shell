@@ -47,28 +47,31 @@
 
 :root,
 :root[data-theme='light'] {
-  --alpine-surface-0: #f9fafb;
-  --alpine-surface-1: #ffffff;
-  --alpine-surface-2: #ffffff;
-  --alpine-surface-3: #f3f4f6;
+  --alpine-ground: #d6d6d6;
 
-  --alpine-line-hairline: #e5e7eb;
-  --alpine-line-strong: #d1d5db;
-  --alpine-line-soft: #f3f4f6;
+  --alpine-surface-0: var(--alpine-ground);
+  --alpine-surface-1: color-mix(in oklab, var(--alpine-ground), white 60%);
+  --alpine-surface-2: color-mix(in oklab, var(--alpine-ground), white 85%);
+  --alpine-surface-3: color-mix(in oklab, var(--alpine-ground), white 45%);
 
-  --alpine-ink-primary: #333332;
-  --alpine-ink-secondary: #4b4b49;
-  --alpine-ink-quiet: #6a7282;
-  --alpine-ink-faint: #99a1af;
+  --alpine-line-hairline: rgba(0, 0, 0, 0.09);
+  --alpine-line-strong: rgba(0, 0, 0, 0.16);
+  --alpine-line-soft: rgba(0, 0, 0, 0.05);
 
-  --alpine-fill-solid: #333332;
-  --alpine-fill-solid-hover: #4a4a48;
+  --alpine-ink-primary: color-mix(in oklab, var(--alpine-ground), black 78%);
+  --alpine-ink-secondary: color-mix(in oklab, var(--alpine-ground), black 62%);
+  --alpine-ink-quiet: color-mix(in oklab, var(--alpine-ground), black 48%);
+  --alpine-ink-faint: color-mix(in oklab, var(--alpine-ground), black 32%);
+
+  --alpine-fill-solid: var(--alpine-ink-primary);
+  --alpine-fill-solid-hover: color-mix(in oklab, var(--alpine-ground), black 66%);
   --alpine-on-solid: #ffffff;
-  --alpine-fill-subtle: #f9fafb;
+  --alpine-fill-subtle: color-mix(in oklab, var(--alpine-ground), white 70%);
   --alpine-fill-ghost: rgba(0, 0, 0, 0.05);
-  --alpine-fill-track: #d1d5db;
+  --alpine-fill-track: rgba(0, 0, 0, 0.15);
+  --alpine-toggle-knob: #ffffff;
 
-  --alpine-focus-ring: #333332;
+  --alpine-focus-ring: var(--alpine-ink-primary);
   --alpine-danger: #dc2626;
   --alpine-success: #047857;
   --alpine-warning: #b45309;
@@ -81,28 +84,31 @@
 }
 
 :root[data-theme='dark'] {
-  --alpine-surface-0: #1a1a19;
-  --alpine-surface-1: #212120;
-  --alpine-surface-2: #292928;
-  --alpine-surface-3: #333332;
+  --alpine-ground: #202020;
 
-  --alpine-line-hairline: #3b3b39;
-  --alpine-line-strong: #4b4b49;
-  --alpine-line-soft: #292928;
+  --alpine-surface-0: var(--alpine-ground);
+  --alpine-surface-1: color-mix(in oklab, var(--alpine-ground), white 4%);
+  --alpine-surface-2: color-mix(in oklab, var(--alpine-ground), white 8%);
+  --alpine-surface-3: color-mix(in oklab, var(--alpine-ground), white 14%);
 
-  --alpine-ink-primary: #ebebe7;
-  --alpine-ink-secondary: #b8b8b2;
-  --alpine-ink-quiet: #9a9a95;
-  --alpine-ink-faint: #6f6f6b;
+  --alpine-line-hairline: rgba(255, 255, 255, 0.08);
+  --alpine-line-strong: rgba(255, 255, 255, 0.14);
+  --alpine-line-soft: rgba(255, 255, 255, 0.05);
 
-  --alpine-fill-solid: #ebebe7;
-  --alpine-fill-solid-hover: #f5f5f2;
-  --alpine-on-solid: #1a1a19;
-  --alpine-fill-subtle: #292928;
-  --alpine-fill-ghost: rgba(255, 255, 255, 0.07);
-  --alpine-fill-track: #4b4b49;
+  --alpine-ink-primary: color-mix(in oklab, var(--alpine-ground), white 92%);
+  --alpine-ink-secondary: color-mix(in oklab, var(--alpine-ground), white 72%);
+  --alpine-ink-quiet: color-mix(in oklab, var(--alpine-ground), white 56%);
+  --alpine-ink-faint: color-mix(in oklab, var(--alpine-ground), white 38%);
 
-  --alpine-focus-ring: #ebebe7;
+  --alpine-fill-solid: var(--alpine-ink-primary);
+  --alpine-fill-solid-hover: #ffffff;
+  --alpine-on-solid: var(--alpine-ground);
+  --alpine-fill-subtle: color-mix(in oklab, var(--alpine-ground), white 11%);
+  --alpine-fill-ghost: rgba(255, 255, 255, 0.06);
+  --alpine-fill-track: rgba(255, 255, 255, 0.18);
+  --alpine-toggle-knob: color-mix(in oklab, var(--alpine-ground), white 70%);
+
+  --alpine-focus-ring: var(--alpine-ink-primary);
   --alpine-danger: #f87171;
   --alpine-success: #34d399;
   --alpine-warning: #fbbf24;
@@ -135,6 +141,7 @@
   --color-fill-subtle: var(--alpine-fill-subtle);
   --color-fill-ghost: var(--alpine-fill-ghost);
   --color-fill-track: var(--alpine-fill-track);
+  --color-toggle-knob: var(--alpine-toggle-knob);
 
   --color-focus-ring: var(--alpine-focus-ring);
   --color-danger: var(--alpine-danger);
@@ -240,6 +247,28 @@
 
 .cc-slider-light::-moz-range-track {
   background: rgba(0, 0, 0, 0.08);
+}
+
+.ui-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--alpine-fill-solid) var(--slider-progress, 50%),
+    var(--alpine-fill-track) var(--slider-progress, 50%)
+  );
+  outline: none;
+  cursor: pointer;
+  transition: --slider-progress 0.15s ease-out;
+}
+
+.ui-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0;
+  height: 0;
 }
 
 @keyframes menu-slide-in  { from { transform: translateY(-26px); } to { transform: translateY(0); } }

@@ -2,8 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react'
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
-import { PageHeader, Spinner } from './appsShared'
 import Button from '../ui/button'
+import EmptyState from '../ui/emptyState'
+import IconButton from '../ui/iconButton'
+import ListRow from '../ui/listRow'
+import PageHeader from '../ui/pageHeader'
+import Spinner from '../ui/spinner'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
@@ -67,10 +71,10 @@ export default function UpdatesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5 w-full">
+    <div className="flex w-full flex-col gap-5">
       <PageHeader
         title="Updates"
-        description={headerDescription({
+        subtitle={headerDescription({
           checking,
           installing,
           restartRequired,
@@ -78,22 +82,19 @@ export default function UpdatesPage() {
           lastCheckedAt: windows.state.lastCheckedAt,
         })}
       >
-        <div className="flex items-center gap-1">
-          <button
-            onClick={refresh}
-            disabled={checking || installing || alpineBusy}
-            title="Check for updates"
-            aria-label="Check for updates"
-            className="focus-ring -m-1 p-1 inline-flex items-center justify-center text-ink-quiet hover:text-ink-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {checking ? <Spinner size={16} /> : <RefreshCw size={16} />}
-          </button>
-        </div>
+        <IconButton
+          label="Check for updates"
+          onClick={refresh}
+          busy={checking}
+          disabled={installing || alpineBusy}
+        >
+          <RefreshCw size={16} />
+        </IconButton>
       </PageHeader>
 
       {errorMessage && (
         <div className="flex items-start gap-2.5 rounded-card border border-danger/30 bg-danger/10 px-4 py-3">
-          <AlertTriangle size={16} className="text-danger shrink-0 mt-0.5" />
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-danger" />
           <span className="text-dense text-danger">{errorMessage}</span>
         </div>
       )}
@@ -101,25 +102,24 @@ export default function UpdatesPage() {
       {(restartRequired || hasRows) && (
         <div className="flex flex-col gap-1">
           {restartRequired && (
-            <Row
+            <ListRow
               icon={<AlertTriangle size={20} className="text-warning" />}
               title="Restart required"
               detail="Restart your device to finish installing Windows updates."
-              action={
-                <PrimaryButton onClick={restart}>
-                  <RotateCcw size={14} />
+              actions={
+                <Button size="sm" onClick={restart} icon={<RotateCcw size={14} />}>
                   Restart now
-                </PrimaryButton>
+                </Button>
               }
             />
           )}
 
           {!restartRequired && alpineActionable && (
-            <Row
+            <ListRow
               icon={<AppWindow size={20} className="text-ink-secondary" />}
               title="Alpine Shell"
               detail={alpineDetail(alpine.state)}
-              action={
+              actions={
                 <AlpineAction
                   state={alpine.state}
                   download={alpine.download}
@@ -134,7 +134,7 @@ export default function UpdatesPage() {
             windowsRows.map((update, i) => {
               const installingThis = installing && windows.state.installingId === update.updateId
               return (
-                <Row
+                <ListRow
                   key={`${update.updateId || update.kb || update.title}-${i}`}
                   icon={<Download size={18} className="text-ink-faint" />}
                   title={update.title}
@@ -150,7 +150,7 @@ export default function UpdatesPage() {
                   ]
                     .filter(Boolean)
                     .join(' · ')}
-                  action={
+                  actions={
                     update.tier === 'feature' ? undefined : installingThis ? (
                       <ProgressBar percent={windows.state.progressPercent} />
                     ) : update.updateId ? (
@@ -164,22 +164,17 @@ export default function UpdatesPage() {
       )}
 
       {showEmptyState && (
-        <div className="flex flex-col items-center justify-center gap-2.5 py-14 text-center">
-          {checking ? (
-            <Spinner size={22} />
-          ) : (
-            <CheckCircle2 size={26} className="text-success" />
-          )}
-          <span className="text-dense text-ink-secondary">
-            {checking ? 'Checking for updates…' : "You're up to date"}
-          </span>
-          {!checking && (
-            <span className="text-[11px] text-ink-quiet">
-              Alpine Shell {alpine.state.currentVersion}
-              {windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''}
-            </span>
-          )}
-        </div>
+        <EmptyState
+          icon={checking ? <Spinner size={22} /> : <CheckCircle2 size={26} className="text-success" />}
+          title={checking ? 'Checking for updates…' : "You're up to date"}
+          detail={
+            checking
+              ? undefined
+              : `Alpine Shell ${alpine.state.currentVersion}${
+                  windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''
+                }`
+          }
+        />
       )}
     </div>
   )
@@ -212,29 +207,6 @@ function alpineDetail(state: UpdateState): string {
   return `Version ${state.availableVersion ?? ''} available`
 }
 
-function Row({
-  icon,
-  title,
-  detail,
-  action,
-}: {
-  icon: React.ReactNode
-  title: string
-  detail: string
-  action?: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-card bg-surface-2 border border-line-hairline px-3 min-h-14 py-2">
-      <span className="w-7 flex justify-center shrink-0">{icon}</span>
-      <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-dense text-ink-primary truncate">{title}</span>
-        {detail && <span className="text-[11px] text-ink-quiet truncate">{detail}</span>}
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
-  )
-}
-
 function AlpineAction({
   state,
   download,
@@ -257,18 +229,28 @@ function AlpineAction({
 
   if (state.status === 'downloaded') {
     return (
-      <PrimaryButton onClick={() => { setPending(true); install() }} disabled={disabled || pending}>
-        {pending ? <Spinner size={14} /> : <RotateCcw size={14} />}
+      <Button
+        size="sm"
+        onClick={() => { setPending(true); install() }}
+        disabled={disabled}
+        busy={pending}
+        icon={<RotateCcw size={14} />}
+      >
         Restart &amp; install
-      </PrimaryButton>
+      </Button>
     )
   }
 
   return (
-    <PrimaryButton onClick={() => { setPending(true); download() }} disabled={disabled || pending}>
-      {pending ? <Spinner size={14} /> : <Download size={14} />}
+    <Button
+      size="sm"
+      onClick={() => { setPending(true); download() }}
+      disabled={disabled}
+      busy={pending}
+      icon={<Download size={14} />}
+    >
       Download
-    </PrimaryButton>
+    </Button>
   )
 }
 
@@ -278,25 +260,15 @@ function WindowsInstallButton({ onClick, disabled }: { onClick: () => void; disa
     if (disabled) setPending(false)
   }, [disabled])
   return (
-    <SecondaryButton onClick={() => { setPending(true); onClick() }} disabled={disabled || pending}>
-      {pending ? <Spinner size={13} /> : <Download size={13} />}
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => { setPending(true); onClick() }}
+      disabled={disabled}
+      busy={pending}
+      icon={<Download size={13} />}
+    >
       Install
-    </SecondaryButton>
-  )
-}
-
-function SecondaryButton({
-  onClick,
-  disabled,
-  children,
-}: {
-  onClick: () => void
-  disabled?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <Button variant="outline" size="sm" onClick={onClick} disabled={disabled} className="font-medium">
-      {children}
     </Button>
   )
 }
@@ -304,27 +276,11 @@ function SecondaryButton({
 function ProgressBar({ percent }: { percent: number }) {
   const clamped = Math.min(100, Math.max(0, percent))
   return (
-    <div className="flex items-center gap-2.5 w-40">
-      <div className="relative flex-1 h-1.5 rounded-full bg-fill-track overflow-hidden">
-        <div className="absolute left-0 top-0 bottom-0 bg-fill-solid transition-all" style={{ width: `${clamped}%` }} />
+    <div className="flex w-40 items-center gap-2.5">
+      <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-fill-track">
+        <div className="absolute top-0 bottom-0 left-0 bg-fill-solid transition-all" style={{ width: `${clamped}%` }} />
       </div>
-      <span className="text-xs text-ink-quiet shrink-0 tabular-nums">{Math.round(clamped)}%</span>
+      <span className="shrink-0 text-xs text-ink-quiet tabular-nums">{Math.round(clamped)}%</span>
     </div>
-  )
-}
-
-function PrimaryButton({
-  onClick,
-  disabled,
-  children,
-}: {
-  onClick: () => void
-  disabled?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <Button size="sm" onClick={onClick} disabled={disabled} className="font-medium">
-      {children}
-    </Button>
   )
 }

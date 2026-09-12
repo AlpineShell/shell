@@ -7,7 +7,8 @@ import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
 import { useMonitors } from "../../hooks/useMonitors"
 import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
-import { SETTING_COMMANDS, type SettingCommand } from "./launcherSettings"
+import { SETTINGS_REGISTRY, isSettingsValueEntry, settingsEntryHint, settingsPageRoute } from "../../settings/registry"
+import { useSettingsValues, writeSettingsValue } from "../../hooks/useSettingsValue"
 import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type SearchFields } from "../../lib/launcherSearch"
 import { useApps } from "../../hooks/useApps"
 import { useFrecencyScores } from "../../hooks/useFrecencyScores"
@@ -36,6 +37,10 @@ const EMOJI_GRID_PADDING = 8
 const EMOJI_GRID_MAX_HEIGHT = 264
 const EMOJI_OVERSCAN_ROWS = 2
 const EMOJI_BY_CHAR = new Map(EMOJIS.map((e) => [e.c, e]))
+const LAUNCHER_VALUE_ENTRIES = SETTINGS_REGISTRY.filter(
+  (entry): entry is SettingsValueEntry =>
+    isSettingsValueEntry(entry) && (entry.control.kind === "toggle" || entry.control.kind === "slider")
+)
 const WALLPAPER_TILE_WIDTH = 200
 const WALLPAPER_TILE_GAP = 12
 const WALLPAPER_PANEL_PADDING_X = 16
@@ -226,7 +231,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const [contextSelected, setContextSelected] = useState(0)
   const [notice, setNotice] = useState<{ text: string; busy: boolean } | null>(null)
   const [activeCommand, setActiveCommand] = useState<string | null>(null)
-  const [settingValues, setSettingValues] = useState<Record<string, boolean | number>>({})
+  const settingValues = useSettingsValues(LAUNCHER_VALUE_ENTRIES)
   const [subView, setSubView] = useState<{ title: string; back: () => void } | null>(null)
   const [wallpapers, setWallpapers] = useState<WallpaperItem[]>([])
   const [previewIndex, setPreviewIndex] = useState(0)
@@ -331,7 +336,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     ? Math.max(LAUNCHER_WIDTH_DEFAULT, wallpaperPanelWidth(wallpapers.length))
     : LAUNCHER_WIDTH_DEFAULT
   const inSubmenu = !!activeCommand && activeCommand !== "wallpaper" && activeCommand !== "emoji"
-  const activeLabel = activeCommand ? (SETTING_COMMANDS.find((c) => c.id === activeCommand)?.label ?? "") : ""
+  const activeLabel = activeCommand ? (SETTINGS_REGISTRY.find((c) => c.id === activeCommand)?.label ?? "") : ""
 
   function enterCommand(id: string) {
     queryBeforeCommand.current = query
@@ -389,24 +394,16 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     window.launcher.hide()
   }
 
-  const loadSettingValues = useCallback(() => {
-    for (const cmd of SETTING_COMMANDS) {
-      const c = cmd.control
-      if (c.kind === "toggle" || c.kind === "slider") {
-        c.get().then((v) => setSettingValues((prev) => ({ ...prev, [cmd.id]: v }))).catch(() => {})
-      }
+  function toggleSetting(cmd: SettingsEntry) {
+    if (!isSettingsValueEntry(cmd) || cmd.control.kind !== "toggle") return
+    if (cmd.applies !== "instant") {
+      openSettingPage(cmd)
+      return
     }
-  }, [])
-
-  function toggleSetting(cmd: SettingCommand) {
-    if (cmd.control.kind !== "toggle") return
-    const current = settingValues[cmd.id] === true
-    const next = !current
-    setSettingValues((prev) => ({ ...prev, [cmd.id]: next }))
-    Promise.resolve(cmd.control.set(next)).catch(() => setSettingValues((prev) => ({ ...prev, [cmd.id]: current })))
+    writeSettingsValue(cmd, settingValues[cmd.id] !== true)
   }
 
-  function adjustSetting(cmd: SettingCommand, direction: number) {
+  function adjustSetting(cmd: SettingsEntry, direction: number) {
     if (cmd.control.kind === "brightness") {
       const m = monitors[0]
       const current = m ? m.brightness : 50
@@ -416,22 +413,27 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       else window.shell.system.setBrightness(next)
       return
     }
-    if (cmd.control.kind !== "slider") return
+    if (!isSettingsValueEntry(cmd) || cmd.control.kind !== "slider") return
     const c = cmd.control
     const current = typeof settingValues[cmd.id] === "number" ? (settingValues[cmd.id] as number) : c.min
     const next = Math.max(c.min, Math.min(c.max, current + direction * c.step))
     if (next === current) return
-    setSettingValues((prev) => ({ ...prev, [cmd.id]: next }))
-    Promise.resolve(c.set(next)).catch(() => {})
+    writeSettingsValue(cmd, next)
   }
 
-  function setSliderValue(cmd: SettingCommand, value: number) {
-    if (cmd.control.kind !== "slider") return
-    setSettingValues((prev) => ({ ...prev, [cmd.id]: value }))
-    Promise.resolve(cmd.control.set(value)).catch(() => {})
+  function setSliderValue(cmd: SettingsEntry, value: number) {
+    if (!isSettingsValueEntry(cmd) || cmd.control.kind !== "slider") return
+    writeSettingsValue(cmd, value)
   }
 
-  function activateSetting(cmd: SettingCommand) {
+  function openSettingPage(cmd: SettingsEntry) {
+    const route = settingsPageRoute(cmd.page)
+    if (!route) return
+    window.shell.windows.openSettings(route)
+    window.launcher.hide()
+  }
+
+  function activateSetting(cmd: SettingsEntry) {
     const c = cmd.control
     if (c.kind === "brightness") { if (brightnessIsSubmenu) enterCommand(cmd.id) }
     else if (c.kind === "emoji") { emojiInsertRef.current = false; enterCommand(cmd.id) }
@@ -441,6 +443,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       window.shell.windows.openSettings(c.path)
       window.launcher.hide()
     }
+    else if (c.kind !== "slider") openSettingPage(cmd)
   }
 
   useEffect(() => {
@@ -453,12 +456,11 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       const list: WallpaperItem[] = [...mine, ...presets].map(({ name, path, thumbnail, url }) => ({ name, path, thumbnail, url }))
       setWallpapers(list)
     })
-    loadSettingValues()
     requestAnimationFrame(() => inputRef.current?.focus())
     return () => {
       offOpenApps()
     }
-  }, [loadSettingValues])
+  }, [])
 
   function registerSurface() {
     const body = bodyRef.current
@@ -555,8 +557,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const matchedSettings = useMemo(() => {
     const q = query.trim()
     if (!q) return []
-    const out: { setting: SettingCommand; s: number }[] = []
-    for (const setting of SETTING_COMMANDS) {
+    const out: { setting: SettingsEntry; s: number }[] = []
+    for (const setting of SETTINGS_REGISTRY) {
       let best = scoreField(q, setting.label)
       for (const k of setting.keywords) best = Math.max(best, scoreField(q, k))
       if (best >= 0) out.push({ setting, s: best })
@@ -1162,7 +1164,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                             <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
                             <div className="flex flex-col min-w-0 flex-1">
                               <span className={`text-[13px] truncate ${textColor}`}>{s.label}</span>
-                              <span className={`text-[11px] truncate ${dimText}`}>{s.hint}</span>
+                              <span className={`text-[11px] truncate ${dimText}`}>{settingsEntryHint(s)}</span>
                             </div>
                             {control.kind === "toggle" ? (
                               <span

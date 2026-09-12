@@ -9,17 +9,15 @@ const {
   needsSystemRangeHook,
   needsObjectShowHook,
 } = require('./winEventDispatch')
+const { isExposedOwnWindow } = require('./exposedOwnWindows')
 
 const WINEVENT_OUTOFCONTEXT = 0x0000
 const WINEVENT_SKIPOWNPROCESS = 0x0002
-const HOOK_FLAGS = WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
 
 const subscribers = []
 
 let native = null
-let procPointer = null
-let systemRangeHook = null
-let objectShowHook = null
+let exposedOwnWindowsProvider = null
 
 function toExactHandle(value) {
   if (typeof value !== 'bigint') return value
@@ -41,40 +39,40 @@ function loadNative() {
   return native
 }
 
-function onWinEvent(_hook, event, hwndRaw, idObject, idChild) {
-  dispatchWinEvent(subscribers, event, toExactHandle(hwndRaw), idObject, idChild)
-}
+function createHookSet(listener, processId, flags) {
+  let procPointer = null
+  let systemRangeHook = null
+  let objectShowHook = null
 
-function ensureProcPointer() {
-  if (procPointer) return
-  const { koffi, procType } = loadNative()
-  procPointer = koffi.register(onWinEvent, procType)
-}
-
-function installHook(firstEvent, lastEvent) {
-  const handle = loadNative().setWinEventHook(firstEvent, lastEvent, 0, procPointer, 0, 0, HOOK_FLAGS)
-  if (!handle) {
-    console.error(`[winEvents] Failed to install hook for events ${firstEvent}-${lastEvent}`)
-    return null
+  function ensureProcPointer() {
+    if (procPointer) return
+    const { koffi, procType } = loadNative()
+    procPointer = koffi.register((_hook, event, hwndRaw, idObject, idChild) => {
+      listener(event, toExactHandle(hwndRaw), idObject, idChild)
+    }, procType)
   }
-  return handle
-}
 
-function removeHook(handle) {
-  if (!handle) return
-  try { loadNative().unhookWinEvent(handle) } catch (_) {}
-}
+  function installHook(firstEvent, lastEvent) {
+    const handle = loadNative().setWinEventHook(firstEvent, lastEvent, 0, procPointer, processId, 0, flags)
+    if (!handle) {
+      console.error(`[winEvents] Failed to install hook for events ${firstEvent}-${lastEvent}`)
+      return null
+    }
+    return handle
+  }
 
-function releaseProcPointer() {
-  if (!procPointer) return
-  try { loadNative().koffi.unregister(procPointer) } catch (_) {}
-  procPointer = null
-}
+  function removeHook(handle) {
+    if (!handle) return
+    try { loadNative().unhookWinEvent(handle) } catch (_) {}
+  }
 
-function syncNativeHooks() {
-  const wantsSystemRange = needsSystemRangeHook(subscribers)
-  const wantsObjectShow = needsObjectShowHook(subscribers)
-  try {
+  function releaseProcPointer() {
+    if (!procPointer) return
+    try { loadNative().koffi.unregister(procPointer) } catch (_) {}
+    procPointer = null
+  }
+
+  return function sync(wantsSystemRange, wantsObjectShow) {
     if (wantsSystemRange || wantsObjectShow) ensureProcPointer()
 
     if (wantsSystemRange && !systemRangeHook) {
@@ -92,6 +90,27 @@ function syncNativeHooks() {
     }
 
     if (!systemRangeHook && !objectShowHook) releaseProcPointer()
+  }
+}
+
+function deliver(event, hwnd, idObject, idChild) {
+  dispatchWinEvent(subscribers, event, hwnd, idObject, idChild)
+}
+
+function deliverExposedOwnWindow(event, hwnd, idObject, idChild) {
+  if (!isExposedOwnWindow(hwnd, exposedOwnWindowsProvider)) return
+  deliver(event, hwnd, idObject, idChild)
+}
+
+const syncForeignHooks = createHookSet(deliver, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)
+const syncOwnHooks = createHookSet(deliverExposedOwnWindow, process.pid, WINEVENT_OUTOFCONTEXT)
+
+function syncNativeHooks() {
+  const wantsSystemRange = needsSystemRangeHook(subscribers)
+  const wantsObjectShow = needsObjectShowHook(subscribers)
+  try {
+    syncForeignHooks(wantsSystemRange, wantsObjectShow)
+    syncOwnHooks(wantsSystemRange, wantsObjectShow)
   } catch (e) {
     console.error('[winEvents] hook sync error:', e.message)
   }
@@ -106,7 +125,12 @@ function subscribe(name, eventIds, listener) {
   }
 }
 
+function setExposedOwnWindows(provider) {
+  exposedOwnWindowsProvider = typeof provider === 'function' ? provider : null
+}
+
 module.exports = {
   SYSTEM_WINDOW_EVENTS,
   subscribe,
+  setExposedOwnWindows,
 }

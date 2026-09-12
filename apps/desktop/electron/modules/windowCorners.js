@@ -177,7 +177,17 @@ function stop() {
   restoreAllWindows()
 }
 
+function roundOwnWindow(browserWindow) {
+  if (!cornerApiAvailable || !browserWindow || browserWindow.isDestroyed()) return
+  try {
+    writeCornerPreference(browserWindow.getNativeWindowHandle().readUInt32LE(0), CORNER_TARGET)
+  } catch (e) {
+    console.error('[windowCorners] rounding an own window failed:', e.message)
+  }
+}
+
 module.exports = {
+  roundOwnWindow,
   start() {
     if (!cornerApiAvailable) return
     const { app } = require('electron')

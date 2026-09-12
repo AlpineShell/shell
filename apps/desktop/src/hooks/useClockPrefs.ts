@@ -15,10 +15,5 @@ export function useClockPrefs() {
     return window.shell?.clock?.onPrefsChanged?.(setPrefsState)
   }, [])
 
-  const setPrefs = (partial: Partial<ClockPrefs>) => {
-    setPrefsState((p) => ({ ...p, ...partial }))
-    window.shell?.clock?.setPrefs?.(partial)
-  }
-
-  return { prefs, setPrefs }
+  return { prefs }
 }

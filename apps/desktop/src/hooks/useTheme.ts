@@ -9,8 +9,10 @@ export function useTheme(): ThemeState {
   )
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme.name
-  }, [theme.name])
+    const root = document.documentElement
+    root.dataset.theme = theme.name
+    root.style.setProperty('--alpine-ground', theme.background)
+  }, [theme.name, theme.background])
 
   return theme
 }

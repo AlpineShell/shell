@@ -8,10 +8,5 @@ export function useTraySettings() {
     window.shell?.tray?.onSettingsChanged?.(setSettingsState)
   }, [])
 
-  const setSettings = (partial: Partial<TraySettings>) => {
-    setSettingsState((s) => ({ ...s, ...partial }))
-    window.shell?.tray?.setSettings?.(partial)
-  }
-
-  return { settings, setSettings }
+  return { settings }
 }

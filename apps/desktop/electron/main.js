@@ -35,6 +35,8 @@ const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const windowCorners = require('./modules/windowCorners')
+const windowSystemMenu = require('./modules/windowSystemMenu')
+const winEvents = require('./modules/winEvents')
 const plugins = require('./modules/plugins')
 const pluginBackendHost = require('./pluginBackendHost')
 const pluginWindows = require('./pluginWindows')
@@ -48,6 +50,7 @@ const displayConfig = require('./modules/displayConfig')
 const clockPrefs = require('./modules/clockPrefs')
 const topbarLayout = require('./modules/topbarLayout')
 const theme = require('./modules/theme')
+const keyboardLayout = require('./modules/keyboardLayout')
 const bookmarks = require('./modules/bookmarks')
 const browserTabs = require('./modules/browserTabs')
 let googleCalendar = null
@@ -544,6 +547,27 @@ function createSetupWindow() {
 let settingsWin = null
 let currentSettingsPage = null
 let pendingSettingsPage = null
+
+function exposedOwnWindowHandles() {
+  const handles = pluginWindows.nativeHandles()
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    try { handles.push(settingsWin.getNativeWindowHandle().readUInt32LE(0)) } catch {}
+  }
+  return handles
+}
+
+const SETTINGS_TITLE_BAR_HEIGHT = 48
+
+function settingsTitleBarOverlay() {
+  return { ...theme.getTitleBarOverlayColors(), height: SETTINGS_TITLE_BAR_HEIGHT }
+}
+
+function repaintSettingsChrome() {
+  if (!settingsWin || settingsWin.isDestroyed()) return
+  settingsWin.setBackgroundColor(theme.getWindowBackground())
+  settingsWin.setTitleBarOverlay(settingsTitleBarOverlay())
+}
+
 function createSettingsWindow() {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.focus()
@@ -555,7 +579,8 @@ function createSettingsWindow() {
     height: 820,
     minWidth: 800,
     minHeight: 560,
-    frame: false,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: settingsTitleBarOverlay(),
     resizable: true,
     center: true,
     transparent: false,
@@ -569,6 +594,8 @@ function createSettingsWindow() {
     },
   })
   settingsWin.on('page-title-updated', (e) => e.preventDefault())
+  windowSystemMenu.enableSystemMenu(settingsWin)
+  windowCorners.roundOwnWindow(settingsWin)
   loadAppURL(settingsWin, getURL('settings'))
   settingsWin.once('ready-to-show', () => {
     if (settingsWin && !settingsWin.isDestroyed()) settingsWin.show()
@@ -763,7 +790,10 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, theme, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
+
+  theme.followTopbarColor(topbarColor)
+  theme.onThemeChange(repaintSettingsChrome)
 
   setup.setShellShutdown(gracefulShutdown)
 
@@ -881,17 +911,11 @@ function startShellMode() {
   if (shellWindow && takeover.actingAsShell) shellWindow.register()
 
   if (altTab) altTab.setShells(shells)
-  if (altTab && altTab.setExposedOwnWindows) {
-    altTab.setExposedOwnWindows(() => {
-      const handles = pluginWindows.nativeHandles()
-      if (settingsWin && !settingsWin.isDestroyed()) {
-        try { handles.push(settingsWin.getNativeWindowHandle().readUInt32LE(0)) } catch {}
-      }
-      return handles
-    })
-  }
+  if (altTab && altTab.setExposedOwnWindows) altTab.setExposedOwnWindows(exposedOwnWindowHandles)
 
   tiling.setShells(shells)
+  tiling.setExposedOwnWindows(exposedOwnWindowHandles)
+  winEvents.setExposedOwnWindows(exposedOwnWindowHandles)
   if (altTab && altTab.onTilingKey) {
     altTab.onTilingKey((direction, shift) => tiling.handleHotkey(direction, shift))
   }

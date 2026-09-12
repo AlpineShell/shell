@@ -1,4 +1,3 @@
-const { app, globalShortcut } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -12,7 +11,10 @@ let altTabModule = null
 let broadcast = null
 
 function getStorePath() {
-  if (!storePath) storePath = path.join(app.getPath('userData'), STORE_FILE)
+  if (!storePath) {
+    const { app } = require('electron')
+    storePath = path.join(app.getPath('userData'), STORE_FILE)
+  }
   return storePath
 }
 
@@ -38,41 +40,57 @@ function save() {
   }
 }
 
+function setWinLauncher(enabled) {
+  if (altTabModule && altTabModule.setWinLauncherEnabled) altTabModule.setWinLauncherEnabled(enabled)
+}
+
 function clearAll() {
+  const { globalShortcut } = require('electron')
   globalShortcut.unregisterAll()
-  if (altTabModule && altTabModule.setWinLauncherEnabled) {
-    altTabModule.setWinLauncherEnabled(false)
+  setWinLauncher(false)
+}
+
+function bind(hotkey) {
+  const { globalShortcut } = require('electron')
+  if (hotkey === DEFAULT_HOTKEY) {
+    setWinLauncher(true)
+    return true
+  }
+  try {
+    return globalShortcut.register(hotkey, () => {
+      if (triggerCallback) triggerCallback()
+    })
+  } catch (e) {
+    console.error('[launcherHotkey] register error:', e.message)
+    return false
   }
 }
 
-function applyHotkey() {
+function applyHotkey(hotkey) {
   clearAll()
-  if (!currentHotkey) return
+  return bind(hotkey)
+}
 
-  if (currentHotkey === 'Win') {
-    if (altTabModule && altTabModule.setWinLauncherEnabled) {
-      altTabModule.setWinLauncherEnabled(true)
-    }
-    return
-  }
-
-  try {
-    const ok = globalShortcut.register(currentHotkey, () => {
-      if (triggerCallback) triggerCallback()
-    })
-    if (!ok) {
-      console.error('[launcherHotkey] register returned false for:', currentHotkey)
-    }
-  } catch (e) {
-    console.error('[launcherHotkey] register error:', e.message)
-  }
+function rebind(current, requested, apply) {
+  const wanted = requested || DEFAULT_HOTKEY
+  if (wanted === current) return { ok: true, hotkey: current }
+  if (apply(wanted)) return { ok: true, hotkey: wanted }
+  apply(current)
+  return { ok: false, hotkey: current }
 }
 
 function setHotkey(hotkey) {
-  currentHotkey = hotkey || DEFAULT_HOTKEY
-  save()
-  applyHotkey()
-  if (broadcast) broadcast('launcher/hotkey-changed', currentHotkey)
+  const result = rebind(currentHotkey, hotkey, applyHotkey)
+  if (!result.ok) {
+    console.error('[launcherHotkey] refused, kept:', result.hotkey)
+    return result
+  }
+  if (result.hotkey !== currentHotkey) {
+    currentHotkey = result.hotkey
+    save()
+    if (broadcast) broadcast('launcher/hotkey-changed', currentHotkey)
+  }
+  return result
 }
 
 function setTriggerCallback(cb) {
@@ -96,18 +114,17 @@ function setAltTabModule(mod) {
 module.exports = {
   handlers: {
     'launcher/hotkey-get': () => currentHotkey,
-    'launcher/hotkey-set': (_event, hotkey) => {
-      setHotkey(hotkey)
-      return currentHotkey
-    },
+    'launcher/hotkey-set': (_event, hotkey) => setHotkey(hotkey),
     'launcher/hotkey-default': () => DEFAULT_HOTKEY,
   },
+  rebind,
   setTriggerCallback,
   setAltTabModule,
   start(b) {
+    const { app, globalShortcut } = require('electron')
     broadcast = b
     load()
-    app.whenReady().then(() => applyHotkey())
+    app.whenReady().then(() => applyHotkey(currentHotkey))
     app.on('will-quit', () => globalShortcut.unregisterAll())
   },
 }

@@ -1,48 +1,40 @@
-import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, AppWindow, House, Monitor, MonitorCog, Paintbrush, Plug, Puzzle, RefreshCw, X } from 'lucide-react'
-import AboutPage from './aboutPage'
-import PersonalizationHub from './personalizationHub'
-import WallpaperPage from './wallpaperPage'
-import TopBarPage from './topBarPage'
-import CalendarPage from './calendarPage'
-import TrayPage from './trayPage'
-import TrayIconsPage from './trayIconsPage'
-import HotkeysPage from './hotkeysPage'
-import TilingPage from './tilingPage'
-import DevicesHub from './devicesHub'
-import BluetoothSettingsPage from './bluetoothSettingsPage'
-import WifiSettingsPage from './wifiSettingsPage'
-import SystemPage from './systemPage'
-import BatteryPage from './batteryPage'
-import SystemRevertPage from './systemRevertPage'
-import AppsHub from './appsHub'
-import AppsRunningPage from './appsRunningPage'
-import AppsInstalledPage from './appsInstalledPage'
-import AppsStartupPage from './appsStartupPage'
-import UpdatesPage from './updatesPage'
-import PluginsPage from './pluginsPage'
-import DisplaysPage from './displaysPage'
+import { Component, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { SETTINGS_PAGES, SETTINGS_SECTIONS, settingsPageByRoute } from '../../settings/registry'
+import { SETTINGS_SEARCH_LIMIT, searchSettings } from '../../settings/settingsSearch'
+import { SETTINGS_ROUTES } from './settingsRoutes'
+import SettingsSearchResults from './settingsSearchResults'
+import SearchField from '../ui/searchField'
+import { highlightSetting } from '../../hooks/useHighlightedSetting'
+import { toggleSettingsValue } from '../../hooks/useSettingsValue'
 import { useTheme } from '../../hooks/useTheme'
-
-interface NavItem {
-  path: string
-  label: string
-  icon: typeof House
-}
-
-const NAV: NavItem[] = [
-  { path: 'home', label: 'Home', icon: House },
-  { path: 'personalization', label: 'Personalization', icon: Paintbrush },
-  { path: 'displays', label: 'Displays', icon: Monitor },
-  { path: 'devices', label: 'Devices & Connections', icon: Plug },
-  { path: 'apps', label: 'Apps', icon: AppWindow },
-  { path: 'system', label: 'System', icon: MonitorCog },
-  { path: 'plugins', label: 'Plugins', icon: Puzzle },
-  { path: 'updates', label: 'Updates', icon: RefreshCw },
-]
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
+const nativeTitleBarHeight = { height: 'env(titlebar-area-height, 3rem)' }
+
+interface NavSection {
+  id: SettingsSectionId
+  label: string
+  pages: SettingsPage[]
+}
+
+function navSections(): NavSection[] {
+  return [...SETTINGS_SECTIONS]
+    .sort((a, b) => a.order - b.order)
+    .map((section) => ({
+      id: section.id,
+      label: section.label,
+      pages: SETTINGS_PAGES.filter(
+        (page) => page.section === section.id && page.route !== null && !page.route.includes('/')
+      ).sort((a, b) => a.order - b.order),
+    }))
+    .filter((section) => section.pages.length > 0)
+}
+
+function routeLabel(route: string): string {
+  return settingsPageByRoute(route)?.label ?? route
+}
 
 export default function SettingsApp() {
   useTheme()
@@ -52,14 +44,33 @@ export default function SettingsApp() {
     return page && page !== 'home' ? ['home', page] : ['home']
   })
   const [historyIndex, setHistoryIndex] = useState(() => history.length - 1)
+  const [query, setQuery] = useState('')
+  const [activeIndex, setActiveIndex] = useState(0)
 
   const currentPath = history[historyIndex]
-  const segments = currentPath.split('/')
-  const topSegment = segments[0]
+  const topSegment = currentPath.split('/')[0]
   const canBack = historyIndex > 0
   const canForward = historyIndex < history.length - 1
+  const sections = navSections()
+
+  const ranked = useMemo(() => searchSettings(query), [query])
+  const matches = useMemo(() => ranked.slice(0, SETTINGS_SEARCH_LIMIT), [ranked])
+  const searching = query.trim().length > 0
+  const selected = matches.length === 0 ? -1 : Math.min(activeIndex, matches.length - 1)
+
+  const searchRef = useRef<HTMLInputElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const listId = useId()
+  const rowBase = useId()
+  const rowId = (index: number) => `${rowBase}-${index}`
+
+  function clearSearch() {
+    setQuery('')
+    setActiveIndex(0)
+  }
 
   function navigate(path: string) {
+    clearSearch()
     if (path === currentPath) return
     const next = history.slice(0, historyIndex + 1)
     next.push(path)
@@ -68,64 +79,133 @@ export default function SettingsApp() {
   }
 
   function back() {
+    clearSearch()
     if (canBack) setHistoryIndex(historyIndex - 1)
   }
 
   function forward() {
+    clearSearch()
     if (canForward) setHistoryIndex(historyIndex + 1)
   }
 
+  function activateMatch(target: SettingsSearchTarget) {
+    const action = target.action
+    if (action.kind === 'toggle') {
+      toggleSettingsValue(action.entry)
+      return
+    }
+    if (action.kind === 'launcher') {
+      clearSearch()
+      window.launcher.show()
+      return
+    }
+    if (action.highlight) highlightSetting(action.highlight)
+    navigate(action.route)
+  }
+
+  function onSearchKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) return
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      clearSearch()
+      searchRef.current?.blur()
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (matches.length === 0) return
+      const step = event.key === 'ArrowDown' ? 1 : -1
+      setActiveIndex((selected + step + matches.length) % matches.length)
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      const match = matches[selected]
+      if (match) activateMatch(match.target)
+    }
+  }
+
   const navigateRef = useRef(navigate)
-  navigateRef.current = navigate
+
+  useEffect(() => {
+    navigateRef.current = navigate
+  })
 
   useEffect(() => {
     return window.shell.windows.onSettingsNavigate((page) => navigateRef.current(page))
   }, [])
 
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        window.launcher.show()
-      }
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+      if (e.key.toLowerCase() !== 'k') return
+      e.preventDefault()
+      searchRef.current?.focus()
+      searchRef.current?.select()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   useEffect(() => {
-    const leaf = segments[segments.length - 1]
-    window.shell.windows.setSettingsPage(SEGMENT_LABELS[leaf] ?? leaf)
+    window.shell.windows.setSettingsPage(routeLabel(currentPath))
   }, [currentPath])
+
+  useEffect(() => {
+    scrollRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+  }, [selected, matches])
 
   return (
     <div className="settings-scope flex h-screen w-screen overflow-hidden bg-surface-1 text-ink-primary">
       <aside className="flex w-56 shrink-0 flex-col bg-surface-0" style={dragRegion}>
-        <div className="h-14 flex items-center px-5 shrink-0">
+        <div className="flex items-center px-5 shrink-0" style={nativeTitleBarHeight}>
           <span className="font-display text-base font-normal tracking-tight text-ink-primary">Settings</span>
         </div>
-        <nav className="flex-1 px-2 flex flex-col gap-0.5 overflow-auto" style={noDragRegion}>
-          {NAV.map((p) => {
-            const Icon = p.icon
-            const active = p.path === topSegment
-            return (
-              <button
-                key={p.path}
-                onClick={() => navigate(p.path)}
-                className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
-                  active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
-                }`}
-              >
-                <Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />
-                {p.label}
-              </button>
-            )
-          })}
+        <div className="px-2 pb-1 shrink-0" style={noDragRegion}>
+          <SearchField
+            ref={searchRef}
+            value={query}
+            onChange={(next) => {
+              setQuery(next)
+              setActiveIndex(0)
+            }}
+            onKeyDown={onSearchKey}
+            label="Search settings"
+            placeholder="Search settings"
+            hint="Ctrl K"
+            controls={searching ? listId : undefined}
+            activeDescendant={selected >= 0 ? rowId(selected) : undefined}
+          />
+        </div>
+        <nav className="flex-1 px-2 pb-3 flex flex-col gap-0.5 overflow-auto" style={noDragRegion}>
+          {sections.map((section) => (
+            <div key={section.id} className="flex flex-col gap-0.5">
+              {section.pages.length > 1 && (
+                <span className="px-3 pt-3 pb-1 text-eyebrow uppercase text-ink-faint select-none">{section.label}</span>
+              )}
+              {section.pages.map((page) => {
+                const Icon = page.icon
+                const active = page.route === topSegment && !searching
+                return (
+                  <button
+                    key={page.id}
+                    onClick={() => navigate(page.route as string)}
+                    className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
+                      active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
+                    }`}
+                  >
+                    <Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />
+                    {page.label}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
         </nav>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col bg-surface-0">
-        <div className="flex h-14 shrink-0 items-center bg-surface-0" style={dragRegion}>
+        <div className="flex shrink-0 items-center bg-surface-0" style={{ ...dragRegion, ...nativeTitleBarHeight }}>
           <header className="w-full h-10 flex items-center gap-3 pl-3 pr-3">
             <div className="flex items-center gap-1" style={noDragRegion}>
               <button
@@ -153,24 +233,30 @@ export default function SettingsApp() {
             <div style={noDragRegion}>
               <Breadcrumb path={currentPath} onNavigate={navigate} />
             </div>
-
-            <div className="flex-1" />
-
-            <button
-              onClick={() => window.shell.windows.closeSettings()}
-              className="focus-ring flex h-7 w-7 cursor-pointer items-center justify-center rounded-field text-ink-quiet transition-colors hover:text-ink-primary"
-              style={noDragRegion}
-              aria-label="Close"
-            >
-              <X size={14} />
-            </button>
           </header>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto rounded-tl-card border-t border-l border-line-hairline bg-surface-1 px-gutter pt-gutter pb-6">
-          <PageErrorBoundary key={currentPath}>
-            <PageRouter path={currentPath} navigate={navigate} />
-          </PageErrorBoundary>
+        <div
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-auto rounded-tl-card border-t border-l border-line-hairline bg-surface-1 px-gutter pt-gutter pb-6"
+        >
+          <div className={searching ? 'hidden' : ''}>
+            <PageErrorBoundary key={currentPath}>
+              <PageRouter path={currentPath} navigate={navigate} />
+            </PageErrorBoundary>
+          </div>
+          {searching && (
+            <SettingsSearchResults
+              query={query}
+              matches={matches}
+              total={ranked.length}
+              selected={selected}
+              listId={listId}
+              rowId={rowId}
+              onPoint={setActiveIndex}
+              onActivate={activateMatch}
+            />
+          )}
         </div>
       </main>
     </div>
@@ -194,75 +280,31 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boo
 }
 
 function PageRouter({ path, navigate }: { path: string; navigate: (p: string) => void }) {
-  if (path === 'home') return <AboutPage onNavigate={navigate} />
-  if (path === 'personalization') return <PersonalizationHub onNavigate={navigate} />
-  if (path === 'personalization/wallpaper') return <WallpaperPage />
-  if (path === 'personalization/topbar') return <TopBarPage />
-  if (path === 'personalization/calendar') return <CalendarPage />
-  if (path === 'personalization/tray') return <TrayPage onNavigate={navigate} />
-  if (path === 'personalization/tray/icons') return <TrayIconsPage />
-  if (path === 'personalization/hotkeys') return <HotkeysPage />
-  if (path === 'personalization/tiling') return <TilingPage />
-  if (path === 'displays') return <DisplaysPage />
-  if (path === 'devices') return <DevicesHub onNavigate={navigate} />
-  if (path === 'devices/bluetooth') return <BluetoothSettingsPage />
-  if (path === 'devices/wifi') return <WifiSettingsPage />
-  if (path === 'apps') return <AppsHub onNavigate={navigate} />
-  if (path === 'apps/running') return <AppsRunningPage />
-  if (path === 'apps/installed') return <AppsInstalledPage />
-  if (path === 'apps/startup') return <AppsStartupPage />
-  if (path === 'system') return <SystemPage onNavigate={navigate} />
-  if (path === 'system/battery') return <BatteryPage />
-  if (path === 'system/revert') return <SystemRevertPage />
-  if (path === 'plugins') return <PluginsPage />
-  if (path === 'updates') return <UpdatesPage />
-  return null
+  return <>{SETTINGS_ROUTES[path]?.(navigate) ?? null}</>
 }
 
-const SEGMENT_LABELS: Record<string, string> = {
-  home: 'Home',
-  apps: 'Apps',
-  running: 'Running',
-  installed: 'Installed',
-  startup: 'Startup',
-  personalization: 'Personalization',
-  displays: 'Displays',
-  wallpaper: 'Wallpaper',
-  topbar: 'Top Bar',
-  calendar: 'Calendar',
-  tray: 'System Tray',
-  icons: 'Manage Icons',
-  hotkeys: 'Hotkeys',
-  tiling: 'Window Tiling',
-  devices: 'Devices & Connections',
-  bluetooth: 'Bluetooth',
-  wifi: 'Wi-Fi',
-  system: 'System',
-  battery: 'Battery',
-  revert: 'Revert back to Windows',
-  plugins: 'Plugins',
-  updates: 'Updates',
+function breadcrumbTrail(path: string): string[] {
+  const segments = path.split('/')
+  return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
 }
 
 function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string) => void }) {
-  const segments = path.split('/')
+  const trail = breadcrumbTrail(path)
   return (
     <div className="flex items-center gap-1 select-none">
-      {segments.map((seg, i) => {
-        const isLast = i === segments.length - 1
-        const subpath = segments.slice(0, i + 1).join('/')
-        const label = SEGMENT_LABELS[seg] ?? seg
+      {trail.map((subpath, index) => {
+        const isLast = index === trail.length - 1
         return (
           <span key={subpath} className="flex items-center gap-1">
-            {i > 0 && <span className="text-dense text-ink-faint">/</span>}
+            {index > 0 && <span className="text-dense text-ink-faint">/</span>}
             {isLast ? (
-              <span className="text-dense text-ink-primary underline decoration-line-strong underline-offset-4">{label}</span>
+              <span className="text-dense text-ink-primary underline decoration-line-strong underline-offset-4">{routeLabel(subpath)}</span>
             ) : (
               <button
                 onClick={() => onNavigate(subpath)}
                 className="focus-ring cursor-pointer text-dense text-ink-quiet underline-offset-4 decoration-line-strong hover:text-ink-primary hover:underline"
               >
-                {label}
+                {routeLabel(subpath)}
               </button>
             )}
           </span>

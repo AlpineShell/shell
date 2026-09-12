@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { settingsPage } from '../../settings/registry'
 import PageTitle from '../ui/pageTitle'
-import Button from '../ui/button'
+import ConfirmButton from '../ui/confirmButton'
 
 type RevertAction = 'temporary' | 'permanent' | 'delete'
 
 type ActionState =
   | { phase: 'idle' }
-  | { phase: 'confirming'; action: RevertAction }
   | { phase: 'running'; action: RevertAction }
   | { phase: 'done'; action: RevertAction; gpoBlocked: boolean; leftBehind: string[] }
   | { phase: 'error'; action: RevertAction; message: string }
@@ -17,6 +17,7 @@ interface RevertActionSpec {
   label: string
   description: string
   actionLabel: string
+  confirmLabel: string
   danger?: boolean
   run: () => Promise<RevertResult>
 }
@@ -27,6 +28,7 @@ const ACTIONS: RevertActionSpec[] = [
     label: 'Revert until next sign-in',
     description: 'Switch to Windows Explorer now. Alpine Shell takes over again the next time you sign in.',
     actionLabel: 'Revert',
+    confirmLabel: 'Revert until sign-in',
     run: () => window.setup.revertTemporary(),
   },
   {
@@ -34,6 +36,7 @@ const ACTIONS: RevertActionSpec[] = [
     label: 'Revert permanently',
     description: 'Make Windows Explorer your shell for good. Alpine Shell stays installed — open it from the Start menu to switch back.',
     actionLabel: 'Revert',
+    confirmLabel: 'Revert permanently',
     run: () => window.setup.revertPermanent(),
   },
   {
@@ -41,6 +44,7 @@ const ACTIONS: RevertActionSpec[] = [
     label: 'Delete Alpine Shell',
     description: 'Revert to Windows Explorer and remove Alpine Shell completely — files, settings, shortcuts and registry entries. This cannot be undone.',
     actionLabel: 'Delete',
+    confirmLabel: 'Delete Alpine Shell',
     danger: true,
     run: () => window.setup.uninstall(),
   },
@@ -82,7 +86,7 @@ export default function SystemRevertPage() {
 
   return (
     <div className="flex flex-col gap-6 w-full">
-      <PageTitle title="Revert back to Windows" />
+      <PageTitle title={settingsPage('revert')?.label ?? ''} />
 
       {state.phase === 'done' && (
         <Banner
@@ -108,13 +112,11 @@ export default function SystemRevertPage() {
               label={spec.label}
               description={spec.description}
               actionLabel={spec.actionLabel}
+              confirmLabel={spec.confirmLabel}
               danger={spec.danger}
               disabled={isDev || state.phase === 'running'}
               busy={state.phase === 'running' && state.action === spec.id}
-              confirming={state.phase === 'confirming' && state.action === spec.id}
-              onStart={() => setState({ phase: 'confirming', action: spec.id })}
               onConfirm={() => runAction(spec)}
-              onCancel={() => setState({ phase: 'idle' })}
             />
           ))}
         </div>
@@ -154,24 +156,20 @@ function Row({
   label,
   description,
   actionLabel,
+  confirmLabel,
   danger,
   disabled,
   busy,
-  confirming,
-  onStart,
   onConfirm,
-  onCancel,
 }: {
   label: string
   description: string
   actionLabel: string
+  confirmLabel: string
   danger?: boolean
   disabled: boolean
   busy: boolean
-  confirming: boolean
-  onStart: () => void
   onConfirm: () => void
-  onCancel: () => void
 }) {
   return (
     <div className="flex items-center justify-between gap-4 py-3 border-b border-line-hairline last:border-b-0">
@@ -179,28 +177,16 @@ function Row({
         <div className="text-sm font-medium text-ink-primary">{label}</div>
         <div className="text-xs text-ink-quiet mt-0.5">{description}</div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {confirming ? (
-          <>
-            <Button variant="outline" size="sm" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button variant={danger ? 'danger' : 'primary'} size="sm" onClick={onConfirm} disabled={busy} className="font-medium">
-              {busy ? 'Working…' : 'Confirm'}
-            </Button>
-          </>
-        ) : (
-          <Button
-            variant={danger ? 'dangerOutline' : 'outline'}
-            size="sm"
-            onClick={onStart}
-            disabled={disabled}
-            className="font-medium"
-          >
-            {actionLabel}
-          </Button>
-        )}
-      </div>
+      <ConfirmButton
+        label={actionLabel}
+        confirmLabel={confirmLabel}
+        onConfirm={onConfirm}
+        variant={danger ? 'dangerOutline' : 'outline'}
+        confirmVariant={danger ? 'danger' : 'primary'}
+        disabled={disabled}
+        busy={busy}
+        className="font-medium"
+      />
     </div>
   )
 }

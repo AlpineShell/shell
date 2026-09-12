@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react'
-import { Bluetooth, Image as ImageIcon, Wifi } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Bluetooth, Image as ImageIcon, RotateCcw, Wifi } from 'lucide-react'
 import { useWallpaper } from '../../hooks/useWallpaper'
+import { settingsPage, settingsPageRoute } from '../../settings/registry'
 import NavRow from '../ui/navRow'
 
 const CACHE_KEY = 'alpine.systemInfo.v2'
+
+const HOME_ROWS: { page: SettingsPageId; icon: ReactNode; description: string }[] = [
+  { page: 'wallpaper', icon: <ImageIcon size={18} />, description: 'Change background image' },
+  { page: 'wifi', icon: <Wifi size={18} />, description: 'Connect to networks' },
+  { page: 'bluetooth', icon: <Bluetooth size={18} />, description: 'Pair and manage Bluetooth devices' },
+  { page: 'revert', icon: <RotateCcw size={18} />, description: 'Switch back to Windows Explorer temporarily or for good, or remove Alpine Shell' },
+]
 
 function readCache(): SystemInfo | null {
   try {
@@ -20,7 +28,9 @@ function readCache(): SystemInfo | null {
 function writeCache(info: SystemInfo) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(info))
-  } catch {}
+  } catch {
+    return
+  }
 }
 
 const TB = 1024 ** 4
@@ -109,9 +119,15 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
       </div>
 
       <div className="flex flex-col gap-2">
-        <NavRow icon={<Bluetooth size={18} />} label="Bluetooth" description="Pair and manage Bluetooth devices" onClick={() => onNavigate('devices/bluetooth')} />
-        <NavRow icon={<ImageIcon size={18} />} label="Wallpaper" description="Change background image" onClick={() => onNavigate('personalization/wallpaper')} />
-        <NavRow icon={<Wifi size={18} />} label="Wi-Fi" description="Connect to networks" onClick={() => onNavigate('devices/wifi')} />
+        {HOME_ROWS.map((row) => (
+          <NavRow
+            key={row.page}
+            icon={row.icon}
+            label={settingsPage(row.page)?.label ?? ''}
+            description={row.description}
+            onClick={() => onNavigate(settingsPageRoute(row.page) ?? '')}
+          />
+        ))}
       </div>
     </div>
   )

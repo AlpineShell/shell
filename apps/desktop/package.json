@@ -12,6 +12,7 @@
     "release": "node scripts/generateGoogleCredentials.js && node scripts/generateMarketplaceConfig.js && vite build && electron-builder --win --publish never && node scripts/publish.js",
     "publish": "node scripts/publish.js",
     "publish:plugin": "node scripts/publishPlugin.js",
+    "screenshots:settings": "bun scripts/captureSettingsSheets.js",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc -b",

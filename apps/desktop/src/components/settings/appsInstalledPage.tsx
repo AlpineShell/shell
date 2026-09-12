@@ -1,8 +1,16 @@
 import { useMemo, useState } from 'react'
-import { Boxes, ChevronDown, ChevronRight, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
+import { AppWindow, Boxes, ExternalLink, FolderOpen, Search, Trash2 } from 'lucide-react'
+import { settingsPage } from '../../settings/registry'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
 import { useStartupApps } from '../../hooks/useStartupApps'
-import { AppIcon, PageHeader, SearchBox, Spinner } from './appsShared'
+import Avatar from '../ui/avatar'
+import Button from '../ui/button'
+import ConfirmButton from '../ui/confirmButton'
+import EmptyState from '../ui/emptyState'
+import ListRow from '../ui/listRow'
+import PageHeader from '../ui/pageHeader'
+import Spinner from '../ui/spinner'
+import TextField from '../ui/textField'
 import Toggle from '../ui/toggle'
 
 type InstalledAction = 'open' | 'locate' | 'uninstall'
@@ -30,36 +38,45 @@ export default function AppsInstalledPage() {
   const startupEntryFor = (app: InstalledApp) => (app.startupId ? startupById.get(app.startupId) : undefined)
 
   return (
-    <div className="flex flex-col gap-5 w-full">
-      <PageHeader title="Installed" description="The apps on your PC. Click one to manage it.">
-        <SearchBox value={query} onChange={setQuery} placeholder="Search for an app" />
+    <div className="flex w-full flex-col gap-5">
+      <PageHeader title={settingsPage('apps-installed')?.label ?? ''} subtitle="The apps on your PC. Click one to manage it.">
+        <TextField
+          label="Search installed apps"
+          value={query}
+          onChange={setQuery}
+          placeholder="Search for an app"
+          icon={<Search size={13} />}
+          className="w-56"
+        />
       </PageHeader>
 
       <div className="flex flex-col gap-1">
-        {installed.length === 0 && <p className="text-sm text-ink-quiet">Looking for installed apps…</p>}
-        {installed.length > 0 && apps.length === 0 && <p className="text-sm text-ink-quiet">No apps match your search.</p>}
+        {installed.length === 0 && <EmptyState icon={<Spinner size={20} />} title="Looking for installed apps…" />}
+        {installed.length > 0 && apps.length === 0 && (
+          <EmptyState icon={<Search size={20} />} title="No apps match your search." />
+        )}
 
         {userApps.map((app) => (
           <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
         ))}
 
         {components.length > 0 && (
-          <div className="rounded-card bg-surface-2 border border-line-hairline mt-1 overflow-hidden">
-            <button onClick={() => setComponentsOpen((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 cursor-pointer text-left hover:bg-fill-ghost transition-colors">
-              <Boxes size={18} className="text-ink-faint shrink-0" />
-              <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-dense text-ink-secondary">Components &amp; dependencies ({components.length})</span>
-                <span className="text-[11px] text-ink-faint">Shared runtime and support files other apps rely on — usually safe to leave alone.</span>
-              </div>
-              {showComponents ? <ChevronDown size={16} className="text-ink-faint shrink-0" /> : <ChevronRight size={16} className="text-ink-faint shrink-0" />}
-            </button>
-            {showComponents && (
-              <div className="flex flex-col gap-1 px-2 pb-2">
-                {components.map((app) => (
-                  <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
-                ))}
-              </div>
-            )}
+          <div className="mt-1">
+            <ListRow
+              icon={<Boxes size={18} className="text-ink-faint" />}
+              title={`Components & dependencies (${components.length})`}
+              detail="Shared runtime and support files other apps rely on — usually safe to leave alone."
+              onActivate={() => setComponentsOpen((v) => !v)}
+              expanded={showComponents}
+            >
+              {showComponents && (
+                <div className="flex flex-col gap-1 px-2 pb-2">
+                  {components.map((app) => (
+                    <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
+                  ))}
+                </div>
+              )}
+            </ListRow>
           </div>
         )}
       </div>
@@ -79,45 +96,62 @@ function InstalledRow({ app, startupEntry }: { app: InstalledApp; startupEntry?:
   }
 
   return (
-    <div className="rounded-card bg-surface-2 border border-line-hairline overflow-hidden">
-      <button onClick={() => setExpanded((v) => !v)} className="w-full flex items-center gap-3 px-3 min-h-14 py-2 text-left cursor-pointer hover:bg-fill-ghost transition-colors">
-        <AppIcon icon={app.icon} name={app.name} />
-        <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-dense text-ink-primary truncate">{app.name}</span>
-          <span className="text-[11px] text-ink-quiet truncate">{app.publisher || (app.source === 'store' ? 'Microsoft Store app' : 'App')}</span>
-        </div>
-        <ChevronDown size={16} className={`text-ink-faint shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </button>
-
+    <ListRow
+      icon={<Avatar src={app.icon} alt={app.name} fallback={<AppWindow size={16} strokeWidth={1.75} />} />}
+      title={app.name}
+      detail={app.publisher || (app.source === 'store' ? 'Microsoft Store app' : 'App')}
+      onActivate={() => setExpanded((v) => !v)}
+      expanded={expanded}
+    >
       {expanded && (
-        <div className="border-t border-line-hairline bg-surface-0 px-3 py-3 flex items-center justify-between gap-x-4 gap-y-3 flex-wrap">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-line-hairline bg-surface-0 px-3 py-3">
           {startupEntry ? (
-            <label className="flex items-center gap-2.5 text-[12px] text-ink-secondary cursor-pointer select-none">
+            <label className="flex cursor-pointer items-center gap-2.5 text-xs text-ink-secondary select-none">
               <Toggle label="Starts with your PC" checked={startOn} pending={!!startupEntry.pending} onChange={() => window.shell.apps.setStartup(startupEntry.id, !startOn)} />
               Starts with your PC
             </label>
           ) : (
-            <span className="text-[12px] text-ink-faint">{app.source === 'store' ? 'Microsoft Store app' : 'Desktop app'}</span>
+            <span className="text-xs text-ink-faint">{app.source === 'store' ? 'Microsoft Store app' : 'Desktop app'}</span>
           )}
-          <div className="flex items-center gap-1.5 ml-auto">
+          <div className="ml-auto flex items-center gap-1.5">
             {app.canOpen && (
-              <button onClick={() => act('open', () => window.shell.apps.openApp(app.id))} disabled={!!pending} className="h-8 px-3 flex items-center gap-1.5 rounded-field text-[12px] text-ink-secondary bg-fill-ghost hover:bg-surface-3 hover:text-ink-primary cursor-pointer transition-colors disabled:opacity-60">
-                {pending === 'open' ? <Spinner size={14} /> : <ExternalLink size={14} />} Open
-              </button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => act('open', () => window.shell.apps.openApp(app.id))}
+                disabled={!!pending}
+                busy={pending === 'open'}
+                icon={<ExternalLink size={14} />}
+              >
+                Open
+              </Button>
             )}
             {app.canOpenLocation && (
-              <button onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))} disabled={!!pending} className="h-8 px-3 flex items-center gap-1.5 rounded-field text-[12px] text-ink-secondary bg-fill-ghost hover:bg-surface-3 hover:text-ink-primary cursor-pointer transition-colors disabled:opacity-60">
-                {pending === 'locate' ? <Spinner size={14} /> : <FolderOpen size={14} />} Location
-              </button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))}
+                disabled={!!pending}
+                busy={pending === 'locate'}
+                icon={<FolderOpen size={14} />}
+              >
+                Location
+              </Button>
             )}
             {app.canUninstall && (
-              <button onClick={() => act('uninstall', () => window.shell.apps.uninstall(app.id))} disabled={!!pending} className="h-8 w-22 flex items-center justify-center gap-1.5 rounded-field text-[12px] text-danger bg-danger/10 hover:bg-danger/20 cursor-pointer transition-colors disabled:opacity-60">
-                {pending === 'uninstall' ? <Spinner size={14} /> : <><Trash2 size={14} /> Remove</>}
-              </button>
+              <ConfirmButton
+                variant="dangerOutline"
+                label="Remove"
+                confirmLabel={`Uninstall ${app.name}`}
+                onConfirm={() => act('uninstall', () => window.shell.apps.uninstall(app.id))}
+                disabled={!!pending}
+                busy={pending === 'uninstall'}
+                icon={<Trash2 size={14} />}
+              />
             )}
           </div>
         </div>
       )}
-    </div>
+    </ListRow>
   )
 }
