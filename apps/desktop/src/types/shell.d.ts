@@ -1310,7 +1310,7 @@ declare global {
     scrollTimer: number | null
   }
 
-  type RidgeKeyStep ='earlier' | 'later' | 'first' | 'last'
+  type RidgeKeyStep = 'earlier' | 'later' | 'first' | 'last'
 
   type RidgeKeyIntent =
     | { kind: 'grab' }
