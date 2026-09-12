@@ -7,7 +7,7 @@ let bootSettingsIcon = null
 let bootSettingsPage = null
 let bootClockPrefs = null
 let bootTopbarLayout = null
-let bootTheme = { name: 'dark', background: '#1a1a19', preference: 'topbar' }
+let bootTheme = { name: 'dark', background: '#202020', preference: 'topbar' }
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
 try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
@@ -56,7 +56,9 @@ try { paintDesktopBackgroundEarly() } catch {}
 function paintThemeEarly() {
   const apply = () => {
     const el = document.documentElement
-    if (el) el.dataset.theme = bootTheme.name
+    if (!el) return
+    el.dataset.theme = bootTheme.name
+    el.style.setProperty('--alpine-ground', bootTheme.background)
   }
   apply()
   if (document.readyState === 'loading') {
@@ -589,7 +591,6 @@ contextBridge.exposeInMainWorld('shell', {
     defaultInputMethod: () => ipcRenderer.invoke('keyboard/default-input-method-get'),
     setDefaultInputMethod: (tip) => ipcRenderer.invoke('keyboard/default-input-method-set', tip),
     activateNow: (tip) => ipcRenderer.invoke('keyboard/activate-now', tip),
-    openLanguageSettings: () => ipcRenderer.invoke('keyboard/language-settings-open'),
     onChanged: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('keyboard/changed', handler)

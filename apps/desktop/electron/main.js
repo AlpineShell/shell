@@ -556,6 +556,18 @@ function exposedOwnWindowHandles() {
   return handles
 }
 
+const SETTINGS_TITLE_BAR_HEIGHT = 48
+
+function settingsTitleBarOverlay() {
+  return { ...theme.getTitleBarOverlayColors(), height: SETTINGS_TITLE_BAR_HEIGHT }
+}
+
+function repaintSettingsChrome() {
+  if (!settingsWin || settingsWin.isDestroyed()) return
+  settingsWin.setBackgroundColor(theme.getWindowBackground())
+  settingsWin.setTitleBarOverlay(settingsTitleBarOverlay())
+}
+
 function createSettingsWindow() {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.focus()
@@ -567,7 +579,8 @@ function createSettingsWindow() {
     height: 820,
     minWidth: 800,
     minHeight: 560,
-    frame: false,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: settingsTitleBarOverlay(),
     resizable: true,
     center: true,
     transparent: false,
@@ -582,6 +595,7 @@ function createSettingsWindow() {
   })
   settingsWin.on('page-title-updated', (e) => e.preventDefault())
   windowSystemMenu.enableSystemMenu(settingsWin)
+  windowCorners.roundOwnWindow(settingsWin)
   loadAppURL(settingsWin, getURL('settings'))
   settingsWin.once('ready-to-show', () => {
     if (settingsWin && !settingsWin.isDestroyed()) settingsWin.show()
@@ -779,6 +793,7 @@ app.whenReady().then(async () => {
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginBackendHost, shellNotice, fileHandlers)
 
   theme.followTopbarColor(topbarColor)
+  theme.onThemeChange(repaintSettingsChrome)
 
   setup.setShellShutdown(gracefulShutdown)
 

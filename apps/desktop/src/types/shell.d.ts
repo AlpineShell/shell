@@ -1422,7 +1422,6 @@ declare global {
         defaultInputMethod: () => Promise<string | null>
         setDefaultInputMethod: (tip: string | null) => Promise<KeyboardLayoutState>
         activateNow: (tip: string) => Promise<{ ok: boolean }>
-        openLanguageSettings: () => Promise<{ ok: boolean }>
         onChanged: (callback: (state: KeyboardLayoutState) => void) => () => void
       }
       calendar: {

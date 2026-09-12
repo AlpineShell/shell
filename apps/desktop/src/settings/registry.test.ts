@@ -60,7 +60,6 @@ const TABLE_ROW = /^\|\s*`([a-z0-9-]+)`\s*\|\s*(instant|confirm|restart|draft)\s
 const EXCEPTIONS: Record<string, SettingsApplies> = {
   displays: 'draft',
   'keyboard-layout-remove': 'confirm',
-  'language-pack': 'restart',
   'app-force-close': 'confirm',
   'app-uninstall': 'confirm',
   startup: 'confirm',

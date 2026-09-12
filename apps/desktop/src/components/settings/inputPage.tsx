@@ -13,7 +13,6 @@ import Select from '../ui/select'
 
 const LAYOUTS_GROUP = 'Languages and layouts'
 const INPUT_METHOD_GROUP = 'Input method'
-const LANGUAGE_PACK_GROUP = 'Language packs'
 
 const FIRST_IN_LIST = ''
 
@@ -74,8 +73,6 @@ export default function InputPage() {
       groupSubtitles={{
         [LAYOUTS_GROUP]: 'Your languages and the layouts attached to each, in the order Windows cycles them.',
         [INPUT_METHOD_GROUP]: 'The layout Windows starts you in, whichever language comes first.',
-        [LANGUAGE_PACK_GROUP]:
-          'Alpine arranges the languages you already have. Installing a language, changing the display language, and copying your settings to the sign-in screen and system accounts all need administrator rights, so Windows does those.',
       }}
     />
   )
@@ -117,7 +114,7 @@ function LanguageList({
       <EmptyState
         icon={<Languages size={20} />}
         title="No language list yet."
-        detail="Windows has not reported your languages. Reopen Settings, or check them in the Windows language settings below."
+        detail="Windows has not reported your languages yet. Reopen Settings to ask again."
       />
     )
   }

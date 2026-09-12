@@ -1,5 +1,5 @@
 import { Component, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { SETTINGS_PAGES, SETTINGS_SECTIONS, settingsPageByRoute } from '../../settings/registry'
 import { SETTINGS_SEARCH_LIMIT, searchSettings } from '../../settings/settingsSearch'
 import { SETTINGS_ROUTES } from './settingsRoutes'
@@ -11,6 +11,7 @@ import { useTheme } from '../../hooks/useTheme'
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
+const nativeTitleBarHeight = { height: 'env(titlebar-area-height, 3rem)' }
 
 interface NavSection {
   id: SettingsSectionId
@@ -157,7 +158,7 @@ export default function SettingsApp() {
   return (
     <div className="settings-scope flex h-screen w-screen overflow-hidden bg-surface-1 text-ink-primary">
       <aside className="flex w-56 shrink-0 flex-col bg-surface-0" style={dragRegion}>
-        <div className="h-14 flex items-center px-5 shrink-0">
+        <div className="flex items-center px-5 shrink-0" style={nativeTitleBarHeight}>
           <span className="font-display text-base font-normal tracking-tight text-ink-primary">Settings</span>
         </div>
         <div className="px-2 pb-1 shrink-0" style={noDragRegion}>
@@ -204,7 +205,7 @@ export default function SettingsApp() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col bg-surface-0">
-        <div className="flex h-14 shrink-0 items-center bg-surface-0" style={dragRegion}>
+        <div className="flex shrink-0 items-center bg-surface-0" style={{ ...dragRegion, ...nativeTitleBarHeight }}>
           <header className="w-full h-10 flex items-center gap-3 pl-3 pr-3">
             <div className="flex items-center gap-1" style={noDragRegion}>
               <button
@@ -232,17 +233,6 @@ export default function SettingsApp() {
             <div style={noDragRegion}>
               <Breadcrumb path={currentPath} onNavigate={navigate} />
             </div>
-
-            <div className="flex-1" />
-
-            <button
-              onClick={() => window.shell.windows.closeSettings()}
-              className="focus-ring flex h-7 w-7 cursor-pointer items-center justify-center rounded-field text-ink-quiet transition-colors hover:text-ink-primary"
-              style={noDragRegion}
-              aria-label="Close"
-            >
-              <X size={14} />
-            </button>
           </header>
         </div>
 

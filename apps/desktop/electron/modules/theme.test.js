@@ -6,6 +6,7 @@ import { createRequire } from 'module'
 
 const nodeRequire = createRequire(import.meta.url)
 const electronModuleId = nodeRequire.resolve('electron')
+const { rgbToOklab, oklabToRgb } = nodeRequire('../oklab.js')
 const syncListeners = new Map()
 
 let userDataDir = ''
@@ -24,11 +25,32 @@ nodeRequire.cache[electronModuleId] = {
   },
 }
 
-const LIGHT_THEME = { name: 'light', background: '#f9fafb' }
-const DARK_THEME = { name: 'dark', background: '#1a1a19' }
+const LIGHT_THEME = { name: 'light', background: '#d6d6d6' }
+const DARK_THEME = { name: 'dark', background: '#202020' }
 
 const DARK_BAR = { r: 30, g: 30, b: 30, darkText: false }
 const LIGHT_BAR = { r: 235, g: 235, b: 235, darkText: true }
+
+function barFromOklab(lightness, a, b, darkText) {
+  const [red, green, blue] = oklabToRgb(lightness, a, b)
+  return { r: red, g: green, b: blue, darkText }
+}
+
+const NAVY_BAR = barFromOklab(0.22, -0.012, -0.05, false)
+const SAND_BAR = barFromOklab(0.88, 0.01, 0.04, true)
+
+function hexOf({ r, g, b }) {
+  return `#${[r, g, b].map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+}
+
+function channelsOf(hex) {
+  return [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16))
+}
+
+function chromaOf(hex) {
+  const [, a, b] = rgbToOklab(...channelsOf(hex))
+  return Math.hypot(a, b)
+}
 
 function createTopbarColorSource(color) {
   const listeners = []
@@ -118,15 +140,34 @@ describe('resolveThemeName', () => {
 })
 
 describe('windowBackgroundFor', () => {
-  it('gives each theme its own chrome colour', async () => {
+  it('gives each theme a neutral ground while there is no bar colour to take a hue from', async () => {
     const theme = await loadModule()
-    expect(theme.windowBackgroundFor('light')).toBe('#f9fafb')
-    expect(theme.windowBackgroundFor('dark')).toBe('#1a1a19')
+    expect(theme.windowBackgroundFor('light')).toBe(LIGHT_THEME.background)
+    expect(theme.windowBackgroundFor('dark')).toBe(DARK_THEME.background)
   })
 
-  it('falls back to the dark chrome colour for an unknown theme', async () => {
+  it('falls back to the dark ground for an unknown theme', async () => {
     const theme = await loadModule()
-    expect(theme.windowBackgroundFor('sepia')).toBe('#1a1a19')
+    expect(theme.windowBackgroundFor('sepia')).toBe(DARK_THEME.background)
+  })
+
+  it('grounds the window in the colour of the bar when both are on the same side', async () => {
+    const theme = await loadModule()
+    expect(theme.windowBackgroundFor('dark', NAVY_BAR)).toBe(hexOf(NAVY_BAR))
+    expect(theme.windowBackgroundFor('light', SAND_BAR)).toBe(hexOf(SAND_BAR))
+  })
+
+  it('carries the hue of the bar across to the other side', async () => {
+    const theme = await loadModule()
+    const [red, green, blue] = channelsOf(theme.windowBackgroundFor('light', NAVY_BAR))
+    expect(Math.min(red, green, blue)).toBeGreaterThan(180)
+    expect(blue).toBeGreaterThan(red)
+  })
+
+  it('mutes a loud bar colour rather than painting the whole window with it', async () => {
+    const theme = await loadModule()
+    const loudRed = { r: 255, g: 0, b: 0, darkText: false }
+    expect(chromaOf(theme.windowBackgroundFor('dark', loudRed))).toBeLessThan(0.065)
   })
 })
 
@@ -188,7 +229,7 @@ describe('the theme getTheme reports', () => {
     writePreference('system')
     const theme = await loadModule()
     expect(theme.getTheme()).toEqual({ ...DARK_THEME, preference: 'system' })
-    expect(theme.getWindowBackground()).toBe('#1a1a19')
+    expect(theme.getWindowBackground()).toBe(DARK_THEME.background)
   })
 })
 
@@ -204,7 +245,7 @@ describe('loading the stored preference', () => {
     nativeTheme = createNativeTheme('dark')
     writePreference('light')
     const theme = await loadModule()
-    expect(theme.getWindowBackground()).toBe('#f9fafb')
+    expect(theme.getWindowBackground()).toBe(LIGHT_THEME.background)
     expect(theme.getTheme().preference).toBe('light')
   })
 
@@ -379,11 +420,22 @@ describe('following the top bar', () => {
     expect(broadcasts).toEqual([{ channel: 'theme/changed', payload: { ...LIGHT_THEME, preference: 'topbar' } }])
   })
 
-  it('broadcasts nothing for a bar colour that stays on the same side of the line', async () => {
+  it('repaints the window when the bar changes hue without crossing the line', async () => {
+    const source = createTopbarColorSource(DARK_BAR)
+    const { theme, broadcasts } = await startFollowing(source)
+
+    source.repaintBarAs(NAVY_BAR)
+
+    const repainted = { name: 'dark', background: hexOf(NAVY_BAR), preference: 'topbar' }
+    expect(theme.getTheme()).toEqual(repainted)
+    expect(broadcasts).toEqual([{ channel: 'theme/changed', payload: repainted }])
+  })
+
+  it('broadcasts nothing for a bar colour that grounds the window the same way', async () => {
     const source = createTopbarColorSource(DARK_BAR)
     const { broadcasts } = await startFollowing(source)
 
-    source.repaintBarAs({ r: 60, g: 60, b: 70, darkText: false })
+    source.repaintBarAs({ r: 40, g: 40, b: 40, darkText: false })
 
     expect(broadcasts).toEqual([])
   })
@@ -394,7 +446,7 @@ describe('following the top bar', () => {
     expect(nativeTheme.themeSource).toBe('light')
   })
 
-  it('leaves a chosen theme alone when the bar colour changes', async () => {
+  it('keeps a chosen light theme light when the bar turns dark', async () => {
     writePreference('light')
     const source = createTopbarColorSource(LIGHT_BAR)
     const { theme, broadcasts } = await startFollowing(source)
@@ -403,6 +455,18 @@ describe('following the top bar', () => {
 
     expect(theme.getTheme()).toEqual({ ...LIGHT_THEME, preference: 'light' })
     expect(broadcasts).toEqual([])
+  })
+
+  it('tints a chosen theme with the hue of the bar', async () => {
+    writePreference('light')
+    const { theme } = await startFollowing(createTopbarColorSource(NAVY_BAR))
+
+    expect(theme.getTheme()).toEqual({
+      name: 'light',
+      background: theme.windowBackgroundFor('light', NAVY_BAR),
+      preference: 'light',
+    })
+    expect(theme.getWindowBackground()).not.toBe(LIGHT_THEME.background)
   })
 
   it('picks the bar up again when the preference returns to it', async () => {
@@ -415,9 +479,55 @@ describe('following the top bar', () => {
     expect(broadcasts).toEqual([{ channel: 'theme/changed', payload: { ...DARK_THEME, preference: 'topbar' } }])
   })
 
-  it('colours the window from the bar', async () => {
-    const { theme } = await startFollowing(createTopbarColorSource(LIGHT_BAR))
-    expect(theme.getWindowBackground()).toBe('#f9fafb')
+  it('colours the window with the bar', async () => {
+    const { theme } = await startFollowing(createTopbarColorSource(SAND_BAR))
+    expect(theme.getWindowBackground()).toBe(hexOf(SAND_BAR))
+  })
+})
+
+describe('the title bar overlay', () => {
+  it('paints the caption buttons in the window ground with white symbols on a dark theme', async () => {
+    const { theme } = await startFollowing(createTopbarColorSource(NAVY_BAR))
+    expect(theme.getTitleBarOverlayColors()).toEqual({ color: hexOf(NAVY_BAR), symbolColor: '#ffffff' })
+  })
+
+  it('draws black symbols on a light theme', async () => {
+    const { theme } = await startFollowing(createTopbarColorSource(SAND_BAR))
+    expect(theme.getTitleBarOverlayColors()).toEqual({ color: hexOf(SAND_BAR), symbolColor: '#000000' })
+  })
+})
+
+describe('listening for a theme change in the main process', () => {
+  it('hears the theme a new bar hue resolves to', async () => {
+    const source = createTopbarColorSource(DARK_BAR)
+    const { theme } = await startFollowing(source)
+    const heard = []
+    theme.onThemeChange((next) => heard.push(next))
+
+    source.repaintBarAs(NAVY_BAR)
+
+    expect(heard).toEqual([{ name: 'dark', background: hexOf(NAVY_BAR), preference: 'topbar' }])
+  })
+
+  it('hears nothing when the theme did not change', async () => {
+    const { theme } = await startModule()
+    const heard = []
+    theme.onThemeChange((next) => heard.push(next))
+
+    setPreference(theme, 'topbar')
+
+    expect(heard).toEqual([])
+  })
+
+  it('stops hearing once it unsubscribes', async () => {
+    const { theme } = await startModule()
+    const heard = []
+    const unsubscribe = theme.onThemeChange((next) => heard.push(next))
+    unsubscribe()
+
+    setPreference(theme, 'light')
+
+    expect(heard).toEqual([])
   })
 })
 

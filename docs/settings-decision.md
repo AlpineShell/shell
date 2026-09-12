@@ -305,11 +305,6 @@ the controls genuinely differ:
   the calling thread, so a shell can only ask: it posts `WM_INPUTLANGCHANGEREQUEST` to the
   foreground window. Windows may ignore it, and the foreground window is the settings window
   while you are clicking in it. The page says both.
-- **`language-pack`** is `restart`, and Alpine does not do it at all. Installing a language
-  or changing the display language needs elevation and a sign-out, so the entry is an action
-  that opens `ms-settings:regionlanguage` instead of a control that would fail. Copying the
-  settings to the sign-in screen and system accounts
-  (`Copy-UserInternationalSettingsToSystem`) needs elevation too and is not offered.
 
 The honest limit in that list is the second one. "The layout currently in use" would be the
 better trigger for the confirmation, but the module publishes the *declared* default, not the
@@ -387,7 +382,7 @@ test failure too.
 | `brightness` | instant | A slider you can see the effect of while dragging, and drag back. |
 | `wallpaper` | instant | Visible immediately, reversible by picking another. |
 | `appearance` | instant | A page-level entry; the page's own settings each declare their own. |
-| `theme` | instant | Repaints Alpine's windows and nothing else. Reversible by picking another option. Its default, `topbar`, reads the light or dark of the bar's own colour so the windows match the bar rather than Windows. |
+| `theme` | instant | Repaints Alpine's windows and nothing else. Reversible by picking another option. Its default, `topbar`, reads the light or dark of the bar's own colour so the windows match the bar rather than Windows. Whichever side is chosen, the window's ground takes the bar's hue, so Settings is drawn in the same material as the bar and its flyouts. |
 | `topbar-color` | instant | A colour. Clearing the override restores the automatic one. |
 | `topbar-color-automatic` | instant | Freezes or resumes wallpaper-following. Both directions are one click. |
 | `topbar-search-icon` | instant | Shows or hides one button. The hotkey works either way, so it cannot strand you. |
@@ -406,7 +401,6 @@ test failure too.
 | `keyboard-layout-remove` | confirm | Removing a spare layout goes straight through. Removing the last layout of a language, or the one that is the default input method, stops and names which case it is first — those two leave you with nothing to type in, or silently hand the default to whatever is first in the list. |
 | `switch-input-method` | instant | Best effort by construction: it posts `WM_INPUTLANGCHANGEREQUEST` to the foreground window, which Windows may ignore. Nothing is persisted, so there is nothing to half-apply. |
 | `default-input-method` | instant | `Set-WinDefaultInputMethodOverride`, per-user, no elevation, no sign-out, undone by choosing another. |
-| `language-pack` | restart | Alpine does not do this at all — installing a language needs elevation and a sign-out — so the entry is an action that opens `ms-settings:regionlanguage`. `restart` is the honest declaration: what you do there does not take effect until you sign out. |
 | `tray` | instant | A page-level entry; the tray's own settings each declare their own. |
 | `tray-enabled` | instant | The story flagged this as possibly removing the way people reach settings. It does not, and this was checked rather than assumed: the setting hides other apps' tray icons (`trayLayout.js`), and the top bar renders `tray` and `status` as separate elements (`topbarLayout.ts`). The Settings gear lives in the status pop-over (`controlCenter.tsx`), and Search reaches Settings whatever the tray is doing. Nothing about turning it off is one-way. |
 | `tray-overflow` | instant | Shows or hides the overflow chevron; the icons behind it are still there. |
