@@ -26,7 +26,7 @@ const RADIO_ERROR_LABELS: Record<BluetoothRadioError, string> = {
 }
 
 function hasConnectedDevice(state: BluetoothState): boolean {
-  return state.devices.some((device) => device.connected)
+  return state.devicesAvailable && state.devices.some((device) => device.connected)
 }
 
 export function isRadioOff(state: BluetoothState): boolean {
@@ -55,7 +55,7 @@ export function indicatorKind(state: BluetoothState): BluetoothIndicatorKind {
 }
 
 export function connectedSummary(state: BluetoothState): string | undefined {
-  if (isRadioOff(state)) return undefined
+  if (isRadioOff(state) || !state.devicesAvailable) return undefined
   const connected = state.devices.filter((device) => device.connected)
   if (connected.length === 0) return undefined
   if (connected.length === 1) return connected[0].name
@@ -64,14 +64,16 @@ export function connectedSummary(state: BluetoothState): string | undefined {
 
 export function nextDeviceAction(device: BluetoothDevice): BluetoothDeviceAction | null {
   if (device.pending) return null
-  if (device.connected) return device.canDisconnect ? 'disconnect' : null
-  return device.canConnect ? 'connect' : null
+  if (device.canDisconnect) return 'disconnect'
+  if (device.canConnect) return 'connect'
+  return null
 }
 
 export function deviceStatusLabel(device: BluetoothDevice): string {
   if (device.pending) return PENDING_LABELS[device.pending]
   if (device.error) return ERROR_LABELS[device.error]
   if (device.audioDisabled) return 'Audio turned off'
+  if (device.connected && device.canConnect) return 'Connected, no audio'
   return device.connected ? 'Connected' : 'Paired'
 }
 

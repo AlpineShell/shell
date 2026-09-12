@@ -2,6 +2,7 @@ import { createPortal } from "react-dom"
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useBluetooth } from "../../hooks/useBluetooth"
+import { useBluetoothRescan } from "../../hooks/useBluetoothRescan"
 import { canToggleRadio, deviceActionLabel, deviceStatusLabel, displayedRadioOn, isRadioOff, nextDeviceAction, radioEmptyStateTitle } from "../../lib/bluetoothPresentation"
 import { moveSelection, resolveSelection } from "../../lib/listSelection"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
@@ -1732,7 +1733,8 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
   const iconColor = darkText ? "black" : "white"
   const iconDim = darkText ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)"
 
-  const { state, toggleDevice, setRadio, refresh } = useBluetooth()
+  const { state, toggleDevice, setRadio } = useBluetooth()
+  useBluetoothRescan()
   const [selection, setSelection] = useState<ListSelection>({ id: BLUETOOTH_RADIO_ROW, index: 0 })
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -1741,10 +1743,6 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
   const notice = radioEmptyStateTitle(state)
   const rowIds = [BLUETOOTH_RADIO_ROW, ...(notice ? [] : state.devices.map((device) => device.id))]
   const current = resolveSelection(rowIds, selection.id, selection.index)
-
-  useEffect(() => {
-    refresh()
-  }, [refresh])
 
   useEffect(() => {
     const el = listRef.current?.querySelector(`[data-idx="${current.index}"]`) as HTMLElement | null

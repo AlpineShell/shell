@@ -12,10 +12,6 @@ function setRadio(on: boolean): Promise<BluetoothActionResult> {
   return window.shell.system.bluetoothSetRadio(on)
 }
 
-function refresh(): Promise<BluetoothState> {
-  return window.shell.system.bluetoothRefresh()
-}
-
 function openPairing(): Promise<BluetoothActionResult> {
   return window.shell.system.bluetoothOpenSettings()
 }
@@ -28,7 +24,7 @@ function repairAudio(device: BluetoothDevice): Promise<BluetoothActionResult> {
   return window.shell.system.bluetoothRepairAudio(device.id)
 }
 
-const BLUETOOTH_ACTIONS = { toggleDevice, setRadio, refresh, openPairing, removeDevice, repairAudio }
+const BLUETOOTH_ACTIONS = { toggleDevice, setRadio, openPairing, removeDevice, repairAudio }
 
 export function useBluetooth() {
   const state = useShellState<BluetoothState>(

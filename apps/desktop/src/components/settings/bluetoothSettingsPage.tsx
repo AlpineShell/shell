@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Bluetooth, BluetoothConnected, Plus, RefreshCw, Unlink, Wrench } from 'lucide-react'
 import EmptyState from '../ui/emptyState'
 import IconButton from '../ui/iconButton'
@@ -7,6 +6,7 @@ import PageHeader from '../ui/pageHeader'
 import Spinner from '../ui/spinner'
 import Toggle from '../ui/toggle'
 import { useBluetooth } from '../../hooks/useBluetooth'
+import { useBluetoothRescan } from '../../hooks/useBluetoothRescan'
 import {
   canToggleRadio,
   deviceActionLabel,
@@ -18,20 +18,11 @@ import {
 } from '../../lib/bluetoothPresentation'
 
 export default function BluetoothSettingsPage() {
-  const { state, toggleDevice, setRadio, refresh, openPairing, removeDevice, repairAudio } = useBluetooth()
-  const [refreshing, setRefreshing] = useState(false)
+  const { state, toggleDevice, setRadio, openPairing, removeDevice, repairAudio } = useBluetooth()
+  const { refreshing, rescan } = useBluetoothRescan()
   const radioOn = displayedRadioOn(state)
   const notice = radioEmptyStateTitle(state)
   const radioError = radioErrorLabel(state.radio.error)
-
-  useEffect(() => {
-    refresh()
-  }, [refresh])
-
-  function rescan() {
-    setRefreshing(true)
-    refresh().finally(() => setRefreshing(false))
-  }
 
   return (
     <div className="flex w-full flex-col gap-5">

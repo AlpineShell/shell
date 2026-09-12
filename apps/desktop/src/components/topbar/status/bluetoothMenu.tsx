@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
 import { Bluetooth, BluetoothConnected, ChevronLeft, Loader2, Plus, RefreshCw } from "lucide-react";
 import { useBluetooth } from "../../../hooks/useBluetooth";
+import { useBluetoothRescan } from "../../../hooks/useBluetoothRescan";
 import { canToggleRadio, deviceActionLabel, deviceStatusLabel, displayedRadioOn, nextDeviceAction, radioEmptyStateTitle, radioErrorLabel } from "../../../lib/bluetoothPresentation";
 
 interface BluetoothMenuProps {
@@ -92,20 +92,11 @@ function DeviceRow({ device, onToggle, darkText }: { device: BluetoothDevice; on
 export default function BluetoothMenu({ onBack, darkText }: BluetoothMenuProps) {
     const color = darkText ? "black" : "white";
     const dimColor = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)";
-    const { state, toggleDevice, setRadio, refresh, openPairing } = useBluetooth();
-    const [refreshing, setRefreshing] = useState(false);
+    const { state, toggleDevice, setRadio, openPairing } = useBluetooth();
+    const { refreshing, rescan } = useBluetoothRescan();
     const radioOn = displayedRadioOn(state);
     const notice = radioEmptyStateTitle(state);
     const radioError = radioErrorLabel(state.radio.error);
-
-    useEffect(() => {
-        refresh();
-    }, [refresh]);
-
-    function rescan() {
-        setRefreshing(true);
-        refresh().finally(() => setRefreshing(false));
-    }
 
     return (
         <div className="p-3 flex flex-col gap-2 w-65">

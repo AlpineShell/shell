@@ -31,7 +31,8 @@ function state(radio: Partial<BluetoothRadio>, devices: BluetoothDevice[] = [], 
   return { radio: { state: 'on', pending: null, error: null, ...radio }, devices, devicesAvailable }
 }
 
-const connected = device({ connected: true, canDisconnect: true })
+const connected = device({ connected: true, canConnect: false, canDisconnect: true })
+const linkedWithoutAudio = device({ connected: true, canConnect: true, canDisconnect: false })
 
 describe('indicatorKind', () => {
   it('shows a connection even before the radio has been read', () => {
@@ -71,6 +72,10 @@ describe('displayedRadioOn and isRadioOff', () => {
     expect(displayedRadioOn(state({ state: 'unknown' }, [device()]))).toBe(false)
     expect(isRadioOff(state({ state: 'unknown' }))).toBe(false)
   })
+
+  it('do not trust a connection from a device list that went stale', () => {
+    expect(displayedRadioOn(state({ state: 'unknown' }, [connected], false))).toBe(false)
+  })
 })
 
 describe('canToggleRadio', () => {
@@ -88,8 +93,9 @@ describe('connectedSummary', () => {
     expect(connectedSummary(state({}, [connected, { ...connected, id: 'twin' }]))).toBe('2 connected')
   })
 
-  it('says nothing while Bluetooth is off', () => {
+  it('says nothing while Bluetooth is off or the device list went stale', () => {
     expect(connectedSummary(state({ state: 'off' }, [connected]))).toBeUndefined()
+    expect(connectedSummary(state({ state: 'on' }, [connected], false))).toBeUndefined()
   })
 })
 
@@ -98,7 +104,11 @@ describe('nextDeviceAction', () => {
     expect(nextDeviceAction(device())).toBe('connect')
     expect(nextDeviceAction(connected)).toBe('disconnect')
     expect(nextDeviceAction(device({ canConnect: false }))).toBeNull()
-    expect(nextDeviceAction(device({ connected: true, canDisconnect: false }))).toBeNull()
+    expect(nextDeviceAction(device({ connected: true, canConnect: false, canDisconnect: false }))).toBeNull()
+  })
+
+  it('offers connect for a device that is linked without its audio', () => {
+    expect(nextDeviceAction(linkedWithoutAudio)).toBe('connect')
   })
 
   it('offers nothing while an operation is pending', () => {
@@ -124,6 +134,7 @@ describe('deviceStatusLabel', () => {
   it('reports turned-off audio, then the connection', () => {
     expect(deviceStatusLabel(device({ audioDisabled: true, canConnect: false }))).toBe('Audio turned off')
     expect(deviceStatusLabel(connected)).toBe('Connected')
+    expect(deviceStatusLabel(linkedWithoutAudio)).toBe('Connected, no audio')
     expect(deviceStatusLabel(device())).toBe('Paired')
   })
 })
