@@ -307,11 +307,23 @@ interface NetworkStatus {
   ssid: string | null
 }
 
-interface BluetoothState {
-  enabled: boolean
-  connected: boolean
-  devices: string[]
+type BluetoothRadioState = 'on' | 'off' | 'unavailable' | 'unknown'
+
+type BluetoothRadioError = 'set-failed' | 'denied'
+
+interface BluetoothRadio {
+  state: BluetoothRadioState
+  pending: 'on' | 'off' | null
+  error: BluetoothRadioError | null
 }
+
+interface BluetoothState {
+  radio: BluetoothRadio
+  devices: BluetoothDevice[]
+  devicesAvailable: boolean
+}
+
+type BluetoothIndicatorKind = 'off' | 'connected' | 'on' | 'neutral'
 
 interface TopBarColor {
   r: number
@@ -386,11 +398,43 @@ declare global {
     connected: boolean
   }
 
+  type BluetoothDeviceOperation = 'connect' | 'disconnect' | 'remove' | 'repair'
+
+  type BluetoothDeviceError =
+    | 'connect-failed'
+    | 'disconnect-failed'
+    | 'remove-failed'
+    | 'remove-partial'
+    | 'repair-failed'
+    | 'repair-cancelled'
+
+  type BluetoothDeviceAction = 'connect' | 'disconnect'
+
   interface BluetoothDevice {
+    id: string
     name: string
-    instanceId: string
     connected: boolean
-    paired: boolean
+    canConnect: boolean
+    canDisconnect: boolean
+    audioDisabled: boolean
+    pending: BluetoothDeviceOperation | null
+    error: BluetoothDeviceError | null
+  }
+
+  interface BluetoothActionResult {
+    accepted: boolean
+    error?: string
+  }
+
+  interface ListSelection {
+    id: string
+    index: number
+  }
+
+  interface AlpineBootState {
+    wallpaper: () => string | null
+    bluetooth: () => BluetoothState | null
+    wifi: () => { status: NetworkStatus | null; radio: boolean } | null
   }
 
   interface MediaPlayback {
@@ -1125,6 +1169,7 @@ declare global {
   }
 
   interface Window {
+    alpineBoot?: AlpineBootState
     fileHandlers: {
       state: () => Promise<FileHandlerState[]>
       chooseDefault: () => Promise<void>
@@ -1323,13 +1368,13 @@ declare global {
       system: {
         bluetooth: () => Promise<BluetoothState>
         onBluetoothChanged: (callback: (data: BluetoothState) => void) => () => void
-        onBluetoothDevicesChanged: (callback: (data: BluetoothDevice[]) => void) => () => void
-        bluetoothScan: () => Promise<BluetoothDevice[]>
-        bluetoothDevices: () => Promise<BluetoothDevice[]>
-        bluetoothToggle: (instanceId: string, action: 'connect' | 'disconnect') => Promise<{ success: boolean }>
-        bluetoothUnpair: (instanceId: string) => Promise<{ success: boolean }>
-        bluetoothOpenSettings: () => Promise<void>
-        bluetoothSetRadio: (enabled: boolean) => Promise<{ success: boolean; state: string }>
+        bluetoothRefresh: () => Promise<BluetoothState>
+        bluetoothConnect: (deviceId: string) => Promise<BluetoothActionResult>
+        bluetoothDisconnect: (deviceId: string) => Promise<BluetoothActionResult>
+        bluetoothRemove: (deviceId: string) => Promise<BluetoothActionResult>
+        bluetoothRepairAudio: (deviceId: string) => Promise<BluetoothActionResult>
+        bluetoothOpenSettings: () => Promise<BluetoothActionResult>
+        bluetoothSetRadio: (enabled: boolean) => Promise<BluetoothActionResult>
         volume: () => Promise<number>
         setVolume: (value: number) => Promise<number>
         onVolumeChanged: (callback: (data: number) => void) => () => void

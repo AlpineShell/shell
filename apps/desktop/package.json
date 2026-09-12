@@ -76,7 +76,9 @@
     ],
     "asarUnpack": [
       "electron/shellExecuteWorker.js",
-      "electron/waitForHandleWorker.js"
+      "electron/waitForHandleWorker.js",
+      "electron/bluetoothWorker.js",
+      "electron/bluetoothNative.js"
     ],
     "extraResources": [
       {

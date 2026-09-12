@@ -1,6 +1,97 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { createPersistentRunner } from './powershell.js'
+import path from 'node:path'
+import { createPersistentRunner, runPowerShellFile } from './powershell.js'
+
+const SCRIPT_PATH = path.resolve(path.join(path.sep, 'scripts', 'bluetoothRadio.ps1'))
+
+function makeFakeChild() {
+  const child = new EventEmitter()
+  child.stdout = new EventEmitter()
+  child.stderr = new EventEmitter()
+  child.kill = vi.fn()
+  return child
+}
+
+describe('runPowerShellFile', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('spawns powershell.exe directly with the script after -File', () => {
+    const spawnProcess = vi.fn(() => makeFakeChild())
+    runPowerShellFile(SCRIPT_PATH, ['-Action', 'get'], { spawnProcess })
+
+    const [file, args, options] = spawnProcess.mock.calls[0]
+    expect(file).toBe('powershell.exe')
+    expect(args.slice(args.indexOf('-File'))).toEqual(['-File', SCRIPT_PATH, '-Action', 'get'])
+    expect(options.windowsHide).toBe(true)
+  })
+
+  it('resolves the trimmed stdout when the script exits cleanly', async () => {
+    const child = makeFakeChild()
+    const result = runPowerShellFile(SCRIPT_PATH, [], { spawnProcess: () => child })
+
+    child.stdout.emit('data', Buffer.from('{"state":"on"}\r\n'))
+    child.emit('close', 0)
+
+    await expect(result).resolves.toEqual({ stdout: '{"state":"on"}', stderr: '', exitCode: 0, timedOut: false })
+  })
+
+  it('reports the exit code and a bounded stderr excerpt on failure', async () => {
+    const child = makeFakeChild()
+    const result = runPowerShellFile(SCRIPT_PATH, [], { spawnProcess: () => child })
+
+    child.stderr.emit('data', Buffer.from('x'.repeat(2000)))
+    child.emit('close', 1)
+
+    const settled = await result
+    expect(settled.exitCode).toBe(1)
+    expect(settled.stderr.length).toBeLessThanOrEqual(400)
+  })
+
+  it('kills the process at the deadline and resolves without waiting for close', async () => {
+    const child = makeFakeChild()
+    const result = runPowerShellFile(SCRIPT_PATH, [], { timeoutMs: 5000, spawnProcess: () => child })
+
+    await vi.advanceTimersByTimeAsync(5000)
+
+    expect(child.kill).toHaveBeenCalledTimes(1)
+    await expect(result).resolves.toMatchObject({ exitCode: null, timedOut: true })
+  })
+
+  it('settles only once when close arrives after the deadline', async () => {
+    const child = makeFakeChild()
+    const result = runPowerShellFile(SCRIPT_PATH, [], { timeoutMs: 1000, spawnProcess: () => child })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    child.stdout.emit('data', Buffer.from('late'))
+    child.emit('close', 0)
+
+    await expect(result).resolves.toMatchObject({ stdout: '', timedOut: true })
+  })
+
+  it('resolves instead of rejecting when the process cannot start', async () => {
+    const child = makeFakeChild()
+    const result = runPowerShellFile(SCRIPT_PATH, [], { spawnProcess: () => child })
+
+    child.emit('error', new Error('spawn powershell.exe ENOENT'))
+
+    await expect(result).resolves.toMatchObject({ exitCode: null, timedOut: false, stderr: 'spawn powershell.exe ENOENT' })
+  })
+
+  it('resolves when spawning throws synchronously', async () => {
+    const spawnProcess = () => {
+      throw new Error('spawn failed')
+    }
+
+    await expect(runPowerShellFile(SCRIPT_PATH, [], { spawnProcess })).resolves.toMatchObject({ exitCode: null, stderr: 'spawn failed' })
+  })
+})
 
 const DELIM = '__PS_PERSISTENT_DONE__'
 

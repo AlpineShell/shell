@@ -355,15 +355,11 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('system/bluetooth-changed', handler)
       return () => ipcRenderer.removeListener('system/bluetooth-changed', handler)
     },
-    onBluetoothDevicesChanged: (callback) => {
-      const handler = (_, data) => callback(data)
-      ipcRenderer.on('system/bluetooth-devices-changed', handler)
-      return () => ipcRenderer.removeListener('system/bluetooth-devices-changed', handler)
-    },
-    bluetoothScan: () => ipcRenderer.invoke('system/bluetooth-scan'),
-    bluetoothDevices: () => ipcRenderer.invoke('system/bluetooth-devices'),
-    bluetoothToggle: (instanceId, action) => ipcRenderer.invoke('system/bluetooth-toggle', { instanceId, action }),
-    bluetoothUnpair: (instanceId) => ipcRenderer.invoke('system/bluetooth-unpair', instanceId),
+    bluetoothRefresh: () => ipcRenderer.invoke('system/bluetooth-refresh'),
+    bluetoothConnect: (deviceId) => ipcRenderer.invoke('system/bluetooth-connect', deviceId),
+    bluetoothDisconnect: (deviceId) => ipcRenderer.invoke('system/bluetooth-disconnect', deviceId),
+    bluetoothRemove: (deviceId) => ipcRenderer.invoke('system/bluetooth-remove', deviceId),
+    bluetoothRepairAudio: (deviceId) => ipcRenderer.invoke('system/bluetooth-repair-audio', deviceId),
     bluetoothOpenSettings: () => ipcRenderer.invoke('system/bluetooth-settings'),
     bluetoothSetRadio: (enabled) => ipcRenderer.invoke('system/bluetooth-set-radio', enabled),
     volume: () => ipcRenderer.invoke('system/volume-get'),

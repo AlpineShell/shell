@@ -15,6 +15,50 @@ function runPowerShell(command) {
   })
 }
 
+const DEFAULT_FILE_TIMEOUT_MS = 10000
+const STDERR_EXCERPT_CHARS = 400
+
+function powerShellFileArguments(scriptPath, args) {
+  return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args]
+}
+
+function runPowerShellFile(scriptPath, args = [], { timeoutMs = DEFAULT_FILE_TIMEOUT_MS, spawnProcess = spawn } = {}) {
+  return new Promise((resolve) => {
+    let settled = false
+    let timer = null
+    let stdout = ''
+    let stderr = ''
+
+    function finish(exitCode, timedOut) {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve({ stdout: stdout.trim(), stderr: stderr.trim().slice(0, STDERR_EXCERPT_CHARS), exitCode, timedOut })
+    }
+
+    let child
+    try {
+      child = spawnProcess('powershell.exe', powerShellFileArguments(scriptPath, args), { windowsHide: true })
+    } catch (e) {
+      stderr = e.message
+      finish(null, false)
+      return
+    }
+
+    timer = setTimeout(() => {
+      try { child.kill() } catch { void 0 }
+      finish(null, true)
+    }, timeoutMs)
+    child.stdout?.on('data', (chunk) => { stdout += chunk })
+    child.stderr?.on('data', (chunk) => { stderr += chunk })
+    child.on('error', (e) => {
+      stderr = stderr || e.message
+      finish(null, false)
+    })
+    child.on('close', (code) => finish(code, false))
+  })
+}
+
 const PERSISTENT_DELIM = '__PS_PERSISTENT_DONE__'
 const DEFAULT_COMMAND_TIMEOUT_MS = 10000
 
@@ -130,4 +174,4 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
   return { run, warm, dispose }
 }
 
-module.exports = { runPowerShell, createPersistentRunner }
+module.exports = { runPowerShell, runPowerShellFile, createPersistentRunner }
