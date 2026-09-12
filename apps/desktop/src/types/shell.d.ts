@@ -1281,6 +1281,35 @@ declare global {
     | { kind: 'hide' }
     | { kind: 'refused'; slot: TopbarSlot }
 
+  interface RidgeDragSetup {
+    measure: () => RidgeDragGeometry
+    scrollContainer: () => HTMLElement | null
+    ghost: import('react').RefObject<HTMLDivElement | null>
+    caret: import('react').RefObject<HTMLDivElement | null>
+    onLift(id: TopbarItemId): void
+    onTarget(target: RidgeDropTarget | null): void
+    onDrop(id: TopbarItemId, target: RidgeDropTarget | null): void
+    onCancel(): void
+  }
+
+  interface RidgeDragControls {
+    start(event: import('react').PointerEvent<HTMLElement>, id: TopbarItemId): void
+    takeSuppressedClick(): boolean
+  }
+
+  interface RidgeDragSession {
+    id: TopbarItemId
+    element: HTMLElement
+    origin: RidgePoint
+    grabOffset: RidgePoint
+    pointer: RidgePoint
+    active: boolean
+    geometry: RidgeDragGeometry | null
+    target: RidgeDropTarget | null
+    scroller: HTMLElement | null
+    scrollTimer: number | null
+  }
+
   type RidgeKeyStep = 'earlier' | 'later' | 'first' | 'last'
 
   type RidgeKeyIntent =
