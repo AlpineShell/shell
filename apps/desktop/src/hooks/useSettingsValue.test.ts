@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { Circle } from 'lucide-react'
-import { useSettingsValue } from './useSettingsValue'
+import { useSettingsValue, writeSettingsValue } from './useSettingsValue'
 
 interface StubOptions {
   stored?: SettingsValue
@@ -226,5 +226,64 @@ describe('useSettingsValue', () => {
     })
 
     await waitFor(() => expect(result.current.value).toBe(false))
+  })
+})
+
+describe('writeSettingsValue', () => {
+  it('resolves true once the entry has written the value', async () => {
+    const { entry } = stubEntry()
+
+    await expect(writeSettingsValue(entry, true)).resolves.toBe(true)
+    expect(entry.write).toHaveBeenCalledWith(true)
+  })
+
+  it('resolves false when the entry refuses the write', async () => {
+    const { entry } = stubEntry({ writeFails: 'Another app already owns that shortcut.' })
+
+    await expect(writeSettingsValue(entry, true)).resolves.toBe(false)
+  })
+
+  it('resolves only after it has read back the value a refused write left behind', async () => {
+    const { entry } = stubEntry({ stored: false, writeFails: true })
+    const { result } = renderHook(() => useSettingsValue(entry))
+    await waitFor(() => expect(result.current.value).toBe(false))
+
+    let written: boolean | undefined
+    await act(async () => {
+      written = await writeSettingsValue(entry, true)
+    })
+
+    expect(written).toBe(false)
+    expect(entry.read).toHaveBeenCalledTimes(2)
+    expect(result.current.value).toBe(false)
+  })
+
+  it('resolves false for a confirm entry, which only stages the value', async () => {
+    const { entry } = stubEntry({ applies: 'confirm' })
+
+    await expect(writeSettingsValue(entry, true)).resolves.toBe(false)
+    expect(entry.write).not.toHaveBeenCalled()
+  })
+
+  it('resolves false when the entry throws before its write starts', async () => {
+    const { entry } = stubEntry()
+    vi.mocked(entry.write).mockImplementation(() => {
+      throw new Error('The bridge is missing.')
+    })
+
+    await expect(writeSettingsValue(entry, true)).resolves.toBe(false)
+  })
+
+  it('takes broadcasts again by the time it resolves', async () => {
+    const { entry, broadcast } = stubEntry({ stored: 20 })
+    const { result } = renderHook(() => useSettingsValue(entry))
+    await waitFor(() => expect(result.current.value).toBe(20))
+
+    await act(async () => {
+      await writeSettingsValue(entry, 60)
+    })
+    act(() => broadcast(35))
+
+    expect(result.current.value).toBe(35)
   })
 })
