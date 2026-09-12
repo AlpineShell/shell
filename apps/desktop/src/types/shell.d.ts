@@ -755,6 +755,104 @@ declare global {
     order?: number
   }
 
+  interface TopbarSurface {
+    bg: string
+    darkText: boolean
+    borderColor: string
+  }
+
+  interface TopbarItemTarget {
+    slot: TopbarSlot
+    index: number
+  }
+
+  type TopbarStepDirection = 'earlier' | 'later'
+
+  type TopbarGatedItemId = Extract<TopbarItemId, 'launcher' | 'tray'>
+
+  type TopbarItemSettingGates = Readonly<Record<TopbarGatedItemId, string>>
+
+  interface TopbarLayoutEditor {
+    items: TopbarLayoutItem[]
+    error: string | null
+    commit(items: TopbarLayoutItem[]): Promise<boolean>
+    reset(): Promise<boolean>
+  }
+
+  interface TopbarInteractiveZone {
+    left: number
+    right: number
+  }
+
+  type PowerAction = 'shutdown' | 'restart' | 'logout'
+
+  type PowerMenuPress = { run: PowerAction } | { armed: PowerAction }
+
+  interface SystemMenuFaceProps {
+    darkText: boolean
+  }
+
+  interface SystemMenuActionsProps {
+    darkText: boolean
+    confirmRequired: boolean
+  }
+
+  interface NoticeFaceProps {
+    notice: Pick<ShellNotice, 'title' | 'message' | 'tone' | 'busy'>
+    darkText: boolean
+  }
+
+  interface LauncherFaceProps {
+    darkText: boolean
+  }
+
+  type TrayFaceIcon = Pick<TrayIcon, 'id' | 'tooltip' | 'icon'>
+
+  interface TrayFaceProps {
+    icons: TrayFaceIcon[]
+    showCaret: boolean
+    darkText: boolean
+  }
+
+  interface TrayIconGlyphProps {
+    src: string
+  }
+
+  interface TrayCaretGlyphProps {
+    darkText: boolean
+  }
+
+  interface MusicBarsGlyphProps {
+    peak: number
+    color: string
+  }
+
+  interface MediaFaceProps {
+    title: string
+    appIcon: string | null
+    peak: number
+    darkText: boolean
+  }
+
+  interface MicrophoneFaceProps {
+    label: string
+    darkText: boolean
+  }
+
+  interface StatusFaceProps {
+    bluetooth: Pick<BluetoothState, 'enabled' | 'connected'>
+    network: Pick<NetworkStatus, 'signal' | 'connected' | 'type'>
+    radioOn: boolean
+    battery: Pick<BatteryStatus, 'percent' | 'charging' | 'hasBattery'>
+    darkText: boolean
+  }
+
+  interface ClockFaceProps {
+    time: string
+    date: string
+    darkText: boolean
+  }
+
   type AlpineHtml = (strings: TemplateStringsArray, ...values: unknown[]) => import('react').ReactNode
 
   interface AlpineStoreRuntime {
@@ -920,6 +1018,7 @@ declare global {
     | 'revert'
     | 'appearance'
     | 'wallpaper'
+    | 'ridge'
     | 'search'
     | 'calendar'
     | 'input'
@@ -1124,6 +1223,242 @@ declare global {
     disabled?: boolean
   }
 
+  type RidgeLayoutMode = 'strip' | 'stacked'
+
+  type RidgePluginSlot = Exclude<TopbarSlot, 'center'>
+
+  type RidgeVisibilityStep =
+    | { kind: 'layout'; items: TopbarLayoutItem[] }
+    | { kind: 'layout-reset' }
+    | { kind: 'gate'; item: TopbarGatedItemId; visible: boolean }
+
+  interface RidgeGates {
+    visible: Record<TopbarGatedItemId, boolean>
+    setGate(item: TopbarGatedItemId, visible: boolean): Promise<boolean>
+  }
+
+  interface RidgeEditor {
+    layout: TopbarLayoutItem[]
+    items: TopbarLayoutItem[]
+    error: string | null
+    isDefault: boolean
+    commit(layout: TopbarLayoutItem[]): Promise<boolean>
+    move(id: TopbarItemId, target: TopbarItemTarget): Promise<boolean>
+    step(id: TopbarItemId, direction: TopbarStepDirection): Promise<boolean>
+    show(id: TopbarItemId): Promise<boolean>
+    hide(id: TopbarItemId): Promise<boolean>
+    reset(): Promise<boolean>
+  }
+
+  interface RidgePoint {
+    x: number
+    y: number
+  }
+
+  interface RidgeBox {
+    left: number
+    top: number
+    right: number
+    bottom: number
+  }
+
+  interface RidgeChipBox extends RidgeBox {
+    id: TopbarItemId
+  }
+
+  interface RidgeLaneBox extends RidgeBox {
+    slot: TopbarSlot
+    chips: RidgeChipBox[]
+  }
+
+  interface RidgeDragGeometry {
+    lanes: RidgeLaneBox[]
+    hideZone: RidgeBox | null
+  }
+
+  type RidgeDropTarget =
+    | { kind: 'lane'; slot: TopbarSlot; index: number }
+    | { kind: 'hide' }
+    | { kind: 'refused'; slot: TopbarSlot }
+
+  type RidgeKeyStep = 'earlier' | 'later' | 'first' | 'last'
+
+  type RidgeKeyIntent =
+    | { kind: 'grab' }
+    | { kind: 'drop' }
+    | { kind: 'cancel' }
+    | { kind: 'hide' }
+    | { kind: 'focus'; step: RidgeKeyStep }
+    | { kind: 'move'; step: RidgeKeyStep }
+    | { kind: 'native' }
+
+  interface RidgeClockPreviewData {
+    now: Date
+    prefs: ClockPrefs
+  }
+
+  interface RidgeStatusPreviewData {
+    battery: BatteryStatus
+    bluetooth: BluetoothState
+    network: NetworkStatus
+  }
+
+  interface RidgeMediaPreviewData {
+    playback: MediaPlayback
+    showVisualizer: boolean
+  }
+
+  interface RidgeTrayPreviewData {
+    visible: TrayIcon[]
+    overflow: TrayIcon[]
+    showOverflow: boolean
+  }
+
+  interface RidgePluginWidget {
+    id: string
+    pluginId: string
+    pluginName: string
+    slot: RidgePluginSlot
+    order: number
+  }
+
+  interface RidgePreviewData {
+    color: TopBarColor | null
+    clock: RidgeClockPreviewData
+    status: RidgeStatusPreviewData
+    media: RidgeMediaPreviewData
+    microphone: MicrophoneStatus
+    tray: RidgeTrayPreviewData
+    plugins: Record<RidgePluginSlot, RidgePluginWidget[]>
+  }
+
+  interface RidgeItemPreviewProps {
+    data: RidgePreviewData
+    darkText: boolean
+  }
+
+  type RidgeItemPreview = import('react').ComponentType<RidgeItemPreviewProps>
+
+  interface RidgePluginGroupFaceProps {
+    widgets: RidgePluginWidget[]
+    darkText: boolean
+  }
+
+  interface RidgeItemLink {
+    label: string
+    page: SettingsPageId
+    detail?(data: RidgePreviewData): string | null
+  }
+
+  interface RidgeItemDetail {
+    entries: string[]
+    links: RidgeItemLink[]
+    note(data: RidgePreviewData): string | null
+  }
+
+  interface RidgeCanvasHandle {
+    focusItem(id: TopbarItemId): void
+  }
+
+  interface RidgeCanvasProps {
+    editor: RidgeEditor
+    previewData: RidgePreviewData
+    openItem: TopbarItemId | null
+    onOpenItemChange: (id: TopbarItemId | null) => void
+    renderCallout: (id: TopbarItemId) => import('react').ReactNode
+    measure?: () => RidgeDragGeometry
+    scrollContainer?: () => HTMLElement | null
+    ref?: import('react').Ref<RidgeCanvasHandle>
+  }
+
+  interface RidgeStripProps {
+    surface: TopbarSurface
+    lanes: Record<TopbarSlot, import('react').ReactNode>
+    ref?: import('react').Ref<HTMLDivElement>
+  }
+
+  type RidgeLaneDropState = 'idle' | 'accept' | 'refuse'
+
+  interface RidgeLaneProps {
+    slot: TopbarSlot
+    label: string
+    mode: RidgeLayoutMode
+    surface: TopbarSurface
+    dropState?: RidgeLaneDropState
+    children?: import('react').ReactNode
+    ref?: import('react').Ref<HTMLDivElement>
+  }
+
+  interface RidgeChipProps {
+    id: TopbarItemId
+    label: string
+    darkText: boolean
+    tabbable: boolean
+    expanded: boolean
+    grabbed: boolean
+    controls?: string
+    lifted?: boolean
+    sample?: boolean
+    describedBy?: string
+    onClick: () => void
+    onKeyDown?: (event: import('react').KeyboardEvent<HTMLButtonElement>) => void
+    onKeyUp?: (event: import('react').KeyboardEvent<HTMLButtonElement>) => void
+    onPointerDown?: (event: import('react').PointerEvent<HTMLButtonElement>) => void
+    onFocus?: () => void
+    children: import('react').ReactNode
+    ref?: import('react').Ref<HTMLButtonElement>
+  }
+
+  interface RidgeDragLayerProps {
+    surface: TopbarSurface
+    ghost: import('react').ReactNode | null
+    ghostRef?: import('react').Ref<HTMLDivElement>
+    caretRef?: import('react').Ref<HTMLDivElement>
+  }
+
+  interface RidgeHideZoneProps {
+    active: boolean
+    targeted: boolean
+    ref?: import('react').Ref<HTMLDivElement>
+  }
+
+  interface RidgeAnnouncerProps {
+    message: string
+  }
+
+  interface RidgeCalloutFrameProps {
+    id: string
+    mode: RidgeLayoutMode
+    children: import('react').ReactNode
+    ref?: import('react').Ref<HTMLDivElement>
+    leaderRef?: import('react').Ref<SVGPathElement>
+  }
+
+  interface RidgeCalloutProps {
+    item: TopbarLayoutItem
+    previewData: RidgePreviewData
+    highlightedSetting: string | null
+    sides: TopbarSlot[]
+    canStepEarlier: boolean
+    canStepLater: boolean
+    onSide: (slot: TopbarSlot) => void
+    onStep: (direction: TopbarStepDirection) => void
+    onHide: () => void
+    onNavigate: (path: string) => void
+    onClose: () => void
+  }
+
+  interface RidgeAddMenuProps {
+    items: TopbarItemId[]
+    onSelect: (id: TopbarItemId) => void
+    onDismiss: () => void
+    onNavigate: (path: string) => void
+  }
+
+  interface RidgePageProps {
+    onNavigate: (path: string) => void
+  }
+
   interface Window {
     fileHandlers: {
       state: () => Promise<FileHandlerState[]>
@@ -1225,6 +1560,7 @@ declare global {
     }
     topbar: {
       setActiveRegion: (region: TopbarActiveRegion | null) => void
+      setInteractiveZones: (zones: TopbarInteractiveZone[]) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => () => void
       colorOverride: () => Promise<TopBarColor | null>
@@ -1311,7 +1647,7 @@ declare global {
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>
-        onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => void
+        onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => () => void
         wifiScan: () => Promise<WifiNetwork[] | null>
         wifiNetworks: () => Promise<WifiNetwork[]>
         onWifiScanUpdated: (callback: (data: WifiNetwork[]) => void) => () => void
@@ -1350,7 +1686,10 @@ declare global {
         keepDisplayLayout: () => Promise<{ ok: boolean }>
         revertDisplayLayout: () => Promise<DisplayInfo[]>
         onDisplaysChanged: (callback: (data: DisplayInfo[]) => void) => () => void
-        powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
+        powerAction: (action: PowerAction) => Promise<void>
+        powerConfirm: () => Promise<boolean>
+        setPowerConfirm: (value: boolean) => Promise<boolean>
+        onPowerConfirmChanged: (callback: (value: boolean) => void) => () => void
         onResume: (callback: () => void) => () => void
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>
@@ -1373,11 +1712,11 @@ declare global {
       }
       tray: {
         icons: () => Promise<TrayIcon[]>
-        onIconsChanged: (callback: (data: TrayIcon[]) => void) => void
+        onIconsChanged: (callback: (data: TrayIcon[]) => void) => () => void
         click: (id: string, button: 'left' | 'right', x: number, y: number) => Promise<void>
         layout: () => Promise<TrayLayout>
         setLayout: (layout: TrayLayout) => Promise<TrayLayout>
-        onLayoutChanged: (callback: (data: TrayLayout) => void) => void
+        onLayoutChanged: (callback: (data: TrayLayout) => void) => () => void
         display: () => Promise<TrayDisplaySetting>
         setDisplay: (showOnAllMonitors: boolean) => Promise<TrayDisplaySetting>
         onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => () => void

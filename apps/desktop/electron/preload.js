@@ -71,6 +71,7 @@ ipcRenderer.on('theme/changed', (_, data) => { bootTheme = data })
 
 contextBridge.exposeInMainWorld('topbar', {
   setActiveRegion: (region) => ipcRenderer.send('topbar/set-active-region', region),
+  setInteractiveZones: (zones) => ipcRenderer.send('topbar/set-interactive-zones', zones),
   color: () => ipcRenderer.invoke('topbar/color'),
   onColorChanged: (callback) => {
     const handler = (_, data) => callback(data)
@@ -334,7 +335,9 @@ contextBridge.exposeInMainWorld('shell', {
   network: {
     wifiSignal: () => ipcRenderer.invoke('network/wifi-signal'),
     onWifiSignalChanged: (callback) => {
-      ipcRenderer.on('network/wifi-signal-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('network/wifi-signal-changed', handler)
+      return () => ipcRenderer.removeListener('network/wifi-signal-changed', handler)
     },
     wifiScan: () => ipcRenderer.invoke('network/wifi-scan'),
     wifiNetworks: () => ipcRenderer.invoke('network/wifi-networks'),
@@ -409,6 +412,13 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('system/displays-changed', handler)
     },
     powerAction: (action) => ipcRenderer.invoke('system/power-action', action),
+    powerConfirm: () => ipcRenderer.invoke('system/power-confirm-get'),
+    setPowerConfirm: (value) => ipcRenderer.invoke('system/power-confirm-set', value),
+    onPowerConfirmChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/power-confirm-changed', handler)
+      return () => ipcRenderer.removeListener('system/power-confirm-changed', handler)
+    },
     onResume: (callback) => {
       const handler = () => callback()
       ipcRenderer.on('system/resume', handler)
@@ -456,13 +466,17 @@ contextBridge.exposeInMainWorld('shell', {
   tray: {
     icons: () => ipcRenderer.invoke('tray/icons'),
     onIconsChanged: (callback) => {
-      ipcRenderer.on('tray/icons-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('tray/icons-changed', handler)
+      return () => ipcRenderer.removeListener('tray/icons-changed', handler)
     },
     click: (id, button, x, y) => ipcRenderer.invoke('tray/click', { id, button, x, y }),
     layout: () => ipcRenderer.invoke('tray/layout-get'),
     setLayout: (layout) => ipcRenderer.invoke('tray/layout-set', layout),
     onLayoutChanged: (callback) => {
-      ipcRenderer.on('tray/layout-changed', (_, data) => callback(data))
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('tray/layout-changed', handler)
+      return () => ipcRenderer.removeListener('tray/layout-changed', handler)
     },
     display: () => ipcRenderer.invoke('tray/display-get'),
     setDisplay: (showOnAllMonitors) => ipcRenderer.invoke('tray/display-set', showOnAllMonitors),
