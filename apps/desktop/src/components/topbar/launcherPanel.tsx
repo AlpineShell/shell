@@ -1,6 +1,9 @@
 import { createPortal } from "react-dom"
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
+import { useBluetooth } from "../../hooks/useBluetooth"
+import { canToggleRadio, deviceActionLabel, deviceStatusLabel, displayedRadioOn, isRadioOff, nextDeviceAction, radioEmptyStateTitle } from "../../lib/bluetoothPresentation"
+import { moveSelection, resolveSelection } from "../../lib/listSelection"
 import { useDarkText, useFullscreenWindow } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
@@ -1719,70 +1722,53 @@ function LauncherWifi({ darkText, onBack }: { darkText: boolean; onBack: () => v
   )
 }
 
+const BLUETOOTH_RADIO_ROW = "radio"
+
 function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
   const textColor = darkText ? "text-black" : "text-white"
   const dimText = darkText ? "text-black/50" : "text-white/50"
+  const errorText = darkText ? "text-red-700" : "text-red-300"
   const selectedBg = darkText ? "bg-black/10" : "bg-white/10"
   const iconColor = darkText ? "black" : "white"
   const iconDim = darkText ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)"
 
-  const [devices, setDevices] = useState<BluetoothDevice[]>([])
-  const [enabled, setEnabled] = useState(false)
-  const [scanning, setScanning] = useState(false)
-  const [selected, setSelected] = useState(0)
-  const [togglingId, setTogglingId] = useState<string | null>(null)
+  const { state, toggleDevice, setRadio, refresh } = useBluetooth()
+  const [selection, setSelection] = useState<ListSelection>({ id: BLUETOOTH_RADIO_ROW, index: 0 })
   const listRef = useRef<HTMLDivElement>(null)
 
-  const itemCount = 1 + (enabled ? devices.length : 0)
-
-  const scan = useCallback(async () => {
-    setScanning(true)
-    try { const r = await window.shell.system.bluetoothScan(); if (r) setDevices(r) } finally { setScanning(false) }
-  }, [])
-
-  useEffect(() => {
-    window.shell.system.bluetooth().then((b) => setEnabled(!!b?.enabled)).catch(() => {})
-    window.shell.system.bluetoothDevices().then(setDevices).catch(() => {})
-    const offDevices = window.shell.system.onBluetoothDevicesChanged((d) => { setDevices(d); setTogglingId(null) })
-    const offState = window.shell.system.onBluetoothChanged((b) => setEnabled(!!b?.enabled))
-    scan()
-    return () => { offDevices(); offState() }
-  }, [scan])
+  const radioOn = displayedRadioOn(state)
+  const radioOff = isRadioOff(state)
+  const notice = radioEmptyStateTitle(state)
+  const rowIds = [BLUETOOTH_RADIO_ROW, ...(notice ? [] : state.devices.map((device) => device.id))]
+  const current = resolveSelection(rowIds, selection.id, selection.index)
 
   useEffect(() => {
-    if (selected > itemCount - 1) setSelected(Math.max(0, itemCount - 1))
-  }, [itemCount, selected])
+    refresh()
+  }, [refresh])
 
   useEffect(() => {
-    const el = listRef.current?.querySelector(`[data-idx="${selected}"]`) as HTMLElement | null
+    const el = listRef.current?.querySelector(`[data-idx="${current.index}"]`) as HTMLElement | null
     el?.scrollIntoView({ block: "nearest" })
-  }, [selected])
+  }, [current.index])
 
   function toggleRadio() {
-    const next = !enabled
-    setEnabled(next)
-    setSelected(0)
-    window.shell.system.bluetoothSetRadio(next).then(() => { if (next) scan() }).catch(() => {})
+    if (!canToggleRadio(state)) return
+    setSelection({ id: BLUETOOTH_RADIO_ROW, index: 0 })
+    setRadio(!radioOn)
   }
 
-  function toggleDevice(device: BluetoothDevice) {
-    if (togglingId) return
-    setTogglingId(device.instanceId)
-    window.shell.system.bluetoothToggle(device.instanceId, device.connected ? "disconnect" : "connect")
-  }
-
-  function activate(idx: number) {
-    if (idx === 0) { toggleRadio(); return }
-    const device = devices[idx - 1]
-    if (device) toggleDevice(device)
+  function activate(rowId: string) {
+    if (rowId === BLUETOOTH_RADIO_ROW) { toggleRadio(); return }
+    const device = state.devices.find((candidate) => candidate.id === rowId)
+    if (device && nextDeviceAction(device)) toggleDevice(device)
   }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" || e.key === "Backspace" || e.key === "ArrowLeft") { e.preventDefault(); onBack() }
-      else if (e.key === "ArrowDown") { e.preventDefault(); setSelected((s) => Math.min(s + 1, itemCount - 1)) }
-      else if (e.key === "ArrowUp") { e.preventDefault(); setSelected((s) => Math.max(s - 1, 0)) }
-      else if (e.key === "Enter") { e.preventDefault(); activate(selected) }
+      else if (e.key === "ArrowDown") { e.preventDefault(); setSelection(moveSelection(rowIds, current, 1)) }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setSelection(moveSelection(rowIds, current, -1)) }
+      else if (e.key === "Enter") { e.preventDefault(); activate(current.id) }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
@@ -1791,40 +1777,49 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
   return (
     <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto">
       <button
+        type="button"
+        role="switch"
+        aria-checked={radioOn}
+        aria-label="Bluetooth"
+        aria-disabled={!canToggleRadio(state)}
         data-idx={0}
-        onMouseMove={() => setSelected(0)}
+        onMouseMove={() => setSelection({ id: BLUETOOTH_RADIO_ROW, index: 0 })}
         onClick={toggleRadio}
-        className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${selected === 0 ? selectedBg : ""}`}
+        className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${current.id === BLUETOOTH_RADIO_ROW ? selectedBg : ""}`}
       >
         <Bluetooth size={18} className={`w-7 shrink-0 ${dimText}`} />
         <span className={`flex-1 text-[13px] ${textColor}`}>Bluetooth</span>
-        <SubToggle on={enabled} darkText={darkText} />
+        <span className="transition-opacity" style={{ opacity: state.radio.pending ? 0.55 : 1 }}>
+          <SubToggle on={radioOn} darkText={darkText} />
+        </span>
       </button>
 
-      {enabled && <div className={`h-px my-1 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
+      {!radioOff && <div className={`h-px my-1 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
 
-      {!enabled ? null : scanning && devices.length === 0 ? (
-        <div className={`flex items-center justify-center py-4 ${dimText}`}><Loader2 size={18} className="animate-spin" /></div>
-      ) : devices.length === 0 ? (
-        <div className={`flex items-center gap-2 justify-center py-4 text-[13px] ${dimText}`}><Bluetooth size={15} /><span>No devices</span></div>
+      {radioOff ? null : notice ? (
+        <div className={`flex items-center gap-2 justify-center py-4 text-[13px] ${dimText}`}><Bluetooth size={15} /><span>{notice}</span></div>
       ) : (
-        devices.map((device, i) => {
-          const idx = i + 1
-          const busy = togglingId === device.instanceId
+        state.devices.map((device, i) => {
+          const index = i + 1
+          const busy = device.pending !== null
+          const actionable = nextDeviceAction(device) !== null
           return (
             <button
-              key={device.instanceId}
-              data-idx={idx}
-              onMouseMove={() => setSelected(idx)}
-              onClick={() => toggleDevice(device)}
-              className={`w-full flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${idx === selected ? selectedBg : ""}`}
+              type="button"
+              key={device.id}
+              data-idx={index}
+              aria-label={deviceActionLabel(device)}
+              aria-disabled={!actionable}
+              onMouseMove={() => setSelection({ id: device.id, index })}
+              onClick={() => activate(device.id)}
+              className={`w-full flex items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${actionable ? "cursor-pointer" : "cursor-default"} ${current.id === device.id ? selectedBg : ""}`}
             >
               <span className="w-7 shrink-0 flex justify-center">
                 {busy ? <Loader2 size={15} className={`animate-spin ${dimText}`} /> : device.connected ? <BluetoothConnected color={iconColor} size={15} /> : <Bluetooth color={iconDim} size={15} />}
               </span>
               <div className="flex flex-col min-w-0 flex-1">
                 <span className={`text-[13px] truncate ${textColor}`}>{device.name}</span>
-                <span className={`text-[11px] ${dimText}`}>{busy ? (device.connected ? "Disconnecting…" : "Connecting…") : device.connected ? "Connected" : "Paired"}</span>
+                <span className={`text-[11px] ${device.error ? errorText : dimText}`}>{deviceStatusLabel(device)}</span>
               </div>
             </button>
           )

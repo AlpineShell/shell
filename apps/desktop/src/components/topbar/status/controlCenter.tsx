@@ -1,13 +1,14 @@
 import { useRef, useState, useEffect } from "react";
 import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Settings, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
 import { useDarkText } from "../../themeContext";
+import { connectedSummary, displayedRadioOn } from "../../../lib/bluetoothPresentation";
 import WifiMenu from "./wifiMenu";
 import BluetoothMenu from "./bluetoothMenu";
 
 interface ControlCenterProps {
     battery: BatteryStatus;
     network: NetworkStatus;
-    bluetooth: { enabled: boolean; connected: boolean; devices: string[] };
+    bluetooth: BluetoothState;
     volume: number;
     setVolume: (value: number) => void;
     muted: boolean;
@@ -19,10 +20,6 @@ interface ControlCenterProps {
     scanWifi: () => void;
     wifiRadio: boolean;
     onToggleWifiRadio: (enabled: boolean) => void;
-    btDevices: BluetoothDevice[];
-    btScanning: boolean;
-    scanBluetooth: () => void;
-    onToggleBluetoothRadio: (enabled: boolean) => void;
 }
 
 function batteryLabel(battery: BatteryStatus): string | undefined {
@@ -41,7 +38,7 @@ function batteryIcon(percent: number | null, charging: boolean): React.FC<{ colo
 
 type View = 'main' | 'wifi' | 'bluetooth';
 
-export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness, wifiNetworks, wifiScanning, scanWifi, wifiRadio, onToggleWifiRadio, btDevices, btScanning, scanBluetooth, onToggleBluetoothRadio }: ControlCenterProps) {
+export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness, wifiNetworks, wifiScanning, scanWifi, wifiRadio, onToggleWifiRadio }: ControlCenterProps) {
     const darkText = useDarkText();
     const [view, setView] = useState<View>('main');
 
@@ -49,12 +46,7 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
         ? network.ssid
         : undefined;
 
-    let btLabel: string | undefined;
-    if (bluetooth.enabled && bluetooth.connected && bluetooth.devices.length > 0) {
-        btLabel = bluetooth.devices.length > 1
-            ? `${bluetooth.devices.length} Connected`
-            : bluetooth.devices[0];
-    }
+    const btLabel = connectedSummary(bluetooth);
 
     const mainRef = useRef<HTMLDivElement>(null);
     const subRef = useRef<HTMLDivElement>(null);
@@ -79,7 +71,7 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                 <div ref={mainRef} className="p-3 gap-3 flex flex-col h-fit w-65 shrink-0">
                     <div className="gap-3 mb-1 flex flex-col">
                         <ControlItem label="Wi-Fi" sublabel={wifiLabel} active={wifiRadio} Icon={Wifi} darkText={darkText} onClick={() => setView('wifi')} />
-                        <ControlItem label="Bluetooth" sublabel={btLabel} active={bluetooth.enabled} Icon={Bluetooth} darkText={darkText} onClick={() => setView('bluetooth')} />
+                        <ControlItem label="Bluetooth" sublabel={btLabel} active={displayedRadioOn(bluetooth)} Icon={Bluetooth} darkText={darkText} onClick={() => setView('bluetooth')} />
                     </div>
                     <div className="flex flex-col gap-2">
                         <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
@@ -115,7 +107,7 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
 
                 <div ref={subRef} className="w-65 shrink-0 self-start">
                     {view === 'wifi' && <WifiMenu networks={wifiNetworks} scanning={wifiScanning} enabled={wifiRadio} onToggleRadio={onToggleWifiRadio} onScan={scanWifi} onBack={() => setView('main')} darkText={darkText} />}
-                    {view === 'bluetooth' && <BluetoothMenu devices={btDevices} scanning={btScanning} enabled={bluetooth.enabled} onToggleRadio={onToggleBluetoothRadio} onScan={scanBluetooth} onBack={() => setView('main')} darkText={darkText} />}
+                    {view === 'bluetooth' && <BluetoothMenu onBack={() => setView('main')} darkText={darkText} />}
                 </div>
             </div>
         </div>
@@ -141,7 +133,7 @@ function ControlItem({ label, sublabel, active, Icon, darkText, onClick }: { lab
 }
 
 function Slider({ Icon, iconSrc, value, onChange, label, onIconClick, muted, darkText }: { Icon?: React.FC<{ color: string; size: number }>; iconSrc?: string; value: number; onChange: (value: number) => void; label?: string; onIconClick?: () => void; muted?: boolean; darkText: boolean }) {
-    const dragging = useRef(false);
+    const [dragging, setDragging] = useState(false);
     const color = darkText ? "black" : "white";
     const mutedColor = darkText ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.4)";
     return (
@@ -160,11 +152,11 @@ function Slider({ Icon, iconSrc, value, onChange, label, onIconClick, muted, dar
                 min={0}
                 max={100}
                 value={value}
-                onPointerDown={() => { dragging.current = true }}
-                onPointerUp={() => { dragging.current = false }}
-                onLostPointerCapture={() => { dragging.current = false }}
+                onPointerDown={() => setDragging(true)}
+                onPointerUp={() => setDragging(false)}
+                onLostPointerCapture={() => setDragging(false)}
                 onChange={(e) => onChange(Number(e.target.value))}
-                className={`cc-slider w-full ${dragging.current ? 'dragging' : 'animate'} ${darkText ? 'cc-slider-light' : ''}`}
+                className={`cc-slider w-full ${dragging ? 'dragging' : 'animate'} ${darkText ? 'cc-slider-light' : ''}`}
                 style={{ '--slider-progress': `${value}%` } as React.CSSProperties}
             />
             </div>

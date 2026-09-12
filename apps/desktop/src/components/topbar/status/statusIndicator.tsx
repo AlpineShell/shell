@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, BluetoothConnected, BluetoothOff, EthernetPort, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
 import { useBattery } from "../../../hooks/useBattery";
 import { useBluetooth } from "../../../hooks/useBluetooth";
 import { useMonitors } from "../../../hooks/useMonitors";
 import { useVolume } from "../../../hooks/useVolume";
 import { useNetworkStatus } from "../../../hooks/useNetwork";
+import { indicatorKind } from "../../../lib/bluetoothPresentation";
 import ControlCenter from "./controlCenter";
 import PopupMenu from "../shared/popupMenu";
 import { useDarkText } from "../../themeContext";
@@ -23,10 +25,10 @@ function NetworkIcon({ signal, connected, type, radioOn, color }: { signal: numb
     return <WifiZero color={color} size={14} />;
 }
 
-function BluetoothIcon({ enabled, connected, color }: { enabled: boolean; connected: boolean; color: string }) {
-    if (!enabled) return <BluetoothOff color={color} size={14} />;
-    if (connected) return <BluetoothConnected color={color} size={14} />;
-    return <Bluetooth color={color} size={14} />;
+function BluetoothIcon({ kind, color }: { kind: BluetoothIndicatorKind; color: string }) {
+    if (kind === 'off') return <BluetoothOff color={color} size={14} />;
+    if (kind === 'connected') return <BluetoothConnected color={color} size={14} />;
+    return <Bluetooth color={color} size={14} opacity={kind === 'neutral' ? 0.5 : 1} />;
 }
 
 function BatteryIcon({ percent, charging, color }: { percent: number | null; charging: boolean; color: string }) {
@@ -38,132 +40,76 @@ function BatteryIcon({ percent, charging, color }: { percent: number | null; cha
     return <BatteryWarning color={color} className="ml-0.5" size={16} />
 }
 
+function requestWifiScan(setNetworks: Dispatch<SetStateAction<WifiNetwork[]>>, setScanning: Dispatch<SetStateAction<boolean>>) {
+    window.shell.network.wifiScan().then((result) => {
+        if (result) setNetworks(result);
+        setScanning(false);
+    });
+}
+
+function requestWifiRadio(setRadio: Dispatch<SetStateAction<boolean>>) {
+    window.shell.network.wifiRadioGet().then((r) => {
+        if (r.success) setRadio(r.state === 'on');
+    });
+}
+
 export default function StatusIndicator() {
     const darkText = useDarkText();
     const battery = useBattery();
     const network = useNetworkStatus();
-    const bluetooth = useBluetooth();
+    const { state: bluetooth } = useBluetooth();
     const { volume, setVolume, muted, toggleMute } = useVolume();
     const { monitors, setBrightness: setMonitorBrightness } = useMonitors();
     const iconColor = darkText ? "black" : "white";
 
     const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([]);
-    const [wifiScanning, setWifiScanning] = useState(false);
+    const [wifiScanning, setWifiScanning] = useState(true);
     const [wifiRadio, setWifiRadio] = useState(true);
-    const [btDevices, setBtDevices] = useState<BluetoothDevice[]>([]);
-    const [btScanning, setBtScanning] = useState(false);
-    const [btEnabledOverride, setBtEnabledOverride] = useState<boolean | null>(null);
-
-    const btResolved = btEnabledOverride !== null
-        ? { ...bluetooth, enabled: btEnabledOverride, connected: btEnabledOverride && bluetooth.connected, devices: btEnabledOverride ? bluetooth.devices : [] }
-        : bluetooth;
-
-    useEffect(() => {
-        if (btEnabledOverride !== null && bluetooth.enabled === btEnabledOverride) {
-            setBtEnabledOverride(null);
-        }
-    }, [bluetooth.enabled, btEnabledOverride]);
-
-    function refreshWifiRadio() {
-        window.shell.network.wifiRadioGet().then((r) => {
-            if (r.success) setWifiRadio(r.state === 'on');
-        });
-    }
 
     function toggleWifiRadio(enabled: boolean) {
         setWifiRadio(enabled);
         window.shell.network.wifiRadioSet(enabled).then((r) => {
             if (r.success) setWifiRadio(r.state === 'on');
-            else refreshWifiRadio();
+            else requestWifiRadio(setWifiRadio);
         });
-    }
-
-    function toggleBluetoothRadio(enabled: boolean) {
-        setBtEnabledOverride(enabled);
-        if (!enabled) {
-            setBtDevices([]);
-            setBtScanning(false);
-        } else {
-            setBtDevices([]);
-            setBtScanning(true);
-        }
-        window.shell.system.bluetoothSetRadio(enabled)
-            .then(() => {
-                if (enabled) {
-                    let attempts = 0;
-                    const trySCan = () => {
-                        attempts++;
-                        window.shell.system.bluetoothScan().then((result) => {
-                            if (result.length > 0 || attempts >= 4) {
-                                setBtDevices(result);
-                                setBtScanning(false);
-                            } else {
-                                setTimeout(trySCan, 1500);
-                            }
-                        });
-                    };
-                    setTimeout(trySCan, 1500);
-                }
-            })
-            .catch(() => {
-                setBtEnabledOverride(null);
-                setBtScanning(false);
-            });
     }
 
     function scanWifi() {
         setWifiScanning(true);
-        window.shell.network.wifiScan().then((result) => {
-            if (result) setWifiNetworks(result);
-            setWifiScanning(false);
-        });
+        requestWifiScan(setWifiNetworks, setWifiScanning);
     }
 
-    function scanBluetooth() {
-        setBtScanning(true);
-        window.shell.system.bluetoothScan().then((result) => {
-            setBtDevices(result);
-            setBtScanning(false);
-        });
-    }
-
-    function scanAll() {
+    function refreshWifi() {
         scanWifi();
-        scanBluetooth();
-        refreshWifiRadio();
+        requestWifiRadio(setWifiRadio);
     }
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
-        scanAll();
-        window.shell.network.onWifiScanUpdated((data) => {
+        requestWifiScan(setWifiNetworks, setWifiScanning);
+        requestWifiRadio(setWifiRadio);
+        return window.shell.network.onWifiScanUpdated((data) => {
             setWifiNetworks(data);
             setWifiScanning(false);
-        });
-        window.shell.system.onBluetoothDevicesChanged((data) => {
-            setBtDevices(data);
         });
     }, []);
 
     return (
         <PopupMenu
-            onOpen={scanAll}
+            onOpen={refreshWifi}
             trigger={
                 <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-4.5 items-center gap-1 transition-colors duration-300`}>
-                    <BluetoothIcon enabled={btResolved.enabled} connected={btResolved.connected} color={iconColor} />
+                    <BluetoothIcon kind={indicatorKind(bluetooth)} color={iconColor} />
                     <NetworkIcon signal={network.signal} connected={network.connected} type={network.type} radioOn={wifiRadio} color={iconColor} />
                     {battery.hasBattery && <BatteryIcon percent={battery.percent} charging={battery.charging} color={iconColor} />}
                 </div>
             }
         >
             <ControlCenter
-                battery={battery} network={network} bluetooth={btResolved}
+                battery={battery} network={network} bluetooth={bluetooth}
                 volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute}
                 monitors={monitors} setMonitorBrightness={setMonitorBrightness}
                 wifiNetworks={wifiNetworks} wifiScanning={wifiScanning} scanWifi={scanWifi}
                 wifiRadio={wifiRadio} onToggleWifiRadio={toggleWifiRadio}
-                btDevices={btDevices} btScanning={btScanning} scanBluetooth={scanBluetooth}
-                onToggleBluetoothRadio={toggleBluetoothRadio}
             />
         </PopupMenu>
     );
