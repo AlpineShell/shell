@@ -10,6 +10,7 @@ import {
   encodeGuid,
   encodeKsProperty,
   propertyKeyBuffer,
+  summarizeOutcomes,
 } from './bluetoothNative.js'
 
 const FRIENDLY_NAME = { guid: '{a45c254e-df1c-4efd-8020-67d146a850e0}', pid: 14 }
@@ -77,6 +78,25 @@ describe('controlCode', () => {
     expect(controlCode(0x41, 3, 0, 0)).toBe(0x0041000c)
     expect(IOCTL_KS_PROPERTY).toBe(0x002f0003)
     expect(IOCTL_BTH_DISCONNECT_DEVICE).toBe(0x0041000c)
+  })
+})
+
+describe('summarizeOutcomes', () => {
+  const refusedOpen = { ok: false, stage: 'open', win32Error: 5, timedOut: false, abandoned: false }
+  const accepted = { ok: true, stage: 'ioctl', win32Error: 0, timedOut: false, abandoned: false }
+  const uncancelled = { ok: false, stage: 'ioctl', win32Error: 258, timedOut: true, abandoned: true }
+
+  it('succeeds when any audio filter accepted the request', () => {
+    expect(summarizeOutcomes('ks-reconnect', [refusedOpen, accepted])).toMatchObject({ ok: true, attempts: 2, failedAt: null, win32Error: 0 })
+  })
+
+  it('reports where the first attempt failed when none succeeded', () => {
+    expect(summarizeOutcomes('ks-reconnect', [refusedOpen])).toMatchObject({ ok: false, failedAt: 'open', win32Error: 5 })
+  })
+
+  it('reports I/O the driver never finished cancelling, so its buffers stay alive', () => {
+    expect(summarizeOutcomes('ks-reconnect', [uncancelled]).abandoned).toBe(true)
+    expect(summarizeOutcomes('ks-reconnect', [accepted]).abandoned).toBe(false)
   })
 })
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { createWorkerChannel } from './workerChannel.js'
+import { MAX_DEATHS_WITHOUT_REPLY, createWorkerChannel } from './workerChannel.js'
 
 function makeFakeWorker() {
   const worker = new EventEmitter()
@@ -9,6 +9,10 @@ function makeFakeWorker() {
   worker.terminate = vi.fn(() => Promise.resolve(0))
   worker.unref = vi.fn()
   worker.reply = (value) => worker.emit('message', { id: worker.posted.at(-1).id, value })
+  worker.crash = () => {
+    worker.emit('error', new Error('cannot load module'))
+    worker.emit('exit', 1)
+  }
   return worker
 }
 
@@ -38,7 +42,6 @@ describe('createWorkerChannel', () => {
     worker.reply({ nodes: [] })
 
     await expect(result).resolves.toEqual({ ok: true, value: { nodes: [] } })
-    expect(channel.isBusy()).toBe(false)
   })
 
   it('resolves a reply that carries an error as a failure', async () => {
@@ -71,7 +74,6 @@ describe('createWorkerChannel', () => {
     await vi.advanceTimersByTimeAsync(2000)
     await first
 
-    expect(channel.isBusy()).toBe(true)
     await expect(channel.request({ type: 'read-nodes' }, 2000)).resolves.toEqual({ ok: false, error: 'stuck' })
     expect(createWorker).toHaveBeenCalledTimes(1)
 
@@ -97,6 +99,35 @@ describe('createWorkerChannel', () => {
     expect(createWorker).toHaveBeenCalledTimes(2)
   })
 
+  it('stops creating workers once several in a row die before replying', async () => {
+    const workers = Array.from({ length: MAX_DEATHS_WITHOUT_REPLY + 1 }, makeFakeWorker)
+    const { channel, createWorker } = channelOver(workers)
+
+    for (const worker of workers.slice(0, MAX_DEATHS_WITHOUT_REPLY)) {
+      const pending = channel.request({ type: 'read-nodes' }, 2000)
+      worker.crash()
+      await pending
+    }
+
+    await expect(channel.request({ type: 'read-nodes' }, 2000)).resolves.toEqual({ ok: false, error: 'unavailable' })
+    expect(createWorker).toHaveBeenCalledTimes(MAX_DEATHS_WITHOUT_REPLY)
+  })
+
+  it('keeps replacing workers that replied before they died', async () => {
+    const workers = Array.from({ length: MAX_DEATHS_WITHOUT_REPLY + 1 }, makeFakeWorker)
+    const { channel, createWorker } = channelOver(workers)
+
+    for (const worker of workers.slice(0, MAX_DEATHS_WITHOUT_REPLY)) {
+      const answered = channel.request({ type: 'read-nodes' }, 2000)
+      worker.reply('ok')
+      await answered
+      worker.crash()
+    }
+    channel.request({ type: 'read-nodes' }, 2000)
+
+    expect(createWorker).toHaveBeenCalledTimes(MAX_DEATHS_WITHOUT_REPLY + 1)
+  })
+
   it('reports the channel as unavailable when no worker can be created, without retrying', async () => {
     const createWorker = vi.fn(() => {
       throw new Error('no worker_threads')
@@ -106,14 +137,5 @@ describe('createWorkerChannel', () => {
     await expect(channel.request({ type: 'read-nodes' }, 2000)).resolves.toEqual({ ok: false, error: 'unavailable' })
     await expect(channel.request({ type: 'read-nodes' }, 2000)).resolves.toEqual({ ok: false, error: 'unavailable' })
     expect(createWorker).toHaveBeenCalledTimes(1)
-  })
-
-  it('is busy while a request is outstanding', () => {
-    const worker = makeFakeWorker()
-    const { channel } = channelOver([worker])
-
-    channel.request({ type: 'read-nodes' }, 2000)
-
-    expect(channel.isBusy()).toBe(true)
   })
 })

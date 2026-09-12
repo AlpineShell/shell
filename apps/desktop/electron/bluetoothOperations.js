@@ -7,15 +7,26 @@ const DEVICE_OPERATION_DEADLINE_MS = {
 const RADIO_CHANGE_DEADLINE_MS = 15000
 const ERROR_VISIBLE_MS = 8000
 const REMOVAL_CONFIRMATION_READS = 2
+const STALE_AFTER_FAILED_READS = 3
+const RADIO_RETRY_FIRST_MS = 5000
+const RADIO_RETRY_MAX_MS = 60000
 const RADIO_STATES = new Set(['on', 'off', 'unavailable', 'unknown'])
 const REMOVED_TRANSPORT_OUTCOMES = new Set(['removed', 'absent'])
+const ERROR_RECOVERED_WHEN = {
+  'connect-failed': (device) => device.classicConnected,
+  'disconnect-failed': (device) => !device.classicConnected,
+  'repair-failed': (device) => !device.audioDisabled,
+  'repair-cancelled': (device) => !device.audioDisabled,
+}
 
 function createSession() {
   return {
     radio: { state: 'unknown', pending: null, error: null },
     devices: [],
     devicesAvailable: false,
+    failedReads: 0,
     stackSignature: null,
+    lastOperationId: 0,
     operations: {},
     errors: {},
     absentReads: {},
@@ -32,8 +43,9 @@ function findDevice(session, deviceId) {
   return session.devices.find((device) => device.id === deviceId) ?? null
 }
 
-function pendingAction(session, deviceId) {
-  return session.operations[deviceId]?.action ?? null
+function isCurrentOperation(session, deviceId, operationId) {
+  const operation = session.operations[deviceId]
+  return !!operation && operation.id === operationId
 }
 
 function isRadioState(state) {
@@ -58,20 +70,24 @@ function operationRefusal(session, device, action) {
 
 function beginDeviceOperation(session, deviceId, action, now) {
   const refusal = operationRefusal(session, findDevice(session, deviceId), action)
-  if (refusal) return { session, error: refusal }
+  if (refusal) return { session, error: refusal, operationId: null }
+  const operationId = session.lastOperationId + 1
+  const operation = { id: operationId, action, deadline: now + DEVICE_OPERATION_DEADLINE_MS[action] }
   return {
     session: {
       ...session,
-      operations: { ...session.operations, [deviceId]: { action, deadline: now + DEVICE_OPERATION_DEADLINE_MS[action] } },
+      lastOperationId: operationId,
+      operations: { ...session.operations, [deviceId]: operation },
       errors: withoutKey(session.errors, deviceId),
       absentReads: withoutKey(session.absentReads, deviceId),
     },
     error: null,
+    operationId,
   }
 }
 
-function failDeviceOperation(session, deviceId, kind, now) {
-  if (!session.operations[deviceId]) return session
+function failDeviceOperation(session, deviceId, operationId, kind, now) {
+  if (!isCurrentOperation(session, deviceId, operationId)) return session
   return {
     ...session,
     operations: withoutKey(session.operations, deviceId),
@@ -116,20 +132,29 @@ function settleDeviceOperations(session, confirmed, now) {
   return { ...session, operations, errors, absentReads }
 }
 
+function isErrorRecovered(error, device) {
+  const recovered = ERROR_RECOVERED_WHEN[error.kind]
+  return !!device && !!recovered && recovered(device)
+}
+
 function clearRecoveredErrors(errors, devices) {
   const next = { ...errors }
   for (const [deviceId, error] of Object.entries(errors)) {
-    if (!error.kind.startsWith('repair')) continue
     const device = devices.find((candidate) => candidate.id === deviceId)
-    if (device && !device.audioDisabled) delete next[deviceId]
+    if (isErrorRecovered(error, device)) delete next[deviceId]
   }
   return next
 }
 
 function applyDeviceRead(session, read, now) {
-  const next = { ...session, devices: read.devices, devicesAvailable: true, stackSignature: read.signature }
+  const next = { ...session, devices: read.devices, devicesAvailable: true, failedReads: 0, stackSignature: read.signature }
   const settled = settleDeviceOperations(next, read.confirmed, now)
   return { ...settled, errors: clearRecoveredErrors(settled.errors, settled.devices) }
+}
+
+function applyFailedRead(session) {
+  const failedReads = session.failedReads + 1
+  return { ...session, failedReads, devicesAvailable: session.devicesAvailable && failedReads < STALE_AFTER_FAILED_READS }
 }
 
 function expireErrors(errors, now) {
@@ -175,12 +200,16 @@ function applyRadioSetResult(session, result, now) {
   return { ...withState, radio: { ...withState.radio, pending: null, error: { kind, expiresAt: now + ERROR_VISIBLE_MS } } }
 }
 
+function nextRadioRetryDelay(previousMs) {
+  return previousMs > 0 ? Math.min(previousMs * 2, RADIO_RETRY_MAX_MS) : RADIO_RETRY_FIRST_MS
+}
+
 function publicDevice(device, session) {
   return {
     id: device.id,
     name: device.name,
     connected: device.connected,
-    canConnect: device.canConnect,
+    canConnect: device.canConnect && !device.classicConnected,
     canDisconnect: device.classicConnected,
     audioDisabled: device.audioDisabled,
     pending: session.operations[device.id]?.action ?? null,
@@ -208,7 +237,11 @@ module.exports = {
   DEVICE_OPERATION_DEADLINE_MS,
   ERROR_VISIBLE_MS,
   RADIO_CHANGE_DEADLINE_MS,
+  RADIO_RETRY_FIRST_MS,
+  RADIO_RETRY_MAX_MS,
+  STALE_AFTER_FAILED_READS,
   applyDeviceRead,
+  applyFailedRead,
   applyRadioRead,
   applyRadioSetResult,
   beginDeviceOperation,
@@ -218,8 +251,9 @@ module.exports = {
   expireSession,
   failDeviceOperation,
   findDevice,
+  isCurrentOperation,
   isRadioState,
-  pendingAction,
+  nextRadioRetryDelay,
   removalError,
   stateKey,
 }

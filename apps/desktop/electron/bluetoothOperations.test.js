@@ -3,7 +3,11 @@ import {
   DEVICE_OPERATION_DEADLINE_MS,
   ERROR_VISIBLE_MS,
   RADIO_CHANGE_DEADLINE_MS,
+  RADIO_RETRY_FIRST_MS,
+  RADIO_RETRY_MAX_MS,
+  STALE_AFTER_FAILED_READS,
   applyDeviceRead,
+  applyFailedRead,
   applyRadioRead,
   applyRadioSetResult,
   beginDeviceOperation,
@@ -12,7 +16,8 @@ import {
   createSession,
   expireSession,
   failDeviceOperation,
-  pendingAction,
+  isCurrentOperation,
+  nextRadioRetryDelay,
   removalError,
   stateKey,
 } from './bluetoothOperations.js'
@@ -32,6 +37,10 @@ function device(overrides = {}) {
     canConnect: true,
     ...overrides,
   }
+}
+
+function classicLinked(overrides = {}) {
+  return device({ classicConnected: true, connected: true, ...overrides })
 }
 
 function confirmedRead(devices) {
@@ -54,6 +63,10 @@ function publicDevice(session, deviceId = 'headset') {
   return composeBluetoothState(session).devices.find((candidate) => candidate.id === deviceId)
 }
 
+function afterFailedReads(session, count) {
+  return Array.from({ length: count }).reduce((current) => applyFailedRead(current), session)
+}
+
 describe('beginDeviceOperation', () => {
   it('refuses a second operation on the same device but not on another device', () => {
     const session = sessionWith([device(), device({ id: 'speaker', name: 'Speaker' })])
@@ -71,12 +84,20 @@ describe('beginDeviceOperation', () => {
     expect(begin(session, 'headset', 'disconnect').error).toBe('unsupported')
     expect(begin(session, 'headset', 'repair').error).toBe('unsupported')
   })
+
+  it('gives every operation its own id and none to a refusal', () => {
+    const first = begin(sessionWith([device(), device({ id: 'speaker', name: 'Speaker' })]), 'headset', 'connect')
+    const second = begin(first.session, 'speaker', 'connect')
+
+    expect(second.operationId).not.toBe(first.operationId)
+    expect(begin(second.session, 'headset', 'connect').operationId).toBeNull()
+  })
 })
 
 describe('settling device operations', () => {
   it('ends a connect when the Classic link is observed', () => {
     const { session } = begin(sessionWith([device()]), 'headset', 'connect')
-    const settled = applyDeviceRead(session, confirmedRead([device({ classicConnected: true, connected: true })]), START + 1000)
+    const settled = applyDeviceRead(session, confirmedRead([classicLinked()]), START + 1000)
 
     expect(publicDevice(settled)).toMatchObject({ pending: null, error: null, connected: true })
   })
@@ -89,8 +110,7 @@ describe('settling device operations', () => {
   })
 
   it('ends a disconnect when the Classic link drops even if LE stays up', () => {
-    const connected = device({ classicConnected: true, connected: true })
-    const { session } = begin(sessionWith([connected]), 'headset', 'disconnect')
+    const { session } = begin(sessionWith([classicLinked()]), 'headset', 'disconnect')
     const settled = applyDeviceRead(session, confirmedRead([device({ connected: true })]), START + 1000)
 
     expect(publicDevice(settled).pending).toBeNull()
@@ -147,21 +167,31 @@ describe('settling device operations', () => {
 
 describe('failDeviceOperation', () => {
   it('clears the pending operation and records the error', () => {
-    const { session } = begin(sessionWith([device()]), 'headset', 'connect')
-    const failed = failDeviceOperation(session, 'headset', 'connect-failed', START + 100)
+    const { session, operationId } = begin(sessionWith([device()]), 'headset', 'connect')
+    const failed = failDeviceOperation(session, 'headset', operationId, 'connect-failed', START + 100)
 
     expect(publicDevice(failed)).toMatchObject({ pending: null, error: 'connect-failed' })
   })
 
   it('does nothing once the operation has already ended', () => {
-    const session = sessionWith([device()])
+    const { session, operationId } = begin(sessionWith([device()]), 'headset', 'connect')
+    const connected = applyDeviceRead(session, confirmedRead([classicLinked()]), START + 1000)
 
-    expect(failDeviceOperation(session, 'headset', 'connect-failed', START)).toBe(session)
+    expect(failDeviceOperation(connected, 'headset', operationId, 'connect-failed', START + 1000)).toBe(connected)
+  })
+
+  it('leaves a newer operation alone when an older one fails late', () => {
+    const { session: connecting, operationId: connectId } = begin(sessionWith([device()]), 'headset', 'connect')
+    const connected = applyDeviceRead(connecting, confirmedRead([classicLinked()]), START + 1000)
+    const { session: removing } = begin(connected, 'headset', 'remove', START + 2000)
+    const late = failDeviceOperation(removing, 'headset', connectId, 'connect-failed', START + 15000)
+
+    expect(publicDevice(late)).toMatchObject({ pending: 'remove', error: null })
   })
 
   it('lets the error expire', () => {
-    const { session } = begin(sessionWith([device()]), 'headset', 'connect')
-    const failed = failDeviceOperation(session, 'headset', 'connect-failed', START)
+    const { session, operationId } = begin(sessionWith([device()]), 'headset', 'connect')
+    const failed = failDeviceOperation(session, 'headset', operationId, 'connect-failed', START)
 
     expect(publicDevice(expireSession(failed, START + ERROR_VISIBLE_MS - 1)).error).toBe('connect-failed')
     expect(publicDevice(expireSession(failed, START + ERROR_VISIBLE_MS)).error).toBeNull()
@@ -169,11 +199,63 @@ describe('failDeviceOperation', () => {
 
   it('drops a repair error once the audio services come back anyway', () => {
     const broken = device({ audioDisabled: true, canConnect: false })
-    const { session } = begin(sessionWith([broken]), 'headset', 'repair')
-    const failed = failDeviceOperation(session, 'headset', 'repair-cancelled', START)
+    const { session, operationId } = begin(sessionWith([broken]), 'headset', 'repair')
+    const failed = failDeviceOperation(session, 'headset', operationId, 'repair-cancelled', START)
     const recovered = applyDeviceRead(failed, confirmedRead([device()]), START + 1000)
 
     expect(publicDevice(recovered).error).toBeNull()
+  })
+
+  it('drops a connect error once the Classic link comes up anyway', () => {
+    const deadline = START + DEVICE_OPERATION_DEADLINE_MS.connect
+    const { session } = begin(sessionWith([device()]), 'headset', 'connect')
+    const timedOut = expireSession(session, deadline)
+    const recovered = applyDeviceRead(timedOut, confirmedRead([classicLinked()]), deadline + 1000)
+
+    expect(publicDevice(timedOut).error).toBe('connect-failed')
+    expect(publicDevice(recovered).error).toBeNull()
+  })
+
+  it('drops a disconnect error once the Classic link drops anyway', () => {
+    const { session, operationId } = begin(sessionWith([classicLinked()]), 'headset', 'disconnect')
+    const failed = applyDeviceRead(failDeviceOperation(session, 'headset', operationId, 'disconnect-failed', START), confirmedRead([classicLinked()]), START + 500)
+    const recovered = applyDeviceRead(failed, confirmedRead([device()]), START + 1500)
+
+    expect(publicDevice(failed).error).toBe('disconnect-failed')
+    expect(publicDevice(recovered).error).toBeNull()
+  })
+})
+
+describe('isCurrentOperation', () => {
+  it('recognises only the operation the device is still waiting on', () => {
+    const { session, operationId } = begin(sessionWith([device()]), 'headset', 'connect')
+
+    expect(isCurrentOperation(session, 'headset', operationId)).toBe(true)
+    expect(isCurrentOperation(session, 'headset', operationId + 1)).toBe(false)
+    expect(isCurrentOperation(session, 'other', operationId)).toBe(false)
+  })
+})
+
+describe('applyFailedRead', () => {
+  it('keeps the devices available through a short run of failed reads', () => {
+    const session = afterFailedReads(sessionWith([device()]), STALE_AFTER_FAILED_READS - 1)
+
+    expect(composeBluetoothState(session).devicesAvailable).toBe(true)
+  })
+
+  it('marks the devices unavailable once reads keep failing, until a read succeeds', () => {
+    const stale = afterFailedReads(sessionWith([device()]), STALE_AFTER_FAILED_READS)
+    const recovered = applyDeviceRead(stale, confirmedRead([device()]), START + 5000)
+
+    expect(composeBluetoothState(stale).devicesAvailable).toBe(false)
+    expect(composeBluetoothState(recovered).devicesAvailable).toBe(true)
+  })
+
+  it('counts from zero again after a successful read', () => {
+    const almostStale = afterFailedReads(sessionWith([device()]), STALE_AFTER_FAILED_READS - 1)
+    const readAgain = applyDeviceRead(almostStale, confirmedRead([device()]), START + 1000)
+
+    expect(composeBluetoothState(applyFailedRead(readAgain)).devicesAvailable).toBe(true)
   })
 })
 
@@ -221,25 +303,31 @@ describe('radio changes', () => {
   })
 })
 
+describe('nextRadioRetryDelay', () => {
+  it('starts short and doubles up to a ceiling', () => {
+    const delays = [nextRadioRetryDelay(0)]
+    while (delays.length < 6) delays.push(nextRadioRetryDelay(delays.at(-1)))
+
+    expect(delays).toEqual([RADIO_RETRY_FIRST_MS, 10000, 20000, 40000, RADIO_RETRY_MAX_MS, RADIO_RETRY_MAX_MS])
+  })
+})
+
 describe('composeBluetoothState', () => {
   it('only offers Disconnect for a Classic link', () => {
-    const state = composeBluetoothState(sessionWith([device({ connected: true }), device({ id: 'b', classicConnected: true, connected: true })]))
+    const state = composeBluetoothState(sessionWith([device({ connected: true }), classicLinked({ id: 'b' })]))
 
     expect(state.devices.map((candidate) => candidate.canDisconnect)).toEqual([false, true])
+  })
+
+  it('offers Connect for an LE-only link but not once the Classic link is up', () => {
+    const state = composeBluetoothState(sessionWith([device({ connected: true }), classicLinked({ id: 'b' })]))
+
+    expect(state.devices.map((candidate) => candidate.canConnect)).toEqual([true, false])
   })
 
   it('reports whether devices could be read at all', () => {
     expect(composeBluetoothState(createSession()).devicesAvailable).toBe(false)
     expect(composeBluetoothState(sessionWith([])).devicesAvailable).toBe(true)
-  })
-})
-
-describe('pendingAction', () => {
-  it('names the operation a device is waiting on', () => {
-    const { session } = begin(sessionWith([device()]), 'headset', 'connect')
-
-    expect(pendingAction(session, 'headset')).toBe('connect')
-    expect(pendingAction(session, 'other')).toBeNull()
   })
 })
 
@@ -261,7 +349,7 @@ describe('removalError', () => {
 })
 
 describe('stateKey', () => {
-  const first = device({ id: 'a', name: 'Buds', classicConnected: true, connected: true })
+  const first = classicLinked({ id: 'a', name: 'Buds' })
   const second = device({ id: 'b', name: 'Speaker' })
   const base = sessionWith([first, second])
 
@@ -281,5 +369,11 @@ describe('stateKey', () => {
     const { session } = begin(base, 'b', 'connect')
 
     expect(stateKey(composeBluetoothState(session))).not.toBe(stateKey(composeBluetoothState(base)))
+  })
+
+  it('changes when the device list goes stale', () => {
+    const stale = afterFailedReads(base, STALE_AFTER_FAILED_READS)
+
+    expect(stateKey(composeBluetoothState(stale))).not.toBe(stateKey(composeBluetoothState(base)))
   })
 })

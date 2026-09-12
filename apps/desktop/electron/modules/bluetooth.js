@@ -30,7 +30,10 @@ let session = operations.createSession()
 let broadcastRef = null
 let lastPublishedKey = null
 let readerChannel = null
-let actionChannel = null
+let radioRetryTimer = null
+let radioRetryDelayMs = 0
+const activeActionChannels = new Set()
+const channelsHoldingAbandonedIo = []
 
 const diagnostics = createDiagnosticLog({ fileName: LOG_FILE_NAME, maxEntries: LOG_MAX_ENTRIES })
 const failures = createFailureReporter({ record: diagnostics.record, prefix: '[bluetooth]' })
@@ -81,9 +84,18 @@ function readerWorkers() {
   return readerChannel
 }
 
-function actionWorkers() {
-  if (!actionChannel) actionChannel = createWorkerChannel({ createWorker: createBluetoothWorker, label: 'bluetooth-actions' })
-  return actionChannel
+function releaseActionChannel(channel, outcome) {
+  activeActionChannels.delete(channel)
+  if (outcome.ok && outcome.value?.abandoned) channelsHoldingAbandonedIo.push(channel)
+  else channel.dispose()
+}
+
+async function requestOnActionWorker(request) {
+  const channel = createWorkerChannel({ createWorker: createBluetoothWorker, label: 'bluetooth-action' })
+  activeActionChannels.add(channel)
+  const outcome = await channel.request(request, ACTION_WATCHDOG_MS)
+  releaseActionChannel(channel, outcome)
+  return outcome
 }
 
 function currentState() {
@@ -103,6 +115,11 @@ function expireAndPublish() {
   publish()
 }
 
+function reportReadDuration(elapsedMs, ok) {
+  if (elapsedMs > SLOW_READ_MS) failures.failure('slow-read', { elapsedMs, ok })
+  else failures.success('slow-read')
+}
+
 function applySnapshot(snapshot) {
   const devices = inStableOrder(groupDevices(snapshot))
   const read = reconcileDeviceRead(
@@ -110,21 +127,24 @@ function applySnapshot(snapshot) {
     { devices, stackIds: snapshot.stackIds },
   )
   session = operations.applyDeviceRead(session, read, Date.now())
-  if (read.stackChanged) refreshRadioQuietly('stack-changed')
+  return read.stackChanged
+}
+
+function applyReadOutcome(snapshot, failure) {
+  if (!snapshot) {
+    failures.failure('read-failed', failure)
+    session = operations.applyFailedRead(session)
+    return
+  }
+  failures.success('read-failed')
+  if (applySnapshot(snapshot)) refreshRadioQuietly('stack-changed')
 }
 
 async function readDevicesOnWorker() {
   const startedAt = Date.now()
   const outcome = await readerWorkers().request({ type: 'read-nodes' }, READ_WATCHDOG_MS)
-  const elapsedMs = Date.now() - startedAt
-  if (elapsedMs > SLOW_READ_MS) failures.failure('slow-read', { elapsedMs, ok: outcome.ok })
-  else failures.success('slow-read')
-  if (outcome.ok && outcome.value) {
-    failures.success('read-failed')
-    applySnapshot(outcome.value)
-  } else {
-    failures.failure('read-failed', outcome.error ?? 'the reader returned nothing')
-  }
+  reportReadDuration(Date.now() - startedAt, outcome.ok)
+  applyReadOutcome(outcome.ok ? outcome.value : null, outcome.error ?? 'the reader returned nothing')
   expireAndPublish()
 }
 
@@ -141,25 +161,51 @@ async function readFreshDevices() {
 }
 
 function readDevicesAtBoot() {
-  const snapshot = bluetoothNative.readBluetoothNodes()
-  if (snapshot) applySnapshot(snapshot)
-  else failures.failure('read-failed', 'the boot read returned nothing')
+  applyReadOutcome(bluetoothNative.readBluetoothNodes(), 'the boot read returned nothing')
   expireAndPublish()
 }
 
 const readRadio = singleFlight(() => runScript('bluetoothRadio.ps1', ['-Action', 'get'], RADIO_READ_TIMEOUT_MS))
 
+function retryRadioRead() {
+  radioRetryTimer = null
+  if (session.radio.state === 'unknown') refreshRadioQuietly('retry')
+}
+
+function scheduleRadioRetry() {
+  if (radioRetryTimer || session.radio.state !== 'unknown') return
+  radioRetryDelayMs = operations.nextRadioRetryDelay(radioRetryDelayMs)
+  radioRetryTimer = setTimeout(retryRadioRead, radioRetryDelayMs)
+}
+
+function cancelRadioRetry() {
+  clearTimeout(radioRetryTimer)
+  radioRetryTimer = null
+  radioRetryDelayMs = 0
+}
+
+function recordRadioDrift(reason, state) {
+  const cached = session.radio.state
+  if (reason === 'surface' && cached !== 'unknown' && cached !== state) diagnostics.record('radio-drift', { cached, read: state })
+}
+
+function applyRadioState(reason, state) {
+  failures.success('radio-read-failed')
+  cancelRadioRetry()
+  recordRadioDrift(reason, state)
+  session = operations.applyRadioRead(session, state)
+  expireAndPublish()
+}
+
+function handleRadioReadFailure(detail) {
+  failures.failure('radio-read-failed', detail)
+  scheduleRadioRetry()
+}
+
 async function refreshRadio(reason) {
   const { value, failure } = await readRadio()
-  if (!operations.isRadioState(value?.state)) {
-    failures.failure('radio-read-failed', failure ?? value?.error ?? 'no radio state')
-    return
-  }
-  failures.success('radio-read-failed')
-  const cached = session.radio.state
-  if (reason === 'surface' && cached !== 'unknown' && cached !== value.state) diagnostics.record('radio-drift', { cached, read: value.state })
-  session = operations.applyRadioRead(session, value.state)
-  expireAndPublish()
+  if (operations.isRadioState(value?.state)) applyRadioState(reason, value.state)
+  else handleRadioReadFailure(failure ?? value?.error ?? 'no radio state')
 }
 
 function refreshRadioQuietly(reason) {
@@ -177,32 +223,31 @@ function refuse(error) {
 
 function beginOperation(deviceId, action) {
   const begun = operations.beginDeviceOperation(session, deviceId, action, Date.now())
-  if (begun.error) return begun.error
+  if (begun.error) return { error: begun.error, operationId: null }
   session = begun.session
   publish()
-  return null
+  return { error: null, operationId: begun.operationId }
 }
 
-function failOperation(deviceId, kind, detail) {
+function failOperation(deviceId, operationId, kind, detail) {
   reportActionFailure(kind, { deviceId, ...detail })
-  session = operations.failDeviceOperation(session, deviceId, kind, Date.now())
+  session = operations.failDeviceOperation(session, deviceId, operationId, kind, Date.now())
   publish()
 }
 
-async function runNativeAction(deviceId, action, request) {
-  const outcome = await actionWorkers().request(request, ACTION_WATCHDOG_MS)
+async function runNativeAction(deviceId, operationId, action, request) {
+  const outcome = await requestOnActionWorker(request)
   const result = outcome.ok ? outcome.value : null
-  if (!result?.ok) failOperation(deviceId, `${action}-failed`, result ?? { error: outcome.error })
   await readFreshDevices()
+  if (!result?.ok) failOperation(deviceId, operationId, `${action}-failed`, result ?? { error: outcome.error })
   return result
 }
 
 function connectDevice(deviceId) {
-  if (actionWorkers().isBusy()) return refuse('busy')
   const device = operations.findDevice(session, deviceId)
-  const refusal = beginOperation(deviceId, 'connect')
-  if (refusal) return refuse(refusal)
-  runNativeAction(deviceId, 'connect', {
+  const { error, operationId } = beginOperation(deviceId, 'connect')
+  if (error) return refuse(error)
+  runNativeAction(deviceId, operationId, 'connect', {
     type: 'connect-device',
     serviceNodeIds: device.audioSinkNodeIds,
     timeoutMs: CONNECT_REQUEST_TIMEOUT_MS,
@@ -210,29 +255,28 @@ function connectDevice(deviceId) {
   return { accepted: true }
 }
 
-async function escalateDisconnect(deviceId, address) {
-  if (operations.pendingAction(session, deviceId) !== 'disconnect' || actionWorkers().isBusy()) return
+async function escalateDisconnect(deviceId, operationId, address) {
+  if (!operations.isCurrentOperation(session, deviceId, operationId)) return
   diagnostics.record('disconnect-escalated', { deviceId })
-  await runNativeAction(deviceId, 'disconnect', { type: 'disconnect-link', address, timeoutMs: DISCONNECT_REQUEST_TIMEOUT_MS })
+  await runNativeAction(deviceId, operationId, 'disconnect', { type: 'disconnect-link', address, timeoutMs: DISCONNECT_REQUEST_TIMEOUT_MS })
 }
 
-function scheduleDisconnectEscalation(deviceId, address, result) {
+function scheduleDisconnectEscalation(deviceId, operationId, address, result) {
   if (!result?.ok || !String(result.method).startsWith('ks-') || !address) return
-  setTimeout(() => escalateDisconnect(deviceId, address).catch(logUnexpected), DISCONNECT_ESCALATION_MS)
+  setTimeout(() => escalateDisconnect(deviceId, operationId, address).catch(logUnexpected), DISCONNECT_ESCALATION_MS)
 }
 
 function disconnectDevice(deviceId) {
-  if (actionWorkers().isBusy()) return refuse('busy')
   const device = operations.findDevice(session, deviceId)
-  const refusal = beginOperation(deviceId, 'disconnect')
-  if (refusal) return refuse(refusal)
-  runNativeAction(deviceId, 'disconnect', {
+  const { error, operationId } = beginOperation(deviceId, 'disconnect')
+  if (error) return refuse(error)
+  runNativeAction(deviceId, operationId, 'disconnect', {
     type: 'disconnect-device',
     serviceNodeIds: device.audioSinkNodeIds,
     address: device.classicAddress,
     timeoutMs: DISCONNECT_REQUEST_TIMEOUT_MS,
   })
-    .then((result) => scheduleDisconnectEscalation(deviceId, device.classicAddress, result))
+    .then((result) => scheduleDisconnectEscalation(deviceId, operationId, device.classicAddress, result))
     .catch(logUnexpected)
   return { accepted: true }
 }
@@ -244,42 +288,50 @@ function removalArguments(device) {
   ]
 }
 
-async function runRemoval(deviceId, device) {
+async function runRemoval(deviceId, operationId, device) {
   const { value, failure } = await runScript('bluetoothUnpair.ps1', removalArguments(device), REMOVE_TIMEOUT_MS)
-  const error = operations.removalError(value)
-  if (error) failOperation(deviceId, error, value ?? { failure })
   await readFreshDevices()
+  const error = operations.removalError(value)
+  if (error) failOperation(deviceId, operationId, error, value ?? { failure })
 }
 
 function removeDevice(deviceId) {
   const device = operations.findDevice(session, deviceId)
-  const refusal = beginOperation(deviceId, 'remove')
-  if (refusal) return refuse(refusal)
-  runRemoval(deviceId, device).catch(logUnexpected)
+  const { error, operationId } = beginOperation(deviceId, 'remove')
+  if (error) return refuse(error)
+  runRemoval(deviceId, operationId, device).catch(logUnexpected)
   return { accepted: true }
 }
 
-async function runRepair(deviceId, device) {
+async function runRepair(deviceId, operationId, device) {
   const { value, failure } = await runScript('bluetoothEnableAudioServices.ps1', ['-Address', device.classicAddress], REPAIR_TIMEOUT_MS)
-  if (!value?.success) failOperation(deviceId, value?.error === 'cancelled' ? 'repair-cancelled' : 'repair-failed', value ?? { failure })
   await readFreshDevices()
+  if (!value?.success) failOperation(deviceId, operationId, value?.error === 'cancelled' ? 'repair-cancelled' : 'repair-failed', value ?? { failure })
 }
 
 function repairAudio(deviceId) {
   const device = operations.findDevice(session, deviceId)
-  const refusal = beginOperation(deviceId, 'repair')
-  if (refusal) return refuse(refusal)
-  runRepair(deviceId, device).catch(logUnexpected)
+  const { error, operationId } = beginOperation(deviceId, 'repair')
+  if (error) return refuse(error)
+  runRepair(deviceId, operationId, device).catch(logUnexpected)
   return { accepted: true }
+}
+
+function applyRadioSetOutcome(value, failure) {
+  if (!value || value.error) reportActionFailure('radio-set-failed', value ?? { failure })
+  session = operations.applyRadioSetResult(session, value, Date.now())
+  expireAndPublish()
+}
+
+async function followUpRadioChange() {
+  await readFreshDevices()
+  if (session.radio.pending) setTimeout(() => refreshRadioQuietly('settle'), RADIO_SETTLE_CHECK_MS)
 }
 
 async function runRadioChange(target) {
   const { value, failure } = await runScript('bluetoothRadio.ps1', ['-Action', target], RADIO_SET_TIMEOUT_MS)
-  if (!value || value.error) reportActionFailure('radio-set-failed', value ?? { failure })
-  session = operations.applyRadioSetResult(session, value, Date.now())
-  expireAndPublish()
-  await readFreshDevices()
-  if (session.radio.pending) setTimeout(() => refreshRadioQuietly('settle'), RADIO_SETTLE_CHECK_MS)
+  applyRadioSetOutcome(value, failure)
+  await followUpRadioChange()
 }
 
 function setRadio(on) {
@@ -344,12 +396,17 @@ function subscribeToWake() {
   for (const event of ['resume', 'unlock-screen']) powerMonitor.on(event, onWake)
 }
 
+function disposeWorkers() {
+  readerChannel?.dispose()
+  for (const channel of activeActionChannels) channel.dispose()
+}
+
 function subscribeToQuit(stopPolling) {
   const { app } = require('electron')
   app.on('will-quit', () => {
     stopPolling?.()
-    readerChannel?.dispose()
-    actionChannel?.dispose()
+    cancelRadioRetry()
+    disposeWorkers()
   })
 }
 

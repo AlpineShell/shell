@@ -1,9 +1,17 @@
+const MAX_DEATHS_WITHOUT_REPLY = 3
+
 function createWorkerChannel({ createWorker, label }) {
   let worker = null
   let unavailable = false
+  let deathsSinceLastReply = 0
   let nextId = 0
   const pending = new Map()
   const draining = new Set()
+
+  function markUnavailable(reason) {
+    unavailable = true
+    console.error(`[${label}] worker unavailable:`, reason)
+  }
 
   function settle(id, outcome) {
     const request = pending.get(id)
@@ -17,15 +25,22 @@ function createWorkerChannel({ createWorker, label }) {
     for (const id of [...pending.keys()]) settle(id, { ok: false, error })
   }
 
+  function noteDeath() {
+    deathsSinceLastReply += 1
+    if (deathsSinceLastReply >= MAX_DEATHS_WITHOUT_REPLY) markUnavailable(`died ${deathsSinceLastReply} times without replying`)
+  }
+
   function forget(started, error) {
     if (started !== worker) return
     worker = null
+    noteDeath()
     settleAll(error)
   }
 
   function attach(started) {
     started.on('message', (message) => {
       if (started !== worker) return
+      deathsSinceLastReply = 0
       settle(message.id, message.error ? { ok: false, error: message.error } : { ok: true, value: message.value })
     })
     started.on('error', (e) => forget(started, `worker-error: ${e?.message ?? e}`))
@@ -44,8 +59,7 @@ function createWorkerChannel({ createWorker, label }) {
       attach(started)
       worker = started
     } catch (e) {
-      unavailable = true
-      console.error(`[${label}] worker unavailable:`, e?.message ?? e)
+      markUnavailable(e?.message ?? e)
     }
     return worker
   }
@@ -83,15 +97,11 @@ function createWorkerChannel({ createWorker, label }) {
     })
   }
 
-  function isBusy() {
-    return pending.size > 0 || draining.size > 0
-  }
-
   function dispose() {
     drop('disposed')
   }
 
-  return { request, isBusy, dispose }
+  return { request, dispose }
 }
 
-module.exports = { createWorkerChannel }
+module.exports = { MAX_DEATHS_WITHOUT_REPLY, createWorkerChannel }

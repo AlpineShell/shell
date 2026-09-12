@@ -306,12 +306,12 @@ function issueIoctl(api, handle, code, input, timeoutMs) {
 
 function sendBoundedIoctl(devicePath, code, input, timeoutMs) {
   const api = loadNativeApi()
-  if (!api) return { ok: false, stage: 'unavailable', win32Error: null, timedOut: false }
+  if (!api) return { ok: false, stage: 'unavailable', win32Error: null, timedOut: false, abandoned: false }
   const opened = openOverlapped(api, devicePath)
-  if (opened.handle === null) return { ok: false, stage: 'open', win32Error: opened.win32Error, timedOut: false }
+  if (opened.handle === null) return { ok: false, stage: 'open', win32Error: opened.win32Error, timedOut: false, abandoned: false }
   try {
-    const { ok, win32Error, timedOut } = issueIoctl(api, opened.handle, code, input, timeoutMs)
-    return { ok, stage: 'ioctl', win32Error, timedOut }
+    const { ok, win32Error, timedOut, settled } = issueIoctl(api, opened.handle, code, input, timeoutMs)
+    return { ok, stage: 'ioctl', win32Error, timedOut, abandoned: !settled }
   } finally {
     api.CloseHandle(opened.handle)
   }
@@ -337,11 +337,12 @@ function summarizeOutcomes(method, outcomes) {
     failedAt: succeeded ? null : failure?.stage ?? null,
     win32Error: succeeded ? 0 : failure?.win32Error ?? null,
     timedOut: outcomes.some((outcome) => outcome.timedOut),
+    abandoned: outcomes.some((outcome) => outcome.abandoned),
   }
 }
 
 function unattempted(method, failedAt) {
-  return { ok: false, method, attempts: 0, failedAt, win32Error: null, timedOut: false }
+  return { ok: false, method, attempts: 0, failedAt, win32Error: null, timedOut: false, abandoned: false }
 }
 
 function requestAudioOneShot({ serviceNodeIds, mode, timeoutMs }) {
@@ -370,7 +371,8 @@ function connectDevice({ serviceNodeIds, timeoutMs }) {
 function disconnectDevice({ serviceNodeIds, address, timeoutMs }) {
   const audio = serviceNodeIds.length > 0 ? requestAudioOneShot({ serviceNodeIds, mode: 'disconnect', timeoutMs }) : null
   if (audio?.ok) return audio
-  return { ...disconnectClassicLink({ address, timeoutMs }), audio }
+  const link = disconnectClassicLink({ address, timeoutMs })
+  return { ...link, audio, abandoned: link.abandoned || !!audio?.abandoned }
 }
 
 module.exports = {
@@ -390,4 +392,5 @@ module.exports = {
   propertyKeyBuffer,
   readBluetoothNodes,
   sendBoundedIoctl,
+  summarizeOutcomes,
 }
