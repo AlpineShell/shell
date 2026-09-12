@@ -1,12 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useShellState } from './useShellState'
 
 export function useTrayIcons() {
-  const [icons, setIcons] = useState<TrayIcon[]>([])
-
-  useEffect(() => {
-    window.shell?.tray?.icons?.()?.then?.(setIcons)
-    window.shell?.tray?.onIconsChanged?.(setIcons)
-  }, [])
-
-  return icons
+  return useShellState<TrayIcon[]>([], window.shell.tray.icons, window.shell.tray.onIconsChanged)
 }
