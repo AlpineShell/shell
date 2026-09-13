@@ -1,5 +1,11 @@
-import { TOPBAR_SLOTS, acceptsTopbarItem, findTopbarItem, visibleTopbarSlotItems } from '../../topbar/layout/topbarLayout'
-import { moveTopbarItem, stepTopbarItem, topbarItemPosition } from '../../topbar/layout/topbarLayoutEdits'
+import { TOPBAR_SLOTS, topbarSlotAcceptsItem, visibleTopbarSlotItems } from '../../topbar/layout/topbarLayout'
+import {
+  TOPBAR_STEP_OFFSETS,
+  moveTopbarItem,
+  stepTopbarItem,
+  topbarItemPosition,
+} from '../../topbar/layout/topbarLayoutEdits'
+import { clamp } from './ridgeGeometry'
 
 const STEP_KEYS = new Map<string, RidgeKeyStep>([
   ['ArrowLeft', 'earlier'],
@@ -14,12 +20,6 @@ const SPACE_KEYS = new Set([' ', 'Spacebar'])
 
 const HIDE_KEYS = new Set(['Delete', 'Backspace'])
 
-const STEP_OFFSETS: Record<TopbarStepDirection, number> = { earlier: -1, later: 1 }
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
-}
-
 function heldModifier(press: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey'>): boolean {
   return press.altKey || press.ctrlKey || press.metaKey
 }
@@ -28,12 +28,16 @@ function steppingIntent(step: RidgeKeyStep, grabbed: boolean): RidgeKeyIntent {
   return grabbed ? { kind: 'move', step } : { kind: 'focus', step }
 }
 
+export function isRidgeSpaceKey(key: string): boolean {
+  return SPACE_KEYS.has(key)
+}
+
 export function ridgeKeyIntent(
   press: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey'>,
   grabbed: boolean
 ): RidgeKeyIntent {
   if (heldModifier(press)) return { kind: 'native' }
-  if (SPACE_KEYS.has(press.key)) return grabbed ? { kind: 'drop' } : { kind: 'grab' }
+  if (isRidgeSpaceKey(press.key)) return grabbed ? { kind: 'drop' } : { kind: 'grab' }
   if (press.key === 'Enter') return grabbed ? { kind: 'drop' } : { kind: 'native' }
   if (press.key === 'Escape') return grabbed ? { kind: 'cancel' } : { kind: 'native' }
   if (HIDE_KEYS.has(press.key)) return { kind: 'hide' }
@@ -49,7 +53,7 @@ function steppedIndex(current: number, count: number, step: RidgeKeyStep): numbe
   if (step === 'first') return 0
   if (step === 'last') return count - 1
   if (current < 0) return 0
-  return clamp(current + STEP_OFFSETS[step], 0, count - 1)
+  return clamp(current + TOPBAR_STEP_OFFSETS[step], 0, count - 1)
 }
 
 export function nextFocusedItem(
@@ -88,7 +92,7 @@ function atLaneEdge(
 }
 
 function neighbouringSlot(slot: TopbarSlot, direction: TopbarStepDirection): TopbarSlot | undefined {
-  return TOPBAR_SLOTS[TOPBAR_SLOTS.indexOf(slot) + STEP_OFFSETS[direction]]
+  return TOPBAR_SLOTS[TOPBAR_SLOTS.indexOf(slot) + TOPBAR_STEP_OFFSETS[direction]]
 }
 
 export function refusingSlotForStep(
@@ -97,9 +101,8 @@ export function refusingSlotForStep(
   step: RidgeKeyStep
 ): TopbarSlot | null {
   if (step === 'first' || step === 'last') return null
-  const definition = findTopbarItem(id)
   const position = topbarItemPosition(items, id)
-  if (!definition || !position || !atLaneEdge(items, id, position, step)) return null
+  if (!position || !atLaneEdge(items, id, position, step)) return null
   const neighbour = neighbouringSlot(position.slot, step)
-  return neighbour && !acceptsTopbarItem(definition, neighbour) ? neighbour : null
+  return neighbour && !topbarSlotAcceptsItem(neighbour, id) ? neighbour : null
 }

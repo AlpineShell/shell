@@ -1,12 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SETTINGS_REGISTRY, settingsEntry, settingsPage, settingsPageRoute } from '../../../settings/registry'
-import { TOPBAR_ITEMS } from '../../topbar/layout/topbarLayout'
+import { TOPBAR_ITEMS, topbarItemLabel } from '../../topbar/layout/topbarLayout'
 import {
   RIDGE_ITEM_DETAILS,
   ridgeItemEntries,
   ridgeItemForSetting,
   ridgeItemSearchEntryId,
-  ridgeItemTitle,
   ridgePluginGroupWidgets,
 } from './ridgeItemCatalogue'
 import { RIDGE_PRESENCE_NOTES } from './ridgeSamples'
@@ -40,7 +39,7 @@ function trayIconsLink(): RidgeItemLink {
 function textACalloutReads(id: TopbarItemId, data: RidgePreviewData): string {
   const detail = RIDGE_ITEM_DETAILS[id]
   return [
-    ridgeItemTitle(id),
+    topbarItemLabel(id),
     ...detail.links.flatMap((link) => [link.label, link.detail?.(data) ?? '']),
     detail.note(data) ?? '',
   ].join(' ')
@@ -125,12 +124,6 @@ describe('the tray icons link', () => {
     [0, 0, null],
   ])('counts %i shown and %i hidden icons as %s', (shown, hidden, counts) => {
     expect(trayIconsLink().detail?.(trayData(shown, hidden))).toBe(counts)
-  })
-})
-
-describe('ridgeItemTitle', () => {
-  it.each(TOPBAR_ITEMS)('titles $id with its Ridge label, $label', ({ id, label }) => {
-    expect(ridgeItemTitle(id)).toBe(label)
   })
 })
 

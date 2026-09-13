@@ -149,7 +149,7 @@ const PARITY_CASES: ParityCase[] = [
       fixture.microphone = { active: true, apps: ['Zoom', 'Teams'] }
     },
     live: <MicrophoneStatus />,
-    face: (darkText) => <MicrophoneFace label="Zoom, Teams" darkText={darkText} />,
+    face: (darkText) => <MicrophoneFace apps={['Zoom', 'Teams']} darkText={darkText} />,
   },
   {
     name: 'MicrophoneStatus without app names',
@@ -157,7 +157,7 @@ const PARITY_CASES: ParityCase[] = [
       fixture.microphone = { active: true, apps: [] }
     },
     live: <MicrophoneStatus />,
-    face: (darkText) => <MicrophoneFace label="In use" darkText={darkText} />,
+    face: (darkText) => <MicrophoneFace apps={[]} darkText={darkText} />,
   },
   {
     name: 'MicrophoneStatus while nothing listens',

@@ -9,13 +9,14 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react'
-import { TOPBAR_SLOTS, findTopbarItem, visibleTopbarSlotItems } from '../../topbar/layout/topbarLayout'
+import { TOPBAR_SLOTS, topbarItemLabel, visibleTopbarSlotItems } from '../../topbar/layout/topbarLayout'
 import { topbarSurface } from '../../topbar/topbarSurface'
 import { useElementWidth } from '../../../hooks/useElementWidth'
 import { useRidgeCalloutAnchor } from '../../../hooks/useRidgeCalloutAnchor'
 import { useRidgeDrag } from '../../../hooks/useRidgeDrag'
 import { ridgeLayoutMode } from './ridgeGeometry'
 import {
+  isRidgeSpaceKey,
   nextFocusedItem,
   refusingSlotForStep,
   ridgeFocusOrder,
@@ -46,14 +47,10 @@ import RidgeCalloutFrame from './ridgeCalloutFrame'
 const WIDTH_BEFORE_MEASURING = Number.POSITIVE_INFINITY
 const RIDGE_BAR_FONT = 'system-ui, sans-serif'
 const REPEATED_MESSAGE_MARK = ' '
-const SPACE_KEYS = new Set([' ', 'Spacebar'])
+const RIDGE_CHIP_SELECTOR = '[data-ridge-chip]'
 const DOT_GRID_GROUND = {
   backgroundImage: 'radial-gradient(var(--alpine-line-strong) 1px, transparent 1px)',
   backgroundSize: '14px 14px',
-}
-
-function chipLabel(id: TopbarItemId): string {
-  return findTopbarItem(id)?.label ?? id
 }
 
 function laneDropState(target: RidgeDropTarget | null, slot: TopbarSlot): RidgeLaneDropState {
@@ -95,11 +92,16 @@ function laneIn(stage: HTMLElement | null, slot: TopbarSlot): HTMLElement | null
   return stage?.querySelector<HTMLElement>(`[data-ridge-lane="${slot}"]`) ?? null
 }
 
+function isOutsideEveryChip(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(RIDGE_CHIP_SELECTOR) === null
+}
+
 export default function RidgeCanvas({
   editor,
   previewData,
   openItem,
   onOpenItemChange,
+  onNothingLeftToFocus,
   renderCallout,
   measure,
   scrollContainer,
@@ -114,6 +116,8 @@ export default function RidgeCanvas({
   const caretRef = useRef<HTMLDivElement>(null)
   const pendingFocus = useRef<TopbarItemId | null>(null)
   const spaceClick = useRef(false)
+  const grabbing = useRef<TopbarItemId | null>(null)
+  const revealedCallout = useRef<TopbarItemId | null>(null)
 
   const [grabbedId, setGrabbedId] = useState<TopbarItemId | null>(null)
   const [arranged, setArranged] = useState<TopbarLayoutItem[] | null>(null)
@@ -146,11 +150,13 @@ export default function RidgeCanvas({
   }
 
   function endGrab() {
+    grabbing.current = null
     setGrabbedId(null)
     setArranged(null)
   }
 
   function grab(id: TopbarItemId) {
+    grabbing.current = id
     setGrabbedId(id)
     setArranged(editor.items)
     announce(ridgeGrabAnnouncement(editor.items, id))
@@ -180,15 +186,22 @@ export default function RidgeCanvas({
     announce(ridgeCancelAnnouncement(editor.items, id))
   }
 
+  function abandonCurrentGrab() {
+    const held = grabbing.current
+    if (held !== null) abandonGrab(held)
+  }
+
   function cancelGrab(id: TopbarItemId) {
     pendingFocus.current = id
     abandonGrab(id)
   }
 
   function hideItem(id: TopbarItemId) {
-    pendingFocus.current = neighbourOf(order, id)
+    const neighbour = neighbourOf(order, id)
+    pendingFocus.current = neighbour
     endGrab()
     if (openItem === id) onOpenItemChange(null)
+    if (neighbour === null) onNothingLeftToFocus()
     editor.hide(id).then((hidden) => {
       if (hidden) announce(ridgeHiddenAnnouncement(id))
     })
@@ -226,13 +239,13 @@ export default function RidgeCanvas({
     const intent = ridgeKeyIntent(event, grabbedId === id)
     if (intent.kind === 'native') return closeCalloutOnEscape(event, id)
     event.preventDefault()
-    if (SPACE_KEYS.has(event.key)) spaceClick.current = true
+    if (isRidgeSpaceKey(event.key)) spaceClick.current = true
     if (event.repeat && (intent.kind === 'grab' || intent.kind === 'drop')) return
     runKeyIntent(intent, id)
   }
 
   function onChipKeyUp(event: KeyboardEvent<HTMLButtonElement>) {
-    if (!spaceClick.current || !SPACE_KEYS.has(event.key)) return
+    if (!spaceClick.current || !isRidgeSpaceKey(event.key)) return
     event.preventDefault()
     window.setTimeout(() => {
       spaceClick.current = false
@@ -295,7 +308,7 @@ export default function RidgeCanvas({
 
   function onChipPointerDown(event: PointerEvent<HTMLButtonElement>, id: TopbarItemId) {
     pendingFocus.current = null
-    if (grabbedId) abandonGrab(grabbedId)
+    abandonCurrentGrab()
     drag.start(event, id)
   }
 
@@ -307,13 +320,12 @@ export default function RidgeCanvas({
   }
 
   function onStageBlur(event: FocusEvent<HTMLDivElement>) {
-    const next = event.relatedTarget
-    if (grabbedId !== null && next instanceof Node && !event.currentTarget.contains(next)) abandonGrab(grabbedId)
+    if (isOutsideEveryChip(event.relatedTarget)) abandonCurrentGrab()
   }
 
   useRidgeCalloutAnchor(stageRef, calloutRef, leaderRef, () => (calloutItem ? chipElement(calloutItem) : null))
 
-  useImperativeHandle(ref, () => ({ focusItem }))
+  useImperativeHandle(ref, () => ({ focusItem, abandonGrab: abandonCurrentGrab, announce }))
 
   useLayoutEffect(() => {
     const id = pendingFocus.current
@@ -322,6 +334,14 @@ export default function RidgeCanvas({
     pendingFocus.current = null
     if (document.activeElement !== chip) chip.focus()
   })
+
+  useLayoutEffect(() => {
+    if (revealedCallout.current === calloutItem) return
+    revealedCallout.current = calloutItem
+    if (calloutItem !== null && grabbedId === null && dragId === null) {
+      calloutRef.current?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [calloutItem, grabbedId, dragId])
 
   function preview(id: TopbarItemId) {
     return createElement(RIDGE_ITEM_PREVIEWS[id], { data: previewData, darkText: surface.darkText })
@@ -333,7 +353,7 @@ export default function RidgeCanvas({
       <RidgeChip
         key={id}
         id={id}
-        label={chipLabel(id)}
+        label={topbarItemLabel(id)}
         darkText={surface.darkText}
         tabbable={id === tabbableId}
         expanded={expanded}
@@ -362,6 +382,7 @@ export default function RidgeCanvas({
         mode={mode}
         surface={surface}
         dropState={laneDropState(dropTarget, slot)}
+        moving={dragId !== null || grabbedId !== null}
       >
         {visibleTopbarSlotItems(items, slot).map((item) => renderChip(item.id))}
       </RidgeLane>

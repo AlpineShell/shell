@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { EMPTY_TOPBAR_LAYOUT, TOPBAR_ITEMS, resolveTopbarLayout, topbarSlotItems } from '../../topbar/layout/topbarLayout'
+import { EMPTY_TOPBAR_LAYOUT, resolveTopbarLayout, topbarSlotItems } from '../../topbar/layout/topbarLayout'
 import { moveTopbarItem, setTopbarItemVisible } from '../../topbar/layout/topbarLayoutEdits'
 import {
   effectiveRidgeItems,
   hideRidgeItemPlan,
   isDefaultRidge,
-  isRidgeGatedItem,
   resetRidgePlan,
   restoreLayoutVisibility,
   showRidgeItemPlan,
@@ -25,12 +24,6 @@ const withGate = (item: TopbarGatedItemId, visible: boolean): RidgeGates['visibl
   [item]: visible,
 })
 const placement = (items: TopbarLayoutItem[]) => items.map(({ id, slot, order }) => ({ id, slot, order }))
-
-describe('isRidgeGatedItem', () => {
-  it('names Search and Tray, the two items their own flags gate', () => {
-    expect(TOPBAR_ITEMS.map((item) => item.id).filter(isRidgeGatedItem)).toEqual(['launcher', 'tray'])
-  })
-})
 
 describe.each(GATED_ITEMS)('effectiveRidgeItems for %s', (item) => {
   it.each([

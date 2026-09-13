@@ -2,7 +2,7 @@ export const RIDGE_SAMPLE_PEAK = 0.6
 
 export const RIDGE_SAMPLE_MEDIA_TITLE = 'Now playing'
 
-export const RIDGE_SAMPLE_MICROPHONE_LABEL = 'In use'
+export const RIDGE_SAMPLE_MICROPHONE_APPS: string[] = []
 
 export const RIDGE_SAMPLE_NOTICE: NoticeFaceProps['notice'] = {
   title: null,

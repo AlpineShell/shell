@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { EMPTY_TOPBAR_LAYOUT, resolveTopbarLayout, storeTopbarLayout } from '../components/topbar/layout/topbarLayout'
 
-const REFUSED_WRITE_MESSAGE = 'Ridge could not save that change.'
+export const REFUSED_WRITE_MESSAGE = 'Ridge could not save that change.'
 
 let lastKnownItems: TopbarLayoutItem[] | null = null
 

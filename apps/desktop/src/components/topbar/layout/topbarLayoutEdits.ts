@@ -1,15 +1,14 @@
 import {
   EMPTY_TOPBAR_LAYOUT,
   TOPBAR_SLOTS,
-  acceptsTopbarItem,
-  findTopbarItem,
   resolveTopbarLayout,
   storeTopbarLayout,
+  topbarSlotAcceptsItem,
   topbarSlotItems,
   visibleTopbarSlotItems,
 } from './topbarLayout'
 
-const STEP_OFFSETS: Record<TopbarStepDirection, number> = { earlier: -1, later: 1 }
+export const TOPBAR_STEP_OFFSETS: Record<TopbarStepDirection, number> = { earlier: -1, later: 1 }
 
 const DEFAULT_TOPBAR_ARRANGEMENT = resolveTopbarLayout(EMPTY_TOPBAR_LAYOUT)
 
@@ -46,11 +45,6 @@ function previousIfUnchanged(previous: TopbarLayoutItem[], next: TopbarLayoutIte
   return sameArrangement(previous, next) ? previous : next
 }
 
-function slotAcceptsItem(slot: TopbarSlot, id: TopbarItemId): boolean {
-  const definition = findTopbarItem(id)
-  return definition !== undefined && acceptsTopbarItem(definition, slot)
-}
-
 function insertionPoint(slotItems: TopbarLayoutItem[], visibleIndex: number): number {
   const anchor = slotItems.filter((item) => item.visible)[Math.max(visibleIndex, 0)]
   return anchor ? slotItems.indexOf(anchor) : slotItems.length
@@ -62,7 +56,7 @@ export function moveTopbarItem(
   target: TopbarItemTarget
 ): TopbarLayoutItem[] {
   const moving = items.find((item) => item.id === id)
-  if (!moving || !slotAcceptsItem(target.slot, id)) return items
+  if (!moving || !topbarSlotAcceptsItem(target.slot, id)) return items
   const bySlot = itemsBySlot(itemsWithout(items, id))
   const destination = bySlot[target.slot]
   destination.splice(insertionPoint(destination, target.index), 0, moving)
@@ -84,7 +78,7 @@ function slotTargets(slot: TopbarSlot, visibleOthers: number): TopbarItemTarget[
 export function topbarItemTargets(items: TopbarLayoutItem[], id: TopbarItemId): TopbarItemTarget[] {
   if (!items.some((item) => item.id === id)) return []
   const others = itemsWithout(items, id)
-  return TOPBAR_SLOTS.filter((slot) => slotAcceptsItem(slot, id)).flatMap((slot) =>
+  return TOPBAR_SLOTS.filter((slot) => topbarSlotAcceptsItem(slot, id)).flatMap((slot) =>
     slotTargets(slot, visibleTopbarSlotItems(others, slot).length)
   )
 }
@@ -101,7 +95,7 @@ function neighbouringTarget(
   const position = topbarItemPosition(items, id)
   const targets = topbarItemTargets(items, id)
   const current = position ? targets.findIndex((target) => sameTarget(target, position)) : -1
-  return current < 0 ? undefined : targets[current + STEP_OFFSETS[direction]]
+  return current < 0 ? undefined : targets[current + TOPBAR_STEP_OFFSETS[direction]]
 }
 
 export function stepTopbarItem(

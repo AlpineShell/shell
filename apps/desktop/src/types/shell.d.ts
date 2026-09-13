@@ -31,7 +31,14 @@ declare global {
     label: string
     description?: import('react').ReactNode
     disabled?: boolean
+    stacked?: boolean
     children?: import('react').ReactNode
+  }
+
+  interface ValueRowProps {
+    entry: SettingsValueEntry
+    description: string
+    wideControlStacked?: boolean
   }
 
   interface NavRowProps {
@@ -121,6 +128,8 @@ declare global {
     variant?: IconButtonVariant
     busy?: boolean
     disabled?: boolean
+    expanded?: boolean
+    controls?: string
     className?: string
   }
 
@@ -879,7 +888,7 @@ declare global {
   }
 
   interface MicrophoneFaceProps {
-    label: string
+    apps: string[]
     darkText: boolean
   }
 
@@ -1430,6 +1439,8 @@ declare global {
 
   interface RidgeCanvasHandle {
     focusItem(id: TopbarItemId): void
+    abandonGrab(): void
+    announce(message: string): void
   }
 
   interface RidgeCanvasProps {
@@ -1437,6 +1448,7 @@ declare global {
     previewData: RidgePreviewData
     openItem: TopbarItemId | null
     onOpenItemChange: (id: TopbarItemId | null) => void
+    onNothingLeftToFocus: () => void
     renderCallout: (id: TopbarItemId) => import('react').ReactNode
     measure?: () => RidgeDragGeometry
     scrollContainer?: () => HTMLElement | null
@@ -1457,6 +1469,7 @@ declare global {
     mode: RidgeLayoutMode
     surface: TopbarSurface
     dropState?: RidgeLaneDropState
+    moving?: boolean
     children?: import('react').ReactNode
     ref?: import('react').Ref<HTMLDivElement>
   }
@@ -1521,10 +1534,17 @@ declare global {
   }
 
   interface RidgeAddMenuProps {
+    id?: string
     items: TopbarItemId[]
     onSelect: (id: TopbarItemId) => void
     onDismiss: () => void
     onNavigate: (path: string) => void
+  }
+
+  interface RidgeHiddenItemNoticeProps {
+    item: TopbarItemId
+    onAdd: () => void
+    onClose: () => void
   }
 
   interface RidgePageProps {

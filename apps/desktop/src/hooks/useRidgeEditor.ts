@@ -9,9 +9,7 @@ import {
   showRidgeItemPlan,
 } from '../components/settings/ridge/ridgeVisibility'
 import { useRidgeGates } from './useRidgeGates'
-import { useTopbarLayoutEditor } from './useTopbarLayoutEditor'
-
-const REFUSED_GATE_MESSAGE = 'Ridge could not save that change.'
+import { REFUSED_WRITE_MESSAGE, useTopbarLayoutEditor } from './useTopbarLayoutEditor'
 
 function sameStoredLayout(first: TopbarLayoutItem[], second: TopbarLayoutItem[]): boolean {
   return (
@@ -42,7 +40,7 @@ export function useRidgeEditor(): RidgeEditor {
   const writeGate = useCallback(
     async (item: TopbarGatedItemId, shown: boolean) => {
       const written = await setGate(item, shown)
-      if (!written) setGateError(REFUSED_GATE_MESSAGE)
+      if (!written) setGateError(REFUSED_WRITE_MESSAGE)
       return written
     },
     [setGate]

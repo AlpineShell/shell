@@ -111,7 +111,10 @@ Four renames fall out of the same argument:
   reader sees. Ids, IPC channels, files and `topbar-layout.json` keep their `topbar` names, so
   no store migrates. The Ridge page draws an editable copy of the bar: items move within and
   between its left, centre and right, hide and come back through "+", and each opens a
-  callout holding that item's settings. The brief asked for one page for the bar, so two
+  callout holding that item's settings. A result in settings search for an item, or for a
+  setting in its callout, opens that callout with the row picked out; if the item is hidden,
+  the page says so and offers to add it back. Search hands Settings only a page, so the same
+  result there opens Ridge with no callout. The brief asked for one page for the bar, so two
   pages folded into it. System tray's three switches are filed on `ridge` and live in the
   System tray item's callout; Manage tray icons moved to `ridge/tray-icons` with its page id
   kept; and the `tray` entry the launcher opens its tray submenu from is re-filed under
@@ -418,14 +421,14 @@ test failure too.
 | `brightness` | instant | A slider you can see the effect of while dragging, and drag back. |
 | `wallpaper` | instant | Visible immediately, reversible by picking another. |
 | `ridge` | instant | A page-level entry. The Ridge page writes each move as it is made, and every move is undone by moving the item back; the settings in its callouts each declare their own. |
-| `ridge-item-system-menu` | instant | A search entry for the Power menu on Ridge. It opens the item's callout and writes nothing itself. |
-| `ridge-item-plugins-left` | instant | A search entry for the Left plugins group on Ridge. It opens the group's callout and writes nothing itself. |
-| `ridge-item-notice` | instant | A search entry for Notices on Ridge. It opens the item's callout and writes nothing itself. |
-| `ridge-item-media` | instant | A search entry for Media on Ridge. It opens the item's callout and writes nothing itself. |
-| `ridge-item-microphone` | instant | A search entry for the Microphone on Ridge. It opens the item's callout and writes nothing itself. |
-| `ridge-item-status` | instant | A search entry for the Status icons on Ridge. It opens the item's callout and writes nothing itself. |
-| `ridge-item-plugins-right` | instant | A search entry for the Right plugins group on Ridge. It opens the group's callout and writes nothing itself. |
-| `ridge-item-clock` | instant | A search entry for the Clock on Ridge. It opens the item's callout and writes nothing itself. |
+| `ridge-item-system-menu` | instant | A search entry for the Power menu on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-plugins-left` | instant | A search entry for the Left plugins group on Ridge. From settings search it opens the group's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-notice` | instant | A search entry for Notices on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-media` | instant | A search entry for Media on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-microphone` | instant | A search entry for the Microphone on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-status` | instant | A search entry for the Status icons on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-plugins-right` | instant | A search entry for the Right plugins group on Ridge. From settings search it opens the group's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-clock` | instant | A search entry for the Clock on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-layout-reset` | confirm | Throws the whole arrangement away: every item back on its first side and in its first place, shown, with the Search button off and the tray on. Nothing restores the arrangement you had, so it asks once, on the shared confirm button. It writes the search flag, then the layout, then the tray flag, and stops at the first one that is refused (see the write path above). |
 | `power-confirm` | instant | Whether Ridge's power menu asks a second time before Log Out, Restart or Shut Down. On by default, because those actions can lose unsaved work (see `power`). Turning it off only removes a second click and turning it on adds it back; nothing runs when it flips. One Enter on its search row flips it, which is acceptable because that row shows a switch and says which way it went. Search's own power submenu always asks, whatever this is set to. |
 | `appearance` | instant | A page-level entry; the page's own settings each declare their own. |
@@ -434,7 +437,7 @@ test failure too.
 | `topbar-color-automatic` | instant | Freezes or resumes wallpaper-following. Both directions are one click. |
 | `topbar-search-icon` | instant | Shows or hides the Search button on Ridge, and is its only visibility switch: hiding the button from Ridge writes this and nothing else. The hotkey works either way, so it cannot strand you. |
 | `media-visualizer` | instant | Swaps one glyph of the Media item on Ridge for another. |
-| `clock-time-format` | instant | Reformats the clock on Ridge and nothing else. Filed on Ridge rather than Calendar because it governs the bar's clock; its search result opens the Clock callout with the row picked out. |
+| `clock-time-format` | instant | Reformats the clock on Ridge and nothing else. Filed on Ridge rather than Calendar because it governs the bar's clock; its result in settings search opens the Clock callout with the row picked out. |
 | `calendar-days` | instant | Changes how many days the hover calendar draws. |
 | `calendar-show-tasks` | instant | Adds or removes a section of the hover calendar. |
 | `search` | instant | A page-level entry; its settings declare their own. |

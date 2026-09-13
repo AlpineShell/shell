@@ -1,7 +1,6 @@
 import { settingsEntry, settingsPage } from '../../../settings/registry'
-import { TOPBAR_ITEMS, TOPBAR_ITEM_SETTING_GATES, findTopbarItem } from '../../topbar/layout/topbarLayout'
+import { TOPBAR_ITEMS, TOPBAR_ITEM_SETTING_GATES, findTopbarItem, isTopbarItemGated } from '../../topbar/layout/topbarLayout'
 import { RIDGE_PRESENCE_NOTES, ridgeItemIsSample } from './ridgeSamples'
-import { isRidgeGatedItem } from './ridgeVisibility'
 
 const RIDGE_ITEM_ENTRY_PREFIX = 'ridge-item-'
 
@@ -49,12 +48,8 @@ export const RIDGE_ITEM_DETAILS: Record<TopbarItemId, RidgeItemDetail> = {
   clock: { entries: ['clock-time-format'], links: [pageLink('calendar')], note: followingWindowsNote },
 }
 
-export function ridgeItemTitle(id: TopbarItemId): string {
-  return findTopbarItem(id)?.label ?? id
-}
-
 export function ridgeItemSearchEntryId(id: TopbarItemId): string {
-  return isRidgeGatedItem(id) ? TOPBAR_ITEM_SETTING_GATES[id] : `${RIDGE_ITEM_ENTRY_PREFIX}${id}`
+  return isTopbarItemGated(id) ? TOPBAR_ITEM_SETTING_GATES[id] : `${RIDGE_ITEM_ENTRY_PREFIX}${id}`
 }
 
 function calloutHoldsSetting(id: TopbarItemId, settingId: string): boolean {

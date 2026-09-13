@@ -20,8 +20,29 @@ function dropStateClass(state: RidgeLaneDropState, darkText: boolean): string {
   return ''
 }
 
-export default function RidgeLane({ slot, label, mode, surface, dropState = 'idle', children, ref }: RidgeLaneProps) {
+function stripOutlineClass(moving: boolean, darkText: boolean): string {
+  if (moving) return darkText ? 'outline-1 outline-dashed outline-black/25' : 'outline-1 outline-dashed outline-white/30'
+  return darkText
+    ? 'empty:outline-1 empty:outline-dashed empty:outline-black/25'
+    : 'empty:outline-1 empty:outline-dashed empty:outline-white/30'
+}
+
+function outlineClass(mode: RidgeLayoutMode, state: RidgeLaneDropState, moving: boolean, darkText: boolean): string {
+  return mode === 'strip' && state !== 'refuse' ? stripOutlineClass(moving, darkText) : ''
+}
+
+export default function RidgeLane({
+  slot,
+  label,
+  mode,
+  surface,
+  dropState = 'idle',
+  moving = false,
+  children,
+  ref,
+}: RidgeLaneProps) {
   const stacked = mode === 'stacked'
+  const outline = outlineClass(mode, dropState, moving, surface.darkText)
   return (
     <div className={WRAPPER_CLASSES[mode]}>
       {stacked && (
@@ -35,7 +56,7 @@ export default function RidgeLane({ slot, label, mode, surface, dropState = 'idl
         aria-label={`${label} side`}
         data-ridge-lane={slot}
         data-drop-state={dropState}
-        className={`relative z-10 flex flex-wrap items-center gap-1 transition-colors ${SIDE_ALIGNMENT[slot]} ${MODE_CLASSES[mode]} ${dropStateClass(dropState, surface.darkText)}`}
+        className={`relative z-10 flex flex-wrap items-center gap-1 transition-colors ${SIDE_ALIGNMENT[slot]} ${MODE_CLASSES[mode]} ${outline} ${dropStateClass(dropState, surface.darkText)}`}
         style={stacked ? { backgroundColor: surface.bg } : undefined}
       >
         {children}

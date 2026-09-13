@@ -8,10 +8,14 @@ import {
   settingsPage,
   settingsPageRoute,
 } from '../../../settings/registry'
-import { TOPBAR_ITEMS, TOPBAR_ITEM_SETTING_GATES } from '../../topbar/layout/topbarLayout'
+import {
+  TOPBAR_ITEMS,
+  TOPBAR_ITEM_SETTING_GATES,
+  isTopbarItemGated,
+  topbarItemLabel,
+} from '../../topbar/layout/topbarLayout'
 import RidgePage from '../ridgePage'
-import { RIDGE_ITEM_DETAILS, ridgeItemSearchEntryId, ridgeItemTitle } from './ridgeItemCatalogue'
-import { isRidgeGatedItem } from './ridgeVisibility'
+import { RIDGE_ITEM_DETAILS, ridgeItemSearchEntryId } from './ridgeItemCatalogue'
 
 vi.mock('../../../hooks/useRidgePreviewData', async () => {
   const { liveRidgePreviewData } = await import('./ridgeTestFixtures')
@@ -52,7 +56,7 @@ const GATE_IDS: string[] = Object.values(TOPBAR_ITEM_SETTING_GATES)
 
 const CALLOUT_ENTRY_IDS = TOPBAR_ITEMS.flatMap((item) => RIDGE_ITEM_DETAILS[item.id].entries)
 
-const UNGATED_ITEMS = TOPBAR_ITEMS.filter((item) => !isRidgeGatedItem(item.id))
+const UNGATED_ITEMS = TOPBAR_ITEMS.filter((item) => !isTopbarItemGated(item.id))
 
 function calloutsListing(id: string): number {
   return CALLOUT_ENTRY_IDS.filter((listed) => listed === id).length
@@ -83,7 +87,7 @@ describe('the settings filed on Ridge', () => {
 
   it.each(UNGATED_ITEMS)('names the $id entry after the item and sends it to Ridge', ({ id }) => {
     const entry = settingsEntry(ridgeItemSearchEntryId(id))
-    expect(entry?.label).toBe(`${ridgeItemTitle(id)} on Ridge`)
+    expect(entry?.label).toBe(`${topbarItemLabel(id)} on Ridge`)
     expect(entry?.control).toEqual({ kind: 'navigate', path: settingsPageRoute('ridge') })
   })
 })

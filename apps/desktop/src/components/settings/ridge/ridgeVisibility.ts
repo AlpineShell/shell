@@ -1,19 +1,15 @@
 import { settingsValueEntry } from '../../../settings/registry'
-import { TOPBAR_ITEM_SETTING_GATES } from '../../topbar/layout/topbarLayout'
+import { TOPBAR_ITEM_SETTING_GATES, isTopbarItemGated } from '../../topbar/layout/topbarLayout'
 import { isDefaultTopbarArrangement, setTopbarItemVisible } from '../../topbar/layout/topbarLayoutEdits'
 
 const RIDGE_GATED_ITEMS = Object.keys(TOPBAR_ITEM_SETTING_GATES) as TopbarGatedItemId[]
-
-export function isRidgeGatedItem(id: TopbarItemId): id is TopbarGatedItemId {
-  return Object.hasOwn(TOPBAR_ITEM_SETTING_GATES, id)
-}
 
 function gateShownByDefault(item: TopbarGatedItemId): boolean {
   return settingsValueEntry(TOPBAR_ITEM_SETTING_GATES[item]).defaultValue === true
 }
 
 function hiddenByGate(item: TopbarLayoutItem, gates: RidgeGates['visible']): boolean {
-  return isRidgeGatedItem(item.id) && !gates[item.id]
+  return isTopbarItemGated(item.id) && !gates[item.id]
 }
 
 function withVisibility(item: TopbarLayoutItem, visible: boolean): TopbarLayoutItem {
@@ -51,7 +47,7 @@ export function showRidgeItemPlan(
   id: TopbarItemId
 ): RidgeVisibilityStep[] {
   const clearLayoutMark = layoutSteps(layout, setTopbarItemVisible(layout, id, true))
-  if (!isRidgeGatedItem(id) || gates[id]) return clearLayoutMark
+  if (!isTopbarItemGated(id) || gates[id]) return clearLayoutMark
   return [...clearLayoutMark, gateStep(id, true)]
 }
 
@@ -60,7 +56,7 @@ export function hideRidgeItemPlan(
   gates: RidgeGates['visible'],
   id: TopbarItemId
 ): RidgeVisibilityStep[] {
-  if (!isRidgeGatedItem(id)) return layoutSteps(layout, setTopbarItemVisible(layout, id, false))
+  if (!isTopbarItemGated(id)) return layoutSteps(layout, setTopbarItemVisible(layout, id, false))
   return gates[id] && layoutShows(layout, id) ? [gateStep(id, false)] : []
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { CirclePlus, Palette, RotateCcw } from 'lucide-react'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
 import { highlightedSetting, onHighlightedSetting } from '../../hooks/useHighlightedSetting'
@@ -7,17 +7,19 @@ import { useRidgePreviewData } from '../../hooks/useRidgePreviewData'
 import {
   EMPTY_TOPBAR_LAYOUT,
   TOPBAR_SLOTS,
-  acceptsTopbarItem,
-  findTopbarItem,
   resolveTopbarLayout,
+  topbarSlotAcceptsItem,
   visibleTopbarSlotItems,
 } from '../topbar/layout/topbarLayout'
 import { stepTopbarItem } from '../topbar/layout/topbarLayoutEdits'
+import { ridgeHiddenAnnouncement, ridgeShownAnnouncement } from './ridge/ridgeAnnouncements'
+import { ridgeHighlightRing } from './ridge/ridgeHighlight'
 import { ridgeItemForSetting } from './ridge/ridgeItemCatalogue'
 import { nextFocusedItem, ridgeFocusOrder } from './ridge/ridgeKeyboard'
 import RidgeAddMenu from './ridge/ridgeAddMenu'
 import RidgeCallout from './ridge/ridgeCallout'
 import RidgeCanvas from './ridge/ridgeCanvas'
+import RidgeHiddenItemNotice from './ridge/ridgeHiddenItemNotice'
 import Button from '../ui/button'
 import ConfirmButton from '../ui/confirmButton'
 import IconButton from '../ui/iconButton'
@@ -37,8 +39,6 @@ const RESET_LABEL = 'Reset Ridge'
 
 const RESET_CONFIRM_LABEL = 'Reset to default'
 
-const HIGHLIGHT_RING = 'bg-fill-ghost ring-1 ring-line-strong'
-
 const FIRST_ITEM_AFTER_RESET = ridgeFocusOrder(resolveTopbarLayout(EMPTY_TOPBAR_LAYOUT))[0]
 
 function calloutForHighlight(settingId: string | null): TopbarItemId | null {
@@ -49,9 +49,16 @@ function hiddenItemIds(items: TopbarLayoutItem[]): TopbarItemId[] {
   return items.filter((item) => !item.visible).map((item) => item.id)
 }
 
+function isShownOnRidge(items: TopbarLayoutItem[], id: TopbarItemId): boolean {
+  return items.some((item) => item.id === id && item.visible)
+}
+
+function hiddenOpenItem(items: TopbarLayoutItem[], openItem: TopbarItemId | null): TopbarItemId | null {
+  return openItem !== null && !isShownOnRidge(items, openItem) ? openItem : null
+}
+
 function sidesFor(id: TopbarItemId): TopbarSlot[] {
-  const definition = findTopbarItem(id)
-  return definition ? TOPBAR_SLOTS.filter((slot) => acceptsTopbarItem(definition, slot)) : []
+  return TOPBAR_SLOTS.filter((slot) => topbarSlotAcceptsItem(slot, id))
 }
 
 function canStep(items: TopbarLayoutItem[], id: TopbarItemId, direction: TopbarStepDirection): boolean {
@@ -73,22 +80,20 @@ function buttonIn(anchor: HTMLElement | null): HTMLButtonElement | null {
   return anchor?.querySelector('button') ?? null
 }
 
-function highlightRing(highlighted: boolean): string {
-  return highlighted ? HIGHLIGHT_RING : ''
-}
-
 export default function RidgePage({ onNavigate }: RidgePageProps) {
   const previewData = useRidgePreviewData()
   const editor = useRidgeEditor()
   const canvas = useRef<RidgeCanvasHandle>(null)
   const addAnchor = useRef<HTMLDivElement>(null)
   const resetAnchor = useRef<HTMLDivElement>(null)
+  const addMenuId = useId()
   const [openItem, setOpenItem] = useState(() => calloutForHighlight(highlightedSetting()))
   const [adding, setAdding] = useState(false)
   const [resetting, setResetting] = useState(false)
   const highlight = useSyncExternalStore(onHighlightedSetting, highlightedSetting)
   const resetUnavailable = editor.isDefault || resetting
   const appearanceRoute = settingsPageRoute('appearance')
+  const hiddenItem = hiddenOpenItem(editor.items, openItem)
 
   useEffect(
     () =>
@@ -107,17 +112,43 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
     buttonIn(addAnchor.current)?.focus()
   }
 
+  function abandonCanvasGrab() {
+    canvas.current?.abandonGrab()
+  }
+
+  function announceOnCanvas(message: string) {
+    canvas.current?.announce(message)
+  }
+
   function closeCallout(id: TopbarItemId) {
     setOpenItem(null)
     canvas.current?.focusItem(id)
   }
 
+  function moveToSide(item: TopbarLayoutItem, slot: TopbarSlot) {
+    abandonCanvasGrab()
+    editor.move(item.id, sideTarget(editor.items, item, slot))
+  }
+
+  function stepFromCallout(id: TopbarItemId, direction: TopbarStepDirection) {
+    abandonCanvasGrab()
+    editor.step(id, direction)
+  }
+
   function hideFromCallout(id: TopbarItemId) {
+    abandonCanvasGrab()
     const neighbour = neighbourOnceHidden(editor.items, id)
     setOpenItem(null)
     if (neighbour) canvas.current?.focusItem(neighbour)
     else focusAddButton()
-    editor.hide(id)
+    editor.hide(id).then((hidden) => {
+      if (hidden) announceOnCanvas(ridgeHiddenAnnouncement(id))
+    })
+  }
+
+  function closeHiddenItemNotice() {
+    setOpenItem(null)
+    focusAddButton()
   }
 
   function dismissAddMenu() {
@@ -129,6 +160,7 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
     setAdding(false)
     editor.show(id).then((shown) => {
       if (!shown) return focusAddButton()
+      announceOnCanvas(ridgeShownAnnouncement(editor.items, id))
       setOpenItem(id)
       canvas.current?.focusItem(id)
     })
@@ -154,8 +186,8 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
         sides={sidesFor(id)}
         canStepEarlier={canStep(editor.items, id, 'earlier')}
         canStepLater={canStep(editor.items, id, 'later')}
-        onSide={(slot) => editor.move(id, sideTarget(editor.items, item, slot))}
-        onStep={(direction) => editor.step(id, direction)}
+        onSide={(slot) => moveToSide(item, slot)}
+        onStep={(direction) => stepFromCallout(id, direction)}
         onHide={() => hideFromCallout(id)}
         onNavigate={onNavigate}
         onClose={() => closeCallout(id)}
@@ -172,7 +204,12 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
           </Button>
         )}
         <div ref={addAnchor} className="flex">
-          <IconButton label={ADD_LABEL} onClick={() => setAdding((open) => !open)}>
+          <IconButton
+            label={ADD_LABEL}
+            expanded={adding}
+            controls={adding ? addMenuId : undefined}
+            onClick={() => setAdding((open) => !open)}
+          >
             <CirclePlus size={16} />
           </IconButton>
         </div>
@@ -180,6 +217,7 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
       {adding && (
         <div className="flex justify-end">
           <RidgeAddMenu
+            id={addMenuId}
             items={hiddenItemIds(editor.items)}
             onSelect={addItem}
             onDismiss={dismissAddMenu}
@@ -193,8 +231,12 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
         previewData={previewData}
         openItem={openItem}
         onOpenItemChange={setOpenItem}
+        onNothingLeftToFocus={focusAddButton}
         renderCallout={renderCallout}
       />
+      {hiddenItem !== null && (
+        <RidgeHiddenItemNotice item={hiddenItem} onAdd={() => addItem(hiddenItem)} onClose={closeHiddenItemNotice} />
+      )}
       <footer className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="text-xs text-ink-quiet">{CHANGES_CAPTION}</p>
@@ -207,7 +249,7 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
         <div
           ref={resetAnchor}
           data-setting={RESET_SETTING}
-          className={`flex shrink-0 rounded-full transition-colors duration-300 ${highlightRing(highlight === RESET_SETTING)}`}
+          className={`flex shrink-0 rounded-full transition-colors duration-300 ${ridgeHighlightRing(highlight === RESET_SETTING)}`}
         >
           <ConfirmButton
             label={RESET_LABEL}

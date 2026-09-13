@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { useState, type ReactElement } from 'react'
-import { EMPTY_TOPBAR_LAYOUT } from '../../topbar/layout/topbarLayout'
+import { EMPTY_TOPBAR_LAYOUT, TOPBAR_ITEMS, TOPBAR_SLOTS } from '../../topbar/layout/topbarLayout'
 import { liveRidgePreviewData } from './ridgeTestFixtures'
 
 let RidgeCanvas: typeof import('./ridgeCanvas').default
@@ -10,6 +10,10 @@ let resizeTo: (width: number) => void
 
 const PREVIEW_DATA = liveRidgePreviewData()
 const TRAY_SETTINGS: TraySettings = { enabled: true, showOverflow: true }
+const ONLY_THE_CLOCK: StoredTopbarLayout = {
+  ...EMPTY_TOPBAR_LAYOUT,
+  hidden: TOPBAR_ITEMS.map((item) => item.id).filter((id) => id !== 'clock'),
+}
 
 const box = (left: number, top: number, right: number, bottom: number): RidgeBox => ({ left, top, right, bottom })
 const chipAt = (id: TopbarItemId, left: number, right: number): RidgeChipBox => ({ id, ...box(left, 4, right, 36) })
@@ -83,9 +87,11 @@ function stubResizeObserver(): (width: number) => void {
 function CanvasHarness({
   measure,
   scrollContainer,
+  onNothingLeftToFocus = () => {},
 }: {
   measure?: () => RidgeDragGeometry
   scrollContainer?: () => HTMLElement | null
+  onNothingLeftToFocus?: () => void
 }) {
   const editor = useRidgeEditor()
   const [openItem, setOpenItem] = useState<TopbarItemId | null>(null)
@@ -95,6 +101,7 @@ function CanvasHarness({
       previewData={PREVIEW_DATA}
       openItem={openItem}
       onOpenItemChange={setOpenItem}
+      onNothingLeftToFocus={onNothingLeftToFocus}
       renderCallout={(id) => <p>Settings for {id}</p>}
       measure={measure}
       scrollContainer={scrollContainer ?? (() => null)}
@@ -183,6 +190,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   const bridges = window as unknown as { topbar?: unknown; shell?: unknown }
   delete bridges.topbar
@@ -300,6 +308,45 @@ describe('RidgeCanvas from the keyboard', () => {
     expect(document.activeElement).toBe(chip('System tray'))
     expect(screen.getAllByRole('button').filter((button) => button.tabIndex === 0)).toEqual([chip('System tray')])
   })
+
+  it('hands focus out of the canvas when it hides the only item Ridge shows', async () => {
+    const onNothingLeftToFocus = vi.fn()
+    installBridges({ stored: ONLY_THE_CLOCK })
+    await mount(<CanvasHarness onNothingLeftToFocus={onNothingLeftToFocus} />)
+
+    chip('Clock').focus()
+    pressKey('Clock', 'Delete')
+    await settle()
+
+    expect(screen.queryByRole('button', { name: 'Clock' })).toBeNull()
+    expect(onNothingLeftToFocus).toHaveBeenCalledTimes(1)
+    expect(announced()).toBe('Clock hidden from Ridge.')
+  })
+
+  it('puts a picked-up item back once focus leaves the items, for its callout or anything else', async () => {
+    installBridges()
+    await mount(<CanvasHarness />)
+    act(() => chip('Clock').click())
+
+    pressSpace('Clock')
+    pressKey('Clock', 'Home')
+    fireEvent.focusOut(chip('Clock'), { relatedTarget: screen.getByText('Settings for clock') })
+
+    expect(chip('Clock').hasAttribute('data-grabbed')).toBe(false)
+    expect(chipsIn('right').at(-1)).toBe('Clock')
+    expect(announced()).toBe('Clock returned to position 6 of 6 on the right.')
+  })
+
+  it('keeps the item picked up while focus stays among the items', async () => {
+    installBridges()
+    await mount(<CanvasHarness />)
+
+    pressSpace('Clock')
+    fireEvent.focusOut(chip('Clock'), { relatedTarget: chip('Media') })
+    fireEvent.focusOut(chip('Clock'), { relatedTarget: null })
+
+    expect(chip('Clock').getAttribute('data-grabbed')).toBe('true')
+  })
 })
 
 describe('RidgeCanvas under the pointer', () => {
@@ -360,15 +407,51 @@ describe('RidgeCanvas under the pointer', () => {
   })
 
   it('never opens a callout from the click that ends a drag', async () => {
+    const { topbar } = installBridges()
+    await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} />)
+
+    dragChip('Clock', { x: 950, y: 20 }, { x: 450, y: 20 })
+    act(() => chip('Clock').click())
+    await settle()
+
+    expect(writtenLayout(topbar.setLayout).slots.right).toEqual([
+      'tray',
+      'clock',
+      'media',
+      'microphone',
+      'status',
+      'plugins-right',
+    ])
+    expect(chip('Clock').getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText('Settings for clock')).toBeNull()
+  })
+
+  it.each<[string, RidgePoint, string]>([
+    ['moved to another side', { x: 350, y: 20 }, 'Media'],
+    ['hidden on the hide zone', { x: 500, y: 80 }, 'Clock'],
+  ])('opens the next callout asked for after a drag whose own click reached no item: %s', async (_, droppedAt, next) => {
     installBridges()
     await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} />)
 
-    dragChip('Clock', { x: 950, y: 20 }, { x: 350, y: 20 })
+    dragChip('Media', { x: 456, y: 20 }, droppedAt)
+    await settle()
+    act(() => chip(next).click())
+
+    expect(chip(next).getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('opens the next callout asked for after a drag cancelled with Escape', async () => {
+    installBridges()
+    await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} />)
+
+    pressPointer('Media', { x: 456, y: 20 })
+    movePointer({ x: 500, y: 80 })
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    releasePointer({ x: 500, y: 80 })
     await settle()
     act(() => chip('Clock').click())
 
-    expect(chip('Clock').getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText('Settings for clock')).toBeNull()
+    expect(chip('Clock').getAttribute('aria-expanded')).toBe('true')
   })
 
   it('still opens the callout after a press that never travels far enough to drag', async () => {
@@ -472,5 +555,35 @@ describe('RidgeCanvas layout', () => {
     resizeTo(1015)
     resizeTo(0)
     expect(layoutMode()).toBe('strip')
+  })
+
+  it('outlines an empty side of the strip, and every side while an item is picked up', async () => {
+    installBridges()
+    await mount(<CanvasHarness />)
+
+    expect(laneOf('center').className.split(' ')).toContain('empty:outline-dashed')
+    expect(laneOf('left').className.split(' ')).not.toContain('outline-dashed')
+
+    pressSpace('Clock')
+
+    for (const slot of TOPBAR_SLOTS) expect(laneOf(slot).className.split(' ')).toContain('outline-dashed')
+  })
+
+  it('brings a callout into view as it opens, but not while an item is picked up', async () => {
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView')
+    installBridges()
+    await mount(<CanvasHarness />)
+
+    act(() => chip('Clock').click())
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect((scrollIntoView.mock.contexts[0] as Element).textContent).toContain('Settings for clock')
+
+    act(() => chip('Clock').click())
+    pressSpace('Media')
+    await settle()
+    act(() => chip('Media').click())
+
+    expect(chip('Media').getAttribute('aria-expanded')).toBe('true')
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
   })
 })

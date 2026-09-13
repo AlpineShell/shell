@@ -5,7 +5,17 @@ const VARIANT_CLASSES: Record<IconButtonVariant, string> = {
   danger: 'text-ink-quiet hover:bg-danger/10 hover:text-danger',
 }
 
-export default function IconButton({ onClick, label, children, variant = 'ghost', busy, disabled, className }: IconButtonProps) {
+export default function IconButton({
+  onClick,
+  label,
+  children,
+  variant = 'ghost',
+  busy,
+  disabled,
+  expanded,
+  controls,
+  className,
+}: IconButtonProps) {
   const inert = disabled || busy
   return (
     <button
@@ -13,6 +23,8 @@ export default function IconButton({ onClick, label, children, variant = 'ghost'
       onClick={onClick}
       disabled={inert}
       aria-busy={busy}
+      aria-expanded={expanded}
+      aria-controls={controls}
       aria-label={label}
       title={label}
       className={`focus-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-field transition-colors ${

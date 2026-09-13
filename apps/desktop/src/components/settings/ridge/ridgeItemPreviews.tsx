@@ -11,7 +11,7 @@ import { formatClock, formatClockDate, resolveTimeFormat } from '../../topbar/ca
 import RidgePluginGroupFace from './ridgePluginGroupFace'
 import {
   RIDGE_SAMPLE_MEDIA_TITLE,
-  RIDGE_SAMPLE_MICROPHONE_LABEL,
+  RIDGE_SAMPLE_MICROPHONE_APPS,
   RIDGE_SAMPLE_NOTICE,
   RIDGE_SAMPLE_PEAK,
   ridgeItemIsSample,
@@ -29,10 +29,6 @@ function asSample(face: ReactElement): ReactElement {
       {face}
     </span>
   )
-}
-
-function microphoneLabel(apps: string[]): string {
-  return apps.length > 0 ? apps.join(', ') : RIDGE_SAMPLE_MICROPHONE_LABEL
 }
 
 export function SystemMenuPreview({ darkText }: RidgeItemPreviewProps) {
@@ -77,9 +73,9 @@ export function MediaPreview({ data, darkText }: RidgeItemPreviewProps) {
 
 export function MicrophonePreview({ data, darkText }: RidgeItemPreviewProps) {
   if (ridgeItemIsSample('microphone', data)) {
-    return asSample(<MicrophoneFace label={RIDGE_SAMPLE_MICROPHONE_LABEL} darkText={darkText} />)
+    return asSample(<MicrophoneFace apps={RIDGE_SAMPLE_MICROPHONE_APPS} darkText={darkText} />)
   }
-  return <MicrophoneFace label={microphoneLabel(data.microphone.apps)} darkText={darkText} />
+  return <MicrophoneFace apps={data.microphone.apps} darkText={darkText} />
 }
 
 export function StatusPreview({ data, darkText }: RidgeItemPreviewProps) {

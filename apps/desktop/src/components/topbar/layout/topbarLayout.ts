@@ -27,6 +27,14 @@ export function findTopbarItem(id: string): TopbarItemDefinition | undefined {
   return TOPBAR_ITEMS.find((item) => item.id === id)
 }
 
+export function topbarItemLabel(id: TopbarItemId): string {
+  return findTopbarItem(id)?.label ?? id
+}
+
+export function isTopbarItemGated(id: TopbarItemId): id is TopbarGatedItemId {
+  return Object.hasOwn(TOPBAR_ITEM_SETTING_GATES, id)
+}
+
 function storedSlotIds(stored: StoredTopbarLayout | null | undefined, slot: TopbarSlot): string[] {
   const ids = stored?.slots?.[slot]
   return Array.isArray(ids) ? ids : []
@@ -34,6 +42,11 @@ function storedSlotIds(stored: StoredTopbarLayout | null | undefined, slot: Topb
 
 export function acceptsTopbarItem(definition: TopbarItemDefinition, slot: TopbarSlot): boolean {
   return definition.kind !== 'plugin-group' || definition.slot === slot
+}
+
+export function topbarSlotAcceptsItem(slot: TopbarSlot, id: TopbarItemId): boolean {
+  const definition = findTopbarItem(id)
+  return definition !== undefined && acceptsTopbarItem(definition, slot)
 }
 
 const EARLIER_IN_CATALOGUE = -1

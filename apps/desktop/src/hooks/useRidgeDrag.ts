@@ -96,11 +96,27 @@ export function useRidgeDrag(setup: RidgeDragSetup): RidgeDragControls {
   const latest = useRef(setup)
   const session = useRef<RidgeDragSession | null>(null)
   const suppressClick = useRef(false)
+  const clickExpiry = useRef<number | null>(null)
   const detach = useRef<() => void>(ignore)
 
   useLayoutEffect(() => {
     latest.current = setup
   })
+
+  const stopClickExpiry = useCallback(() => {
+    if (clickExpiry.current !== null) window.clearTimeout(clickExpiry.current)
+    clickExpiry.current = null
+  }, [])
+
+  const forgetSuppressedClick = useCallback(() => {
+    stopClickExpiry()
+    suppressClick.current = false
+  }, [stopClickExpiry])
+
+  const expireSuppressedClickAfterThisTask = useCallback(() => {
+    stopClickExpiry()
+    clickExpiry.current = window.setTimeout(forgetSuppressedClick)
+  }, [stopClickExpiry, forgetSuppressedClick])
 
   const end = useCallback((): RidgeDragSession | null => {
     const ended = session.current
@@ -112,11 +128,23 @@ export function useRidgeDrag(setup: RidgeDragSetup): RidgeDragControls {
     return ended
   }, [])
 
-  useEffect(() => () => void end(), [end])
+  useEffect(
+    () => () => {
+      end()
+      window.removeEventListener('pointerup', expireSuppressedClickAfterThisTask)
+      stopClickExpiry()
+    },
+    [end, expireSuppressedClickAfterThisTask, stopClickExpiry]
+  )
 
-  const cancel = useCallback(() => {
+  const cancelHeldDrag = useCallback(() => {
     if (end()?.active) latest.current.onCancel()
   }, [end])
+
+  const cancelLostDrag = useCallback(() => {
+    cancelHeldDrag()
+    expireSuppressedClickAfterThisTask()
+  }, [cancelHeldDrag, expireSuppressedClickAfterThisTask])
 
   const drop = useCallback(
     (event: PointerEvent) => {
@@ -124,8 +152,9 @@ export function useRidgeDrag(setup: RidgeDragSetup): RidgeDragControls {
       if (!ended?.active) return
       ended.pointer = pointOf(event)
       latest.current.onDrop(ended.id, targetUnderPointer(ended))
+      expireSuppressedClickAfterThisTask()
     },
-    [end]
+    [end, expireSuppressedClickAfterThisTask]
   )
 
   const scrollTick = useCallback(() => {
@@ -161,45 +190,51 @@ export function useRidgeDrag(setup: RidgeDragSetup): RidgeDragControls {
     if (current?.active) remeasure(current, latest.current)
   }, [])
 
+  const expireSuppressedClickOnRelease = useCallback(() => {
+    window.addEventListener('pointerup', expireSuppressedClickAfterThisTask, { once: true })
+  }, [expireSuppressedClickAfterThisTask])
+
   const cancelOnEscape = useCallback(
     (event: KeyboardEvent) => {
-      if (event.key === 'Escape') cancel()
+      if (event.key !== 'Escape') return
+      cancelHeldDrag()
+      expireSuppressedClickOnRelease()
     },
-    [cancel]
+    [cancelHeldDrag, expireSuppressedClickOnRelease]
   )
 
   const attach = useCallback(
     (element: HTMLElement) => {
       window.addEventListener('pointermove', follow)
       window.addEventListener('pointerup', drop)
-      window.addEventListener('pointercancel', cancel)
+      window.addEventListener('pointercancel', cancelLostDrag)
       window.addEventListener('keydown', cancelOnEscape)
-      window.addEventListener('blur', cancel)
+      window.addEventListener('blur', cancelLostDrag)
       window.addEventListener('scroll', followScroll, true)
-      element.addEventListener('lostpointercapture', cancel)
+      element.addEventListener('lostpointercapture', cancelLostDrag)
       return () => {
         window.removeEventListener('pointermove', follow)
         window.removeEventListener('pointerup', drop)
-        window.removeEventListener('pointercancel', cancel)
+        window.removeEventListener('pointercancel', cancelLostDrag)
         window.removeEventListener('keydown', cancelOnEscape)
-        window.removeEventListener('blur', cancel)
+        window.removeEventListener('blur', cancelLostDrag)
         window.removeEventListener('scroll', followScroll, true)
-        element.removeEventListener('lostpointercapture', cancel)
+        element.removeEventListener('lostpointercapture', cancelLostDrag)
       }
     },
-    [follow, drop, cancel, cancelOnEscape, followScroll]
+    [follow, drop, cancelLostDrag, cancelOnEscape, followScroll]
   )
 
   const start = useCallback(
     (event: ReactPointerEvent<HTMLElement>, id: TopbarItemId) => {
-      suppressClick.current = false
+      forgetSuppressedClick()
       if (event.button !== PRIMARY_BUTTON) return
-      cancel()
+      cancelHeldDrag()
       session.current = startedSession(event, id)
       event.currentTarget.setPointerCapture?.(event.pointerId)
       detach.current = attach(event.currentTarget)
     },
-    [cancel, attach]
+    [forgetSuppressedClick, cancelHeldDrag, attach]
   )
 
   const takeSuppressedClick = useCallback(() => {

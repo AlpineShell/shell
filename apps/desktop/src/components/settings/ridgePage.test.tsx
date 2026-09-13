@@ -218,6 +218,12 @@ function pressKey(name: string, key: string) {
   fireEvent.keyDown(chip(name), { key })
 }
 
+function announced(): string {
+  const canvas = document.querySelector<HTMLElement>('[data-layout-mode]')
+  if (!canvas) throw new Error('no canvas rendered')
+  return (within(canvas).getByRole('status').textContent ?? '').trim()
+}
+
 beforeEach(async () => {
   vi.resetModules()
   resizeTo = stubResizeObserver()
@@ -308,6 +314,44 @@ describe('search highlights on the Ridge page', () => {
   })
 })
 
+describe('a search hit for an item Ridge is not showing', () => {
+  it('says the item is hidden, and adding it back opens its callout on Ridge', async () => {
+    const { spy } = installBridges({ stored: CLOCK_HIDDEN })
+    act(() => highlightSetting('ridge-item-clock'))
+    await openPage()
+
+    const notice = calloutFor('Clock')
+    expect(notice.textContent).toContain('Clock is hidden from Ridge.')
+    expect(expandedItems()).toEqual([])
+    fireEvent.click(within(notice).getByRole('button', { name: 'Add Clock to Ridge' }))
+    await settle()
+
+    expect(lastWrittenLayout(spy('topbar.setLayout')).hidden).toEqual([])
+    expect(chip('Clock').getAttribute('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(chip('Clock'))
+    expect(calloutFor('Clock').textContent).not.toContain('is hidden from Ridge')
+  })
+
+  it('points at the Search button, hidden by default, for a hit on its hotkey', async () => {
+    installBridges({ searchIcon: false })
+    act(() => highlightSetting('launcher-hotkey'))
+    await openPage()
+
+    expect(calloutFor('Search button').textContent).toContain('Search button is hidden from Ridge.')
+  })
+
+  it('closes on its Close button and hands focus to +', async () => {
+    installBridges({ stored: CLOCK_HIDDEN })
+    act(() => highlightSetting('ridge-item-clock'))
+    await openPage()
+
+    fireEvent.click(within(calloutFor('Clock')).getByRole('button', { name: 'Close' }))
+
+    expect(screen.queryByRole('region', { name: 'Clock settings' })).toBeNull()
+    expect(document.activeElement).toBe(addButton())
+  })
+})
+
 describe('resetting Ridge', () => {
   it('offers no reset while Ridge is as it started', async () => {
     installBridges()
@@ -378,6 +422,20 @@ describe("bringing items back with '+'", () => {
     expect(chip('Media').getAttribute('aria-expanded')).toBe('true')
     expect(calloutFor('Media')).toBeTruthy()
     expect(screen.queryByRole('group', { name: 'Add to Ridge' })).toBeNull()
+    expect(announced()).toBe('Media added, position 2 of 6 on the right.')
+  })
+
+  it('tells assistive technology whether its menu is open, and which menu that is', async () => {
+    installBridges()
+    await openPage()
+    expect(addButton().getAttribute('aria-expanded')).toBe('false')
+    expect(addButton().hasAttribute('aria-controls')).toBe(false)
+
+    fireEvent.click(addButton())
+
+    expect(addButton().getAttribute('aria-expanded')).toBe('true')
+    const menu = document.getElementById(addButton().getAttribute('aria-controls') ?? '')
+    expect(menu).toBe(screen.getByRole('group', { name: 'Add to Ridge' }))
   })
 
   it('brings the Search button back by turning its flag on, leaving the layout alone', async () => {
@@ -438,6 +496,31 @@ describe('the callout on the Ridge page', () => {
     expect(lastWrittenLayout(spy('topbar.setLayout')).hidden).toEqual(['media'])
     expect(screen.queryByRole('button', { name: 'Media' })).toBeNull()
     expect(document.activeElement).toBe(chip('Microphone'))
+    expect(announced()).toBe('Media hidden from Ridge.')
+  })
+
+  it('keeps a move made in the callout while its item is picked up on the keyboard', async () => {
+    const { spy } = installBridges()
+    await openPage()
+    await openCallout('Clock')
+
+    chip('Clock').focus()
+    pressSpace('Clock')
+    fireEvent.click(within(calloutFor('Clock')).getByRole('button', { name: 'Move earlier' }))
+    await settle()
+    pressSpace('Clock')
+    pressSpace('Clock')
+    await settle()
+
+    expect(spy('topbar.setLayout')).toHaveBeenCalledTimes(1)
+    expect(lastWrittenLayout(spy('topbar.setLayout')).slots.right).toEqual([
+      'tray',
+      'media',
+      'microphone',
+      'status',
+      'clock',
+      'plugins-right',
+    ])
   })
 
   it('hands focus to the item before it when it hides the last item', async () => {

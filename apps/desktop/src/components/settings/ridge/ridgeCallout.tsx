@@ -1,24 +1,20 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react'
 import { ArrowLeft, ArrowRight, ChevronRight, EyeOff, Puzzle, X } from 'lucide-react'
 import { settingsEntry, settingsPageRoute } from '../../../settings/registry'
+import { topbarItemLabel } from '../../topbar/layout/topbarLayout'
 import { entryRowContent, registryPageRendersEntry } from '../registryRowContent'
 import Button from '../../ui/button'
 import Card from '../../ui/card'
 import IconButton from '../../ui/iconButton'
 import Segmented from '../../ui/segmented'
 import { ridgeSideLabel } from './ridgeAnnouncements'
-import {
-  RIDGE_ITEM_DETAILS,
-  ridgeItemEntries,
-  ridgeItemSearchEntryId,
-  ridgeItemTitle,
-  ridgePluginGroupWidgets,
-} from './ridgeItemCatalogue'
+import { ridgeHighlightRing } from './ridgeHighlight'
+import { RIDGE_ITEM_DETAILS, ridgeItemEntries, ridgeItemSearchEntryId, ridgePluginGroupWidgets } from './ridgeItemCatalogue'
 
-const HIGHLIGHT_RING = 'bg-fill-ghost ring-1 ring-line-strong'
+const WIDE_CONTROLS_STACKED = true
 
 function settingRowClass(highlighted: boolean): string {
-  return `-mx-2 rounded-field px-2 py-1.5 transition-colors duration-300 ${highlighted ? HIGHLIGHT_RING : ''}`
+  return `-mx-2 rounded-field px-2 py-1.5 transition-colors duration-300 ${ridgeHighlightRing(highlighted)}`
 }
 
 function sideOption(slot: TopbarSlot): SegmentedOption<TopbarSlot> {
@@ -41,7 +37,7 @@ export default function RidgeCallout(props: RidgeCalloutProps) {
   return (
     <div
       role="region"
-      aria-label={`${ridgeItemTitle(item.id)} settings`}
+      aria-label={`${topbarItemLabel(item.id)} settings`}
       onKeyDown={closeOnEscape}
       className="w-full max-w-[22rem]"
     >
@@ -62,7 +58,7 @@ function CalloutHeader({ item, onClose }: RidgeCalloutProps) {
   return (
     <div className="flex items-center gap-2">
       {Icon && <Icon size={16} className="shrink-0 text-ink-quiet" />}
-      <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{ridgeItemTitle(item.id)}</h3>
+      <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{topbarItemLabel(item.id)}</h3>
       <IconButton label="Close" onClick={onClose}>
         <X size={15} />
       </IconButton>
@@ -91,7 +87,7 @@ function CalloutSettings({ item, highlightedSetting }: RidgeCalloutProps) {
             data-setting={entry.id}
             className={settingRowClass(highlighted)}
           >
-            {entryRowContent(entry, entry.description)}
+            {entryRowContent(entry, entry.description, WIDE_CONTROLS_STACKED)}
           </div>
         )
       })}

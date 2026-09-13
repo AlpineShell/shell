@@ -4,17 +4,17 @@ import { settingsPageRoute } from '../../../settings/registry'
 import Button from '../../ui/button'
 import Card from '../../ui/card'
 import SearchPicker from '../../ui/searchPicker'
-import { ridgeItemTitle } from './ridgeItemCatalogue'
+import { topbarItemLabel } from '../../topbar/layout/topbarLayout'
 
 const ADD_MENU_LABEL = 'Add to Ridge'
 
 const NOTHING_HIDDEN = 'Everything is already on Ridge.'
 
 function hiddenItemOption(id: TopbarItemId): SearchPickerOption {
-  return { value: id, label: ridgeItemTitle(id) }
+  return { value: id, label: topbarItemLabel(id) }
 }
 
-export default function RidgeAddMenu({ items, onSelect, onDismiss, onNavigate }: RidgeAddMenuProps) {
+export default function RidgeAddMenu({ id, items, onSelect, onDismiss, onNavigate }: RidgeAddMenuProps) {
   const pluginsRoute = settingsPageRoute('plugins')
 
   function dismissOnEscape(event: KeyboardEvent<HTMLDivElement>) {
@@ -24,12 +24,12 @@ export default function RidgeAddMenu({ items, onSelect, onDismiss, onNavigate }:
   }
 
   function selectHiddenItem(value: string) {
-    const chosen = items.find((id) => id === value)
+    const chosen = items.find((hiddenId) => hiddenId === value)
     if (chosen) onSelect(chosen)
   }
 
   return (
-    <div role="group" aria-label={ADD_MENU_LABEL} onKeyDown={dismissOnEscape} className="w-full max-w-[22rem]">
+    <div id={id} role="group" aria-label={ADD_MENU_LABEL} onKeyDown={dismissOnEscape} className="w-full max-w-[22rem]">
       <Card className="flex flex-col gap-2 p-3">
         {items.length > 0 ? (
           <SearchPicker

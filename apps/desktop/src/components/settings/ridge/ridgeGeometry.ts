@@ -1,4 +1,4 @@
-import { acceptsTopbarItem, findTopbarItem } from '../../topbar/layout/topbarLayout'
+import { topbarSlotAcceptsItem } from '../../topbar/layout/topbarLayout'
 
 const RIDGE_STRIP_MIN_WIDTH = 704
 const EDGE_SCROLL_BAND = 40
@@ -14,7 +14,7 @@ const EMPTY_LANE_CARET_X: Record<TopbarSlot, (lane: RidgeBox) => number> = {
   right: (lane) => lane.right - CARET_GAP,
 }
 
-function clamp(value: number, min: number, max: number): number {
+export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
@@ -41,11 +41,6 @@ export function ridgeBoxWithin(box: RidgeBox, frame: RidgeBox): RidgeBox {
     right: box.right - frame.left,
     bottom: box.bottom - frame.top,
   }
-}
-
-function laneAccepts(slot: TopbarSlot, id: TopbarItemId): boolean {
-  const definition = findTopbarItem(id)
-  return definition !== undefined && acceptsTopbarItem(definition, slot)
 }
 
 function otherChips(lane: RidgeLaneBox, id: TopbarItemId): RidgeChipBox[] {
@@ -98,7 +93,7 @@ export function resolveDropTarget(
   if (geometry.hideZone && boxContains(geometry.hideZone, point)) return { kind: 'hide' }
   const lane = geometry.lanes.find((candidate) => boxContains(candidate, point))
   if (!lane) return null
-  if (!laneAccepts(lane.slot, id)) return { kind: 'refused', slot: lane.slot }
+  if (!topbarSlotAcceptsItem(lane.slot, id)) return { kind: 'refused', slot: lane.slot }
   return { kind: 'lane', slot: lane.slot, index: insertionIndexInLane(lane, point, id) }
 }
 

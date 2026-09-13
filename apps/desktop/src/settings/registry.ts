@@ -55,7 +55,7 @@ import {
   Wallpaper,
   Wifi,
 } from 'lucide-react'
-import { TOPBAR_ITEMS, TOPBAR_ITEM_SETTING_GATES, findTopbarItem } from '../components/topbar/layout/topbarLayout'
+import { TOPBAR_ITEMS, isTopbarItemGated, topbarItemLabel } from '../components/topbar/layout/topbarLayout'
 
 export const SETTINGS_PAGE_GROUP = 'Page'
 
@@ -456,16 +456,8 @@ const RIDGE_ITEM_SEARCH: Record<
   },
 }
 
-function hasSettingGate(id: TopbarItemId): id is TopbarGatedItemId {
-  return Object.hasOwn(TOPBAR_ITEM_SETTING_GATES, id)
-}
-
-function topbarItemLabel(id: TopbarItemId): string {
-  return findTopbarItem(id)?.label ?? id
-}
-
 function ungatedTopbarItemIds(): Exclude<TopbarItemId, TopbarGatedItemId>[] {
-  return TOPBAR_ITEMS.flatMap((item) => (hasSettingGate(item.id) ? [] : [item.id]))
+  return TOPBAR_ITEMS.flatMap((item) => (isTopbarItemGated(item.id) ? [] : [item.id]))
 }
 
 function ridgeItemEntry(id: Exclude<TopbarItemId, TopbarGatedItemId>, index: number): SettingsEntry {

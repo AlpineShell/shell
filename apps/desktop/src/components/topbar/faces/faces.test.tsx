@@ -67,7 +67,7 @@ const FACES: [string, (darkText: boolean) => ReactElement][] = [
     ],
     ["MediaFace with bars", (darkText) => <MediaFace title="Blue in Green" appIcon={null} peak={0.6} darkText={darkText} />],
     ["MediaFace with the app icon", (darkText) => <MediaFace title="Blue in Green" appIcon={PNG_BASE64} peak={0} darkText={darkText} />],
-    ["MicrophoneFace", (darkText) => <MicrophoneFace label="Zoom, Teams" darkText={darkText} />],
+    ["MicrophoneFace", (darkText) => <MicrophoneFace apps={["Zoom", "Teams"]} darkText={darkText} />],
     ["StatusFace", (darkText) => <StatusFace {...status()} darkText={darkText} />],
     ["ClockFace", (darkText) => <ClockFace time="09:41" date="Sep 12" darkText={darkText} />],
 ];
@@ -258,5 +258,15 @@ describe("ClockFace", () => {
     it("shows the time, then the date", () => {
         const { container } = render(<ClockFace time="9:41 PM" date="Sep 12" darkText={false} />);
         expect(container.textContent).toBe("9:41 PM Sep 12");
+    });
+});
+
+describe("MicrophoneFace", () => {
+    it.each<[string[], string]>([
+        [["Zoom", "Teams"], "Zoom, Teams"],
+        [[], "In use"],
+    ])("reads %j as %s", (apps, label) => {
+        const { container } = render(<MicrophoneFace apps={apps} darkText={false} />);
+        expect(container.textContent).toBe(label);
     });
 });
