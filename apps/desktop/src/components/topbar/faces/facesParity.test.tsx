@@ -12,6 +12,7 @@ import MicrophoneFace from './microphoneFace'
 import StatusFace from './statusFace'
 import MediaFace from './mediaFace'
 import NoticeFace from './noticeFace'
+import { UNKNOWN_BLUETOOTH_STATE } from '../../../lib/bluetoothPresentation'
 
 interface BarFixture {
   now: Date
@@ -46,7 +47,7 @@ vi.mock('../../../hooks/useCalendar', () => ({ useCalendar: () => ({ state: { co
 vi.mock('../../../hooks/useMinuteTick', () => ({ useMinuteTick: () => bar.fixture.now }))
 vi.mock('../../../hooks/useMicrophone', () => ({ useMicrophone: () => bar.fixture.microphone }))
 vi.mock('../../../hooks/useBattery', () => ({ useBattery: () => bar.fixture.battery }))
-vi.mock('../../../hooks/useBluetooth', () => ({ useBluetooth: () => bar.fixture.bluetooth }))
+vi.mock('../../../hooks/useBluetooth', () => ({ useBluetooth: () => ({ state: bar.fixture.bluetooth }) }))
 vi.mock('../../../hooks/useNetwork', () => ({ useNetworkStatus: () => bar.fixture.network }))
 vi.mock('../../../hooks/useVolume', () => ({ useVolume: () => ({ volume: 50, setVolume: () => {}, muted: false, toggleMute: () => {} }) }))
 vi.mock('../../../hooks/useMonitors', () => ({ useMonitors: () => ({ monitors: [], setBrightness: () => {} }) }))
@@ -67,6 +68,25 @@ const PLAYBACK: MediaPlayback = {
   thumbnailType: null,
 }
 
+const CONNECTED_BLUETOOTH: BluetoothState = {
+  radio: { state: 'on', pending: null, error: null },
+  devices: [
+    {
+      id: 'wh-1000xm4',
+      name: 'WH-1000XM4',
+      connected: true,
+      canConnect: false,
+      canDisconnect: true,
+      audioDisabled: false,
+      pending: null,
+      error: null,
+    },
+  ],
+  devicesAvailable: true,
+}
+
+const BLUETOOTH_OFF: BluetoothState = { ...CONNECTED_BLUETOOTH, radio: { state: 'off', pending: null, error: null } }
+
 const NOTICE: ShellNotice = {
   id: 'file-handler',
   displayId: null,
@@ -86,7 +106,7 @@ function freshFixture(): BarFixture {
     calendarConnected: false,
     microphone: { active: false, apps: [] },
     battery: { percent: 64, charging: false, onAcPower: false, hasBattery: true },
-    bluetooth: { enabled: true, connected: true, devices: ['WH-1000XM4'] },
+    bluetooth: CONNECTED_BLUETOOTH,
     network: { signal: 55, connected: true, type: 'wifi', ssid: 'Home' },
     wifiRadioState: 'on',
     playback: PLAYBACK,
@@ -98,7 +118,7 @@ function freshFixture(): BarFixture {
 
 const statusFace = (darkText: boolean, over: Partial<Omit<StatusFaceProps, 'darkText'>> = {}) => (
   <StatusFace
-    bluetooth={{ enabled: true, connected: true }}
+    bluetooth={CONNECTED_BLUETOOTH}
     network={{ signal: 55, connected: true, type: 'wifi' }}
     radioOn
     battery={{ percent: 64, charging: false, hasBattery: true }}
@@ -166,6 +186,22 @@ const PARITY_CASES: ParityCase[] = [
     },
     live: <StatusIndicator />,
     face: (darkText) => statusFace(darkText, { battery: { percent: null, charging: false, hasBattery: false } }),
+  },
+  {
+    name: 'StatusIndicator with Bluetooth off',
+    arrange: (fixture) => {
+      fixture.bluetooth = BLUETOOTH_OFF
+    },
+    live: <StatusIndicator />,
+    face: (darkText) => statusFace(darkText, { bluetooth: BLUETOOTH_OFF }),
+  },
+  {
+    name: 'StatusIndicator while Bluetooth is still being checked',
+    arrange: (fixture) => {
+      fixture.bluetooth = UNKNOWN_BLUETOOTH_STATE
+    },
+    live: <StatusIndicator />,
+    face: (darkText) => statusFace(darkText, { bluetooth: UNKNOWN_BLUETOOTH_STATE }),
   },
   {
     name: 'MediaStatus drawing the music bars',
@@ -240,10 +276,6 @@ beforeEach(() => {
       wifiRadioGet: () => Promise.resolve({ success: true, state: bar.fixture.wifiRadioState }),
       wifiScan: () => Promise.resolve([]),
       onWifiScanUpdated: () => () => {},
-    },
-    system: {
-      bluetoothScan: () => Promise.resolve([]),
-      onBluetoothDevicesChanged: () => () => {},
     },
   }
 })

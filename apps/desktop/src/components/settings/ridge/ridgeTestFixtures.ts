@@ -47,7 +47,22 @@ export function liveRidgePreviewData(): RidgePreviewData {
     },
     status: {
       battery: { percent: 64, charging: false, onAcPower: false, hasBattery: true },
-      bluetooth: { enabled: true, connected: true, devices: ['Headphones'] },
+      bluetooth: {
+        radio: { state: 'on', pending: null, error: null },
+        devices: [
+          {
+            id: 'headphones',
+            name: 'Headphones',
+            connected: true,
+            canConnect: false,
+            canDisconnect: true,
+            audioDisabled: false,
+            pending: null,
+            error: null,
+          },
+        ],
+        devicesAvailable: true,
+      },
       network: { signal: 80, connected: true, type: 'wifi', ssid: 'Home' },
     },
     media: {

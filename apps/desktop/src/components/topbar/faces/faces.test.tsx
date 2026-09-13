@@ -22,8 +22,25 @@ const notice = (over: Partial<NoticeFaceProps["notice"]> = {}): NoticeFaceProps[
     ...over,
 });
 
+const bluetoothState = (radio: BluetoothRadioState, connected: boolean, devicesAvailable = true): BluetoothState => ({
+    radio: { state: radio, pending: null, error: null },
+    devices: [
+        {
+            id: "headphones",
+            name: "Headphones",
+            connected,
+            canConnect: !connected,
+            canDisconnect: connected,
+            audioDisabled: false,
+            pending: null,
+            error: null,
+        },
+    ],
+    devicesAvailable,
+});
+
 const status = (over: Partial<Omit<StatusFaceProps, "darkText">> = {}): Omit<StatusFaceProps, "darkText"> => ({
-    bluetooth: { enabled: true, connected: false },
+    bluetooth: bluetoothState("on", false),
     network: { signal: 80, connected: true, type: "wifi" },
     radioOn: true,
     battery: { percent: 64, charging: false, hasBattery: true },
@@ -203,12 +220,22 @@ describe("StatusFace", () => {
         expect(icons(over)[1]).toBe(expected);
     });
 
-    it.each([
-        ["off", { enabled: false, connected: false }, "lucide-bluetooth-off"],
-        ["connected", { enabled: true, connected: true }, "lucide-bluetooth-connected"],
-        ["on and idle", { enabled: true, connected: false }, "lucide-bluetooth"],
-    ] as const)("draws Bluetooth %s", (_, bluetooth, expected) => {
+    it.each<[string, BluetoothState, string]>([
+        ["off", bluetoothState("off", false), "lucide-bluetooth-off"],
+        ["without an adapter", bluetoothState("unavailable", false), "lucide-bluetooth-off"],
+        ["connected", bluetoothState("on", true), "lucide-bluetooth-connected"],
+        ["on and idle", bluetoothState("on", false), "lucide-bluetooth"],
+        ["while its devices are still unknown", bluetoothState("on", false, false), "lucide-bluetooth"],
+    ])("draws Bluetooth %s", (_, bluetooth, expected) => {
         expect(icons({ bluetooth })[0]).toBe(expected);
+    });
+
+    it.each<[string, BluetoothState, string]>([
+        ["dims the Bluetooth glyph while Bluetooth is still being checked", bluetoothState("unknown", false, false), "0.5"],
+        ["keeps the Bluetooth glyph at full strength while Bluetooth is on", bluetoothState("on", false), "1"],
+    ])("%s", (_, bluetooth, opacity) => {
+        const glyph = render(<StatusFace {...status({ bluetooth })} darkText={false} />).container.querySelector("svg");
+        expect(glyph?.getAttribute("opacity")).toBe(opacity);
     });
 
     it.each([

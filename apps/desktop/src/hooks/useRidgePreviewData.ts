@@ -37,7 +37,7 @@ export function useRidgePreviewData(): RidgePreviewData {
   const now = useMinuteTick()
   const { prefs } = useClockPrefs()
   const battery = useBattery()
-  const bluetooth = useBluetooth()
+  const { state: bluetooth } = useBluetooth()
   const network = useNetworkStatus()
   const playback = useMediaPlayback()
   const showVisualizer = useMediaVisualizer()

@@ -1,4 +1,5 @@
 import { Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, BluetoothConnected, BluetoothOff, EthernetPort, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
+import { indicatorKind } from "../../../lib/bluetoothPresentation";
 
 function NetworkIcon({ network, radioOn, darkText }: Pick<StatusFaceProps, "network" | "radioOn" | "darkText">) {
     const color = darkText ? "black" : "white";
@@ -14,9 +15,10 @@ function NetworkIcon({ network, radioOn, darkText }: Pick<StatusFaceProps, "netw
 
 function BluetoothIcon({ bluetooth, darkText }: Pick<StatusFaceProps, "bluetooth" | "darkText">) {
     const color = darkText ? "black" : "white";
-    if (!bluetooth.enabled) return <BluetoothOff color={color} size={14} />;
-    if (bluetooth.connected) return <BluetoothConnected color={color} size={14} />;
-    return <Bluetooth color={color} size={14} />;
+    const kind = indicatorKind(bluetooth);
+    if (kind === "off") return <BluetoothOff color={color} size={14} />;
+    if (kind === "connected") return <BluetoothConnected color={color} size={14} />;
+    return <Bluetooth color={color} size={14} opacity={kind === "neutral" ? 0.5 : 1} />;
 }
 
 function BatteryIcon({ battery, darkText }: Pick<StatusFaceProps, "battery" | "darkText">) {
