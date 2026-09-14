@@ -3,12 +3,9 @@ export {}
 declare global {
   type ThemeName = 'light' | 'dark'
 
-  type ThemePreference = 'topbar' | 'system' | 'light' | 'dark'
-
   interface ThemeState {
     name: ThemeName
     background: string
-    preference: ThemePreference
   }
 
   interface ValueRowProps {
@@ -1150,7 +1147,7 @@ declare global {
     isDefault: boolean
     commit(layout: TopbarLayoutItem[]): Promise<boolean>
     move(id: TopbarItemId, target: TopbarItemTarget): Promise<boolean>
-    step(id: TopbarItemId, direction: TopbarStepDirection): Promise<boolean>
+    step(id: TopbarItemId, direction: TopbarStepDirection, isDrawn?: (id: TopbarItemId) => boolean): Promise<boolean>
     show(id: TopbarItemId): Promise<boolean>
     hide(id: TopbarItemId): Promise<boolean>
     reset(): Promise<boolean>
@@ -1539,7 +1536,6 @@ declare global {
       theme: {
         initial: ThemeState
         get: () => Promise<ThemeState>
-        setPreference: (value: ThemePreference) => Promise<ThemeState>
         onChanged: (callback: (theme: ThemeState) => void) => () => void
       }
       windows: {

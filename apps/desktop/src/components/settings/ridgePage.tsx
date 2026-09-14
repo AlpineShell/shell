@@ -8,10 +8,11 @@ import { useRidgePreviewData } from '../../hooks/useRidgePreviewData'
 import { useRidgeLivePlugins } from '../../hooks/useRidgeLivePlugins'
 import { useOutsidePointer } from '../../hooks/useOutsidePointer'
 import { EMPTY_TOPBAR_LAYOUT, resolveTopbarLayout } from '../topbar/layout/topbarLayout'
-import { stepTopbarItem } from '../topbar/layout/topbarLayoutEdits'
+import { stepTopbarItemPast } from '../topbar/layout/topbarLayoutEdits'
+import { useTopbarWidgets } from '../../plugins/pluginRegistry'
 import { ridgeHiddenAnnouncement, ridgeShownAnnouncement } from './ridge/ridgeAnnouncements'
 import { ridgeHighlightRing } from './ridge/ridgeHighlight'
-import { ridgeCanAddItem, ridgeItemForSetting } from './ridge/ridgeItemCatalogue'
+import { ridgeCanAddItem, ridgeDrawsItem, ridgeItemForSetting } from './ridge/ridgeItemCatalogue'
 import { nextFocusedItem, ridgeFocusOrder } from './ridge/ridgeKeyboard'
 import RidgeAddMenu from './ridge/ridgeAddMenu'
 import RidgeCallout from './ridge/ridgeCallout'
@@ -47,8 +48,13 @@ function hiddenOpenItem(items: TopbarLayoutItem[], openItem: TopbarItemId | null
   return openItem !== null && !isShownOnRidge(items, openItem) ? openItem : null
 }
 
-function canStep(items: TopbarLayoutItem[], id: TopbarItemId, direction: TopbarStepDirection): boolean {
-  return stepTopbarItem(items, id, direction) !== items
+function canStep(
+  items: TopbarLayoutItem[],
+  id: TopbarItemId,
+  direction: TopbarStepDirection,
+  isDrawn: (id: TopbarItemId) => boolean
+): boolean {
+  return stepTopbarItemPast(items, id, direction, isDrawn) !== items
 }
 
 function neighbourOnceHidden(items: TopbarLayoutItem[], id: TopbarItemId): TopbarItemId | null {
@@ -65,6 +71,8 @@ export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
   const previewData = useRidgePreviewData()
   useRidgeLivePlugins()
   const editor = useRidgeEditor()
+  const liveWidgetCounts = { left: useTopbarWidgets('left').length, right: useTopbarWidgets('right').length }
+  const isDrawn = (id: TopbarItemId) => ridgeDrawsItem(id, liveWidgetCounts)
   const canvas = useRef<RidgeCanvasHandle>(null)
   const addAnchor = useRef<HTMLDivElement>(null)
   const resetAnchor = useRef<HTMLDivElement>(null)
@@ -111,7 +119,7 @@ export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
 
   function stepFromCallout(id: TopbarItemId, direction: TopbarStepDirection) {
     abandonCanvasGrab()
-    editor.step(id, direction)
+    editor.step(id, direction, isDrawn)
   }
 
   function hideFromCallout(id: TopbarItemId) {
@@ -166,8 +174,8 @@ export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
         item={item}
         previewData={previewData}
         highlightedSetting={highlight}
-        canStepEarlier={canStep(editor.items, id, 'earlier')}
-        canStepLater={canStep(editor.items, id, 'later')}
+        canStepEarlier={canStep(editor.items, id, 'earlier', isDrawn)}
+        canStepLater={canStep(editor.items, id, 'later', isDrawn)}
         onStep={(direction) => stepFromCallout(id, direction)}
         onHide={() => hideFromCallout(id)}
         onNavigate={onNavigate}

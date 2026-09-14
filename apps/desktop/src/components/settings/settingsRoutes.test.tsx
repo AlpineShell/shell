@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react'
 import { describe, it, expect } from 'vitest'
 import {
   SETTINGS_PAGE_GROUP,
@@ -9,6 +10,8 @@ import {
 import { SETTINGS_SEARCH_TARGETS } from '../../settings/settingsSearch'
 import { SETTINGS_ROUTES, SETTINGS_ROUTE_COVERAGE } from './settingsRoutes'
 import { registryPageRendersEntry } from './registryRowContent'
+
+const ROUTES_FOLDED_INTO_RIDGE = ['appearance', 'calendar']
 
 const declaredRoutes = SETTINGS_PAGES.map((page) => page.route).filter((route): route is string => route !== null)
 
@@ -33,6 +36,10 @@ function routeRendersEntry(route: string, entry: SettingsEntry): boolean {
   return coverage.registryRows && registryPageRendersEntry(entry)
 }
 
+function renderedView(route: string): ReactElement<{ initialItem?: TopbarItemId }> {
+  return SETTINGS_ROUTES[route](() => {}) as ReactElement<{ initialItem?: TopbarItemId }>
+}
+
 describe('settings routes', () => {
   it('renders a page for every route the registry declares', () => {
     for (const route of declaredRoutes) {
@@ -40,10 +47,24 @@ describe('settings routes', () => {
     }
   })
 
-  it('declares a registry page for every route it renders', () => {
+  it('declares a registry page for every route it renders, apart from the routes folded into Ridge', () => {
     for (const route of Object.keys(SETTINGS_ROUTES)) {
+      if (ROUTES_FOLDED_INTO_RIDGE.includes(route)) continue
       expect(declaredRoutes).toContain(route)
     }
+  })
+
+  it('keeps every route folded into Ridge rendering Ridge, with no registry page of its own', () => {
+    const ridge = renderedView(settingsPageRoute('ridge') as string)
+    for (const route of ROUTES_FOLDED_INTO_RIDGE) {
+      expect(Object.keys(SETTINGS_ROUTES), route).toContain(route)
+      expect(declaredRoutes, route).not.toContain(route)
+      expect(renderedView(route).type, route).toBe(ridge.type)
+    }
+  })
+
+  it('opens the folded Calendar route on the clock', () => {
+    expect(renderedView('calendar').props.initialItem).toBe('clock')
   })
 
   it('reaches every nested route from a parent that renders', () => {

@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { settingsPageRoute } from '../../../settings/registry'
 import RidgeAddMenu from './ridgeAddMenu'
+import { liveRidgePreviewData, ridgePluginWidget } from './ridgeTestFixtures'
 
 const NOTHING_HIDDEN = 'Everything is already on Ridge.'
 
-function openAddMenu(items: TopbarItemId[]) {
-  const handlers = { onSelect: vi.fn(), onDismiss: vi.fn(), onNavigate: vi.fn() }
-  render(<RidgeAddMenu items={items} {...handlers} />)
+const WEATHER_LOGO = 'alpine-plugin://com.example.weather/logo.png'
+
+function openAddMenu(items: TopbarItemId[], previewData: RidgePreviewData = liveRidgePreviewData()) {
+  const handlers = { onSelect: vi.fn(), onDismiss: vi.fn() }
+  render(<RidgeAddMenu items={items} previewData={previewData} {...handlers} />)
   return handlers
 }
 
@@ -15,10 +17,20 @@ function optionLabels(): string[] {
   return screen.queryAllByRole('option').map((option) => option.textContent ?? '')
 }
 
+function withWeatherLogo(): RidgePreviewData {
+  const live = liveRidgePreviewData()
+  return { ...live, plugins: { ...live.plugins, left: [{ ...ridgePluginWidget('left', 'Weather'), pluginIcon: WEATHER_LOGO }] } }
+}
+
 describe('RidgeAddMenu', () => {
-  it('offers the hidden items under their Ridge names', () => {
+  it('offers the hidden items under their Ridge names, and a plugin group under its plugins', () => {
     openAddMenu(['media', 'tray', 'plugins-left'])
-    expect(optionLabels()).toEqual(['Media', 'System tray', 'Left plugins'])
+    expect(optionLabels()).toEqual(['Media', 'System tray', 'Weather'])
+  })
+
+  it('shows a plugin group with its plugin logo', () => {
+    openAddMenu(['plugins-left'], withWeatherLogo())
+    expect(screen.getByRole('option', { name: 'Weather' }).querySelector('img')?.getAttribute('src')).toBe(WEATHER_LOGO)
   })
 
   it('starts in its search field, ready to type', () => {
@@ -76,12 +88,14 @@ describe('RidgeAddMenu', () => {
     expect(onDismiss).not.toHaveBeenCalled()
   })
 
-  it.each<[string, TopbarItemId[]]>([
-    ['while items are hidden', ['media']],
-    ['while nothing is hidden', []],
-  ])('opens Plugins from Get plugins %s', (_, items) => {
-    const { onNavigate } = openAddMenu(items)
-    fireEvent.click(screen.getByRole('button', { name: 'Get plugins' }))
-    expect(onNavigate).toHaveBeenCalledWith(settingsPageRoute('plugins'))
+  it('offers nothing but its hidden items, with no button of its own', () => {
+    openAddMenu(['media'])
+    expect(optionLabels()).toEqual(['Media'])
+    expect(screen.queryAllByRole('button')).toEqual([])
+  })
+
+  it('has no button of its own when nothing is hidden either', () => {
+    openAddMenu([])
+    expect(screen.queryAllByRole('button')).toEqual([])
   })
 })

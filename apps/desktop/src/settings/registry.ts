@@ -354,6 +354,10 @@ function toTimeFormat(value: unknown): TimeFormat {
 
 const DEFAULT_TIME_FORMAT: ResolvedTimeFormat = '24h'
 
+function toOfferedTimeFormat(value: unknown): ResolvedTimeFormat {
+  return value === '12h' || value === '24h' ? value : DEFAULT_TIME_FORMAT
+}
+
 function chosenTimeFormat(prefs: ClockPrefs | null): ResolvedTimeFormat {
   return prefs ? resolveTimeFormat(prefs) : DEFAULT_TIME_FORMAT
 }
@@ -585,7 +589,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     applies: 'instant',
     defaultValue: DEFAULT_TIME_FORMAT,
     initial: () => chosenTimeFormat(window.shell.clock.initial),
-    validate: toTimeFormat,
+    validate: toOfferedTimeFormat,
     read: () => window.shell.clock.prefs().then(chosenTimeFormat),
     write: (value: string | number) => window.shell.clock.setPrefs({ timeFormat: toTimeFormat(value) }),
     subscribe: (listener: (value: string | number) => void) =>

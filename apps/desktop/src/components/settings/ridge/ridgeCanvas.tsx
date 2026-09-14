@@ -166,7 +166,7 @@ export default function RidgeCanvas({
     const current = arranged ?? editor.items
     const refused = refusingSlotForStep(current, id, step)
     if (refused) return announce(ridgeRefusedAnnouncement(id, refused))
-    const next = stepGrabbedPosition(current, id, step)
+    const next = stepGrabbedPosition(current, id, step, (itemId) => ridgeDrawsItem(itemId, liveWidgetCounts))
     if (next === current) return announce(ridgeEdgeAnnouncement(current, id))
     pendingFocus.current = id
     setArranged(next)
