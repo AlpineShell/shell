@@ -1,8 +1,10 @@
 import { Bluetooth, BluetoothConnected, Plus, RefreshCw, Unlink, Wrench } from 'lucide-react'
-import { EmptyState, IconButton, ListRow, PageHeader, Spinner, Toggle } from '@alpine/ui'
+import { ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, Spinner, Toggle } from '@alpine/ui'
 import { useBluetooth } from '../../hooks/useBluetooth'
 import { useBluetoothRescan } from '../../hooks/useBluetoothRescan'
+import PageSpinner from './pageSpinner'
 import {
+  CHECKING_BLUETOOTH,
   canToggleRadio,
   deviceActionLabel,
   deviceStatusLabel,
@@ -39,8 +41,10 @@ export default function BluetoothSettingsPage() {
 
       {radioError && <p className="-mt-3 text-xs text-danger">{radioError}</p>}
 
-      {notice ? (
-        <EmptyState icon={<Bluetooth size={20} />} title={notice} />
+      {notice === CHECKING_BLUETOOTH || (refreshing && state.devices.length === 0) ? (
+        <PageSpinner label={CHECKING_BLUETOOTH} />
+      ) : notice ? (
+        <EmptyState variant="plain" title={notice} />
       ) : (
         <div className="flex flex-col gap-1">
           {state.devices.map((device) => (
@@ -73,14 +77,16 @@ function DeviceActions({ device, onRemove, onRepair }: { device: BluetoothDevice
           <Wrench size={14} />
         </IconButton>
       )}
-      <IconButton
-        label="Remove device"
-        variant="danger"
-        onClick={onRemove}
-        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-      >
-        <Unlink size={14} />
-      </IconButton>
+      <span className="flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+        <ConfirmButton
+          label="Remove device"
+          confirmLabel="Forget device"
+          icon={<Unlink size={14} />}
+          iconOnly
+          confirmOnly
+          onConfirm={onRemove}
+        />
+      </span>
     </>
   )
 }

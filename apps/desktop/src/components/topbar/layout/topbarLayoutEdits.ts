@@ -107,6 +107,39 @@ export function stepTopbarItem(
   return target ? moveTopbarItem(items, id, target) : items
 }
 
+function drawsEveryItem(): boolean {
+  return true
+}
+
+function drawnPosition(
+  items: TopbarLayoutItem[],
+  id: TopbarItemId,
+  isDrawn: (id: TopbarItemId) => boolean
+): TopbarItemTarget | null {
+  return topbarItemPosition(
+    items.filter((item) => item.id === id || isDrawn(item.id)),
+    id
+  )
+}
+
+export function stepTopbarItemPast(
+  items: TopbarLayoutItem[],
+  id: TopbarItemId,
+  direction: TopbarStepDirection,
+  isDrawn: (id: TopbarItemId) => boolean = drawsEveryItem
+): TopbarLayoutItem[] {
+  const start = drawnPosition(items, id, isDrawn)
+  let current = items
+  let next = stepTopbarItem(current, id, direction)
+  while (next !== current) {
+    const reached = drawnPosition(next, id, isDrawn)
+    if (!start || !reached || !sameTarget(start, reached)) return next
+    current = next
+    next = stepTopbarItem(current, id, direction)
+  }
+  return items
+}
+
 export function setTopbarItemVisible(
   items: TopbarLayoutItem[],
   id: TopbarItemId,

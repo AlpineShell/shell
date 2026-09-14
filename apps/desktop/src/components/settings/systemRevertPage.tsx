@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { ConfirmButton, PageTitle } from '@alpine/ui'
+import { ConfirmButton, PageTitle, Row } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 
 type RevertAction = 'temporary' | 'permanent' | 'delete'
@@ -104,9 +104,9 @@ export default function SystemRevertPage() {
       )}
 
       {state.phase !== 'done' && (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-4">
           {ACTIONS.map((spec) => (
-            <Row
+            <RevertRow
               key={spec.id}
               label={spec.label}
               description={spec.description}
@@ -151,7 +151,7 @@ function Banner({
   )
 }
 
-function Row({
+function RevertRow({
   label,
   description,
   actionLabel,
@@ -171,21 +171,18 @@ function Row({
   onConfirm: () => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3 border-b border-line-hairline last:border-b-0">
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-ink-primary">{label}</div>
-        <div className="text-xs text-ink-quiet mt-0.5">{description}</div>
-      </div>
+    <Row label={label} info={description}>
       <ConfirmButton
         label={actionLabel}
         confirmLabel={confirmLabel}
         onConfirm={onConfirm}
         variant={danger ? 'dangerOutline' : 'outline'}
         confirmVariant={danger ? 'danger' : 'primary'}
+        confirmOnly
         disabled={disabled}
         busy={busy}
         className="font-medium"
       />
-    </div>
+    </Row>
   )
 }

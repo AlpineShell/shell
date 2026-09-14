@@ -93,7 +93,7 @@ describe('settings search ranking', () => {
   it('finds the input language setting by keyboard layout, whichever page it is filed under', () => {
     for (const [page, group] of [
       ['search', 'Input'],
-      ['appearance', 'Language'],
+      ['ridge', 'Language'],
       ['home', 'Region'],
     ] as [SettingsPageId, string][]) {
       const targets = settingsSearchTargets([inputLanguageEntry(page, group)], SETTINGS_PAGES)
@@ -121,9 +121,22 @@ describe('settings search ranking', () => {
   })
 
   it('ranks an exact title above a keyword match on another entry', () => {
-    const matches = searchSettings('theme')
-    expect(matches[0].target.label).toBe('Theme')
+    const matches = searchSettings('wallpaper')
+    expect(matches[0].target.label).toBe('Wallpaper')
     expect(labels(matches).length).toBeGreaterThan(1)
+  })
+
+  it('finds Ridge by the names of the pages folded into it', () => {
+    for (const query of ['appearance', 'calendar']) {
+      const found = shown(query).some(
+        (match) => match.target.action.kind === 'navigate' && match.target.action.route === settingsPageRoute('ridge')
+      )
+      expect(found, `no result for "${query}" leads to Ridge`).toBe(true)
+    }
+  })
+
+  it('offers no theme setting any more', () => {
+    expect(SETTINGS_SEARCH_TARGETS.map((target) => target.id)).not.toContain('theme')
   })
 
   it('ranks a word of a title above anything that only scatters through a description', () => {

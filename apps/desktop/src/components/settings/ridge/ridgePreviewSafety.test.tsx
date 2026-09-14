@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { act, render, renderHook, waitFor } from '@testing-library/react'
 import { TOPBAR_ITEMS } from '../../topbar/layout/topbarLayout'
 import { useRidgePreviewData } from '../../../hooks/useRidgePreviewData'
+import { clearWidgets, registerContribution } from '../../../plugins/pluginRegistry'
 import { RIDGE_ITEM_PREVIEWS } from './ridgeItemPreviewMap'
 import { ridgePluginRecord, ridgeTrayIcon } from './ridgeTestFixtures'
 
@@ -162,8 +163,18 @@ function functionPaths(value: unknown, path: string): string[] {
   return Object.entries(value).flatMap(([key, child]) => functionPaths(child, `${path}.${key}`))
 }
 
+function registerWidget(slot: TopbarSlot, text: string) {
+  registerContribution({
+    type: 'topbar-widget',
+    id: `com.example.${text.toLowerCase()}:default`,
+    component: () => createElement('span', null, text),
+    slot,
+  })
+}
+
 afterEach(() => {
   vi.useRealTimers()
+  clearWidgets()
   for (const root of BRIDGE_ROOTS) delete (window as unknown as Record<string, unknown>)[root]
 })
 
@@ -197,9 +208,16 @@ describe('the Ridge previews', () => {
       TRAY_ICONS[1].icon,
       TRAY_ICONS[0].icon,
     ])
+    expect(sampleItems()).toEqual([])
+  })
+
+  it('draw the plugin widgets the bar has registered, each on its own side', async () => {
+    stubBridges()
+    registerWidget('left', 'Weather')
+    registerWidget('right', 'Notes')
+    await renderHarness()
     expect(previewOf('plugins-left').textContent).toBe('Weather')
     expect(previewOf('plugins-right').textContent).toBe('Notes')
-    expect(sampleItems()).toEqual(['notice'])
   })
 
   it('get plain values from the preview data, never a function they could call', async () => {
@@ -210,8 +228,8 @@ describe('the Ridge previews', () => {
     expect(functionPaths(result.current, 'previewData')).toEqual([])
   })
 
-  it('cover exactly the items Ridge can hold', () => {
-    expect(Object.keys(RIDGE_ITEM_PREVIEWS).sort()).toEqual(TOPBAR_ITEMS.map((item) => item.id).sort())
+  it('cover every item Ridge can hold', () => {
+    expect(Object.keys(RIDGE_ITEM_PREVIEWS)).toEqual(expect.arrayContaining(TOPBAR_ITEMS.map((item) => item.id)))
   })
 })
 

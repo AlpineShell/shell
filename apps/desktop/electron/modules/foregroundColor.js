@@ -1,3 +1,5 @@
+const fs = require('fs')
+const path = require('path')
 const koffi = require('koffi')
 const { screen } = require('electron')
 
@@ -22,6 +24,7 @@ const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
 
 const batterySaver = require('./batterySaver')
+const { isExposedOwnWindow } = require('./exposedOwnWindows')
 
 const SRCCOPY = 0x00CC0020
 
@@ -38,6 +41,12 @@ const sampledHwndPerDisplay = new Map()
 let startupIgnoreHwnd = null
 let displayRemovedListener = null
 let stopPolling = null
+let ridgeColoredWindowsProvider = null
+
+const ADAPT_STORE_FILE = 'foreground-color.json'
+let adaptToApps = true
+let adaptStorePath = null
+let adaptBroadcast = null
 
 function colorEqual(a, b) {
   if (a === b) return true
@@ -122,8 +131,51 @@ function clearDisplay(displayId, broadcast) {
   }
 }
 
+function getAdaptStorePath() {
+  if (!adaptStorePath) {
+    const { app } = require('electron')
+    adaptStorePath = path.join(app.getPath('userData'), ADAPT_STORE_FILE)
+  }
+  return adaptStorePath
+}
+
+function loadAdaptToApps() {
+  try {
+    const file = getAdaptStorePath()
+    if (!fs.existsSync(file)) return
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'))
+    if (typeof data.adaptToApps === 'boolean') adaptToApps = data.adaptToApps
+  } catch (e) {
+    console.error('[foregroundColor] load error:', e.message)
+  }
+}
+
+function saveAdaptToApps() {
+  try {
+    fs.writeFileSync(getAdaptStorePath(), JSON.stringify({ adaptToApps }, null, 2))
+  } catch (e) {
+    console.error('[foregroundColor] save error:', e.message)
+  }
+}
+
+function clearAllDisplays(broadcast) {
+  const displayIds = new Set([...perDisplay.keys(), ...hwndPerDisplay.keys(), ...pendingDisplay.keys()])
+  for (const displayId of displayIds) clearDisplay(displayId, broadcast)
+}
+
+function setAdaptToApps(value) {
+  adaptToApps = value === true
+  saveAdaptToApps()
+  if (adaptBroadcast) {
+    if (!adaptToApps) clearAllDisplays(adaptBroadcast)
+    adaptBroadcast('topbar/fg-color-adapt-changed', adaptToApps)
+  }
+  return adaptToApps
+}
+
 function update(broadcast) {
   if (altTab && altTab.isSwitcherActive()) return
+  if (!adaptToApps) return
 
   for (const [displayId, trackedHwnd] of [...hwndPerDisplay.entries()]) {
     if (!trackedHwnd || !IsZoomed(trackedHwnd)) {
@@ -143,6 +195,11 @@ function update(broadcast) {
 
   const displayId = getDisplayIdForWindow(hwnd)
   if (displayId == null) return
+
+  if (isExposedOwnWindow(hwnd, ridgeColoredWindowsProvider)) {
+    clearDisplay(displayId, broadcast)
+    return
+  }
 
   hwndPerDisplay.set(displayId, hwnd)
 
@@ -186,6 +243,8 @@ function stop() {
 
 module.exports = {
   handlers: {
+    'topbar/fg-color-adapt-get': () => adaptToApps,
+    'topbar/fg-color-adapt-set': (_event, value) => setAdaptToApps(value),
     'topbar/fg-color': () => {
       const result = []
       for (const [displayId, color] of perDisplay) {
@@ -194,8 +253,13 @@ module.exports = {
       return result
     },
   },
+  setRidgeColoredWindows(provider) {
+    ridgeColoredWindowsProvider = typeof provider === 'function' ? provider : null
+  },
   start(broadcast) {
     const { app } = require('electron')
+    adaptBroadcast = broadcast
+    loadAdaptToApps()
     const initial = GetForegroundWindow()
     if (initial && IsZoomed(initial)) startupIgnoreHwnd = initial
     displayRemovedListener = (_event, removed) => clearDisplay(removed.id, broadcast)

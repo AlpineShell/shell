@@ -6,12 +6,12 @@ import { useSettingsValue } from '../../hooks/useSettingsValue'
 import RegistryPage from './registryPage'
 
 const SAVER_GROUP = 'Battery saver'
-const AUTOMATIC_GROUP = 'Automatic'
-const EFFECTS_GROUP = 'What battery saver does'
 
 const AUTOMATIC = settingsValueEntry('battery-saver-automatic')
 const THRESHOLD = settingsValueEntry('battery-saver-threshold')
 const DIMMING = settingsValueEntry('battery-saver-dimming')
+
+const AUTOMATIC_GROUP_ENTRIES = ['battery-saver-automatic', 'battery-saver-threshold']
 
 const OVERRIDE_CHOICES: SegmentedOption<BatterySaverOverride>[] = [
   { value: 'auto', label: 'Automatic' },
@@ -33,7 +33,7 @@ export default function BatteryPage() {
       content: (
         <Row
           label="Battery saver right now"
-          description="On and Off both hold whatever the charge is, and go back to Automatic the next time you plug in."
+          info="On and Off both hold whatever the charge is, and go back to Automatic the next time you plug in."
         >
           <Segmented
             label="Battery saver right now"
@@ -46,20 +46,9 @@ export default function BatteryPage() {
     },
   ]
 
-  if (!state.hasBattery) {
-    slots.push({
-      group: AUTOMATIC_GROUP,
-      order: 2.5,
-      content: (
-        <p className="text-xs text-ink-quiet">
-          No battery was detected on this PC, so battery saver will never turn on by itself. You can still switch it on manually.
-        </p>
-      ),
-    })
-  }
-
   const hidden: string[] = []
-  if (!automatic) hidden.push('battery-saver-threshold')
+  if (!state.hasBattery) hidden.push(...AUTOMATIC_GROUP_ENTRIES)
+  else if (!automatic) hidden.push('battery-saver-threshold')
   if (!dimming) hidden.push('battery-saver-dim-amount', 'battery-saver-dim-externals')
 
   return (
@@ -68,13 +57,12 @@ export default function BatteryPage() {
       slots={slots}
       hidden={hidden}
       lead={
-        <StatusCard
+        <BatteryStatus
           state={state}
           thresholdPercent={typeof threshold === 'number' ? threshold : 20}
           automaticEnabled={automatic}
         />
       }
-      groupSubtitles={{ [EFFECTS_GROUP]: 'Each of these applies only while battery saver is active.' }}
     />
   )
 }
@@ -85,30 +73,26 @@ function statusHeadline(state: BatterySaverState): string {
 }
 
 function statusDetail(state: BatterySaverState, thresholdPercent: number, automaticEnabled: boolean): string {
-  const charge = state.percent == null ? 'Charge unavailable' : `${state.percent}% charge`
+  const charge = state.percent == null ? 'Charge unavailable' : `${state.percent}%`
   const source = state.onAcPower ? (state.charging ? 'charging' : 'plugged in') : 'on battery'
-  if (state.reason === 'manual') return `${charge}, ${source} — turned on manually.`
-  if (state.reason === 'threshold') return `${charge}, ${source} — at or below your ${thresholdPercent}% threshold.`
-  if (state.override === 'off') return `${charge}, ${source} — turned off manually until you next plug in.`
-  if (state.onAcPower) return `${charge}, ${source} — battery saver stays off while you are plugged in.`
-  if (!automaticEnabled) return `${charge}, ${source} — automatic battery saver is turned off.`
-  return `${charge}, ${source} — battery saver turns on at ${thresholdPercent}%.`
+  const summary = `${charge}, ${source}`
+  if (state.reason === 'manual') return `${summary} · on manually`
+  if (state.reason === 'threshold') return `${summary} · automatic, below ${thresholdPercent}%`
+  if (state.override === 'off') return `${summary} · off until you plug in`
+  if (state.onAcPower) return summary
+  if (!automaticEnabled) return `${summary} · automatic off`
+  return `${summary} · turns on at ${thresholdPercent}%`
 }
 
-function StatusCard({ state, thresholdPercent, automaticEnabled }: { state: BatterySaverState; thresholdPercent: number; automaticEnabled: boolean }) {
+function BatteryStatus({ state, thresholdPercent, automaticEnabled }: { state: BatterySaverState; thresholdPercent: number; automaticEnabled: boolean }) {
   const Icon = state.active ? Leaf : state.onAcPower ? BatteryCharging : BatteryLow
   return (
-    <div className="rounded-card bg-surface-2 border border-line-hairline px-4 py-4 flex items-center gap-3">
+    <div className="flex items-center gap-3 rounded-card bg-surface-2 px-4 py-3">
       <Icon size={18} className={`shrink-0 ${state.active ? 'text-success' : 'text-ink-secondary'}`} />
       <div className="flex flex-col flex-1 min-w-0 gap-0.5">
         <span className="text-dense text-ink-primary">{statusHeadline(state)}</span>
         <span className="text-xs text-ink-quiet">{statusDetail(state, thresholdPercent, automaticEnabled)}</span>
       </div>
-      {state.active && (
-        <span className="shrink-0 text-eyebrow uppercase px-1.5 py-0.5 rounded bg-success/15 text-success">
-          {state.reason === 'manual' ? 'Manual' : 'Automatic'}
-        </span>
-      )}
     </div>
   )
 }

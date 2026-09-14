@@ -14,6 +14,10 @@ import {
   reorderInputMethodTips,
   buildInputMethodTipList,
   composeKeyboardLayoutHandle,
+  parseLanguageCatalogue,
+  hasLanguageTag,
+  buildAddLanguageCommand,
+  buildRemoveLanguageCommand,
 } from './keyboardLayoutParser.js'
 
 const IME_TIP = '0411:{03B5835F-F03C-411B-9CE2-AA23E1171E36}{A76C93D9-5523-4E90-AAFA-4DB112F9AC76}'
@@ -321,5 +325,86 @@ describe('composeKeyboardLayoutHandle', () => {
 
   it('reports no handle for a tip it cannot parse', () => {
     expect(composeKeyboardLayoutHandle('rubbish')).toBe(0)
+  })
+})
+
+describe('parseLanguageCatalogue', () => {
+  const raw = [
+    'fr-FR\tfrançais (France)\tFrench (France)',
+    'de-CH\tDeutsch (Schweiz)\tGerman (Switzerland)',
+    'aa-DJ\tQafar (Yabuuti)\tAfar (Djibouti)',
+  ].join('\r\n')
+
+  it('reads the tag, English name and native name of every culture, sorted by English name', () => {
+    expect(parseLanguageCatalogue(raw)).toEqual([
+      { tag: 'aa-DJ', name: 'Afar (Djibouti)', nativeName: 'Qafar (Yabuuti)' },
+      { tag: 'fr-FR', name: 'French (France)', nativeName: 'français (France)' },
+      { tag: 'de-CH', name: 'German (Switzerland)', nativeName: 'Deutsch (Schweiz)' },
+    ])
+  })
+
+  it('falls back to the English name, then to the tag, when Windows gives no name', () => {
+    expect(parseLanguageCatalogue('en-GB\t\tEnglish (United Kingdom)\r\nsr-Latn-RS\t\t')).toEqual([
+      { tag: 'en-GB', name: 'English (United Kingdom)', nativeName: 'English (United Kingdom)' },
+      { tag: 'sr-Latn-RS', name: 'sr-Latn-RS', nativeName: 'sr-Latn-RS' },
+    ])
+  })
+
+  it('keeps only the first row for a tag repeated in another case', () => {
+    expect(parseLanguageCatalogue('fr-FR\tfrançais\tFrench\r\nFR-fr\tautre\tOther')).toHaveLength(1)
+  })
+
+  it('skips a row whose tag could smuggle anything into PowerShell', () => {
+    expect(parseLanguageCatalogue("en-GB'; Remove-Item C:\tEnglish\tEnglish\r\nnot a tag\tX\tY")).toEqual([])
+  })
+
+  it('reports empty output as an empty catalogue', () => {
+    expect(parseLanguageCatalogue('')).toEqual([])
+    expect(parseLanguageCatalogue(null)).toEqual([])
+  })
+})
+
+describe('hasLanguageTag', () => {
+  const languages = [{ tag: 'de-CH' }, { tag: 'en-GB' }]
+
+  it('finds a language whatever the case of the tag', () => {
+    expect(hasLanguageTag(languages, 'EN-gb')).toBe(true)
+  })
+
+  it('reports a language that is not in the list', () => {
+    expect(hasLanguageTag(languages, 'fr-FR')).toBe(false)
+    expect(hasLanguageTag(languages, undefined)).toBe(false)
+  })
+})
+
+describe('buildAddLanguageCommand', () => {
+  it('appends the language to the list Windows already has and writes the whole list back', () => {
+    expect(buildAddLanguageCommand('fr-FR')).toBe(
+      "$list = Get-WinUserLanguageList; $list.Add('fr-FR'); Set-WinUserLanguageList -LanguageList $list -Force -WarningAction SilentlyContinue"
+    )
+  })
+
+  it('never builds a command that holds a double quote, which would end the powershell -Command string', () => {
+    expect(buildAddLanguageCommand('sr-Latn-RS')).not.toContain('"')
+  })
+
+  it.each(["fr-FR'); Remove-Item C: -Recurse; ('", 'fr FR', '', null, undefined])('refuses %o', (tag) => {
+    expect(buildAddLanguageCommand(tag)).toBe(null)
+  })
+})
+
+describe('buildRemoveLanguageCommand', () => {
+  it('drops the matching language and writes the list back only while another language remains', () => {
+    expect(buildRemoveLanguageCommand('fr-FR')).toBe(
+      "$list = Get-WinUserLanguageList; $target = $null; foreach ($language in $list) { if ($language.LanguageTag -eq 'fr-FR') { $target = $language } }; if ($target -and $list.Count -gt 1) { [void]$list.Remove($target); Set-WinUserLanguageList -LanguageList $list -Force -WarningAction SilentlyContinue }"
+    )
+  })
+
+  it('never builds a command that holds a double quote, which would end the powershell -Command string', () => {
+    expect(buildRemoveLanguageCommand('zh-Hans-CN')).not.toContain('"')
+  })
+
+  it.each(["fr-FR' } }; Remove-Item C: -Recurse; { '", '$(whoami)', '', null])('refuses %o', (tag) => {
+    expect(buildRemoveLanguageCommand(tag)).toBe(null)
   })
 })

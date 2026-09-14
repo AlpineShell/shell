@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { RotateCw, Star, MonitorCheck } from 'lucide-react'
-import { Button, PageTitle, Row, Section, Slider } from '@alpine/ui'
+import { RotateCw, Star, MonitorCheck, X } from 'lucide-react'
+import { Button, IconButton, PageTitle, Row, Section, Slider } from '@alpine/ui'
 import { useDisplays } from '../../hooks/useDisplays'
 import { useMonitors } from '../../hooks/useMonitors'
 import { useHighlightedSetting } from '../../hooks/useHighlightedSetting'
@@ -32,9 +32,8 @@ function orientationLabel(orientation: DisplayOrientation): string {
   return 'Landscape'
 }
 
-function monitorSourceLabel(monitor: MonitorInfo): string {
-  const source = monitor.type === 'internal' ? 'Built-in display' : 'External display over DDC/CI'
-  return monitor.brightnessWritable ? source : `${source} · not responding`
+function monitorStatusNote(monitor: MonitorInfo): string | undefined {
+  return monitor.brightnessWritable ? undefined : 'Not responding'
 }
 
 function applyErrorMessage(code: number | null): string {
@@ -149,7 +148,7 @@ export default function DisplaysPage() {
       ) : (
         <>
           {phase === 'confirming' ? (
-            <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 border border-line-hairline px-4 py-3">
+            <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 px-4 py-3">
               <span className="inline-flex items-center gap-2 text-dense text-ink-primary">
                 <MonitorCheck size={16} className="text-success" />
                 Keep these display changes? Reverting in {secondsLeft}s.
@@ -165,12 +164,12 @@ export default function DisplaysPage() {
             </div>
           ) : (
             dirty && (
-              <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 border border-line-hairline px-4 py-3">
+              <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 px-4 py-3">
                 <span className="text-dense text-ink-primary">You have unsaved display changes.</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button variant="outline" size="sm" onClick={discard} className="font-medium">
-                    Discard
-                  </Button>
+                  <IconButton label="Discard" onClick={discard}>
+                    <X size={15} />
+                  </IconButton>
                   <Button size="sm" onClick={apply} disabled={applying} className="font-medium">
                     {applying ? 'Applying…' : 'Apply'}
                   </Button>
@@ -181,13 +180,13 @@ export default function DisplaysPage() {
 
           {error && <p className="text-xs text-danger">{error}</p>}
 
-          <Section title="Arrangement" subtitle="Drag the displays to match how they are physically placed on your desk.">
+          <Section title="Arrangement">
             <DisplayCanvas displays={draft} selectedId={selectedId} onSelect={setSelectedId} onMove={moveDisplay} />
           </Section>
 
           {selected && (
             <Section title={selected.name}>
-              <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 border border-line-hairline px-4 py-4">
+              <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-dense text-ink-primary">
                     {selected.width} × {selected.height}
@@ -196,10 +195,9 @@ export default function DisplaysPage() {
                   <div className="text-xs text-ink-quiet mt-0.5">{orientationLabel(selected.orientation)}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button variant="outline" size="sm" onClick={rotateSelected} className="font-medium">
-                    <RotateCw size={14} />
-                    Rotate
-                  </Button>
+                  <IconButton label="Rotate" onClick={rotateSelected}>
+                    <RotateCw size={15} />
+                  </IconButton>
                   {selected.primary ? (
                     <span className="inline-flex items-center gap-1.5 h-8 px-3 text-xs text-success">
                       <Star size={14} />
@@ -233,7 +231,7 @@ function BrightnessSection() {
   }, [highlighted])
 
   return (
-    <Section title="Brightness" subtitle="Applies straight away, one level per display.">
+    <Section title="Brightness">
       <div
         ref={anchor}
         className={`-mx-2 rounded-field px-2 py-1.5 transition-colors duration-300 ${
@@ -247,7 +245,7 @@ function BrightnessSection() {
         ) : (
           <div className="flex flex-col gap-3">
             {monitors.map((monitor) => (
-              <Row key={monitor.id} label={monitor.name} description={monitorSourceLabel(monitor)}>
+              <Row key={monitor.id} label={monitor.name} description={monitorStatusNote(monitor)}>
                 <Slider
                   label={`${monitor.name} brightness`}
                   min={0}
@@ -332,7 +330,7 @@ function DisplayCanvas({
       onMouseMove={onMouseMove}
       onMouseUp={endDrag}
       onMouseLeave={endDrag}
-      className="relative h-64 w-full rounded-card bg-surface-2 border border-line-hairline overflow-hidden select-none"
+      className="relative h-64 w-full rounded-card bg-surface-2 overflow-hidden select-none"
     >
       {scale > 0 &&
         displays.map((d, index) => {

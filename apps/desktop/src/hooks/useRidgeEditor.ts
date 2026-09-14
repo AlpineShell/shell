@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { moveTopbarItem, stepTopbarItem } from '../components/topbar/layout/topbarLayoutEdits'
+import { moveTopbarItem, stepTopbarItemPast } from '../components/topbar/layout/topbarLayoutEdits'
 import {
   effectiveRidgeItems,
   hideRidgeItemPlan,
@@ -79,7 +79,8 @@ export function useRidgeEditor(): RidgeEditor {
   )
 
   const step = useCallback(
-    (id: TopbarItemId, direction: TopbarStepDirection) => commit(stepTopbarItem(items, id, direction)),
+    (id: TopbarItemId, direction: TopbarStepDirection, isDrawn?: (id: TopbarItemId) => boolean) =>
+      commit(stepTopbarItemPast(items, id, direction, isDrawn)),
     [items, commit]
   )
 

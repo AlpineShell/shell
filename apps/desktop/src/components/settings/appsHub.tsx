@@ -2,11 +2,11 @@ import { Activity, FileType, Package, Power } from 'lucide-react'
 import { NavRow, PageTitle } from '@alpine/ui'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
 
-const ROWS: { page: SettingsPageId; description: string; icon: typeof Package }[] = [
-  { page: 'apps-installed', description: 'All your apps. Turn off auto-start, open, or uninstall.', icon: Package },
-  { page: 'apps-startup', description: 'Choose what opens automatically when you start your PC.', icon: Power },
-  { page: 'apps-running', description: 'See what’s open and using your computer right now.', icon: Activity },
-  { page: 'apps-defaults', description: 'File types your plugins can open, and which app Windows uses.', icon: FileType },
+const ROWS: { page: SettingsPageId; icon: typeof Package }[] = [
+  { page: 'apps-installed', icon: Package },
+  { page: 'apps-startup', icon: Power },
+  { page: 'apps-running', icon: Activity },
+  { page: 'apps-defaults', icon: FileType },
 ]
 
 export default function AppsHub({ onNavigate }: { onNavigate: (path: string) => void }) {
@@ -21,7 +21,6 @@ export default function AppsHub({ onNavigate }: { onNavigate: (path: string) => 
               key={row.page}
               icon={<Icon size={18} />}
               label={settingsPage(row.page)?.label ?? ''}
-              description={row.description}
               onClick={() => onNavigate(settingsPageRoute(row.page) ?? '')}
             />
           )

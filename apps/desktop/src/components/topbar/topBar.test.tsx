@@ -63,11 +63,23 @@ describe('top bar structure', () => {
       Array.from(row.querySelectorAll('i')).map((el) => el.getAttribute('data-el'))
     )
     expect(rows).toEqual([
-      ['system-menu', 'plugins-left', 'notice'],
-      ['launcher'],
+      ['system-menu', 'plugins-left'],
+      ['notice', 'launcher'],
       ['tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'],
     ])
     expect(container.querySelector('.z-10')?.children.length).toBe(3)
+  })
+
+  it('keeps the notices first in the centre cluster whatever the layout puts there', () => {
+    Object.assign(window.topbar, {
+      initialLayout: { slots: { left: [], center: ['clock', 'launcher'], right: [] }, hidden: ['launcher'] },
+    })
+    const { container } = render(<TopBar />)
+    const centre = container.querySelectorAll('.z-10 > div')[1]
+    expect(Array.from(centre.querySelectorAll('i')).map((el) => el.getAttribute('data-el'))).toEqual([
+      'notice',
+      'clock',
+    ])
   })
 
   it('spaces the centre cluster like its sides', () => {

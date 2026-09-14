@@ -14,14 +14,14 @@ everything below.
 
 | Page | Setting | Stored in |
 |---|---|---|
-| Appearance | theme (Ridge / system / light / dark) | `electron/modules/theme.js` → `theme.json` |
-| Appearance | colour override, automatic colour | `electron/modules/topbarColor.js` → `topbar-color.json` |
+| Ridge | colour override, automatic colour | `electron/modules/topbarColor.js` → `topbar-color.json` |
+| Ridge | adapt to apps | `electron/modules/foregroundColor.js` → `foreground-color.json` |
 | Ridge | which items are hidden, and the side and place of each one | `electron/modules/topbarLayout.js` → `topbar-layout.json` |
 | Ridge | show search button, show media visualizer | `electron/modules/topbarColor.js` → `topbar-color.json` |
-| Ridge | time format (auto/12h/24h) | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
+| Ridge | time format (12h/24h) | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
 | Ridge | show tray, show overflow arrow, show on all monitors | `electron/modules/trayLayout.js` → `tray-layout.json` |
 | Ridge | confirm power menu actions | `electron/modules/power.js` → `power-prefs.json` |
-| Calendar | days shown (1/2/3), show Google Tasks | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
+| Ridge | days shown (1/2/3), show Google Tasks | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
 | Search | Search hotkey, show recent apps, show bookmarks, show browser tabs, maximum results | `electron/modules/launcherHotkey.js` → `launcher-hotkey.json`, `electron/modules/launcherPrefs.js` → `launcher-prefs.json` |
 | Window Tiling | enabled, mode, Win+Arrow snapping, drag-to-zone, dynamic layout, split ratios, gap, outer margin, keep-oversized, placement | `electron/modules/tiling.js` → `tiling.json` |
 | Battery | force battery saver, automatic, threshold %, dim displays, dim by %, dim external monitors, reduce background polling, throttle processes | `electron/modules/batterySaver.js` + `batterySaverPolicy.js` → `battery-saver-prefs.json` |
@@ -183,8 +183,9 @@ that switches on the mode. The registry carries static `label`, `description` an
 it as a predicate on every entry would put page layout back into the data.
 
 Theme, default file handlers and keyboard layout *were* in this paragraph and are no longer.
-Theme is now a registry entry (`theme`, on the Appearance page) backed by a stored preference
-in `electron/modules/theme.js`; default file handlers now have a page (`apps/defaults`) with a
+Theme was a registry entry for a while (`theme`, on the Appearance page) and is now retired:
+the settings window always takes the light or dark of Ridge's colour, so `electron/modules/theme.js`
+stores nothing; default file handlers now have a page (`apps/defaults`) with a
 page-level entry so search can reach it; keyboard layout has a page (`input`) whose entries
 carry the search synonyms and the `applies` of each control, and whose lists come from
 `electron/modules/keyboardLayout.js` rather than from a value the registry can read and
@@ -328,6 +329,11 @@ the controls genuinely differ:
   layout of a language leaves that language with nothing to type in, and the layout that is
   the *default input method* silently hands the default to whatever is first in the list.
   Those stop in the row and name which case it is before doing anything.
+- **`language-add`** is `instant` and **`language-remove`** is `confirm`. Adding a language
+  appends it to the same `Set-WinUserLanguageList` write, and Windows attaches that
+  language's usual layout. Removing one drops every layout it carries at once, so it asks
+  first, and the last language offers no remove at all because Windows needs one. Both
+  re-read the list afterwards and report it when Windows did not do what was asked.
 - **`switch-input-method`** is `instant` and best effort. Changing the active layout affects
   the calling thread, so a shell can only ask: it posts `WM_INPUTLANGCHANGEREQUEST` to the
   foreground window. Windows may ignore it, and the foreground window is the settings window
@@ -423,7 +429,6 @@ test failure too.
 | `ridge` | instant | A page-level entry. The Ridge page writes each move as it is made, and every move is undone by moving the item back; the settings in its callouts each declare their own. |
 | `ridge-item-system-menu` | instant | A search entry for the Power menu on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-plugins-left` | instant | A search entry for the Left plugins group on Ridge. From settings search it opens the group's callout; from Search it opens Ridge without one. It writes nothing itself. |
-| `ridge-item-notice` | instant | A search entry for Notices on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-media` | instant | A search entry for Media on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-microphone` | instant | A search entry for the Microphone on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-status` | instant | A search entry for the Status icons on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
@@ -431,10 +436,9 @@ test failure too.
 | `ridge-item-clock` | instant | A search entry for the Clock on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-layout-reset` | confirm | Throws the whole arrangement away: every item back on its first side and in its first place, shown, with the Search button off and the tray on. Nothing restores the arrangement you had, so it asks once, on the shared confirm button. It writes the search flag, then the layout, then the tray flag, and stops at the first one that is refused (see the write path above). |
 | `power-confirm` | instant | Whether Ridge's power menu asks a second time before Log Out, Restart or Shut Down. On by default, because those actions can lose unsaved work (see `power`). Turning it off only removes a second click and turning it on adds it back; nothing runs when it flips. One Enter on its search row flips it, which is acceptable because that row shows a switch and says which way it went. Search's own power submenu always asks, whatever this is set to. |
-| `appearance` | instant | A page-level entry; the page's own settings each declare their own. |
-| `theme` | instant | Repaints Alpine's windows and nothing else. Reversible by picking another option. Its default, `topbar`, reads the light or dark of the bar's own colour so the windows match the bar rather than Windows. Whichever side is chosen, the window's ground takes the bar's hue, so Settings is drawn in the same material as the bar and its flyouts. |
 | `topbar-color` | instant | A colour. Clearing the override restores the automatic one. |
 | `topbar-color-automatic` | instant | Freezes or resumes wallpaper-following. Both directions are one click. |
+| `topbar-adapt-to-apps` | instant | Lets Ridge take the colour of a maximized app in front, or stops it. Nothing is lost either way: turning it off hands Ridge back its own colour, and turning it on picks the app up again. |
 | `topbar-search-icon` | instant | Shows or hides the Search button on Ridge, and is its only visibility switch: hiding the button from Ridge writes this and nothing else. The hotkey works either way, so it cannot strand you. |
 | `media-visualizer` | instant | Swaps one glyph of the Media item on Ridge for another. |
 | `clock-time-format` | instant | Reformats the clock on Ridge and nothing else. Filed on Ridge rather than Calendar because it governs the bar's clock; its result in settings search opens the Clock callout with the row picked out. |
@@ -449,6 +453,8 @@ test failure too.
 | `input` | instant | A page-level entry; the page's controls disagree about `applies` and each declares its own. |
 | `keyboard-layouts` | instant | Adding a layout or reordering the list is a per-user `Set-WinUserLanguageList` write that needs no sign-out and is undone by doing the opposite. |
 | `keyboard-layout-remove` | confirm | Removing a spare layout goes straight through. Removing the last layout of a language, or the one that is the default input method, stops and names which case it is first — those two leave you with nothing to type in, or silently hand the default to whatever is first in the list. |
+| `language-add` | instant | Adding a language is the same per-user `Set-WinUserLanguageList` write as adding a layout: no elevation, no sign-out, and removing the language again undoes it. |
+| `language-remove` | confirm | Removing a language takes every layout attached to it off the list in one write, so the button asks before it does anything. The last language has no remove button at all, because Windows needs at least one. |
 | `switch-input-method` | instant | Best effort by construction: it posts `WM_INPUTLANGCHANGEREQUEST` to the foreground window, which Windows may ignore. Nothing is persisted, so there is nothing to half-apply. |
 | `default-input-method` | instant | `Set-WinDefaultInputMethodOverride`, per-user, no elevation, no sign-out, undone by choosing another. |
 | `tray` | instant | A page-level entry, filed under Ridge now that the System tray page has folded into it. The launcher opens its tray submenu from it, and the tray's own settings each declare their own. |
@@ -505,6 +511,6 @@ Every entry in the table writes through an IPC handler whose module owns one JSO
 `app.getPath('userData')` and writes it inside the same handler that applies the effect:
 `topbar-color.json`, `topbar-layout.json`, `clock-prefs.json`, `launcher-prefs.json`,
 `launcher-hotkey.json`, `tray-layout.json`, `tiling.json`, `battery-saver-prefs.json`,
-`wallpaper.json`, `theme.json`, `power-prefs.json`. That is what makes the guarantee in point 2
+`wallpaper.json`, `foreground-color.json`, `power-prefs.json`. That is what makes the guarantee in point 2
 above hold: there is no separate save step that could be skipped, so a value that reached the
 store is a value that survives a restart.

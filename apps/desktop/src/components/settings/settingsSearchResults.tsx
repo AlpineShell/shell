@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { ArrowUpRight, ChevronRight, SearchX } from 'lucide-react'
+import { ArrowUpRight, ChevronRight } from 'lucide-react'
 import { EmptyState, PageTitle, Toggle } from '@alpine/ui'
 import { useSettingsValue } from '../../hooks/useSettingsValue'
 
@@ -15,21 +15,15 @@ export default function SettingsSearchResults({
   onPoint,
   onActivate,
 }: SettingsSearchResultsProps) {
-  const hidden = total - matches.length
-
   return (
     <div
       className="flex w-full flex-col gap-stack"
       onMouseDown={(event) => event.preventDefault()}
     >
-      <PageTitle title="Search" subtitle={resultSummary(total, query)} />
+      <PageTitle title="Search" />
 
       {matches.length === 0 ? (
-        <EmptyState
-          icon={<SearchX size={20} />}
-          title={`Nothing matches “${query.trim()}”`}
-          detail="Try a word from the setting's name, or what it does."
-        />
+        <EmptyState variant="plain" title={`Nothing matches “${query.trim()}”`} />
       ) : (
         <div id={listId} role="listbox" aria-label="Settings search results" className="flex flex-col gap-0.5">
           {matches.map((match, index) => (
@@ -43,12 +37,6 @@ export default function SettingsSearchResults({
             />
           ))}
         </div>
-      )}
-
-      {hidden > 0 && (
-        <p className="text-center text-xs text-ink-quiet">
-          {hidden} weaker {hidden === 1 ? 'match is' : 'matches are'} hidden. Keep typing to narrow it down.
-        </p>
       )}
 
       <p role="status" aria-live="polite" className="sr-only">

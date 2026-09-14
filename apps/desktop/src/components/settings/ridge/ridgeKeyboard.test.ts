@@ -13,7 +13,6 @@ const DEFAULT_ITEMS = resolveTopbarLayout(EMPTY_TOPBAR_LAYOUT)
 const BAR_ORDER: TopbarItemId[] = [
   'system-menu',
   'plugins-left',
-  'notice',
   'launcher',
   'tray',
   'media',
@@ -87,14 +86,14 @@ describe('ridgeFocusOrder', () => {
   it('follows an item that moved to another side', () => {
     const clockInCenter = moveTopbarItem(DEFAULT_ITEMS, 'clock', { slot: 'center', index: 1 })
 
-    expect(ridgeFocusOrder(clockInCenter).slice(2, 6)).toEqual(['notice', 'launcher', 'clock', 'tray'])
+    expect(ridgeFocusOrder(clockInCenter).slice(1, 5)).toEqual(['plugins-left', 'launcher', 'clock', 'tray'])
   })
 })
 
 describe('nextFocusedItem', () => {
   it('moves one item along, crossing sides', () => {
-    expect(nextFocusedItem(BAR_ORDER, 'notice', 'later')).toBe('launcher')
-    expect(nextFocusedItem(BAR_ORDER, 'launcher', 'earlier')).toBe('notice')
+    expect(nextFocusedItem(BAR_ORDER, 'plugins-left', 'later')).toBe('launcher')
+    expect(nextFocusedItem(BAR_ORDER, 'launcher', 'earlier')).toBe('plugins-left')
   })
 
   it('stops at the ends instead of wrapping', () => {
@@ -120,10 +119,10 @@ describe('nextFocusedItem', () => {
 
 describe('stepGrabbedPosition', () => {
   it('moves one place later, crossing into the next side', () => {
-    const moved = stepGrabbedPosition(DEFAULT_ITEMS, 'notice', 'later')
+    const moved = stepGrabbedPosition(DEFAULT_ITEMS, 'launcher', 'later')
 
-    expect(idsInSlot(moved, 'left')).toEqual(['system-menu', 'plugins-left'])
-    expect(idsInSlot(moved, 'center')).toEqual(['notice', 'launcher'])
+    expect(idsInSlot(moved, 'center')).toEqual([])
+    expect(idsInSlot(moved, 'right')).toEqual(['launcher', 'tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'])
   })
 
   it('moves one place earlier, crossing into the previous side', () => {
@@ -156,16 +155,22 @@ describe('stepGrabbedPosition', () => {
     expect(stepGrabbedPosition(DEFAULT_ITEMS, 'clock', 'last')).toBe(DEFAULT_ITEMS)
   })
 
-  it('keeps a plugin group on its own side', () => {
-    expect(stepGrabbedPosition(PLUGINS_LEFT_LAST, 'plugins-left', 'later')).toBe(PLUGINS_LEFT_LAST)
-    expect(stepGrabbedPosition(PLUGINS_RIGHT_FIRST, 'plugins-right', 'earlier')).toBe(PLUGINS_RIGHT_FIRST)
+  it('carries a plugin group into the neighbouring side like any other item', () => {
+    expect(idsInSlot(stepGrabbedPosition(PLUGINS_LEFT_LAST, 'plugins-left', 'later'), 'center')).toEqual([
+      'plugins-left',
+      'launcher',
+    ])
+    expect(idsInSlot(stepGrabbedPosition(PLUGINS_RIGHT_FIRST, 'plugins-right', 'earlier'), 'center')).toEqual([
+      'launcher',
+      'plugins-right',
+    ])
   })
 })
 
 describe('refusingSlotForStep', () => {
-  it('names the center when a plugin group steps off the end of its side towards it', () => {
-    expect(refusingSlotForStep(PLUGINS_LEFT_LAST, 'plugins-left', 'later')).toBe('center')
-    expect(refusingSlotForStep(PLUGINS_RIGHT_FIRST, 'plugins-right', 'earlier')).toBe('center')
+  it('lets a plugin group step off the end of its side into the center', () => {
+    expect(refusingSlotForStep(PLUGINS_LEFT_LAST, 'plugins-left', 'later')).toBeNull()
+    expect(refusingSlotForStep(PLUGINS_RIGHT_FIRST, 'plugins-right', 'earlier')).toBeNull()
   })
 
   it('refuses nothing while the plugin group still has room on its side', () => {
@@ -179,7 +184,7 @@ describe('refusingSlotForStep', () => {
   })
 
   it('never refuses an element', () => {
-    expect(refusingSlotForStep(DEFAULT_ITEMS, 'notice', 'later')).toBeNull()
+    expect(refusingSlotForStep(DEFAULT_ITEMS, 'launcher', 'later')).toBeNull()
     expect(refusingSlotForStep(DEFAULT_ITEMS, 'tray', 'earlier')).toBeNull()
   })
 

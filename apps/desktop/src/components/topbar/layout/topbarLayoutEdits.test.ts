@@ -2,10 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   EMPTY_TOPBAR_LAYOUT,
   TOPBAR_SLOTS,
-  acceptsTopbarItem,
-  findTopbarItem,
   resolveTopbarLayout,
   storeTopbarLayout,
+  topbarSlotAcceptsItem,
   topbarSlotItems,
   visibleTopbarSlotItems,
 } from './topbarLayout'
@@ -14,6 +13,7 @@ import {
   moveTopbarItem,
   setTopbarItemVisible,
   stepTopbarItem,
+  stepTopbarItemPast,
   topbarItemPosition,
   topbarItemTargets,
 } from './topbarLayoutEdits'
@@ -28,11 +28,7 @@ const ordersInSlot = (items: TopbarLayoutItem[], slot: TopbarSlot) =>
 const withHidden = (...ids: TopbarItemId[]) =>
   resolveTopbarLayout({ slots: { left: [], center: [], right: [] }, hidden: ids })
 const itemById = (items: TopbarLayoutItem[], id: TopbarItemId) => items.find((item) => item.id === id)
-const acceptedSlots = (id: TopbarItemId) =>
-  TOPBAR_SLOTS.filter((slot) => {
-    const definition = findTopbarItem(id)
-    return definition !== undefined && acceptsTopbarItem(definition, slot)
-  })
+const acceptedSlots = (id: TopbarItemId) => TOPBAR_SLOTS.filter((slot) => topbarSlotAcceptsItem(slot, id))
 
 function walkLater(items: TopbarLayoutItem[], id: TopbarItemId): TopbarItemTarget[] {
   const visited: TopbarItemTarget[] = []
@@ -46,11 +42,30 @@ function walkLater(items: TopbarLayoutItem[], id: TopbarItemId): TopbarItemTarge
   }
 }
 
-describe('acceptsTopbarItem', () => {
-  it('lets an element into every slot and a plugin group only into its own', () => {
+describe('stepTopbarItemPast', () => {
+  const pluginsRightUndrawn = (id: TopbarItemId) => id !== 'plugins-right'
+
+  it('steps like stepTopbarItem when every item is drawn', () => {
+    expect(stepTopbarItemPast(DEFAULT_ITEMS, 'clock', 'earlier')).toEqual(stepTopbarItem(DEFAULT_ITEMS, 'clock', 'earlier'))
+  })
+
+  it('keeps stepping past an item that is not drawn until the move shows', () => {
+    const stepped = stepTopbarItemPast(DEFAULT_ITEMS, 'clock', 'earlier', pluginsRightUndrawn)
+    expect(idsInSlot(stepped, 'right')).toEqual(['tray', 'media', 'microphone', 'clock', 'status', 'plugins-right'])
+  })
+
+  it('leaves the layout as it is when only undrawn items are in the way', () => {
+    const clockBeforePlugins = moveTopbarItem(DEFAULT_ITEMS, 'clock', { slot: 'right', index: 4 })
+    expect(idsInSlot(clockBeforePlugins, 'right')).toEqual(['tray', 'media', 'microphone', 'status', 'clock', 'plugins-right'])
+    expect(stepTopbarItemPast(clockBeforePlugins, 'clock', 'later', pluginsRightUndrawn)).toBe(clockBeforePlugins)
+  })
+})
+
+describe('the slots an item may go to', () => {
+  it('lets an element and a plugin group alike into every slot', () => {
     expect(acceptedSlots('clock')).toEqual(['left', 'center', 'right'])
-    expect(acceptedSlots('plugins-left')).toEqual(['left'])
-    expect(acceptedSlots('plugins-right')).toEqual(['right'])
+    expect(acceptedSlots('plugins-left')).toEqual(['left', 'center', 'right'])
+    expect(acceptedSlots('plugins-right')).toEqual(['left', 'center', 'right'])
   })
 })
 
@@ -73,7 +88,7 @@ describe('moveTopbarItem', () => {
 
   it('renumbers order from zero in every slot', () => {
     const moved = moveTopbarItem(DEFAULT_ITEMS, 'clock', { slot: 'left', index: 1 })
-    expect(ordersInSlot(moved, 'left')).toEqual([0, 1, 2, 3])
+    expect(ordersInSlot(moved, 'left')).toEqual([0, 1, 2])
     expect(ordersInSlot(moved, 'center')).toEqual([0])
     expect(ordersInSlot(moved, 'right')).toEqual([0, 1, 2, 3, 4])
   })
@@ -97,14 +112,31 @@ describe('moveTopbarItem', () => {
     expect(moved.filter((item) => item.id !== 'media').every((item) => item.visible)).toBe(true)
   })
 
-  it('refuses to move a plugin group out of its home slot', () => {
-    expect(moveTopbarItem(DEFAULT_ITEMS, 'plugins-left', { slot: 'right', index: 0 })).toBe(DEFAULT_ITEMS)
-    expect(moveTopbarItem(DEFAULT_ITEMS, 'plugins-right', { slot: 'center', index: 0 })).toBe(DEFAULT_ITEMS)
+  it('moves a plugin group to another side like any element', () => {
+    const leftGroupOnTheRight = moveTopbarItem(DEFAULT_ITEMS, 'plugins-left', { slot: 'right', index: 0 })
+    expect(idsInSlot(leftGroupOnTheRight, 'left')).toEqual(['system-menu'])
+    expect(idsInSlot(leftGroupOnTheRight, 'right')).toEqual([
+      'plugins-left',
+      'tray',
+      'media',
+      'microphone',
+      'status',
+      'plugins-right',
+      'clock',
+    ])
+
+    const rightGroupInTheCentre = moveTopbarItem(DEFAULT_ITEMS, 'plugins-right', { slot: 'center', index: 0 })
+    expect(idsInSlot(rightGroupInTheCentre, 'center')).toEqual(['plugins-right', 'launcher'])
+    expect(idsInSlot(rightGroupInTheCentre, 'right')).toEqual(['tray', 'media', 'microphone', 'status', 'clock'])
   })
 
   it('still reorders a plugin group within its home slot', () => {
     const moved = moveTopbarItem(DEFAULT_ITEMS, 'plugins-right', { slot: 'right', index: 0 })
     expect(idsInSlot(moved, 'right')).toEqual(['plugins-right', 'tray', 'media', 'microphone', 'status', 'clock'])
+  })
+
+  it('refuses a slot that does not exist', () => {
+    expect(moveTopbarItem(DEFAULT_ITEMS, 'clock', { slot: 'top' as TopbarSlot, index: 0 })).toBe(DEFAULT_ITEMS)
   })
 
   it('returns the same layout when the item is already where it was asked to go', () => {
@@ -149,9 +181,9 @@ describe('stepTopbarItem', () => {
   })
 
   it('crosses a lane edge into the near end of the next lane', () => {
-    const noticeLater = stepTopbarItem(DEFAULT_ITEMS, 'notice', 'later')
-    expect(idsInSlot(noticeLater, 'left')).toEqual(['system-menu', 'plugins-left'])
-    expect(idsInSlot(noticeLater, 'center')).toEqual(['notice', 'launcher'])
+    const systemMenuLater = stepTopbarItem(stepTopbarItem(DEFAULT_ITEMS, 'system-menu', 'later'), 'system-menu', 'later')
+    expect(idsInSlot(systemMenuLater, 'left')).toEqual(['plugins-left'])
+    expect(idsInSlot(systemMenuLater, 'center')).toEqual(['system-menu', 'launcher'])
 
     const trayEarlier = stepTopbarItem(DEFAULT_ITEMS, 'tray', 'earlier')
     expect(idsInSlot(trayEarlier, 'center')).toEqual(['launcher', 'tray'])
@@ -159,9 +191,9 @@ describe('stepTopbarItem', () => {
   })
 
   it('crosses into a lane whose items are all hidden', () => {
-    const stepped = stepTopbarItem(withHidden('launcher'), 'notice', 'later')
-    expect(visibleIdsInSlot(stepped, 'center')).toEqual(['notice'])
-    expect(idsInSlot(stepped, 'center')).toEqual(['launcher', 'notice'])
+    const stepped = stepTopbarItem(withHidden('launcher'), 'plugins-left', 'later')
+    expect(visibleIdsInSlot(stepped, 'center')).toEqual(['plugins-left'])
+    expect(idsInSlot(stepped, 'center')).toEqual(['launcher', 'plugins-left'])
   })
 
   it('stays put at either end of the bar', () => {
@@ -169,22 +201,28 @@ describe('stepTopbarItem', () => {
     expect(stepTopbarItem(DEFAULT_ITEMS, 'clock', 'later')).toBe(DEFAULT_ITEMS)
   })
 
-  it('skips every lane that refuses a plugin group, so the group stays in its own', () => {
-    const leftGroupAtEdge = stepTopbarItem(DEFAULT_ITEMS, 'plugins-left', 'later')
-    expect(idsInSlot(leftGroupAtEdge, 'left')).toEqual(['system-menu', 'notice', 'plugins-left'])
-    expect(stepTopbarItem(leftGroupAtEdge, 'plugins-left', 'later')).toBe(leftGroupAtEdge)
+  it('steps a plugin group across a lane edge like any element', () => {
+    const leftGroupLater = stepTopbarItem(DEFAULT_ITEMS, 'plugins-left', 'later')
+    expect(idsInSlot(leftGroupLater, 'left')).toEqual(['system-menu'])
+    expect(idsInSlot(leftGroupLater, 'center')).toEqual(['plugins-left', 'launcher'])
 
-    const rightGroupAtEdge = moveTopbarItem(DEFAULT_ITEMS, 'plugins-right', { slot: 'right', index: 0 })
-    expect(stepTopbarItem(rightGroupAtEdge, 'plugins-right', 'earlier')).toBe(rightGroupAtEdge)
+    const rightGroupAtLaneStart = moveTopbarItem(DEFAULT_ITEMS, 'plugins-right', { slot: 'right', index: 0 })
+    const rightGroupEarlier = stepTopbarItem(rightGroupAtLaneStart, 'plugins-right', 'earlier')
+    expect(idsInSlot(rightGroupEarlier, 'center')).toEqual(['launcher', 'plugins-right'])
   })
 
   it('walks an element through every target in order', () => {
     expect(walkLater(DEFAULT_ITEMS, 'system-menu')).toEqual(topbarItemTargets(DEFAULT_ITEMS, 'system-menu'))
   })
 
+  it('walks a plugin group through every target in order', () => {
+    const groupAtStart = moveTopbarItem(DEFAULT_ITEMS, 'plugins-right', { slot: 'left', index: 0 })
+    expect(walkLater(groupAtStart, 'plugins-right')).toEqual(topbarItemTargets(groupAtStart, 'plugins-right'))
+  })
+
   it('undoes a step later with a step earlier', () => {
-    const there = stepTopbarItem(DEFAULT_ITEMS, 'notice', 'later')
-    expect(stepTopbarItem(there, 'notice', 'earlier')).toEqual(DEFAULT_ITEMS)
+    const there = stepTopbarItem(DEFAULT_ITEMS, 'plugins-left', 'later')
+    expect(stepTopbarItem(there, 'plugins-left', 'earlier')).toEqual(DEFAULT_ITEMS)
   })
 })
 
@@ -194,7 +232,6 @@ describe('topbarItemTargets', () => {
       { slot: 'left', index: 0 },
       { slot: 'left', index: 1 },
       { slot: 'left', index: 2 },
-      { slot: 'left', index: 3 },
       { slot: 'center', index: 0 },
       { slot: 'center', index: 1 },
       { slot: 'right', index: 0 },
@@ -206,17 +243,25 @@ describe('topbarItemTargets', () => {
     ])
   })
 
-  it('offers a plugin group only its home lane', () => {
+  it('offers a plugin group every lane, not only its home lane', () => {
     expect(topbarItemTargets(DEFAULT_ITEMS, 'plugins-left')).toEqual([
       { slot: 'left', index: 0 },
       { slot: 'left', index: 1 },
-      { slot: 'left', index: 2 },
+      { slot: 'center', index: 0 },
+      { slot: 'center', index: 1 },
+      { slot: 'right', index: 0 },
+      { slot: 'right', index: 1 },
+      { slot: 'right', index: 2 },
+      { slot: 'right', index: 3 },
+      { slot: 'right', index: 4 },
+      { slot: 'right', index: 5 },
+      { slot: 'right', index: 6 },
     ])
   })
 
   it('counts only the visible items of each lane', () => {
     const targets = topbarItemTargets(withHidden('media', 'launcher'), 'clock')
-    expect(targets.filter((target) => target.slot === 'left')).toHaveLength(4)
+    expect(targets.filter((target) => target.slot === 'left')).toHaveLength(3)
     expect(targets.filter((target) => target.slot === 'center')).toEqual([{ slot: 'center', index: 0 }])
     expect(targets.filter((target) => target.slot === 'right')).toHaveLength(5)
   })
@@ -243,15 +288,15 @@ describe('topbarItemPosition', () => {
 
 describe('setTopbarItemVisible', () => {
   it('hides an item where it stands', () => {
-    const hidden = setTopbarItemVisible(DEFAULT_ITEMS, 'notice', false)
-    expect(idsInSlot(hidden, 'left')).toEqual(['system-menu', 'plugins-left', 'notice'])
-    expect(visibleIdsInSlot(hidden, 'left')).toEqual(['system-menu', 'plugins-left'])
-    expect(itemById(hidden, 'notice')).toEqual({ id: 'notice', slot: 'left', order: 2, visible: false })
+    const hidden = setTopbarItemVisible(DEFAULT_ITEMS, 'plugins-left', false)
+    expect(idsInSlot(hidden, 'left')).toEqual(['system-menu', 'plugins-left'])
+    expect(visibleIdsInSlot(hidden, 'left')).toEqual(['system-menu'])
+    expect(itemById(hidden, 'plugins-left')).toEqual({ id: 'plugins-left', slot: 'left', order: 1, visible: false })
   })
 
   it('shows a hidden item again in the same place', () => {
-    const hidden = setTopbarItemVisible(DEFAULT_ITEMS, 'notice', false)
-    expect(setTopbarItemVisible(hidden, 'notice', true)).toEqual(DEFAULT_ITEMS)
+    const hidden = setTopbarItemVisible(DEFAULT_ITEMS, 'plugins-left', false)
+    expect(setTopbarItemVisible(hidden, 'plugins-left', true)).toEqual(DEFAULT_ITEMS)
   })
 
   it('keeps a moved item in its new place through a hide and a show', () => {
@@ -261,7 +306,7 @@ describe('setTopbarItemVisible', () => {
   })
 
   it('returns the same layout when the item is already in that state', () => {
-    expect(setTopbarItemVisible(DEFAULT_ITEMS, 'notice', true)).toBe(DEFAULT_ITEMS)
+    expect(setTopbarItemVisible(DEFAULT_ITEMS, 'plugins-left', true)).toBe(DEFAULT_ITEMS)
   })
 })
 
@@ -276,6 +321,12 @@ describe('isDefaultTopbarArrangement', () => {
     expect(isDefaultTopbarArrangement(moveTopbarItem(DEFAULT_ITEMS, 'clock', { slot: 'center', index: 0 }))).toBe(
       false
     )
+  })
+
+  it('rejects an arrangement with a plugin group moved to another side', () => {
+    expect(
+      isDefaultTopbarArrangement(moveTopbarItem(DEFAULT_ITEMS, 'plugins-right', { slot: 'left', index: 0 }))
+    ).toBe(false)
   })
 
   it('rejects an arrangement with a hidden item, because a reset would show it again', () => {
@@ -293,11 +344,11 @@ describe('serialisation of edits', () => {
     const edited = moveTopbarItem(
       stepTopbarItem(
         setTopbarItemVisible(moveTopbarItem(DEFAULT_ITEMS, 'clock', { slot: 'center', index: 0 }), 'media', false),
-        'notice',
+        'plugins-left',
         'later'
       ),
       'plugins-right',
-      { slot: 'right', index: 0 }
+      { slot: 'left', index: 0 }
     )
     expect(resolveTopbarLayout(storeTopbarLayout(edited))).toEqual(edited)
   })
