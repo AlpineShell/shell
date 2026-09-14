@@ -195,7 +195,7 @@ function NetworkRow({
               onSubmit={onPasswordSubmit}
               className="max-w-xs flex-1"
             />
-            <Button size="sm" onClick={onPasswordSubmit}>
+            <Button onClick={onPasswordSubmit}>
               Connect
             </Button>
           </div>
