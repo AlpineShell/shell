@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
+import { NavRow } from '@alpine/ui'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
 import RegistryPage from './registryPage'
-import NavRow from '../ui/navRow'
 
 const PRESET_COLORS = [
   { r: 48, g: 48, b: 48 },

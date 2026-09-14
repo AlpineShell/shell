@@ -12,6 +12,7 @@ This is a Bun-workspaces monorepo. Run all commands from the repo root.
 
 - `apps/desktop/` — the Electron desktop shell (the original app; package name `alpine-shell`). Its build/release config (electron-builder, Railway/MinIO publish) lives in `apps/desktop/package.json`.
 - `packages/license/` — `@alpine/license`, the shared license/activation contract (types + key validation) imported by the desktop app.
+- `apps/desktop/vendor/` — the vendored release tarball of `@alpine/ui` ([AlpineShell/ui](https://github.com/AlpineShell/ui)), the shared React primitives (Button, Row, Toggle, …) and design tokens that settings and setup render with. Import primitives by name from `@alpine/ui`. A missing prop or look goes into the library and ships as a release, never into a local copy; `bun run propagate` in the ui repo opens the bump PR here.
 
 The website (marketing, docs, plugin marketplace pages) lives in its own repo: [AlpineShell/website](https://github.com/AlpineShell/website).
 

@@ -1,5 +1,5 @@
 import RegistryPage from './registryPage'
-import Row from '../ui/row'
+import { Row } from '@alpine/ui'
 import HotkeyRecorder from './hotkeyRecorder'
 
 const HOTKEYS_GROUP = 'Hotkeys'

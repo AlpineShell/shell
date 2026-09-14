@@ -1,10 +1,9 @@
 import { BatteryCharging, BatteryLow, Leaf } from 'lucide-react'
+import { Row, Segmented, type SegmentedOption } from '@alpine/ui'
 import { useBatterySaver } from '../../hooks/useBatterySaver'
 import { settingsValueEntry } from '../../settings/registry'
 import { useSettingsValue } from '../../hooks/useSettingsValue'
 import RegistryPage from './registryPage'
-import Row from '../ui/row'
-import Segmented from '../ui/segmented'
 
 const SAVER_GROUP = 'Battery saver'
 const AUTOMATIC_GROUP = 'Automatic'

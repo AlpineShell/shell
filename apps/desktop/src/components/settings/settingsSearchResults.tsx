@@ -1,9 +1,7 @@
 import { type ReactNode } from 'react'
 import { ArrowUpRight, ChevronRight, SearchX } from 'lucide-react'
+import { EmptyState, PageTitle, Toggle } from '@alpine/ui'
 import { useSettingsValue } from '../../hooks/useSettingsValue'
-import EmptyState from '../ui/emptyState'
-import PageTitle from '../ui/pageTitle'
-import Toggle from '../ui/toggle'
 
 const IGNORE_CHANGE = () => {}
 

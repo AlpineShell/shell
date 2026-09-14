@@ -1,9 +1,7 @@
 import { useLayoutEffect, useRef, type KeyboardEvent } from 'react'
 import { CirclePlus, X } from 'lucide-react'
+import { Button, Card, IconButton } from '@alpine/ui'
 import { topbarItemLabel } from '../../topbar/layout/topbarLayout'
-import Button from '../../ui/button'
-import Card from '../../ui/card'
-import IconButton from '../../ui/iconButton'
 
 export default function RidgeHiddenItemNotice({ item, onAdd, onClose }: RidgeHiddenItemNoticeProps) {
   const region = useRef<HTMLDivElement>(null)

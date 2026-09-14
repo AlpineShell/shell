@@ -1,11 +1,6 @@
 import type { ReactNode } from 'react'
+import { Button, Row, Segmented, Select, Slider, Toggle } from '@alpine/ui'
 import { useSettingsValue } from '../../hooks/useSettingsValue'
-import Row from '../ui/row'
-import Toggle from '../ui/toggle'
-import Slider from '../ui/slider'
-import Select from '../ui/select'
-import Segmented from '../ui/segmented'
-import Button from '../ui/button'
 import HotkeyRecorder from './hotkeyRecorder'
 
 export function ActionRow({

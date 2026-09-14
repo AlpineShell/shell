@@ -11,222 +11,10 @@ declare global {
     preference: ThemePreference
   }
 
-  interface SectionProps {
-    title: string
-    subtitle?: string
-    children: import('react').ReactNode
-  }
-
-  interface PageTitleProps {
-    title: string
-    subtitle?: string
-  }
-
-  interface CardProps {
-    className?: string
-    children: import('react').ReactNode
-  }
-
-  interface RowProps {
-    label: string
-    description?: import('react').ReactNode
-    disabled?: boolean
-    stacked?: boolean
-    children?: import('react').ReactNode
-  }
-
   interface ValueRowProps {
     entry: SettingsValueEntry
     description: string
     wideControlStacked?: boolean
-  }
-
-  interface NavRowProps {
-    label: string
-    description?: string
-    icon?: import('react').ReactNode
-    onClick: () => void
-  }
-
-  interface ToggleProps {
-    checked: boolean
-    onChange: (value: boolean) => void
-    label: string
-    disabled?: boolean
-    pending?: boolean
-  }
-
-  interface SegmentedOption<T> {
-    value: T
-    label: import('react').ReactNode
-  }
-
-  interface SegmentedProps<T extends string | number> {
-    options: SegmentedOption<T>[]
-    value: T
-    onChange: (value: T) => void
-    label?: string
-  }
-
-  interface SelectOption<T> {
-    value: T
-    label: string
-  }
-
-  interface SelectProps<T extends string> {
-    options: SelectOption<T>[]
-    value: T
-    onChange: (value: T) => void
-    label: string
-  }
-
-  interface SliderProps {
-    min: number
-    max: number
-    step?: number
-    value: number
-    onChange: (value: number) => void
-    label: string
-    suffix?: string
-  }
-
-  type ButtonVariant = 'primary' | 'outline' | 'ghost' | 'danger' | 'dangerOutline'
-
-  type ButtonSize = 'sm' | 'md'
-
-  interface ButtonProps {
-    onClick: () => void
-    children: import('react').ReactNode
-    variant?: ButtonVariant
-    size?: ButtonSize
-    icon?: import('react').ReactNode
-    busy?: boolean
-    disabled?: boolean
-    className?: string
-  }
-
-  interface ConfirmButtonProps {
-    label: string
-    confirmLabel: string
-    onConfirm: () => void
-    variant?: ButtonVariant
-    confirmVariant?: ButtonVariant
-    size?: ButtonSize
-    icon?: import('react').ReactNode
-    iconOnly?: boolean
-    busy?: boolean
-    disabled?: boolean
-    className?: string
-  }
-
-  type IconButtonVariant = 'ghost' | 'danger'
-
-  interface IconButtonProps {
-    onClick: () => void
-    label: string
-    children: import('react').ReactNode
-    variant?: IconButtonVariant
-    busy?: boolean
-    disabled?: boolean
-    expanded?: boolean
-    controls?: string
-    className?: string
-  }
-
-  interface SpinnerProps {
-    size?: number
-  }
-
-  type AvatarSize = 'sm' | 'md'
-
-  interface AvatarProps {
-    src?: string | null
-    alt: string
-    fallback: import('react').ReactNode
-    size?: AvatarSize
-  }
-
-  type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger'
-
-  interface BadgeProps {
-    tone?: BadgeTone
-    children: import('react').ReactNode
-  }
-
-  interface EmptyStateProps {
-    icon?: import('react').ReactNode
-    title: string
-    detail?: import('react').ReactNode
-    action?: import('react').ReactNode
-  }
-
-  interface PageHeaderProps {
-    title: string
-    subtitle?: string
-    children?: import('react').ReactNode
-  }
-
-  interface ListRowProps {
-    icon?: import('react').ReactNode
-    title: string
-    badges?: import('react').ReactNode
-    detail?: import('react').ReactNode
-    actions?: import('react').ReactNode
-    onActivate?: () => void
-    activateLabel?: string
-    expanded?: boolean
-    disabled?: boolean
-    muted?: boolean
-    children?: import('react').ReactNode
-  }
-
-  interface TextFieldProps {
-    value: string
-    onChange: (value: string) => void
-    label: string
-    placeholder?: string
-    type?: 'text' | 'password'
-    icon?: import('react').ReactNode
-    invalid?: boolean
-    onSubmit?: () => void
-    className?: string
-    ref?: import('react').Ref<HTMLInputElement>
-  }
-
-  interface SearchFieldProps {
-    value: string
-    onChange: (value: string) => void
-    label: string
-    placeholder?: string
-    hint?: string
-    onKeyDown?: (event: import('react').KeyboardEvent<HTMLInputElement>) => void
-    controls?: string
-    activeDescendant?: string
-    ref?: import('react').Ref<HTMLInputElement>
-  }
-
-  interface SearchPickerOption {
-    value: string
-    label: string
-    detail?: string
-    disabled?: boolean
-  }
-
-  interface SearchPickerProps {
-    options: SearchPickerOption[]
-    onSelect: (value: string) => void
-    onDismiss: () => void
-    label: string
-    placeholder?: string
-    emptyMessage?: string
-  }
-
-  interface PickerTileProps {
-    onClick: () => void
-    label: string
-    selected?: boolean
-    className?: string
-    children: import('react').ReactNode
   }
 
   type SetupOutcomeTone = 'success' | 'danger'
@@ -1125,12 +913,12 @@ declare global {
 
   interface SettingsSelectControl {
     kind: 'select'
-    options: readonly SelectOption<string>[]
+    options: readonly import('@alpine/ui').SelectOption<string>[]
   }
 
   interface SettingsSegmentedControl {
     kind: 'segmented'
-    options: readonly SelectOption<string | number>[]
+    options: readonly import('@alpine/ui').SelectOption<string | number>[]
   }
 
   interface SettingsColorControl {

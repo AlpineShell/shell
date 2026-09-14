@@ -1,17 +1,9 @@
 import { useMemo, useState } from 'react'
 import { AppWindow, Boxes, ExternalLink, FolderOpen, Search, Trash2 } from 'lucide-react'
+import { Avatar, Button, ConfirmButton, EmptyState, ListRow, PageHeader, Spinner, TextField, Toggle } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
 import { useStartupApps } from '../../hooks/useStartupApps'
-import Avatar from '../ui/avatar'
-import Button from '../ui/button'
-import ConfirmButton from '../ui/confirmButton'
-import EmptyState from '../ui/emptyState'
-import ListRow from '../ui/listRow'
-import PageHeader from '../ui/pageHeader'
-import Spinner from '../ui/spinner'
-import TextField from '../ui/textField'
-import Toggle from '../ui/toggle'
 
 type InstalledAction = 'open' | 'locate' | 'uninstall'
 

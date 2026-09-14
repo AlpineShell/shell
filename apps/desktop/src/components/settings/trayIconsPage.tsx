@@ -1,12 +1,9 @@
 import { ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react'
+import { Card, IconButton, PageTitle, Section } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useTrayIcons } from '../../hooks/useTrayIcons'
 import { useTrayLayout } from '../../hooks/useTrayLayout'
 import { composeTray } from '../topbar/tray/composeTray'
-import PageTitle from '../ui/pageTitle'
-import Section from '../ui/section'
-import IconButton from '../ui/iconButton'
-import Card from '../ui/card'
 
 export default function TrayIconsPage() {
   const icons = useTrayIcons()

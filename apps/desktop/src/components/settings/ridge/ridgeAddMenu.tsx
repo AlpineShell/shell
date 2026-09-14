@@ -1,9 +1,8 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react'
 import { Puzzle } from 'lucide-react'
+import { Button, Card, SearchPicker, type SearchPickerOption } from '@alpine/ui'
+import { scoreField } from '../../../lib/launcherSearch'
 import { settingsPageRoute } from '../../../settings/registry'
-import Button from '../../ui/button'
-import Card from '../../ui/card'
-import SearchPicker from '../../ui/searchPicker'
 import { topbarItemLabel } from '../../topbar/layout/topbarLayout'
 
 const ADD_MENU_LABEL = 'Add to Ridge'
@@ -37,6 +36,7 @@ export default function RidgeAddMenu({ id, items, onSelect, onDismiss, onNavigat
             placeholder="Find a hidden item"
             options={items.map(hiddenItemOption)}
             emptyMessage="No hidden item matches that."
+            score={scoreField}
             onSelect={selectHiddenItem}
             onDismiss={onDismiss}
           />

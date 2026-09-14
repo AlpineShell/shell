@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Upload, X } from 'lucide-react'
+import { IconButton, PageHeader, PickerTile, Segmented, type SegmentedOption } from '@alpine/ui'
 import { useWallpaper } from '../../hooks/useWallpaper'
-import IconButton from '../ui/iconButton'
-import PageHeader from '../ui/pageHeader'
-import PickerTile from '../ui/pickerTile'
-import Segmented from '../ui/segmented'
 
 type Tab = 'mine' | 'marketplace'
 

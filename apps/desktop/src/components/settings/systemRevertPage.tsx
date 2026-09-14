@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { ConfirmButton, PageTitle } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
-import PageTitle from '../ui/pageTitle'
-import ConfirmButton from '../ui/confirmButton'
 
 type RevertAction = 'temporary' | 'permanent' | 'delete'
 

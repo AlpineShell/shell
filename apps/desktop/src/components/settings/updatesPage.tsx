@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react'
+import { Button, EmptyState, IconButton, ListRow, PageHeader, Spinner } from '@alpine/ui'
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
-import Button from '../ui/button'
-import EmptyState from '../ui/emptyState'
-import IconButton from '../ui/iconButton'
-import ListRow from '../ui/listRow'
-import PageHeader from '../ui/pageHeader'
-import Spinner from '../ui/spinner'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2

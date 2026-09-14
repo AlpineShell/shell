@@ -277,7 +277,7 @@ from the registry was a separate card, which is what made both reviewable.
 The six scalar pages — Appearance (was Top Bar), Calendar, Search (was Hotkeys), System tray
 (since folded into Ridge), Window tiling and Battery — now render from the registry through
 `src/components/settings/registryPage.tsx`. It reads the entries for a page, groups them,
-renders each `control` kind with the shared components in `src/components/ui/`, and reads and
+renders each `control` kind with the shared components from `@alpine/ui`, and reads and
 writes through the entry's own `read` / `subscribe` / `write` via `hooks/useSettingsValue.ts`.
 
 Two escape hatches keep the bespoke pieces bespoke, and they are worth naming because they
@@ -496,7 +496,7 @@ test failure too.
 The write path covers registry-driven values. The device and app managers keep their own state —
 a Wi-Fi list, a plugin list, a display arrangement — and the registry only declares how their
 actions apply, which is what the `confirm` rows above are for. The confirmation itself is a
-shared component (`src/components/ui/confirmButton.tsx`) so that a `confirm` declaration and the
+shared component (`ConfirmButton` from `@alpine/ui`) so that a `confirm` declaration and the
 thing the user actually sees stay the same shape wherever they appear.
 
 ### Persistence

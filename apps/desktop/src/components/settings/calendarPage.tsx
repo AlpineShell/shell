@@ -1,8 +1,7 @@
 import { Check, Loader2, LogOut } from 'lucide-react'
+import { Button, Card } from '@alpine/ui'
 import { useCalendar } from '../../hooks/useCalendar'
 import RegistryPage from './registryPage'
-import Button from '../ui/button'
-import Card from '../ui/card'
 
 const ACCOUNT_GROUP = 'Google account'
 

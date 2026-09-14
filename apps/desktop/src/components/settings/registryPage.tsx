@@ -1,9 +1,8 @@
 import { Fragment, useEffect, useRef, type ReactNode } from 'react'
+import { PageTitle, Section } from '@alpine/ui'
 import { SETTINGS_PAGE_GROUP, SETTINGS_REGISTRY, settingsPage } from '../../settings/registry'
 import { useHighlightedSetting } from '../../hooks/useHighlightedSetting'
 import { entryRowContent } from './registryRowContent'
-import PageTitle from '../ui/pageTitle'
-import Section from '../ui/section'
 
 interface PlacedItem {
   key: string

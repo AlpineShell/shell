@@ -1,7 +1,6 @@
 import { Activity, FileType, Package, Power } from 'lucide-react'
+import { NavRow, PageTitle } from '@alpine/ui'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
-import PageTitle from '../ui/pageTitle'
-import NavRow from '../ui/navRow'
 
 const ROWS: { page: SettingsPageId; description: string; icon: typeof Package }[] = [
   { page: 'apps-installed', description: 'All your apps. Turn off auto-start, open, or uninstall.', icon: Package },

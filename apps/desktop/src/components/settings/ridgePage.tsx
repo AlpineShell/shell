@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { CirclePlus, Palette, RotateCcw } from 'lucide-react'
+import { Button, ConfirmButton, IconButton, PageHeader } from '@alpine/ui'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
 import { highlightedSetting, onHighlightedSetting } from '../../hooks/useHighlightedSetting'
 import { useRidgeEditor } from '../../hooks/useRidgeEditor'
@@ -20,10 +21,6 @@ import RidgeAddMenu from './ridge/ridgeAddMenu'
 import RidgeCallout from './ridge/ridgeCallout'
 import RidgeCanvas from './ridge/ridgeCanvas'
 import RidgeHiddenItemNotice from './ridge/ridgeHiddenItemNotice'
-import Button from '../ui/button'
-import ConfirmButton from '../ui/confirmButton'
-import IconButton from '../ui/iconButton'
-import PageHeader from '../ui/pageHeader'
 
 const RESET_SETTING = 'ridge-layout-reset'
 
@@ -206,8 +203,8 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
         <div ref={addAnchor} className="flex">
           <IconButton
             label={ADD_LABEL}
-            expanded={adding}
-            controls={adding ? addMenuId : undefined}
+            aria-expanded={adding}
+            aria-controls={adding ? addMenuId : undefined}
             onClick={() => setAdding((open) => !open)}
           >
             <CirclePlus size={16} />
