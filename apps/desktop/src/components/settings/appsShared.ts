@@ -1,10 +1,9 @@
-import type { BadgeTone } from '@alpine/ui'
-export function bandLabel(band: 'light' | 'moderate' | 'heavy'): string {
-  return band === 'heavy' ? 'Heavy' : band === 'moderate' ? 'Moderate' : 'Light'
-}
+const MB = 1024 ** 2
+const GB = 1024 ** 3
 
-export function bandTone(band: 'light' | 'moderate' | 'heavy'): BadgeTone {
-  return band === 'heavy' ? 'warning' : 'neutral'
+export function formatMemory(bytes: number): string {
+  if (bytes >= GB) return `${(bytes / GB).toFixed(1)} GB`
+  return `${Math.max(1, Math.round(bytes / MB))} MB`
 }
 
 export function processKey(target: string | null): string | null {

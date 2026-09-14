@@ -37,9 +37,7 @@ const LAUNCHER_SETTING_IDS = [
   'battery-saver-throttling',
   'wallpaper',
   'emoji',
-  'appearance',
   'search',
-  'theme',
   'updates',
   'apps-running',
   'apps-installed',
@@ -60,6 +58,7 @@ const TABLE_ROW = /^\|\s*`([a-z0-9-]+)`\s*\|\s*(instant|confirm|restart|draft)\s
 const EXCEPTIONS: Record<string, SettingsApplies> = {
   displays: 'draft',
   'keyboard-layout-remove': 'confirm',
+  'language-remove': 'confirm',
   'app-force-close': 'confirm',
   'app-uninstall': 'confirm',
   startup: 'confirm',
@@ -71,12 +70,18 @@ const EXCEPTIONS: Record<string, SettingsApplies> = {
   'ridge-layout-reset': 'confirm',
 }
 
+const SETTINGS_FOLDED_INTO_RIDGE = [
+  'topbar-color',
+  'topbar-color-automatic',
+  'topbar-adapt-to-apps',
+  'calendar-days',
+  'calendar-show-tasks',
+]
+
 const PERSONAL_SIDEBAR: SettingsPageId[] = [
-  'appearance',
   'wallpaper',
   'ridge',
   'search',
-  'calendar',
   'input',
   'tiling',
   'battery',
@@ -104,6 +109,8 @@ const PAGE_ONLY_IDS = [
   'input',
   'keyboard-layouts',
   'keyboard-layout-remove',
+  'language-add',
+  'language-remove',
   'switch-input-method',
   'default-input-method',
   'wifi',
@@ -187,6 +194,30 @@ describe('settings pages', () => {
       expect(page.label, page.id).not.toMatch(OLD_BAR_NAME)
       expect(page.description, page.id).not.toMatch(OLD_BAR_NAME)
     }
+  })
+
+  it('declares no Appearance or Calendar page now that both folded into Ridge', () => {
+    const ids = SETTINGS_PAGES.map((page) => page.id)
+    expect(ids).not.toContain('appearance')
+    expect(ids).not.toContain('calendar')
+  })
+})
+
+describe('the settings folded into Ridge', () => {
+  it('files the colour and hover calendar settings on Ridge', () => {
+    for (const id of SETTINGS_FOLDED_INTO_RIDGE) {
+      expect(settingsEntry(id)?.page, id).toBe('ridge')
+    }
+  })
+
+  it('lets Ridge follow the colour of the app in front, as a switch that is on by default', () => {
+    const adaptToApps = settingsEntry('topbar-adapt-to-apps') as SettingsEntry
+    expect(adaptToApps.control.kind).toBe('toggle')
+    expect(isSettingsValueEntry(adaptToApps) && adaptToApps.defaultValue).toBe(true)
+  })
+
+  it('has no theme setting, because the settings window always follows Ridge', () => {
+    expect(settingsEntry('theme')).toBeNull()
   })
 })
 
@@ -343,6 +374,15 @@ describe('settings values', () => {
       const control = entry.control
       if (control.kind !== 'select' && control.kind !== 'segmented') continue
       expect(control.options.map((option) => option.value)).toContain(entry.validate('nonsense'))
+    }
+  })
+
+  it('offers only the 12-hour and 24-hour clock, and turns anything else into one of them', () => {
+    const timeFormat = settingsEntry('clock-time-format') as SettingsEntry
+    const control = timeFormat.control
+    expect(control.kind === 'segmented' && control.options.map((option) => option.value)).toEqual(['12h', '24h'])
+    for (const value of ['auto', 'nonsense', 12, null]) {
+      expect(isSettingsValueEntry(timeFormat) && timeFormat.validate?.(value)).toMatch(/^(12h|24h)$/)
     }
   })
 

@@ -42,17 +42,27 @@ vi.mock('../../../hooks/useRidgeEditor', async () => {
   return { useRidgeEditor: () => editor }
 })
 
+vi.mock('../../../hooks/useRidgeLivePlugins', () => ({ useRidgeLivePlugins: () => {} }))
+
 vi.mock('./ridgeCanvas', () => ({ default: () => null }))
+
+vi.mock('./ridgeColorSection', () => ({ default: () => null }))
 
 const RESET_ENTRY = 'ridge-layout-reset'
 
 const PAGE_LEVEL_ENTRIES = ['ridge', 'tray']
+
+const COLOR_SECTION_GROUP = 'Color'
+
+const COLOR_SECTION_IDS = ['topbar-adapt-to-apps', 'topbar-color', 'topbar-color-automatic']
 
 const RIDGE_ENTRIES = SETTINGS_REGISTRY.filter((entry) => entry.page === 'ridge')
 
 const RIDGE_VALUE_IDS = RIDGE_ENTRIES.filter(isSettingsValueEntry).map((entry) => entry.id)
 
 const GATE_IDS: string[] = Object.values(TOPBAR_ITEM_SETTING_GATES)
+
+const OUTSIDE_THE_CALLOUTS = [...GATE_IDS, ...COLOR_SECTION_IDS]
 
 const CALLOUT_ENTRY_IDS = TOPBAR_ITEMS.flatMap((item) => RIDGE_ITEM_DETAILS[item.id].entries)
 
@@ -63,15 +73,20 @@ function calloutsListing(id: string): number {
 }
 
 describe('the settings filed on Ridge', () => {
-  it('lists every value setting on Ridge in exactly one callout, apart from the two gates', () => {
-    const listed = RIDGE_VALUE_IDS.filter((id) => !GATE_IDS.includes(id))
+  it('lists every value setting on Ridge in exactly one callout, apart from the two gates and the Color section', () => {
+    const listed = RIDGE_VALUE_IDS.filter((id) => !OUTSIDE_THE_CALLOUTS.includes(id))
     expect(listed.length).toBeGreaterThan(0)
     for (const id of listed) expect(calloutsListing(id), id).toBe(1)
   })
 
-  it('leaves out of the callouts exactly the gates that show the Search button and the tray, both filed on Ridge', () => {
-    expect(RIDGE_VALUE_IDS.filter((id) => calloutsListing(id) === 0).sort()).toEqual([...GATE_IDS].sort())
+  it('leaves out of the callouts exactly the gates that show the Search button and the tray, and the Color section', () => {
+    expect(RIDGE_VALUE_IDS.filter((id) => calloutsListing(id) === 0).sort()).toEqual([...OUTSIDE_THE_CALLOUTS].sort())
     for (const id of GATE_IDS) expect(settingsEntry(id)?.page).toBe('ridge')
+  })
+
+  it('files the Color section settings on Ridge under Color', () => {
+    const colorIds = RIDGE_ENTRIES.filter((entry) => entry.group === COLOR_SECTION_GROUP).map((entry) => entry.id)
+    expect(colorIds.sort()).toEqual(COLOR_SECTION_IDS)
   })
 
   it('files on Ridge one entry per item without a gate, beside its page, the tray submenu and Reset', () => {

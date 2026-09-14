@@ -238,9 +238,9 @@ export default function SettingsApp() {
 
         <div
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-auto rounded-tl-card border-t border-l border-line-hairline bg-surface-1 px-gutter pt-gutter pb-6"
+          className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable] rounded-tl-card border-t border-l border-line-hairline bg-surface-1 px-gutter pt-gutter pb-6"
         >
-          <div className={searching ? 'hidden' : ''}>
+          <div className={searching ? 'hidden' : 'flex min-h-full flex-col'}>
             <PageErrorBoundary key={currentPath}>
               <PageRouter path={currentPath} navigate={navigate} />
             </PageErrorBoundary>

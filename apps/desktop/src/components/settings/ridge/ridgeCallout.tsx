@@ -1,29 +1,32 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react'
-import { ArrowLeft, ArrowRight, ChevronRight, EyeOff, Puzzle, X } from 'lucide-react'
-import { Button, Card, IconButton, Segmented, type SegmentedOption } from '@alpine/ui'
+import { useEffect, useRef, type ComponentType, type KeyboardEvent } from 'react'
+import { ArrowLeft, ArrowRight, ChevronRight, Trash2, X } from 'lucide-react'
+import { Card, IconButton, InfoTip } from '@alpine/ui'
 import { settingsEntry, settingsPageRoute } from '../../../settings/registry'
-import { topbarItemLabel } from '../../topbar/layout/topbarLayout'
 import { entryRowContent, registryPageRendersEntry } from '../registryRowContent'
-import { ridgeSideLabel } from './ridgeAnnouncements'
+import RidgeCalendarAccount from './ridgeCalendarAccount'
 import { ridgeHighlightRing } from './ridgeHighlight'
-import { RIDGE_ITEM_DETAILS, ridgeItemEntries, ridgeItemSearchEntryId, ridgePluginGroupWidgets } from './ridgeItemCatalogue'
+import {
+  RIDGE_ITEM_DETAILS,
+  ridgeItemEntries,
+  ridgeItemPluginIcon,
+  ridgeItemSearchEntryId,
+  ridgeItemTitle,
+} from './ridgeItemCatalogue'
+
+const RIDGE_ITEM_PANELS: Partial<Record<TopbarItemId, ComponentType>> = {
+  clock: RidgeCalendarAccount,
+}
 
 const WIDE_CONTROLS_STACKED = true
+
+const NO_DESCRIPTION = ''
 
 function settingRowClass(highlighted: boolean): string {
   return `-mx-2 rounded-field px-2 py-1.5 transition-colors duration-300 ${ridgeHighlightRing(highlighted)}`
 }
 
-function sideOption(slot: TopbarSlot): SegmentedOption<TopbarSlot> {
-  return { value: slot, label: ridgeSideLabel(slot) }
-}
-
-function fixedSideText(slot: TopbarSlot): string {
-  return `Always on the ${ridgeSideLabel(slot).toLowerCase()}. Plugin groups stay on their own side.`
-}
-
 export default function RidgeCallout(props: RidgeCalloutProps) {
-  const { item, onClose } = props
+  const { item, previewData, onClose } = props
 
   function closeOnEscape(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'Escape' || event.defaultPrevented) return
@@ -34,28 +37,41 @@ export default function RidgeCallout(props: RidgeCalloutProps) {
   return (
     <div
       role="region"
-      aria-label={`${topbarItemLabel(item.id)} settings`}
+      aria-label={`${ridgeItemTitle(item.id, previewData)} settings`}
       onKeyDown={closeOnEscape}
       className="w-full max-w-[22rem]"
     >
       <Card className="flex flex-col gap-4 p-4">
         <CalloutHeader {...props} />
         <CalloutSettings {...props} />
-        <CalloutWidgets {...props} />
+        <CalloutPanel {...props} />
         <CalloutLinks {...props} />
-        <CalloutNote {...props} />
-        <CalloutPlacement {...props} />
+        <CalloutActions {...props} />
       </Card>
     </div>
   )
 }
 
-function CalloutHeader({ item, onClose }: RidgeCalloutProps) {
+function CalloutPanel({ item }: RidgeCalloutProps) {
+  const Panel = RIDGE_ITEM_PANELS[item.id]
+  return Panel ? <Panel /> : null
+}
+
+function CalloutHeader({ item, previewData, onClose }: RidgeCalloutProps) {
   const Icon = settingsEntry(ridgeItemSearchEntryId(item.id))?.icon
+  const pluginIcon = ridgeItemPluginIcon(item.id, previewData)
+  const note = RIDGE_ITEM_DETAILS[item.id].note(previewData)
   return (
     <div className="flex items-center gap-2">
-      {Icon && <Icon size={16} className="shrink-0 text-ink-quiet" />}
-      <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{topbarItemLabel(item.id)}</h3>
+      {pluginIcon ? (
+        <img src={pluginIcon} alt="" className="size-4 shrink-0 rounded-sm object-contain" />
+      ) : (
+        Icon && <Icon size={16} className="shrink-0 text-ink-quiet" />
+      )}
+      <div className="flex min-w-0 flex-1 items-start gap-1">
+        <h3 className="min-w-0 truncate text-sm font-semibold text-ink-primary">{ridgeItemTitle(item.id, previewData)}</h3>
+        {note && <InfoTip text={note} />}
+      </div>
       <IconButton label="Close" onClick={onClose}>
         <X size={15} />
       </IconButton>
@@ -84,26 +100,11 @@ function CalloutSettings({ item, highlightedSetting }: RidgeCalloutProps) {
             data-setting={entry.id}
             className={settingRowClass(highlighted)}
           >
-            {entryRowContent(entry, entry.description, WIDE_CONTROLS_STACKED)}
+            {entryRowContent(entry, NO_DESCRIPTION, WIDE_CONTROLS_STACKED, entry.description)}
           </div>
         )
       })}
     </div>
-  )
-}
-
-function CalloutWidgets({ item, previewData }: RidgeCalloutProps) {
-  const widgets = ridgePluginGroupWidgets(item.id, previewData)
-  if (!widgets || widgets.length === 0) return null
-  return (
-    <ul aria-label="Plugin widgets" className="flex flex-col gap-1.5">
-      {widgets.map((widget) => (
-        <li key={widget.id} className="flex min-w-0 items-center gap-2 text-dense text-ink-primary">
-          <Puzzle size={14} className="shrink-0 text-ink-quiet" />
-          <span className="truncate">{widget.pluginName}</span>
-        </li>
-      ))}
-    </ul>
   )
 }
 
@@ -133,47 +134,20 @@ function CalloutLinks({ item, previewData, onNavigate }: RidgeCalloutProps) {
   )
 }
 
-function CalloutNote({ item, previewData }: RidgeCalloutProps) {
-  const note = RIDGE_ITEM_DETAILS[item.id].note(previewData)
-  return note === null ? null : <p className="text-xs text-ink-quiet">{note}</p>
-}
-
-function CalloutPlacement({ item, sides, canStepEarlier, canStepLater, onSide, onStep, onHide }: RidgeCalloutProps) {
-  function chooseSide(slot: TopbarSlot) {
-    if (slot !== item.slot) onSide(slot)
-  }
-
+function CalloutActions({ canStepEarlier, canStepLater, onStep, onHide }: RidgeCalloutProps) {
   return (
-    <div className="flex flex-col gap-3 border-t border-line-hairline pt-3">
-      <h4 className="text-xs font-medium text-ink-quiet">Placement</h4>
-      {sides.length > 1 ? (
-        <Segmented label="Side" options={sides.map(sideOption)} value={item.slot} onChange={chooseSide} />
-      ) : (
-        <p className="text-xs text-ink-quiet">{fixedSideText(item.slot)}</p>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          icon={<ArrowLeft size={14} />}
-          disabled={!canStepEarlier}
-          onClick={() => onStep('earlier')}
-        >
-          Move earlier
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          icon={<ArrowRight size={14} />}
-          disabled={!canStepLater}
-          onClick={() => onStep('later')}
-        >
-          Move later
-        </Button>
-        <Button variant="ghost" size="sm" icon={<EyeOff size={14} />} onClick={onHide} className="ml-auto">
-          Hide
-        </Button>
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-1">
+        <IconButton label="Move earlier" disabled={!canStepEarlier} onClick={() => onStep('earlier')}>
+          <ArrowLeft size={15} />
+        </IconButton>
+        <IconButton label="Move later" disabled={!canStepLater} onClick={() => onStep('later')}>
+          <ArrowRight size={15} />
+        </IconButton>
       </div>
+      <IconButton label="Remove from Ridge" variant="danger" onClick={onHide}>
+        <Trash2 size={15} />
+      </IconButton>
     </div>
   )
 }

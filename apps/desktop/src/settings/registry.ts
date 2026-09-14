@@ -12,7 +12,6 @@ import {
   ChevronUp,
   Clock,
   Columns3,
-  Contrast,
   FileType,
   Frame,
   Grid2x2,
@@ -56,6 +55,7 @@ import {
   Wifi,
 } from 'lucide-react'
 import { TOPBAR_ITEMS, isTopbarItemGated, topbarItemLabel } from '../components/topbar/layout/topbarLayout'
+import { resolveTimeFormat } from '../components/topbar/calendar/calendarLayout'
 
 export const SETTINGS_PAGE_GROUP = 'Page'
 
@@ -87,7 +87,18 @@ const RIDGE_DESCRIPTION = 'Arrange the bar across the top of your screen, and se
 
 const RIDGE_KEYWORDS = ['ridge', 'top bar', 'topbar', 'menu bar', 'status bar', 'bar layout']
 
-const PAGES_FOLDED_INTO_RIDGE = ['system tray']
+const PAGES_FOLDED_INTO_RIDGE = [
+  'system tray',
+  'appearance',
+  'color',
+  'colour',
+  'ridge color',
+  'calendar',
+  'google calendar',
+  'google',
+  'agenda',
+  'schedule',
+]
 
 export const SETTINGS_PAGES: SettingsPage[] = [
   {
@@ -111,17 +122,6 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     section: 'home',
     kind: 'manager',
     order: 1,
-  },
-  {
-    id: 'appearance',
-    route: 'appearance',
-    label: 'Appearance',
-    description: 'Light or dark theme, and the colour of Ridge',
-    keywords: ['appearance', 'theme', 'dark mode', 'light mode', 'color', 'colour'],
-    icon: Palette,
-    section: 'personalization',
-    kind: 'settings',
-    order: 0,
   },
   {
     id: 'wallpaper',
@@ -155,17 +155,6 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     section: 'personalization',
     kind: 'settings',
     order: 3,
-  },
-  {
-    id: 'calendar',
-    route: 'calendar',
-    label: 'Calendar',
-    description: 'Google account and what the hover calendar shows',
-    keywords: ['calendar', 'google', 'agenda', 'schedule'],
-    icon: CalendarDays,
-    section: 'personalization',
-    kind: 'settings',
-    order: 4,
   },
   {
     id: 'input',
@@ -359,14 +348,18 @@ export function settingsPageRoute(id: SettingsPageId): string | null {
   return PAGES_BY_ID.get(id)?.route ?? null
 }
 
-const THEME_PREFERENCES: ThemePreference[] = ['topbar', 'system', 'light', 'dark']
-
-function toThemePreference(value: unknown): ThemePreference {
-  return THEME_PREFERENCES.includes(value as ThemePreference) ? (value as ThemePreference) : 'topbar'
-}
-
 function toTimeFormat(value: unknown): TimeFormat {
   return value === '12h' || value === '24h' ? value : 'auto'
+}
+
+const DEFAULT_TIME_FORMAT: ResolvedTimeFormat = '24h'
+
+function toOfferedTimeFormat(value: unknown): ResolvedTimeFormat {
+  return value === '12h' || value === '24h' ? value : DEFAULT_TIME_FORMAT
+}
+
+function chosenTimeFormat(prefs: ClockPrefs | null): ResolvedTimeFormat {
+  return prefs ? resolveTimeFormat(prefs) : DEFAULT_TIME_FORMAT
 }
 
 function toCalendarDayCount(value: unknown): CalendarDayCount {
@@ -552,7 +545,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'topbar-search-icon',
     label: 'Show search button on Ridge',
-    description: 'Display the search button on Ridge. The hotkey still works either way.',
+    description: 'The hotkey still works when the button is hidden.',
     hint: 'Show the search button on Ridge',
     keywords: ['search icon', 'top bar', 'launcher button'],
     icon: Search,
@@ -570,7 +563,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     id: 'media-visualizer',
     label: 'Media visualizer',
     description:
-      "Show the audio visualizer instead of the playing app's icon. The bars only animate for audio playing on this PC, so leave this off if you often play to other devices.",
+      'Bars instead of the app icon while audio plays.',
     hint: 'Show the audio visualizer on Ridge',
     keywords: ['media', 'visualizer', 'audio', 'top bar'],
     icon: AudioLines,
@@ -587,24 +580,23 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'clock-time-format',
     label: 'Time format',
-    description: 'Show the clock as a 12-hour or 24-hour time, or follow whatever Windows is set to.',
+    description: 'How the clock on Ridge shows the time.',
     keywords: ['time format', 'clock', '12 hour', '24 hour', 'am pm', 'military time'],
     icon: Clock,
     page: 'ridge',
     group: topbarItemLabel('clock'),
     order: 1,
     applies: 'instant',
-    defaultValue: 'auto',
-    initial: () => toTimeFormat(window.shell.clock.initial?.timeFormat),
-    validate: toTimeFormat,
-    read: () => window.shell.clock.prefs().then((prefs) => prefs.timeFormat),
+    defaultValue: DEFAULT_TIME_FORMAT,
+    initial: () => chosenTimeFormat(window.shell.clock.initial),
+    validate: toOfferedTimeFormat,
+    read: () => window.shell.clock.prefs().then(chosenTimeFormat),
     write: (value: string | number) => window.shell.clock.setPrefs({ timeFormat: toTimeFormat(value) }),
     subscribe: (listener: (value: string | number) => void) =>
-      window.shell.clock.onPrefsChanged((prefs) => listener(prefs.timeFormat)),
+      window.shell.clock.onPrefsChanged((prefs) => listener(chosenTimeFormat(prefs))),
     control: {
       kind: 'segmented',
       options: [
-        { value: 'auto', label: 'Auto' },
         { value: '12h', label: '12-hour' },
         { value: '24h', label: '24-hour' },
       ],
@@ -643,7 +635,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     id: 'tray-overflow',
     label: 'Show overflow arrow',
     description:
-      'Show the chevron that holds hidden icons. When off, the arrow is hidden and hidden icons are managed only from Manage tray icons.',
+      'The arrow that holds hidden icons.',
     keywords: ['overflow arrow', 'chevron', 'hidden icons', 'tray', 'expand'],
     icon: ChevronUp,
     page: 'ridge',
@@ -672,7 +664,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'tray-all-monitors',
     label: 'Show tray on all monitors',
-    description: 'Mirror the tray onto Ridge on every display. When off, it appears only on your primary display.',
+    description: 'Off keeps it on the primary display.',
     keywords: ['all monitors', 'every display', 'mirror tray', 'primary display', 'multi monitor'],
     icon: Monitor,
     page: 'ridge',
@@ -689,7 +681,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'power-confirm',
     label: 'Confirm power menu actions',
-    description: "Ask a second time before Log Out, Restart or Shut Down from Ridge's power menu. Search always asks.",
+    description: 'Ask again before Log Out, Restart or Shut Down.',
     hint: "Ask a second time before Ridge's power menu acts",
     keywords: ['reassurance dialog', 'confirm shut down', 'confirm restart', 'confirm log out', 'ask before shutting down'],
     icon: ShieldCheck,
@@ -719,53 +711,13 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
 
   {
-    id: 'appearance',
-    label: 'Appearance',
-    description: 'Theme and the Ridge color',
-    keywords: ['appearance', 'ridge color', 'top bar', 'topbar', 'color', 'colour'],
-    icon: Palette,
-    page: 'appearance',
-    group: 'Page',
-    order: 0,
-    applies: 'instant',
-    control: { kind: 'navigate', path: 'appearance' },
-  },
-  {
-    id: 'theme',
-    label: 'Theme',
-    description: "Follow Ridge, follow Windows, or force light or dark for Alpine's own windows.",
-    hint: 'Follow Ridge or Windows, or force light or dark',
-    keywords: ['theme', 'dark mode', 'light mode', 'appearance', 'night mode', 'colour scheme', 'color scheme', 'top bar', 'topbar'],
-    icon: Contrast,
-    page: 'appearance',
-    group: 'Theme',
-    order: 1,
-    applies: 'instant',
-    defaultValue: 'topbar',
-    initial: () => window.shell.theme.initial.preference,
-    validate: toThemePreference,
-    read: () => window.shell.theme.get().then((theme) => theme.preference),
-    write: (value: string) => window.shell.theme.setPreference(toThemePreference(value)),
-    subscribe: (listener: (value: string) => void) =>
-      window.shell.theme.onChanged((theme) => listener(theme.preference)),
-    control: {
-      kind: 'segmented',
-      options: [
-        { value: 'topbar', label: 'Ridge' },
-        { value: 'system', label: 'System' },
-        { value: 'light', label: 'Light' },
-        { value: 'dark', label: 'Dark' },
-      ],
-    },
-  },
-  {
     id: 'topbar-color',
     label: 'Ridge color',
     description: 'Pick a preset or use a color from your wallpaper.',
     hint: 'Override the Ridge color',
     keywords: ['top bar color', 'topbar colour', 'accent', 'preset', 'swatch', 'palette', 'tint'],
     icon: Palette,
-    page: 'appearance',
+    page: 'ridge',
     group: 'Color',
     order: 2,
     applies: 'instant',
@@ -787,7 +739,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     hint: 'Follow the wallpaper color',
     keywords: ['automatic color', 'automatic colour', 'auto', 'wallpaper color', 'top bar', 'follow wallpaper'],
     icon: Sparkles,
-    page: 'appearance',
+    page: 'ridge',
     group: 'Color',
     order: 3,
     applies: 'instant',
@@ -802,12 +754,29 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
 
   {
+    id: 'topbar-adapt-to-apps',
+    label: 'Adapt to apps',
+    description: 'Ridge takes the color of a maximized app in front.',
+    hint: 'Take the color of the app in front',
+    keywords: ['adapt to apps', 'app color', 'window color', 'match app', 'foreground color'],
+    icon: Palette,
+    page: 'ridge',
+    group: 'Color',
+    order: 4,
+    applies: 'instant',
+    defaultValue: true,
+    read: () => window.topbar.adaptToApps(),
+    write: (value: boolean) => window.topbar.setAdaptToApps(value),
+    subscribe: (listener: (value: boolean) => void) => window.topbar.onAdaptToAppsChanged(listener),
+    control: { kind: 'toggle' },
+  },
+  {
     id: 'calendar-days',
     label: 'Days shown',
     description: 'How many days the hover calendar shows at once.',
     keywords: ['days shown', 'calendar days', 'agenda length', 'three days', 'hover calendar'],
     icon: CalendarDays,
-    page: 'calendar',
+    page: 'ridge',
     group: 'Hover calendar',
     order: 2,
     applies: 'instant',
@@ -830,10 +799,10 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'calendar-show-tasks',
     label: 'Show Google Tasks',
-    description: 'Display tasks with a due date alongside your events, like Google Calendar.',
+    description: 'Tasks with a due date show beside your events.',
     keywords: ['google tasks', 'tasks', 'todo', 'to-do', 'due dates', 'calendar'],
     icon: ListTodo,
-    page: 'calendar',
+    page: 'ridge',
     group: 'Hover calendar',
     order: 3,
     applies: 'instant',
@@ -931,7 +900,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'launcher-max-results',
     label: 'Maximum results',
-    description: 'The most apps and options Search will show at once, before and after you type.',
+    description: 'How many results Search shows at once.',
     keywords: ['maximum results', 'max results', 'result count', 'list length', 'how many results'],
     icon: ListOrdered,
     page: 'search',
@@ -974,7 +943,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'keyboard-layout-remove',
     label: 'Remove a keyboard layout',
-    description: 'Take a layout off a language. The last layout of a language, or the default one, asks first.',
+    description: 'Take a layout off a language. Asks first.',
     hint: 'Take a keyboard layout off a language',
     keywords: [
       'remove keyboard layout',
@@ -989,6 +958,32 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     page: 'input',
     group: 'Languages and layouts',
     order: 2,
+    applies: 'confirm',
+    control: { kind: 'navigate', path: 'input' },
+  },
+  {
+    id: 'language-add',
+    label: 'Add a language',
+    description: 'Add a language to your list. Windows attaches its usual keyboard layout to it.',
+    hint: 'Add a language to your list',
+    keywords: ['add language', 'add input language', 'new language', 'language', 'keyboard', 'typing'],
+    icon: Languages,
+    page: 'input',
+    group: 'Languages and layouts',
+    order: 5,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'input' },
+  },
+  {
+    id: 'language-remove',
+    label: 'Remove a language',
+    description: 'Take a language and its layouts off your list. Asks first, and always keeps one.',
+    hint: 'Take a language off your list',
+    keywords: ['remove language', 'delete language', 'remove input language', 'language', 'keyboard', 'typing'],
+    icon: Trash2,
+    page: 'input',
+    group: 'Languages and layouts',
+    order: 6,
     applies: 'confirm',
     control: { kind: 'navigate', path: 'input' },
   },
@@ -1050,7 +1045,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'tiling-enabled',
     label: 'Enable window tiling',
-    description: 'Arrange windows into layouts. When off, Windows behaves normally.',
+    description: 'Arrange windows into layouts.',
     keywords: ['enable tiling', 'window tiling', 'tile windows', 'turn off tiling', 'window manager'],
     icon: LayoutDashboard,
     page: 'tiling',
@@ -1161,6 +1156,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     control: {
       kind: 'action',
       actionLabel: 'Reset split sizes',
+      actionIcon: RotateCcw,
       run: () => window.shell.tiling.setConfig({ ratios: {} }),
     },
   },
@@ -1219,7 +1215,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'tiling-oversized-placement',
     label: 'Oversized window placement',
-    description: 'Whether an oversized window floats centered on screen or aligns to its zone edge.',
+    description: 'Where a window too big for its zone goes.',
     keywords: ['placement', 'center window', 'edge align', 'oversized', 'float'],
     icon: Maximize2,
     page: 'tiling',
@@ -1298,7 +1294,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'battery-saver-dimming',
     label: 'Battery saver dimming',
-    description: 'Lower the brightness of the built-in display, and put it back when battery saver ends.',
+    description: 'Dims the built-in display while battery saver is on.',
     hint: 'Dim the displays while battery saver is on',
     keywords: ['battery saver dimming', 'dim', 'brightness', 'power saving', 'screen'],
     icon: Sun,

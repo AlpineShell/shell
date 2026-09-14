@@ -3,6 +3,8 @@ import { useShellState } from './useShellState'
 
 const EMPTY_STATE: KeyboardLayoutState = { languages: [], defaultInputMethod: null }
 
+const LANGUAGE_CHANGE_UNANSWERED = 'Windows did not answer. Try again.'
+
 async function readKeyboardLayoutState(): Promise<KeyboardLayoutState> {
   const [languages, defaultInputMethod] = await Promise.all([
     window.shell.keyboard.languages(),
@@ -36,12 +38,19 @@ export function useKeyboardLayout() {
   )
   const [optimistic, setOptimistic] = useState<OptimisticKeyboardLayout | null>(null)
   const [availableLayouts, setAvailableLayouts] = useState<KeyboardLayoutOption[]>([])
+  const [availableLanguages, setAvailableLanguages] = useState<KeyboardLanguageOption[]>([])
+  const [languageError, setLanguageError] = useState<string | null>(null)
+  const [addingLanguage, setAddingLanguage] = useState(false)
 
   useEffect(() => {
     let alive = true
     window.shell.keyboard
       .availableLayouts()
       .then((layouts) => { if (alive) setAvailableLayouts(layouts) })
+      .catch(() => {})
+    window.shell.keyboard
+      .availableLanguages()
+      .then((languages) => { if (alive) setAvailableLanguages(languages) })
       .catch(() => {})
     return () => { alive = false }
   }, [])
@@ -54,6 +63,24 @@ export function useKeyboardLayout() {
     write
       .catch(() => {})
       .finally(() => setOptimistic((current) => (current === pending ? null : current)))
+  }
+
+  const reportLanguageChange = (write: Promise<KeyboardLanguageChangeResult>) =>
+    write
+      .then((result) => setLanguageError(result.ok ? null : result.error))
+      .catch(() => setLanguageError(LANGUAGE_CHANGE_UNANSWERED))
+
+  const addLanguage = (tag: string) => {
+    setLanguageError(null)
+    setAddingLanguage(true)
+    reportLanguageChange(window.shell.keyboard.addLanguage(tag)).finally(() => setAddingLanguage(false))
+  }
+
+  const removeLanguage = (tag: string) => {
+    setLanguageError(null)
+    const write = window.shell.keyboard.removeLanguage(tag)
+    apply({ ...state, languages: state.languages.filter((language) => language.tag !== tag) }, write)
+    reportLanguageChange(write)
   }
 
   const addLayout = (tag: string, layoutId: string) => {
@@ -96,6 +123,11 @@ export function useKeyboardLayout() {
     languages: state.languages,
     defaultInputMethod: state.defaultInputMethod,
     availableLayouts,
+    availableLanguages,
+    languageError,
+    addingLanguage,
+    addLanguage,
+    removeLanguage,
     addLayout,
     removeLayout,
     reorderLayouts,

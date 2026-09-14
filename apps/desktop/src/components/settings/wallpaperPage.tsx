@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Upload, X } from 'lucide-react'
-import { IconButton, PageHeader, PickerTile, Segmented, type SegmentedOption } from '@alpine/ui'
+import { Trash2, Upload } from 'lucide-react'
+import { ConfirmButton, PageHeader, PickerTile, Segmented, type SegmentedOption } from '@alpine/ui'
 import { useWallpaper } from '../../hooks/useWallpaper'
 
-type Tab = 'mine' | 'marketplace'
+type Tab = 'mine' | 'presets'
 
 const TABS: SegmentedOption<Tab>[] = [
   { value: 'mine', label: 'Mine' },
-  { value: 'marketplace', label: 'Marketplace' },
+  { value: 'presets', label: 'Presets' },
 ]
 
 interface WallpaperItem {
@@ -127,14 +127,12 @@ export default function WallpaperPage() {
         </div>
       )}
 
-      {tab === 'marketplace' && (
+      {tab === 'presets' && (
         <div className="flex flex-wrap gap-3">
           {!loadedPresets ? (
             [0, 1, 2, 3, 4, 5].map((i) => <TileSkeleton key={i} />)
           ) : presets.length === 0 ? (
-            <div className="py-6 text-sm text-ink-quiet">
-              No presets yet. Drop image files into the <code className="rounded bg-fill-ghost px-1 font-mono text-ink-primary">wallpapers/</code> folder of the project.
-            </div>
+            <div className="py-6 text-sm text-ink-quiet">No presets yet.</div>
           ) : (
             presets.map((p) => (
               <WallpaperTile
@@ -183,10 +181,15 @@ function WallpaperTile({
         )}
       </PickerTile>
       {onDelete && (
-        <div className="absolute top-1.5 right-1.5 rounded-field bg-surface-1/90 opacity-0 transition-opacity group-hover:opacity-100">
-          <IconButton label="Delete wallpaper" variant="danger" onClick={onDelete}>
-            <X size={14} strokeWidth={2.5} />
-          </IconButton>
+        <div className="absolute top-1.5 right-1.5 rounded-field bg-surface-1/90 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <ConfirmButton
+            iconOnly
+            confirmOnly
+            label="Delete wallpaper"
+            confirmLabel="Delete"
+            icon={<Trash2 size={14} />}
+            onConfirm={onDelete}
+          />
         </div>
       )}
     </div>

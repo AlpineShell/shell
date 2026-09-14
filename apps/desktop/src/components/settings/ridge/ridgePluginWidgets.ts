@@ -1,3 +1,5 @@
+import { pluginLogoUrl } from '../../../plugins/pluginAssets'
+
 const DEFAULT_WIDGET_SLOT = 'right'
 const DEFAULT_WIDGET_ORDER = 0
 const DEFAULT_WIDGET_EXPORT = 'default'
@@ -37,7 +39,7 @@ function registerPlaceholder(byId: Map<string, RidgePluginWidget>, record: Plugi
   const slot = widgetSlot(widget)
   byId.delete(id)
   if (isRidgePluginSlot(slot)) {
-    byId.set(id, { id, pluginId: record.id, pluginName: record.name, slot, order: widgetOrder(widget) })
+    byId.set(id, { id, pluginId: record.id, pluginName: record.name, pluginIcon: pluginLogoUrl(record), slot, order: widgetOrder(widget) })
   }
 }
 

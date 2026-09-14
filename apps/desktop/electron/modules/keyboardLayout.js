@@ -11,6 +11,10 @@ const {
   isKeyboardLayoutId,
   parseLayoutCatalogue,
   parseLanguageList,
+  parseLanguageCatalogue,
+  hasLanguageTag,
+  buildAddLanguageCommand,
+  buildRemoveLanguageCommand,
   withLayoutNames,
   addInputMethodTip,
   removeInputMethodTip,
@@ -26,6 +30,8 @@ const CHANGE_SETTLE_MS = 400
 
 const LAYOUT_CATALOGUE_COMMAND =
   "Get-ChildItem 'HKLM:/SYSTEM/CurrentControlSet/Control/Keyboard Layouts' | ForEach-Object { $_.PSChildName + [char]9 + $_.GetValue('Layout Text') }"
+const LANGUAGE_CATALOGUE_COMMAND =
+  '[System.Globalization.CultureInfo]::GetCultures([System.Globalization.CultureTypes]::SpecificCultures) | ForEach-Object { $_.Name + [char]9 + $_.NativeName + [char]9 + $_.EnglishName }'
 const LANGUAGE_LIST_COMMAND =
   "$list = Get-WinUserLanguageList; foreach ($language in $list) { $lcid = 0; try { $lcid = [System.Globalization.CultureInfo]::GetCultureInfo($language.LanguageTag).LCID } catch { }; $language.LanguageTag + [char]9 + $language.Autonym + [char]9 + $language.EnglishName + [char]9 + ('{0:x4}' -f $lcid) + [char]9 + ($language.InputMethodTips -join ',') }"
 const DEFAULT_INPUT_METHOD_COMMAND = '(Get-WinDefaultInputMethodOverride).InputMethodTip'
@@ -37,6 +43,7 @@ let broadcast = null
 let currentState = { languages: [], defaultInputMethod: null }
 let lastPublishedState = null
 let cachedCatalogue = null
+let cachedLanguageCatalogue = null
 let refreshTimer = null
 let windowApi = null
 let windowApiUnavailable = false
@@ -76,6 +83,13 @@ async function readLayoutCatalogue() {
   if (cachedCatalogue) return cachedCatalogue
   const catalogue = parseLayoutCatalogue(await runPowerShell(LAYOUT_CATALOGUE_COMMAND))
   if (catalogue.length) cachedCatalogue = catalogue
+  return catalogue
+}
+
+async function readLanguageCatalogue() {
+  if (cachedLanguageCatalogue) return cachedLanguageCatalogue
+  const catalogue = parseLanguageCatalogue(await runPowerShell(LANGUAGE_CATALOGUE_COMMAND))
+  if (catalogue.length) cachedLanguageCatalogue = catalogue
   return catalogue
 }
 
@@ -141,6 +155,42 @@ function reorderLayouts(tag, order) {
   return changeInputMethodTips(tag, (tips) => reorderInputMethodTips(tips, Array.isArray(order) ? order : []))
 }
 
+function languageChangeSucceeded(state) {
+  return { ok: true, error: null, state }
+}
+
+function languageChangeFailed(error, state) {
+  console.error('[keyboardLayout]', error)
+  return { ok: false, error, state }
+}
+
+async function addLanguage(tag) {
+  const command = buildAddLanguageCommand(tag)
+  if (!command) return languageChangeFailed('That is not a language Windows can add.', currentState)
+  const { languages } = await refreshState()
+  if (languages.length === 0) return languageChangeFailed('Windows has not reported your languages yet.', currentState)
+  if (hasLanguageTag(languages, tag)) return languageChangeSucceeded(currentState)
+  await runPowerShell(command)
+  const state = await publishState()
+  const added = hasLanguageTag(state.languages, tag) || state.languages.length > languages.length
+  return added ? languageChangeSucceeded(state) : languageChangeFailed(`Windows did not add ${tag}.`, state)
+}
+
+async function removeLanguage(tag) {
+  const command = buildRemoveLanguageCommand(tag)
+  if (!command) return languageChangeFailed('That is not a language in your list.', currentState)
+  const { languages } = await refreshState()
+  if (languages.length === 0) return languageChangeFailed('Windows has not reported your languages yet.', currentState)
+  if (!hasLanguageTag(languages, tag)) return languageChangeSucceeded(currentState)
+  if (languages.length < 2) {
+    return languageChangeFailed('Windows needs at least one language, so the last one stays.', currentState)
+  }
+  await runPowerShell(command)
+  const state = await publishState()
+  const removed = !hasLanguageTag(state.languages, tag)
+  return removed ? languageChangeSucceeded(state) : languageChangeFailed(`Windows did not remove ${tag}.`, state)
+}
+
 async function setDefaultInputMethod(tip) {
   const parsed = tip ? parseInputMethodTip(tip) : null
   if (tip && !parsed) {
@@ -204,7 +254,10 @@ function watchForExternalChanges() {
 module.exports = {
   handlers: {
     'keyboard/layouts-available': () => readLayoutCatalogue(),
+    'keyboard/languages-available': () => readLanguageCatalogue(),
     'keyboard/languages-get': () => refreshState().then((state) => state.languages),
+    'keyboard/language-add': (_event, { tag } = {}) => addLanguage(tag),
+    'keyboard/language-remove': (_event, { tag } = {}) => removeLanguage(tag),
     'keyboard/layout-add': (_event, { tag, layoutId } = {}) => addLayout(tag, layoutId),
     'keyboard/layout-remove': (_event, { tag, tip } = {}) => removeLayout(tag, tip),
     'keyboard/layouts-reorder': (_event, { tag, tips } = {}) => reorderLayouts(tag, tips),

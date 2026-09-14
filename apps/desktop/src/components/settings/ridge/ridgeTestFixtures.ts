@@ -35,7 +35,7 @@ export function ridgeTrayIcon(id: string): TrayIcon {
 
 export function ridgePluginWidget(slot: RidgePluginSlot, pluginName: string): RidgePluginWidget {
   const pluginId = `com.example.${pluginName.toLowerCase()}`
-  return { id: `${pluginId}:default`, pluginId, pluginName, slot, order: 0 }
+  return { id: `${pluginId}:default`, pluginId, pluginName, pluginIcon: null, slot, order: 0 }
 }
 
 export function liveRidgePreviewData(): RidgePreviewData {

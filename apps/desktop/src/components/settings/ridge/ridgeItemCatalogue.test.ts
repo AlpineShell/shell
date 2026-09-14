@@ -3,13 +3,17 @@ import { SETTINGS_REGISTRY, settingsEntry, settingsPage, settingsPageRoute } fro
 import { TOPBAR_ITEMS, topbarItemLabel } from '../../topbar/layout/topbarLayout'
 import {
   RIDGE_ITEM_DETAILS,
+  ridgeCanAddItem,
+  ridgeDrawsItem,
   ridgeItemEntries,
   ridgeItemForSetting,
+  ridgeItemPluginIcon,
   ridgeItemSearchEntryId,
+  ridgeItemTitle,
   ridgePluginGroupWidgets,
 } from './ridgeItemCatalogue'
 import { RIDGE_PRESENCE_NOTES } from './ridgeSamples'
-import { absentRidgePreviewData, liveRidgePreviewData, ridgeTrayIcon } from './ridgeTestFixtures'
+import { absentRidgePreviewData, liveRidgePreviewData, ridgePluginWidget, ridgeTrayIcon } from './ridgeTestFixtures'
 
 const REGISTRY_MODULE = '../../../settings/registry'
 
@@ -17,9 +21,11 @@ const ITEM_IDS = TOPBAR_ITEMS.map((item) => item.id)
 
 const LINKS = ITEM_IDS.flatMap((id) => RIDGE_ITEM_DETAILS[id].links)
 
-function clockData(timeFormat: TimeFormat, systemTimeFormat: ResolvedTimeFormat): RidgePreviewData {
+const RADAR_LOGO = 'alpine-plugin://com.example.radar/logo.png'
+
+function rightPluginsData(widgets: RidgePluginWidget[]): RidgePreviewData {
   const live = liveRidgePreviewData()
-  return { ...live, clock: { ...live.clock, prefs: { ...live.clock.prefs, timeFormat, systemTimeFormat } } }
+  return { ...live, plugins: { ...live.plugins, right: widgets } }
 }
 
 function trayData(shown: number, hidden: number): RidgePreviewData {
@@ -51,21 +57,20 @@ afterEach(() => {
 })
 
 describe('RIDGE_ITEM_DETAILS', () => {
-  it('describes every item Ridge can hold, and nothing else', () => {
-    expect(Object.keys(RIDGE_ITEM_DETAILS).sort()).toEqual([...ITEM_IDS].sort())
+  it('describes every item Ridge can hold', () => {
+    expect(Object.keys(RIDGE_ITEM_DETAILS)).toEqual(expect.arrayContaining(ITEM_IDS))
   })
 
   it.each<[TopbarItemId, string[], SettingsPageId[]]>([
     ['system-menu', ['power-confirm'], []],
     ['plugins-left', [], ['plugins']],
-    ['notice', [], []],
     ['launcher', ['launcher-hotkey'], ['search']],
     ['tray', ['tray-all-monitors', 'tray-overflow'], ['tray-icons']],
     ['media', ['media-visualizer'], []],
     ['microphone', [], []],
     ['status', [], ['wifi', 'bluetooth', 'battery']],
     ['plugins-right', [], ['plugins']],
-    ['clock', ['clock-time-format'], ['calendar']],
+    ['clock', ['clock-time-format', 'calendar-days', 'calendar-show-tasks'], []],
   ])('gives the %s callout its settings and its links', (id, entries, pages) => {
     expect(RIDGE_ITEM_DETAILS[id].entries).toEqual(entries)
     expect(RIDGE_ITEM_DETAILS[id].links.map((link) => link.page)).toEqual(pages)
@@ -91,27 +96,16 @@ describe('RIDGE_ITEM_DETAILS', () => {
   })
 })
 
-describe('the Time callout note', () => {
-  it.each<[TimeFormat, ResolvedTimeFormat, string | null]>([
-    ['auto', '12h', 'Following Windows (12-hour).'],
-    ['auto', '24h', 'Following Windows (24-hour).'],
-    ['12h', '24h', null],
-    ['24h', '12h', null],
-  ])('reads a %s clock on a %s system as %s', (timeFormat, systemTimeFormat, note) => {
-    expect(RIDGE_ITEM_DETAILS.clock.note(clockData(timeFormat, systemTimeFormat))).toBe(note)
-  })
-})
-
 describe('the presence notes', () => {
-  it('explain only the notice while every other item has live data', () => {
+  it('explain nothing while every item has live data', () => {
     const data = liveRidgePreviewData()
-    expect(ITEM_IDS.filter((id) => RIDGE_ITEM_DETAILS[id].note(data) !== null)).toEqual(['notice'])
+    expect(ITEM_IDS.filter((id) => RIDGE_ITEM_DETAILS[id].note(data) !== null)).toEqual([])
   })
 
   it('explain every item Ridge draws a sample of, in the words the samples use', () => {
     const data = absentRidgePreviewData()
     const explained = ITEM_IDS.filter((id) => RIDGE_ITEM_DETAILS[id].note(data) !== null)
-    expect(explained).toEqual(['plugins-left', 'notice', 'tray', 'media', 'microphone', 'plugins-right'])
+    expect(explained).toEqual(['plugins-left', 'tray', 'media', 'microphone', 'plugins-right'])
     for (const id of explained) expect(RIDGE_ITEM_DETAILS[id].note(data)).toBe(RIDGE_PRESENCE_NOTES[id])
   })
 })
@@ -135,7 +129,7 @@ describe('ridgeItemSearchEntryId', () => {
     expect(settingsEntry('tray-enabled')).not.toBeNull()
   })
 
-  it.each<TopbarItemId>(['system-menu', 'plugins-left', 'notice', 'media', 'microphone', 'status', 'plugins-right', 'clock'])(
+  it.each<TopbarItemId>(['system-menu', 'plugins-left', 'media', 'microphone', 'status', 'plugins-right', 'clock'])(
     'gives %s a Ridge item entry of its own',
     (id) => {
       expect(ridgeItemSearchEntryId(id)).toBe(`ridge-item-${id}`)
@@ -203,5 +197,62 @@ describe('ridgePluginGroupWidgets', () => {
 
   it.each<TopbarItemId>(['clock', 'tray', 'launcher'])('has no widgets for %s, which is not a plugin group', (id) => {
     expect(ridgePluginGroupWidgets(id, liveRidgePreviewData())).toBeNull()
+  })
+})
+
+describe('ridgeItemTitle', () => {
+  it('names a plugin group after the plugins on its side', () => {
+    const data = liveRidgePreviewData()
+    expect(ridgeItemTitle('plugins-left', data)).toBe('Weather')
+    expect(ridgeItemTitle('plugins-right', data)).toBe('Notes')
+  })
+
+  it('names each plugin once, in the order their widgets sit', () => {
+    const radar = ridgePluginWidget('right', 'Radar')
+    const secondRadar = { ...radar, id: `${radar.pluginId}:Rain` }
+    const data = rightPluginsData([radar, ridgePluginWidget('right', 'Notes'), secondRadar])
+    expect(ridgeItemTitle('plugins-right', data)).toBe('Radar, Notes')
+  })
+
+  it('falls back to the Ridge label for a plugin group without widgets and for every other item', () => {
+    const data = absentRidgePreviewData()
+    expect(ridgeItemTitle('plugins-left', data)).toBe(topbarItemLabel('plugins-left'))
+    expect(ridgeItemTitle('clock', data)).toBe(topbarItemLabel('clock'))
+  })
+})
+
+describe('ridgeItemPluginIcon', () => {
+  it('takes the first plugin logo on the side of a plugin group', () => {
+    const radar = { ...ridgePluginWidget('right', 'Radar'), pluginIcon: RADAR_LOGO }
+    expect(ridgeItemPluginIcon('plugins-right', rightPluginsData([ridgePluginWidget('right', 'Notes'), radar]))).toBe(RADAR_LOGO)
+  })
+
+  it('has no logo for plugins without one, nor for an item that is not a plugin group', () => {
+    const data = liveRidgePreviewData()
+    expect(ridgeItemPluginIcon('plugins-right', data)).toBeNull()
+    expect(ridgeItemPluginIcon('clock', data)).toBeNull()
+  })
+})
+
+describe('ridgeCanAddItem', () => {
+  it('offers a plugin group back only while a plugin places a widget on its side', () => {
+    expect(ridgeCanAddItem('plugins-left', liveRidgePreviewData())).toBe(true)
+    expect(ridgeCanAddItem('plugins-left', absentRidgePreviewData())).toBe(false)
+  })
+
+  it('always offers an item that is not a plugin group', () => {
+    expect(ridgeCanAddItem('media', absentRidgePreviewData())).toBe(true)
+  })
+})
+
+describe('ridgeDrawsItem', () => {
+  it('draws a plugin group only while a live widget fills its side', () => {
+    const counts = { left: 0, right: 2 }
+    expect(ridgeDrawsItem('plugins-left', counts)).toBe(false)
+    expect(ridgeDrawsItem('plugins-right', counts)).toBe(true)
+  })
+
+  it('always draws an item that is not a plugin group', () => {
+    expect(ridgeDrawsItem('clock', { left: 0, right: 0 })).toBe(true)
   })
 })

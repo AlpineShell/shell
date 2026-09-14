@@ -9,12 +9,11 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react'
-import { TOPBAR_SLOTS, topbarItemLabel, visibleTopbarSlotItems } from '../../topbar/layout/topbarLayout'
+import { TOPBAR_SLOTS, visibleTopbarSlotItems } from '../../topbar/layout/topbarLayout'
 import { topbarSurface } from '../../topbar/topbarSurface'
-import { useElementWidth } from '../../../hooks/useElementWidth'
 import { useRidgeCalloutAnchor } from '../../../hooks/useRidgeCalloutAnchor'
 import { useRidgeDrag } from '../../../hooks/useRidgeDrag'
-import { ridgeLayoutMode } from './ridgeGeometry'
+import { useTopbarWidgets } from '../../../plugins/pluginRegistry'
 import {
   isRidgeSpaceKey,
   nextFocusedItem,
@@ -34,24 +33,23 @@ import {
   ridgeRefusedAnnouncement,
   ridgeSideLabel,
 } from './ridgeAnnouncements'
+import { ridgeCalloutPlacement } from './ridgeGeometry'
+import { ridgeDrawsItem, ridgeItemTitle } from './ridgeItemCatalogue'
 import { RIDGE_ITEM_PREVIEWS } from './ridgeItemPreviewMap'
 import { ridgeItemIsSample } from './ridgeSamples'
+import RidgeFit from './ridgeFit'
 import RidgeStrip from './ridgeStrip'
 import RidgeLane from './ridgeLane'
 import RidgeChip from './ridgeChip'
 import RidgeDragLayer from './ridgeDragLayer'
-import RidgeHideZone from './ridgeHideZone'
 import RidgeAnnouncer from './ridgeAnnouncer'
 import RidgeCalloutFrame from './ridgeCalloutFrame'
 
-const WIDTH_BEFORE_MEASURING = Number.POSITIVE_INFINITY
+const LAYOUT_MODE: RidgeLayoutMode = 'strip'
 const RIDGE_BAR_FONT = 'system-ui, sans-serif'
 const REPEATED_MESSAGE_MARK = ' '
 const RIDGE_CHIP_SELECTOR = '[data-ridge-chip]'
-const DOT_GRID_GROUND = {
-  backgroundImage: 'radial-gradient(var(--alpine-line-strong) 1px, transparent 1px)',
-  backgroundSize: '14px 14px',
-}
+const CALLOUT_GAP = 12
 
 function laneDropState(target: RidgeDropTarget | null, slot: TopbarSlot): RidgeLaneDropState {
   if (target?.kind === 'lane' && target.slot === slot) return 'accept'
@@ -107,9 +105,8 @@ export default function RidgeCanvas({
   scrollContainer,
   ref,
 }: RidgeCanvasProps) {
-  const rootRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  const hideZoneRef = useRef<HTMLDivElement>(null)
+  const stripAreaRef = useRef<HTMLDivElement>(null)
   const calloutRef = useRef<HTMLDivElement>(null)
   const leaderRef = useRef<SVGPathElement>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
@@ -117,7 +114,6 @@ export default function RidgeCanvas({
   const pendingFocus = useRef<TopbarItemId | null>(null)
   const spaceClick = useRef(false)
   const grabbing = useRef<TopbarItemId | null>(null)
-  const revealedCallout = useRef<TopbarItemId | null>(null)
 
   const [grabbedId, setGrabbedId] = useState<TopbarItemId | null>(null)
   const [arranged, setArranged] = useState<TopbarLayoutItem[] | null>(null)
@@ -125,15 +121,19 @@ export default function RidgeCanvas({
   const [announcement, setAnnouncement] = useState('')
   const [dragId, setDragId] = useState<TopbarItemId | null>(null)
   const [dropTarget, setDropTarget] = useState<RidgeDropTarget | null>(null)
+  const [placementFor, setPlacementFor] = useState<RidgeCalloutPlacementFor | null>(null)
 
   const calloutId = useId()
   const hintId = useId()
-  const mode = ridgeLayoutMode(useElementWidth(rootRef, WIDTH_BEFORE_MEASURING))
   const surface = topbarSurface(previewData.color)
+  const liveWidgetCounts = { left: useTopbarWidgets('left').length, right: useTopbarWidgets('right').length }
   const items = arranged ?? editor.items
-  const order = ridgeFocusOrder(items)
+  const drawnItems = items.filter((item) => ridgeDrawsItem(item.id, liveWidgetCounts))
+  const order = ridgeFocusOrder(drawnItems)
   const tabbableId = activeId !== null && order.includes(activeId) ? activeId : (order[0] ?? null)
   const calloutItem = openItem !== null && order.includes(openItem) ? openItem : null
+  const calloutPlacement: RidgeCalloutPlacement =
+    placementFor !== null && placementFor.id === calloutItem ? placementFor.placement : 'below'
 
   function announce(message: string) {
     setAnnouncement((previous) => freshAnnouncement(previous, message))
@@ -166,7 +166,7 @@ export default function RidgeCanvas({
     const current = arranged ?? editor.items
     const refused = refusingSlotForStep(current, id, step)
     if (refused) return announce(ridgeRefusedAnnouncement(id, refused))
-    const next = stepGrabbedPosition(current, id, step)
+    const next = stepGrabbedPosition(current, id, step, (itemId) => ridgeDrawsItem(itemId, liveWidgetCounts))
     if (next === current) return announce(ridgeEdgeAnnouncement(current, id))
     pendingFocus.current = id
     setArranged(next)
@@ -271,11 +271,7 @@ export default function RidgeCanvas({
   }
 
   function measureCanvas(): RidgeDragGeometry {
-    const hideZone = hideZoneRef.current
-    return {
-      lanes: TOPBAR_SLOTS.flatMap(measuredLane),
-      hideZone: hideZone ? elementBox(hideZone) : null,
-    }
+    return { lanes: TOPBAR_SLOTS.flatMap(measuredLane), hideZone: null }
   }
 
   function clearDrag() {
@@ -283,11 +279,20 @@ export default function RidgeCanvas({
     setDropTarget(null)
   }
 
+  function layoutIndex(slot: TopbarSlot, id: TopbarItemId, drawnIndex: number): number {
+    const visible = visibleTopbarSlotItems(
+      editor.items.filter((item) => item.id !== id),
+      slot
+    )
+    const anchor = visible.filter((item) => ridgeDrawsItem(item.id, liveWidgetCounts))[drawnIndex]
+    return anchor ? visible.indexOf(anchor) : visible.length
+  }
+
   function applyDrop(id: TopbarItemId, target: RidgeDropTarget) {
     if (target.kind === 'hide') return hideItem(id)
     if (target.kind === 'refused') return announce(ridgeRefusedAnnouncement(id, target.slot))
     pendingFocus.current = id
-    editor.move(id, { slot: target.slot, index: target.index })
+    editor.move(id, { slot: target.slot, index: layoutIndex(target.slot, id, target.index) })
   }
 
   function finishDrag(id: TopbarItemId, target: RidgeDropTarget | null) {
@@ -336,12 +341,20 @@ export default function RidgeCanvas({
   })
 
   useLayoutEffect(() => {
-    if (revealedCallout.current === calloutItem) return
-    revealedCallout.current = calloutItem
-    if (calloutItem !== null && grabbedId === null && dragId === null) {
-      calloutRef.current?.scrollIntoView({ block: 'nearest' })
-    }
-  }, [calloutItem, grabbedId, dragId])
+    const callout = calloutRef.current
+    const stripArea = stripAreaRef.current
+    const stage = stageRef.current
+    if (calloutItem === null || !callout || !stripArea || !stage) return
+    const strip = elementBox(stripArea)
+    const scroller = scrollContainer?.() ?? nearestScroller(stage)
+    const visibleBottom = scroller ? elementBox(scroller).bottom : window.innerHeight
+    const placement = ridgeCalloutPlacement(
+      callout.offsetHeight + CALLOUT_GAP,
+      visibleBottom - strip.bottom,
+      strip.top - elementBox(stage).top
+    )
+    if (placement !== calloutPlacement) setPlacementFor({ id: calloutItem, placement })
+  })
 
   function preview(id: TopbarItemId) {
     return createElement(RIDGE_ITEM_PREVIEWS[id], { data: previewData, darkText: surface.darkText })
@@ -353,7 +366,7 @@ export default function RidgeCanvas({
       <RidgeChip
         key={id}
         id={id}
-        label={topbarItemLabel(id)}
+        label={ridgeItemTitle(id, previewData)}
         darkText={surface.darkText}
         tabbable={id === tabbableId}
         expanded={expanded}
@@ -379,49 +392,54 @@ export default function RidgeCanvas({
         key={slot}
         slot={slot}
         label={ridgeSideLabel(slot)}
-        mode={mode}
+        mode={LAYOUT_MODE}
         surface={surface}
         dropState={laneDropState(dropTarget, slot)}
         moving={dragId !== null || grabbedId !== null}
       >
-        {visibleTopbarSlotItems(items, slot).map((item) => renderChip(item.id))}
+        {visibleTopbarSlotItems(drawnItems, slot).map((item) => renderChip(item.id))}
       </RidgeLane>
+    )
+  }
+
+  function renderCalloutFrame(id: TopbarItemId) {
+    return (
+      <RidgeCalloutFrame id={calloutId} mode={LAYOUT_MODE} ref={calloutRef} leaderRef={leaderRef}>
+        {renderCallout(id)}
+      </RidgeCalloutFrame>
     )
   }
 
   const lanes = { left: renderLane('left'), center: renderLane('center'), right: renderLane('right') }
 
   return (
-    <div ref={rootRef} className="w-full">
+    <div className="flex w-full flex-1 flex-col">
       <div
         ref={stageRef}
-        data-layout-mode={mode}
+        data-layout-mode={LAYOUT_MODE}
         onBlur={onStageBlur}
-        className={`relative flex flex-col gap-3 rounded-card border border-line-hairline bg-surface-0 p-4 ${dragId ? 'cursor-grabbing' : ''}`}
-        style={DOT_GRID_GROUND}
+        className={`relative grid flex-1 grid-cols-1 grid-rows-[1fr_auto_1fr] ${dragId ? 'cursor-grabbing' : ''}`}
       >
-        <div className="select-none" style={{ fontFamily: RIDGE_BAR_FONT }}>
-          {mode === 'strip' ? (
-            <RidgeStrip surface={surface} lanes={lanes} />
-          ) : (
-            <div role="group" aria-label="Ridge" className="flex flex-col gap-2">
-              {lanes.left}
-              {lanes.center}
-              {lanes.right}
-            </div>
+        <div className="relative">
+          {calloutItem && calloutPlacement === 'above' && (
+            <div className="absolute inset-x-0 bottom-0 flex flex-col pb-3">{renderCalloutFrame(calloutItem)}</div>
           )}
+        </div>
+        <div ref={stripAreaRef} className="select-none" style={{ fontFamily: RIDGE_BAR_FONT }}>
+          <RidgeFit>
+            <RidgeStrip surface={surface} lanes={lanes} />
+          </RidgeFit>
           <RidgeDragLayer surface={surface} ghost={dragId ? preview(dragId) : null} ghostRef={ghostRef} caretRef={caretRef} />
         </div>
-        <RidgeHideZone active={dragId !== null} targeted={dropTarget?.kind === 'hide'} ref={hideZoneRef} />
-        {calloutItem && (
-          <RidgeCalloutFrame id={calloutId} mode={mode} ref={calloutRef} leaderRef={leaderRef}>
-            {renderCallout(calloutItem)}
-          </RidgeCalloutFrame>
-        )}
-        <p id={hintId} className="text-xs text-ink-quiet">
-          {RIDGE_KEYBOARD_HINT}
-        </p>
-        <RidgeAnnouncer message={announcement} />
+        <div className="relative">
+          {calloutItem && calloutPlacement === 'below' && (
+            <div className="absolute inset-x-0 top-0 flex flex-col pt-3">{renderCalloutFrame(calloutItem)}</div>
+          )}
+          <p id={hintId} className="sr-only">
+            {RIDGE_KEYBOARD_HINT}
+          </p>
+          <RidgeAnnouncer message={announcement} />
+        </div>
       </div>
     </div>
   )

@@ -3,17 +3,15 @@ export {}
 declare global {
   type ThemeName = 'light' | 'dark'
 
-  type ThemePreference = 'topbar' | 'system' | 'light' | 'dark'
-
   interface ThemeState {
     name: ThemeName
     background: string
-    preference: ThemePreference
   }
 
   interface ValueRowProps {
     entry: SettingsValueEntry
     description: string
+    info?: string
     wideControlStacked?: boolean
   }
 
@@ -785,6 +783,18 @@ declare global {
     state: KeyboardLayoutState
   }
 
+  interface KeyboardLanguageOption {
+    tag: string
+    name: string
+    nativeName: string
+  }
+
+  interface KeyboardLanguageChangeResult {
+    ok: boolean
+    error: string | null
+    state: KeyboardLayoutState
+  }
+
   interface CalendarConnection {
     connected: boolean
     email: string | null
@@ -940,7 +950,7 @@ declare global {
 
   type SettingsPanelControl =
     | { kind: 'navigate'; path: string }
-    | { kind: 'action'; actionLabel: string; run(): Promise<unknown> }
+    | { kind: 'action'; actionLabel: string; actionIcon: SettingsIcon; run(): Promise<unknown> }
     | { kind: 'brightness' }
     | { kind: 'wallpaper' }
     | { kind: 'wifi' }
@@ -1065,6 +1075,59 @@ declare global {
 
   type RidgeLayoutMode = 'strip' | 'stacked'
 
+  type RidgeCalloutPlacement = 'below' | 'above'
+
+  interface RidgeCalloutPlacementFor {
+    id: TopbarItemId
+    placement: RidgeCalloutPlacement
+  }
+
+
+  interface RidgeFitProps {
+    children: import('react').ReactNode
+  }
+
+  interface RidgeFitMeasurement {
+    width: number
+    height: number
+    floor: number
+  }
+
+  interface RidgeRgb {
+    r: number
+    g: number
+    b: number
+  }
+
+  interface RidgeSwatchProps {
+    label: string
+    selected: boolean
+    onClick: () => void
+    background: string
+    light: boolean
+  }
+
+  interface RidgePresetMenuProps {
+    color: RidgeRgb | null
+    onPick: (color: RidgeRgb) => void
+  }
+
+  interface RidgePresetColor {
+    name: string
+    color: RidgeRgb
+  }
+
+  interface RidgeLivePluginWidgetsProps {
+    slot: RidgePluginSlot
+    data: RidgePreviewData
+    darkText: boolean
+  }
+
+  interface RidgePluginBoundaryProps {
+    id: string
+    children: import('react').ReactNode
+  }
+
   type RidgePluginSlot = Exclude<TopbarSlot, 'center'>
 
   type RidgeVisibilityStep =
@@ -1084,7 +1147,7 @@ declare global {
     isDefault: boolean
     commit(layout: TopbarLayoutItem[]): Promise<boolean>
     move(id: TopbarItemId, target: TopbarItemTarget): Promise<boolean>
-    step(id: TopbarItemId, direction: TopbarStepDirection): Promise<boolean>
+    step(id: TopbarItemId, direction: TopbarStepDirection, isDrawn?: (id: TopbarItemId) => boolean): Promise<boolean>
     show(id: TopbarItemId): Promise<boolean>
     hide(id: TopbarItemId): Promise<boolean>
     reset(): Promise<boolean>
@@ -1187,6 +1250,7 @@ declare global {
     id: string
     pluginId: string
     pluginName: string
+    pluginIcon: string | null
     slot: RidgePluginSlot
     order: number
   }
@@ -1311,10 +1375,8 @@ declare global {
     item: TopbarLayoutItem
     previewData: RidgePreviewData
     highlightedSetting: string | null
-    sides: TopbarSlot[]
     canStepEarlier: boolean
     canStepLater: boolean
-    onSide: (slot: TopbarSlot) => void
     onStep: (direction: TopbarStepDirection) => void
     onHide: () => void
     onNavigate: (path: string) => void
@@ -1324,9 +1386,9 @@ declare global {
   interface RidgeAddMenuProps {
     id?: string
     items: TopbarItemId[]
+    previewData: RidgePreviewData
     onSelect: (id: TopbarItemId) => void
     onDismiss: () => void
-    onNavigate: (path: string) => void
   }
 
   interface RidgeHiddenItemNoticeProps {
@@ -1337,6 +1399,7 @@ declare global {
 
   interface RidgePageProps {
     onNavigate: (path: string) => void
+    initialItem?: TopbarItemId
   }
 
   interface AppearancePageProps {
@@ -1451,6 +1514,9 @@ declare global {
       colorOverride: () => Promise<TopBarColor | null>
       setColorOverride: (color: { r: number; g: number; b: number } | null) => Promise<TopBarColor | null>
       colorPalette: () => Promise<TopBarColor[]>
+      adaptToApps: () => Promise<boolean>
+      setAdaptToApps: (value: boolean) => Promise<boolean>
+      onAdaptToAppsChanged: (callback: (value: boolean) => void) => () => void
       searchIcon: () => Promise<boolean>
       setSearchIcon: (value: boolean) => Promise<boolean>
       onSearchIconChanged: (callback: (visible: boolean) => void) => () => void
@@ -1470,7 +1536,6 @@ declare global {
       theme: {
         initial: ThemeState
         get: () => Promise<ThemeState>
-        setPreference: (value: ThemePreference) => Promise<ThemeState>
         onChanged: (callback: (theme: ThemeState) => void) => () => void
       }
       windows: {
@@ -1640,6 +1705,9 @@ declare global {
       keyboard: {
         availableLayouts: () => Promise<KeyboardLayoutOption[]>
         languages: () => Promise<KeyboardLanguage[]>
+        availableLanguages: () => Promise<KeyboardLanguageOption[]>
+        addLanguage: (tag: string) => Promise<KeyboardLanguageChangeResult>
+        removeLanguage: (tag: string) => Promise<KeyboardLanguageChangeResult>
         addLayout: (tag: string, layoutId: string) => Promise<KeyboardLayoutState>
         removeLayout: (tag: string, tip: string) => Promise<KeyboardLayoutState>
         reorderLayouts: (tag: string, tips: string[]) => Promise<KeyboardLayoutState>

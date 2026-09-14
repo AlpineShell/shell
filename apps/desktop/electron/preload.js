@@ -7,7 +7,7 @@ let bootSettingsIcon = null
 let bootSettingsPage = null
 let bootClockPrefs = null
 let bootTopbarLayout = null
-let bootTheme = { name: 'dark', background: '#202020', preference: 'topbar' }
+let bootTheme = { name: 'dark', background: '#202020' }
 try { bootWallpaper = ipcRenderer.sendSync('windows/wallpaper-init') } catch {}
 try { bootBluetooth = ipcRenderer.sendSync('system/bluetooth-init') } catch {}
 try { bootWifi = ipcRenderer.sendSync('network/wifi-init') } catch {}
@@ -87,6 +87,13 @@ contextBridge.exposeInMainWorld('topbar', {
   colorOverride: () => ipcRenderer.invoke('topbar/color-override-get'),
   setColorOverride: (color) => ipcRenderer.invoke('topbar/color-override-set', color),
   colorPalette: () => ipcRenderer.invoke('topbar/color-palette'),
+  adaptToApps: () => ipcRenderer.invoke('topbar/fg-color-adapt-get'),
+  setAdaptToApps: (value) => ipcRenderer.invoke('topbar/fg-color-adapt-set', value),
+  onAdaptToAppsChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('topbar/fg-color-adapt-changed', handler)
+    return () => ipcRenderer.removeListener('topbar/fg-color-adapt-changed', handler)
+  },
   searchIcon: () => ipcRenderer.invoke('topbar/search-icon-get'),
   setSearchIcon: (value) => ipcRenderer.invoke('topbar/search-icon-set', value),
   onSearchIconChanged: (callback) => {
@@ -297,7 +304,6 @@ contextBridge.exposeInMainWorld('shell', {
   theme: {
     initial: bootTheme,
     get: () => ipcRenderer.invoke('theme/get'),
-    setPreference: (value) => ipcRenderer.invoke('theme/set-preference', value),
     onChanged: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('theme/changed', handler)
@@ -595,6 +601,9 @@ contextBridge.exposeInMainWorld('shell', {
   keyboard: {
     availableLayouts: () => ipcRenderer.invoke('keyboard/layouts-available'),
     languages: () => ipcRenderer.invoke('keyboard/languages-get'),
+    availableLanguages: () => ipcRenderer.invoke('keyboard/languages-available'),
+    addLanguage: (tag) => ipcRenderer.invoke('keyboard/language-add', { tag }),
+    removeLanguage: (tag) => ipcRenderer.invoke('keyboard/language-remove', { tag }),
     addLayout: (tag, layoutId) => ipcRenderer.invoke('keyboard/layout-add', { tag, layoutId }),
     removeLayout: (tag, tip) => ipcRenderer.invoke('keyboard/layout-remove', { tag, tip }),
     reorderLayouts: (tag, tips) => ipcRenderer.invoke('keyboard/layouts-reorder', { tag, tips }),

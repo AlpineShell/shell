@@ -16,9 +16,26 @@ describe('pluginWidgetPlaceholders', () => {
   it('stands one placeholder in for each widget a loaded plugin puts on its side of the bar', () => {
     const records = [pluginWithWidgets([{ slot: 'left', export: 'Forecast', order: 2 }])]
     expect(pluginWidgetPlaceholders(records, 'left')).toEqual([
-      { id: 'com.example.weather:Forecast', pluginId: 'com.example.weather', pluginName: 'Weather', slot: 'left', order: 2 },
+      {
+        id: 'com.example.weather:Forecast',
+        pluginId: 'com.example.weather',
+        pluginName: 'Weather',
+        pluginIcon: null,
+        slot: 'left',
+        order: 2,
+      },
     ])
     expect(pluginWidgetPlaceholders(records, 'right')).toEqual([])
+  })
+
+  it('carries the plugin logo, preferring the marketplace one to the manifest icon', () => {
+    const withIcon = pluginWithWidgets([{ slot: 'right' }], { icon: 'icon.png' })
+    const withLogo = pluginWithWidgets([{ slot: 'right' }], {
+      icon: 'icon.png',
+      marketplace: { logo: 'logo.png' } as PluginRecord['marketplace'],
+    })
+    expect(pluginWidgetPlaceholders([withIcon], 'right')[0].pluginIcon).toBe('alpine-plugin://com.example.weather/icon.png')
+    expect(pluginWidgetPlaceholders([withLogo], 'right')[0].pluginIcon).toBe('alpine-plugin://com.example.weather/logo.png')
   })
 
   it.each<[string, Partial<PluginRecord>]>([
@@ -31,7 +48,14 @@ describe('pluginWidgetPlaceholders', () => {
 
   it('puts a widget without a slot on the right, first, under its default export', () => {
     expect(pluginWidgetPlaceholders([pluginWithWidgets([{}])], 'right')).toEqual([
-      { id: 'com.example.weather:default', pluginId: 'com.example.weather', pluginName: 'Weather', slot: 'right', order: 0 },
+      {
+        id: 'com.example.weather:default',
+        pluginId: 'com.example.weather',
+        pluginName: 'Weather',
+        pluginIcon: null,
+        slot: 'right',
+        order: 0,
+      },
     ])
   })
 

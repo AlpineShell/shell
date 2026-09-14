@@ -1,23 +1,16 @@
-import { useMemo, useState } from 'react'
-import { AppWindow, Boxes, ExternalLink, FolderOpen, Search, Trash2 } from 'lucide-react'
-import { Avatar, Button, ConfirmButton, EmptyState, ListRow, PageHeader, Spinner, TextField, Toggle } from '@alpine/ui'
+import { useState } from 'react'
+import { AppWindow, Boxes, FolderOpen, Search, SquareArrowOutUpRight, Trash2 } from 'lucide-react'
+import { Avatar, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, TextField } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
-import { useStartupApps } from '../../hooks/useStartupApps'
+import PageSpinner from './pageSpinner'
 
 type InstalledAction = 'open' | 'locate' | 'uninstall'
 
 export default function AppsInstalledPage() {
   const installed = useInstalledApps()
-  const startup = useStartupApps()
   const [query, setQuery] = useState('')
   const [componentsOpen, setComponentsOpen] = useState(false)
-
-  const startupById = useMemo(() => {
-    const map = new Map<string, StartupEntry>()
-    for (const e of startup) map.set(e.id, e)
-    return map
-  }, [startup])
 
   const q = query.trim().toLowerCase()
   const apps = q
@@ -27,11 +20,9 @@ export default function AppsInstalledPage() {
   const components = apps.filter((a) => a.isComponent)
   const showComponents = componentsOpen || q.length > 0
 
-  const startupEntryFor = (app: InstalledApp) => (app.startupId ? startupById.get(app.startupId) : undefined)
-
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title={settingsPage('apps-installed')?.label ?? ''} subtitle="The apps on your PC. Click one to manage it.">
+      <PageHeader title={settingsPage('apps-installed')?.label ?? ''}>
         <TextField
           label="Search installed apps"
           value={query}
@@ -42,44 +33,35 @@ export default function AppsInstalledPage() {
         />
       </PageHeader>
 
-      <div className="flex flex-col gap-1">
-        {installed.length === 0 && <EmptyState icon={<Spinner size={20} />} title="Looking for installed apps…" />}
-        {installed.length > 0 && apps.length === 0 && (
-          <EmptyState icon={<Search size={20} />} title="No apps match your search." />
-        )}
+      {installed.length === 0 && <PageSpinner label="Looking for installed apps" />}
+      {installed.length > 0 && apps.length === 0 && <EmptyState variant="plain" title="No apps match your search." />}
 
+      <div className="flex flex-col">
         {userApps.map((app) => (
-          <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
+          <InstalledRow key={app.id} app={app} />
         ))}
 
         {components.length > 0 && (
-          <div className="mt-1">
+          <div className="mt-3">
             <ListRow
-              icon={<Boxes size={18} className="text-ink-faint" />}
-              title={`Components & dependencies (${components.length})`}
-              detail="Shared runtime and support files other apps rely on — usually safe to leave alone."
+              variant="plain"
+              icon={<Boxes size={16} className="text-ink-faint" />}
+              title={`Components & dependencies · ${components.length}`}
+              muted
               onActivate={() => setComponentsOpen((v) => !v)}
               expanded={showComponents}
-            >
-              {showComponents && (
-                <div className="flex flex-col gap-1 px-2 pb-2">
-                  {components.map((app) => (
-                    <InstalledRow key={app.id} app={app} startupEntry={startupEntryFor(app)} />
-                  ))}
-                </div>
-              )}
-            </ListRow>
+            />
           </div>
         )}
+
+        {showComponents && components.map((app) => <InstalledRow key={app.id} app={app} />)}
       </div>
     </div>
   )
 }
 
-function InstalledRow({ app, startupEntry }: { app: InstalledApp; startupEntry?: StartupEntry }) {
-  const [expanded, setExpanded] = useState(false)
+function InstalledRow({ app }: { app: InstalledApp }) {
   const [pending, setPending] = useState<InstalledAction | null>(null)
-  const startOn = startupEntry ? (startupEntry.pending ? startupEntry.pending === 'enable' : startupEntry.enabled) : false
 
   async function act(kind: InstalledAction, run: () => Promise<unknown>) {
     if (pending) return
@@ -89,61 +71,47 @@ function InstalledRow({ app, startupEntry }: { app: InstalledApp; startupEntry?:
 
   return (
     <ListRow
+      variant="plain"
+      revealActions
       icon={<Avatar src={app.icon} alt={app.name} fallback={<AppWindow size={16} strokeWidth={1.75} />} />}
       title={app.name}
-      detail={app.publisher || (app.source === 'store' ? 'Microsoft Store app' : 'App')}
-      onActivate={() => setExpanded((v) => !v)}
-      expanded={expanded}
-    >
-      {expanded && (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-line-hairline bg-surface-0 px-3 py-3">
-          {startupEntry ? (
-            <label className="flex cursor-pointer items-center gap-2.5 text-xs text-ink-secondary select-none">
-              <Toggle label="Starts with your PC" checked={startOn} pending={!!startupEntry.pending} onChange={() => window.shell.apps.setStartup(startupEntry.id, !startOn)} />
-              Starts with your PC
-            </label>
-          ) : (
-            <span className="text-xs text-ink-faint">{app.source === 'store' ? 'Microsoft Store app' : 'Desktop app'}</span>
+      detail={app.publisher || undefined}
+      actions={
+        <>
+          {app.canOpen && (
+            <IconButton
+              label="Open"
+              onClick={() => act('open', () => window.shell.apps.openApp(app.id))}
+              disabled={!!pending}
+              busy={pending === 'open'}
+            >
+              <SquareArrowOutUpRight size={14} />
+            </IconButton>
           )}
-          <div className="ml-auto flex items-center gap-1.5">
-            {app.canOpen && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => act('open', () => window.shell.apps.openApp(app.id))}
-                disabled={!!pending}
-                busy={pending === 'open'}
-                icon={<ExternalLink size={14} />}
-              >
-                Open
-              </Button>
-            )}
-            {app.canOpenLocation && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))}
-                disabled={!!pending}
-                busy={pending === 'locate'}
-                icon={<FolderOpen size={14} />}
-              >
-                Location
-              </Button>
-            )}
-            {app.canUninstall && (
-              <ConfirmButton
-                variant="dangerOutline"
-                label="Remove"
-                confirmLabel={`Uninstall ${app.name}`}
-                onConfirm={() => act('uninstall', () => window.shell.apps.uninstall(app.id))}
-                disabled={!!pending}
-                busy={pending === 'uninstall'}
-                icon={<Trash2 size={14} />}
-              />
-            )}
-          </div>
-        </div>
-      )}
-    </ListRow>
+          {app.canOpenLocation && (
+            <IconButton
+              label="Open file location"
+              onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))}
+              disabled={!!pending}
+              busy={pending === 'locate'}
+            >
+              <FolderOpen size={14} />
+            </IconButton>
+          )}
+          {app.canUninstall && (
+            <ConfirmButton
+              label="Uninstall"
+              confirmLabel={`Uninstall ${app.name}`}
+              onConfirm={() => act('uninstall', () => window.shell.apps.uninstall(app.id))}
+              disabled={!!pending}
+              busy={pending === 'uninstall'}
+              icon={<Trash2 size={14} />}
+              iconOnly
+              confirmOnly
+            />
+          )}
+        </>
+      }
+    />
   )
 }

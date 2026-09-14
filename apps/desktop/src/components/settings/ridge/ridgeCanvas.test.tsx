@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { useState, type ReactElement } from 'react'
+import { createElement, useState, type ReactElement } from 'react'
 import { EMPTY_TOPBAR_LAYOUT, TOPBAR_ITEMS, TOPBAR_SLOTS } from '../../topbar/layout/topbarLayout'
+import { RIDGE_KEYBOARD_HINT } from './ridgeAnnouncements'
 import { liveRidgePreviewData } from './ridgeTestFixtures'
 
 let RidgeCanvas: typeof import('./ridgeCanvas').default
 let useRidgeEditor: typeof import('../../../hooks/useRidgeEditor').useRidgeEditor
+let pluginRegistry: typeof import('../../../plugins/pluginRegistry')
 let resizeTo: (width: number) => void
 
 const PREVIEW_DATA = liveRidgePreviewData()
@@ -14,16 +16,30 @@ const ONLY_THE_CLOCK: StoredTopbarLayout = {
   ...EMPTY_TOPBAR_LAYOUT,
   hidden: TOPBAR_ITEMS.map((item) => item.id).filter((id) => id !== 'clock'),
 }
+const NARROW_CANVAS = 500
+const WIDE_CANVAS = 2000
+const NATURAL_STRIP_WIDTH = 1000
 
 const box = (left: number, top: number, right: number, bottom: number): RidgeBox => ({ left, top, right, bottom })
 const chipAt = (id: TopbarItemId, left: number, right: number): RidgeChipBox => ({ id, ...box(left, 4, right, 36) })
+const domRect = ({ left, top, right, bottom }: RidgeBox): DOMRect => ({
+  left,
+  top,
+  right,
+  bottom,
+  x: left,
+  y: top,
+  width: right - left,
+  height: bottom - top,
+  toJSON: () => ({}),
+})
 
 const STRIP_GEOMETRY: RidgeDragGeometry = {
   lanes: [
     {
       slot: 'left',
       ...box(0, 0, 300, 40),
-      chips: [chipAt('system-menu', 4, 36), chipAt('plugins-left', 40, 72), chipAt('notice', 76, 200)],
+      chips: [chipAt('system-menu', 4, 36), chipAt('plugins-left', 40, 72)],
     },
     { slot: 'center', ...box(300, 0, 400, 40), chips: [] },
     {
@@ -39,7 +55,7 @@ const STRIP_GEOMETRY: RidgeDragGeometry = {
       ],
     },
   ],
-  hideZone: box(0, 60, 1000, 100),
+  hideZone: null,
 }
 
 function installBridges({ searchIcon = false, stored = EMPTY_TOPBAR_LAYOUT } = {}) {
@@ -59,6 +75,15 @@ function installBridges({ searchIcon = false, stored = EMPTY_TOPBAR_LAYOUT } = {
   }
   Object.assign(window, { topbar, shell: { tray } })
   return { topbar, tray }
+}
+
+function registerLiveWidget(slot: TopbarSlot, text: string) {
+  pluginRegistry.registerContribution({
+    type: 'topbar-widget',
+    id: `com.example.${text.toLowerCase()}:default`,
+    component: () => createElement('span', null, text),
+    slot,
+  })
 }
 
 function stubResizeObserver(): (width: number) => void {
@@ -140,14 +165,25 @@ function announced(): string {
   return (screen.getByRole('status').textContent ?? '').trim()
 }
 
-function hideZone(): HTMLElement {
-  const zone = document.querySelector<HTMLElement>('[data-ridge-hide-zone]')
-  if (!zone) throw new Error('no hide zone rendered')
-  return zone
-}
-
 function layoutMode(): string | null {
   return document.querySelector('[data-layout-mode]')?.getAttribute('data-layout-mode') ?? null
+}
+
+function strip(): HTMLElement {
+  return screen.getByRole('group', { name: 'Ridge' })
+}
+
+function stripScale(): string {
+  return strip().parentElement?.style.transform ?? ''
+}
+
+function isStripArea(element: Element): boolean {
+  const stage = element.parentElement
+  return stage !== null && stage.hasAttribute('data-layout-mode') && stage.children[1] === element
+}
+
+function precedesStrip(element: Element): boolean {
+  return (strip().compareDocumentPosition(element) & Node.DOCUMENT_POSITION_PRECEDING) !== 0
 }
 
 function writtenLayout(setLayout: Mock): StoredTopbarLayout {
@@ -186,12 +222,16 @@ beforeEach(async () => {
   resizeTo = stubResizeObserver()
   RidgeCanvas = (await import('./ridgeCanvas')).default
   useRidgeEditor = (await import('../../../hooks/useRidgeEditor')).useRidgeEditor
+  pluginRegistry = await import('../../../plugins/pluginRegistry')
+  registerLiveWidget('left', 'Weather')
+  registerLiveWidget('right', 'Notes')
 })
 
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  pluginRegistry.clearWidgets()
   const bridges = window as unknown as { topbar?: unknown; shell?: unknown }
   delete bridges.topbar
   delete bridges.shell
@@ -202,37 +242,39 @@ describe('RidgeCanvas from the keyboard', () => {
     const { topbar } = installBridges()
     await mount(<CanvasHarness />)
 
-    chip('Notices').focus()
-    pressSpace('Notices')
-    pressKey('Notices', 'ArrowRight')
-    pressKey('Notices', 'ArrowRight')
+    chip('Power menu').focus()
+    pressSpace('Power menu')
+    pressKey('Power menu', 'ArrowRight')
+    pressKey('Power menu', 'ArrowRight')
+    pressKey('Power menu', 'ArrowRight')
     expect(topbar.setLayout).not.toHaveBeenCalled()
-    pressSpace('Notices')
+    pressSpace('Power menu')
     await settle()
 
     expect(topbar.setLayout).toHaveBeenCalledTimes(1)
     expect(writtenLayout(topbar.setLayout)).toEqual({
       slots: {
-        left: ['system-menu', 'plugins-left'],
+        left: ['plugins-left'],
         center: ['launcher'],
-        right: ['notice', 'tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'],
+        right: ['system-menu', 'tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'],
       },
       hidden: [],
     })
-    expect(announced()).toBe('Notices dropped, position 1 of 7 on the right.')
+    expect(announced()).toBe('Power menu dropped, position 1 of 7 on the right.')
   })
 
   it('keeps focus on the item it carries into another side and says where it is', async () => {
     installBridges()
     await mount(<CanvasHarness />)
 
-    chip('Notices').focus()
-    pressSpace('Notices')
-    pressKey('Notices', 'ArrowRight')
+    chip('Power menu').focus()
+    pressSpace('Power menu')
+    pressKey('Power menu', 'ArrowRight')
+    pressKey('Power menu', 'ArrowRight')
 
-    expect(chipsIn('center')).toEqual(['Notices'])
-    expect(document.activeElement).toBe(chip('Notices'))
-    expect(announced()).toBe('Notices, position 1 of 1 in the center.')
+    expect(chipsIn('center')).toEqual(['Power menu'])
+    expect(document.activeElement).toBe(chip('Power menu'))
+    expect(announced()).toBe('Power menu, position 1 of 1 in the center.')
   })
 
   it('drops with Enter while an item is picked up', async () => {
@@ -253,16 +295,16 @@ describe('RidgeCanvas from the keyboard', () => {
     const { topbar } = installBridges()
     await mount(<CanvasHarness />)
 
-    chip('Notices').focus()
-    pressSpace('Notices')
-    pressKey('Notices', 'ArrowRight')
-    pressKey('Notices', 'Escape')
+    chip('Power menu').focus()
+    pressSpace('Power menu')
+    pressKey('Power menu', 'ArrowRight')
+    pressKey('Power menu', 'Escape')
     await settle()
 
     expect(topbar.setLayout).not.toHaveBeenCalled()
-    expect(chipsIn('left')).toEqual(['Power menu', 'Left plugins', 'Notices'])
-    expect(document.activeElement).toBe(chip('Notices'))
-    expect(announced()).toBe('Notices returned to position 3 of 3 on the left.')
+    expect(chipsIn('left')).toEqual(['Power menu', 'Weather'])
+    expect(document.activeElement).toBe(chip('Power menu'))
+    expect(announced()).toBe('Power menu returned to position 1 of 2 on the left.')
   })
 
   it('hides the Search button on Delete by turning off only its own flag', async () => {
@@ -282,28 +324,27 @@ describe('RidgeCanvas from the keyboard', () => {
     expect(announced()).toBe('Search button hidden from Ridge.')
   })
 
-  it('refuses to carry a plugin group off its own side, says why and writes nothing', async () => {
-    const { topbar } = installBridges({
-      stored: { slots: { left: ['system-menu', 'notice', 'plugins-left'], center: [], right: [] }, hidden: [] },
-    })
+  it('carries a plugin group onto another side like any other item', async () => {
+    const { topbar } = installBridges()
     await mount(<CanvasHarness />)
 
-    pressSpace('Left plugins')
-    pressKey('Left plugins', 'ArrowRight')
-    expect(announced()).toBe("Left plugins can't move to the center. Plugin groups stay on their own side.")
-    pressSpace('Left plugins')
+    pressSpace('Weather')
+    pressKey('Weather', 'ArrowRight')
+    expect(chipsIn('center')).toEqual(['Weather'])
+    pressSpace('Weather')
     await settle()
 
-    expect(topbar.setLayout).not.toHaveBeenCalled()
-    expect(chipsIn('left')).toEqual(['Power menu', 'Notices', 'Left plugins'])
+    expect(topbar.setLayout).toHaveBeenCalledTimes(1)
+    expect(writtenLayout(topbar.setLayout).slots.left).toEqual(['system-menu'])
+    expect(writtenLayout(topbar.setLayout).slots.center).toEqual(['launcher', 'plugins-left'])
   })
 
   it('moves focus along the bar with the arrow keys, as one Tab stop', async () => {
     installBridges()
     await mount(<CanvasHarness />)
 
-    chip('Notices').focus()
-    pressKey('Notices', 'ArrowRight')
+    chip('Weather').focus()
+    pressKey('Weather', 'ArrowRight')
 
     expect(document.activeElement).toBe(chip('System tray'))
     expect(screen.getAllByRole('button').filter((button) => button.tabIndex === 0)).toEqual([chip('System tray')])
@@ -347,6 +388,15 @@ describe('RidgeCanvas from the keyboard', () => {
 
     expect(chip('Clock').getAttribute('data-grabbed')).toBe('true')
   })
+
+  it('describes the keys to assistive technology only, in a hint every item points at', async () => {
+    installBridges()
+    await mount(<CanvasHarness />)
+
+    const hint = document.getElementById(chip('Clock').getAttribute('aria-describedby') ?? '')
+    expect(hint?.textContent).toBe(RIDGE_KEYBOARD_HINT)
+    expect(hint?.className.split(' ')).toContain('sr-only')
+  })
 })
 
 describe('RidgeCanvas under the pointer', () => {
@@ -362,48 +412,48 @@ describe('RidgeCanvas under the pointer', () => {
     expect(chipsIn('center')).toEqual(['Clock'])
   })
 
-  it('hides an item dropped on the hide zone', async () => {
+  it('drops nothing when an item is released outside every side', async () => {
     const { topbar } = installBridges()
     await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} />)
 
     dragChip('Media', { x: 456, y: 20 }, { x: 500, y: 80 })
     await settle()
 
-    expect(writtenLayout(topbar.setLayout).hidden).toEqual(['media'])
-    expect(screen.queryByRole('button', { name: 'Media' })).toBeNull()
-  })
-
-  it('shows the hide zone only while an item is held, and Escape drops nothing', async () => {
-    const { topbar } = installBridges()
-    await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} />)
-    expect(hideZone().hasAttribute('data-active')).toBe(false)
-
-    pressPointer('Media', { x: 456, y: 20 })
-    movePointer({ x: 500, y: 80 })
-    expect(hideZone().getAttribute('data-active')).toBe('true')
-    expect(hideZone().getAttribute('data-targeted')).toBe('true')
-
-    fireEvent.keyDown(document.body, { key: 'Escape' })
-    releasePointer({ x: 500, y: 80 })
-    await settle()
-
-    expect(hideZone().hasAttribute('data-active')).toBe(false)
     expect(topbar.setLayout).not.toHaveBeenCalled()
     expect(chipsIn('right')).toContain('Media')
   })
 
-  it('refuses a plugin group dropped on another side and says why', async () => {
+  it('marks the side under a held item, draws no hide zone, and Escape drops nothing', async () => {
     const { topbar } = installBridges()
     await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} />)
 
-    pressPointer('Right plugins', { x: 564, y: 20 })
+    pressPointer('Media', { x: 456, y: 20 })
     movePointer({ x: 350, y: 20 })
-    expect(laneOf('center').getAttribute('data-drop-state')).toBe('refuse')
+    expect(laneOf('center').getAttribute('data-drop-state')).toBe('accept')
+    expect(document.querySelector('[data-ridge-hide-zone]')).toBeNull()
+
+    fireEvent.keyDown(document.body, { key: 'Escape' })
     releasePointer({ x: 350, y: 20 })
     await settle()
 
+    expect(laneOf('center').getAttribute('data-drop-state')).toBe('idle')
     expect(topbar.setLayout).not.toHaveBeenCalled()
-    expect(announced()).toBe("Right plugins can't move to the center. Plugin groups stay on their own side.")
+    expect(chipsIn('right')).toContain('Media')
+  })
+
+  it('moves a plugin group dragged onto another side', async () => {
+    const { topbar } = installBridges()
+    await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} />)
+
+    pressPointer('Notes', { x: 564, y: 20 })
+    movePointer({ x: 350, y: 20 })
+    expect(laneOf('center').getAttribute('data-drop-state')).toBe('accept')
+    releasePointer({ x: 350, y: 20 })
+    await settle()
+
+    expect(topbar.setLayout).toHaveBeenCalledTimes(1)
+    expect(writtenLayout(topbar.setLayout).slots.center).toEqual(['launcher', 'plugins-right'])
+    expect(chipsIn('center')).toEqual(['Notes'])
   })
 
   it('never opens a callout from the click that ends a drag', async () => {
@@ -428,7 +478,7 @@ describe('RidgeCanvas under the pointer', () => {
 
   it.each<[string, RidgePoint, string]>([
     ['moved to another side', { x: 350, y: 20 }, 'Media'],
-    ['hidden on the hide zone', { x: 500, y: 80 }, 'Clock'],
+    ['released outside every side', { x: 500, y: 80 }, 'Clock'],
   ])('opens the next callout asked for after a drag whose own click reached no item: %s', async (_, droppedAt, next) => {
     installBridges()
     await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} />)
@@ -445,9 +495,9 @@ describe('RidgeCanvas under the pointer', () => {
     await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} />)
 
     pressPointer('Media', { x: 456, y: 20 })
-    movePointer({ x: 500, y: 80 })
+    movePointer({ x: 350, y: 20 })
     fireEvent.keyDown(document.body, { key: 'Escape' })
-    releasePointer({ x: 500, y: 80 })
+    releasePointer({ x: 350, y: 20 })
     await settle()
     act(() => chip('Clock').click())
 
@@ -476,7 +526,7 @@ describe('RidgeCanvas under the pointer', () => {
         scrolled = value
       },
     })
-    scroller.getBoundingClientRect = () => ({ ...box(0, 0, 1000, 100), x: 0, y: 0, width: 1000, height: 100, toJSON: () => ({}) })
+    scroller.getBoundingClientRect = () => domRect(box(0, 0, 1000, 100))
     await mount(<CanvasHarness measure={() => STRIP_GEOMETRY} scrollContainer={() => scroller} />)
 
     pressPointer('Clock', { x: 950, y: 20 })
@@ -534,56 +584,75 @@ describe('RidgeCanvas activation', () => {
 })
 
 describe('RidgeCanvas layout', () => {
-  it('draws one strip on a wide canvas and stacks the sides at the 525px minimum', async () => {
+  it('draws the three sides as one strip at every width, never stacking them', async () => {
     installBridges()
     await mount(<CanvasHarness />)
 
-    resizeTo(1015)
-    expect(layoutMode()).toBe('strip')
-    resizeTo(525)
-    expect(layoutMode()).toBe('stacked')
+    for (const width of [1015, 525, 0]) {
+      resizeTo(width)
+      expect(layoutMode()).toBe('strip')
+    }
     expect(screen.getAllByRole('list')).toHaveLength(3)
   })
 
-  it('keeps its mode when the page is hidden and reports a width of 0', async () => {
+  it('scales the strip down to fit a narrow canvas, and back to full size once it fits', async () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(NATURAL_STRIP_WIDTH)
     installBridges()
     await mount(<CanvasHarness />)
 
-    resizeTo(525)
-    resizeTo(0)
-    expect(layoutMode()).toBe('stacked')
-    resizeTo(1015)
-    resizeTo(0)
-    expect(layoutMode()).toBe('strip')
+    resizeTo(NARROW_CANVAS)
+    expect(stripScale()).toMatch(/^scale\(0\.\d+\)$/)
+
+    resizeTo(WIDE_CANVAS)
+    expect(stripScale()).toBe('')
   })
 
-  it('outlines an empty side of the strip, and every side while an item is picked up', async () => {
+  it('draws a plugin group only while a live widget fills it', async () => {
+    installBridges()
+    await mount(<CanvasHarness />)
+    expect(chipsIn('left')).toEqual(['Power menu', 'Weather'])
+
+    act(() => pluginRegistry.clearWidgets())
+
+    expect(chipsIn('left')).toEqual(['Power menu'])
+    expect(chipsIn('right')).not.toContain('Notes')
+  })
+
+  it('outlines the sides only while an item is picked up', async () => {
     installBridges()
     await mount(<CanvasHarness />)
 
-    expect(laneOf('center').className.split(' ')).toContain('empty:outline-dashed')
-    expect(laneOf('left').className.split(' ')).not.toContain('outline-dashed')
+    for (const slot of TOPBAR_SLOTS) expect(laneOf(slot).className).not.toContain('outline-dashed')
 
     pressSpace('Clock')
 
     for (const slot of TOPBAR_SLOTS) expect(laneOf(slot).className.split(' ')).toContain('outline-dashed')
   })
 
-  it('brings a callout into view as it opens, but not while an item is picked up', async () => {
-    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView')
+  it('opens the callout below Ridge while there is room for it there', async () => {
     installBridges()
     await mount(<CanvasHarness />)
 
     act(() => chip('Clock').click())
-    expect(scrollIntoView).toHaveBeenCalledTimes(1)
-    expect((scrollIntoView.mock.contexts[0] as Element).textContent).toContain('Settings for clock')
+
+    expect(precedesStrip(screen.getByText('Settings for clock'))).toBe(false)
+  })
+
+  it('opens the callout above Ridge when only the room above holds it', async () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(200)
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.hasAttribute('data-layout-mode')) return domRect(box(0, 0, 1000, 700))
+      if (isStripArea(this)) return domRect(box(0, 500, 1000, 540))
+      return domRect(box(0, 0, 0, 0))
+    })
+    const scroller = document.createElement('div')
+    scroller.getBoundingClientRect = () => domRect(box(0, 0, 1000, 600))
+    installBridges()
+    await mount(<CanvasHarness scrollContainer={() => scroller} />)
 
     act(() => chip('Clock').click())
-    pressSpace('Media')
-    await settle()
-    act(() => chip('Media').click())
 
-    expect(chip('Media').getAttribute('aria-expanded')).toBe('true')
-    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(chip('Clock').getAttribute('aria-expanded')).toBe('true')
+    expect(precedesStrip(screen.getByText('Settings for clock'))).toBe(true)
   })
 })

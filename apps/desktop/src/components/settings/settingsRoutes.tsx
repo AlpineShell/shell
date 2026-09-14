@@ -1,5 +1,4 @@
 import AboutPage from './aboutPage'
-import AppearancePage from './appearancePage'
 import AppsDefaultsPage from './appsDefaultsPage'
 import AppsHub from './appsHub'
 import AppsInstalledPage from './appsInstalledPage'
@@ -7,7 +6,6 @@ import AppsRunningPage from './appsRunningPage'
 import AppsStartupPage from './appsStartupPage'
 import BatteryPage from './batteryPage'
 import BluetoothSettingsPage from './bluetoothSettingsPage'
-import CalendarPage from './calendarPage'
 import DisplaysPage from './displaysPage'
 import InputPage from './inputPage'
 import PluginsPage from './pluginsPage'
@@ -23,12 +21,12 @@ import WifiSettingsPage from './wifiSettingsPage'
 export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'home': (navigate) => <AboutPage onNavigate={navigate} />,
   'home/revert': () => <SystemRevertPage />,
-  'appearance': (navigate) => <AppearancePage onNavigate={navigate} />,
+  'appearance': (navigate) => <RidgePage onNavigate={navigate} />,
   'wallpaper': () => <WallpaperPage />,
   'ridge': (navigate) => <RidgePage onNavigate={navigate} />,
   'ridge/tray-icons': () => <TrayIconsPage />,
   'search': () => <SearchPage />,
-  'calendar': () => <CalendarPage />,
+  'calendar': (navigate) => <RidgePage onNavigate={navigate} initialItem="clock" />,
   'input': () => <InputPage />,
   'tiling': () => <TilingPage />,
   'battery': () => <BatteryPage />,
@@ -45,14 +43,12 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
 }
 
 export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
-  'appearance': { registryRows: true, renderedByThePage: ['topbar-color', 'topbar-color-automatic'] },
   'wallpaper': { registryRows: false, renderedByThePage: ['wallpaper'] },
   'ridge': {
     registryRows: false,
     renderedByThePage: [
       'ridge-item-system-menu',
       'ridge-item-plugins-left',
-      'ridge-item-notice',
       'ridge-item-media',
       'ridge-item-microphone',
       'ridge-item-status',
@@ -66,13 +62,24 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
       'tray-overflow',
       'tray-all-monitors',
       'clock-time-format',
+      'calendar-days',
+      'calendar-show-tasks',
+      'topbar-color',
+      'topbar-color-automatic',
+      'topbar-adapt-to-apps',
     ],
   },
   'search': { registryRows: true, renderedByThePage: [] },
-  'calendar': { registryRows: true, renderedByThePage: [] },
   'input': {
     registryRows: true,
-    renderedByThePage: ['keyboard-layouts', 'keyboard-layout-remove', 'switch-input-method', 'default-input-method'],
+    renderedByThePage: [
+      'keyboard-layouts',
+      'keyboard-layout-remove',
+      'switch-input-method',
+      'language-add',
+      'language-remove',
+      'default-input-method',
+    ],
   },
   'tiling': { registryRows: true, renderedByThePage: [] },
   'battery': { registryRows: true, renderedByThePage: ['battery-saver'] },

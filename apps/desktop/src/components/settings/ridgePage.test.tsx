@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { createElement } from 'react'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
 import { EMPTY_TOPBAR_LAYOUT, TOPBAR_ITEMS } from '../topbar/layout/topbarLayout'
 import { liveRidgePreviewData } from './ridge/ridgeTestFixtures'
 
 let RidgePage: typeof import('./ridgePage').default
 let highlightSetting: typeof import('../../hooks/useHighlightedSetting').highlightSetting
+let pluginRegistry: typeof import('../../plugins/pluginRegistry')
 let resizeTo: (width: number) => void
 
 const LIVE = liveRidgePreviewData()
+const WALLPAPER_COLOR: TopBarColor = { r: 12, g: 40, b: 64, darkText: false }
+const LIVE_WIDGETS: [TopbarSlot, string][] = [
+  ['left', 'Weather'],
+  ['right', 'Notes'],
+]
 const HIGHLIGHT_DURATION = 2500
 const REFUSAL = new Error('The bar did not answer.')
 const REFUSED_MESSAGE = 'Ridge could not save that change.'
@@ -19,6 +26,9 @@ const MEDIA_HIDDEN: StoredTopbarLayout = { ...EMPTY_TOPBAR_LAYOUT, hidden: ['med
 
 const PREVIEW_READS: Record<string, unknown> = {
   'topbar.color': LIVE.color,
+  'topbar.colorOverride': null,
+  'topbar.colorPalette': [WALLPAPER_COLOR],
+  'topbar.adaptToApps': true,
   'topbar.mediaVisualizer': false,
   'shell.clock.prefs': LIVE.clock.prefs,
   'shell.system.battery': LIVE.status.battery,
@@ -36,6 +46,7 @@ const PREVIEW_READS: Record<string, unknown> = {
 
 const SUBSCRIPTIONS = [
   'topbar.onColorChanged',
+  'topbar.onAdaptToAppsChanged',
   'topbar.onMediaVisualizerChanged',
   'topbar.onLayoutChanged',
   'topbar.onSearchIconChanged',
@@ -56,6 +67,8 @@ const SUBSCRIPTIONS = [
 ]
 
 const QUIET_WRITES = [
+  'topbar.setColorOverride',
+  'topbar.setAdaptToApps',
   'shell.clock.setPrefs',
   'shell.tray.setDisplay',
   'shell.system.setPowerConfirm',
@@ -158,11 +171,27 @@ async function flushReads() {
   await act(async () => {})
 }
 
-async function openPage(): Promise<Mock> {
+function registerLiveWidgets() {
+  for (const [slot, text] of LIVE_WIDGETS) {
+    pluginRegistry.registerContribution({
+      type: 'topbar-widget',
+      id: `com.example.${text.toLowerCase()}:default`,
+      component: () => createElement('span', null, text),
+      slot,
+    })
+  }
+}
+
+async function openPage(initialItem?: TopbarItemId): Promise<Mock> {
   const onNavigate = vi.fn()
-  render(<RidgePage onNavigate={onNavigate} />)
+  render(<RidgePage onNavigate={onNavigate} initialItem={initialItem} />)
   await settle()
+  act(() => registerLiveWidgets())
   return onNavigate
+}
+
+function swatch(name: string): HTMLElement {
+  return screen.getByRole('button', { name })
 }
 
 function chip(name: string): HTMLElement {
@@ -229,11 +258,13 @@ beforeEach(async () => {
   resizeTo = stubResizeObserver()
   RidgePage = (await import('./ridgePage')).default
   highlightSetting = (await import('../../hooks/useHighlightedSetting')).highlightSetting
+  pluginRegistry = await import('../../plugins/pluginRegistry')
 })
 
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  pluginRegistry.clearWidgets()
   const globals = window as unknown as Record<string, unknown>
   for (const root of BRIDGE_ROOTS) delete globals[root]
 })
@@ -245,11 +276,48 @@ describe('the Ridge page header', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(settingsPage('ridge')?.label ?? '')
   })
 
-  it('opens Appearance for the color and theme', async () => {
-    installBridges()
-    const onNavigate = await openPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Color and theme' }))
-    expect(onNavigate).toHaveBeenCalledWith(settingsPageRoute('appearance'))
+})
+
+describe('the Color section on the Ridge page', () => {
+  it('follows the wallpaper until a wallpaper swatch is picked, and follows it again from Automatic', async () => {
+    const { spy } = installBridges()
+    await openPage()
+    expect(swatch('Automatic').getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.click(swatch('Wallpaper color 1'))
+
+    expect(spy('topbar.setColorOverride')).toHaveBeenLastCalledWith({ r: 12, g: 40, b: 64 })
+    expect(swatch('Wallpaper color 1').getAttribute('aria-pressed')).toBe('true')
+    expect(swatch('Automatic').getAttribute('aria-pressed')).toBe('false')
+
+    fireEvent.click(swatch('Automatic'))
+
+    expect(spy('topbar.setColorOverride')).toHaveBeenLastCalledWith(null)
+    expect(swatch('Automatic').getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('picks a preset color from its menu, and closes the menu', async () => {
+    const { spy } = installBridges()
+    await openPage()
+
+    fireEvent.click(swatch('More colors'))
+    fireEvent.click(within(screen.getByRole('group', { name: 'More colors' })).getByRole('button', { name: 'Slate' }))
+
+    expect(spy('topbar.setColorOverride')).toHaveBeenLastCalledWith({ r: 50, g: 50, b: 60 })
+    expect(screen.queryByRole('group', { name: 'More colors' })).toBeNull()
+    expect(swatch('Automatic').getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('turns Adapt to apps off from its switch', async () => {
+    const { spy } = installBridges()
+    await openPage()
+    const adaptToApps = screen.getByRole('switch', { name: 'Adapt to apps' })
+    expect(adaptToApps.getAttribute('aria-checked')).toBe('true')
+
+    fireEvent.click(adaptToApps)
+    await settle()
+
+    expect(spy('topbar.setAdaptToApps')).toHaveBeenCalledWith(false)
   })
 })
 
@@ -366,6 +434,7 @@ describe('resetting Ridge', () => {
     fireEvent.click(resetButton())
     await settle()
     expect(writes).toEqual([])
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
     await settle()
 
@@ -423,6 +492,15 @@ describe("bringing items back with '+'", () => {
     expect(calloutFor('Media')).toBeTruthy()
     expect(screen.queryByRole('group', { name: 'Add to Ridge' })).toBeNull()
     expect(announced()).toBe('Media added, position 2 of 6 on the right.')
+  })
+
+  it('offers a hidden plugin group back only while a plugin places a widget on its side', async () => {
+    installBridges({ stored: { ...EMPTY_TOPBAR_LAYOUT, hidden: ['plugins-left'] } })
+    await openPage()
+
+    fireEvent.click(addButton())
+
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Search button'])
   })
 
   it('tells assistive technology whether its menu is open, and which menu that is', async () => {
@@ -485,12 +563,12 @@ describe('the callout on the Ridge page', () => {
     expect(document.activeElement).toBe(chip('Clock'))
   })
 
-  it('hides its item and hands focus to the item after it', async () => {
+  it('removes its item with the trash button and hands focus to the item after it', async () => {
     const { spy } = installBridges()
     await openPage()
     const callout = await openCallout('Media')
 
-    fireEvent.click(within(callout).getByRole('button', { name: 'Hide' }))
+    fireEvent.click(within(callout).getByRole('button', { name: 'Remove from Ridge' }))
     await settle()
 
     expect(lastWrittenLayout(spy('topbar.setLayout')).hidden).toEqual(['media'])
@@ -523,38 +601,15 @@ describe('the callout on the Ridge page', () => {
     ])
   })
 
-  it('hands focus to the item before it when it hides the last item', async () => {
+  it('hands focus to the item before it when it removes the last item', async () => {
     installBridges()
     await openPage()
     const callout = await openCallout('Clock')
 
-    fireEvent.click(within(callout).getByRole('button', { name: 'Hide' }))
+    fireEvent.click(within(callout).getByRole('button', { name: 'Remove from Ridge' }))
     await settle()
 
     expect(document.activeElement).toBe(chip('Right plugins'))
-  })
-
-  it('moves its item to the near end of a side it joins from the right', async () => {
-    const { spy } = installBridges()
-    await openPage()
-    const callout = await openCallout('Clock')
-
-    fireEvent.click(within(callout).getByRole('radio', { name: 'Left' }))
-    await settle()
-
-    expect(lastWrittenLayout(spy('topbar.setLayout')).slots.left).toEqual(['system-menu', 'plugins-left', 'notice', 'clock'])
-    expect(chip('Clock').getAttribute('aria-expanded')).toBe('true')
-  })
-
-  it('moves its item to the near end of a side it joins from the left', async () => {
-    const { spy } = installBridges()
-    await openPage()
-    const callout = await openCallout('Notices')
-
-    fireEvent.click(within(callout).getByRole('radio', { name: 'Right' }))
-    await settle()
-
-    expect(lastWrittenLayout(spy('topbar.setLayout')).slots.right[0]).toBe('notice')
   })
 
   it('steps its item along the bar, and never past the end', async () => {
@@ -576,22 +631,37 @@ describe('the callout on the Ridge page', () => {
     ])
   })
 
-  it('offers a plugin group no side but its own', async () => {
-    installBridges()
+  it('steps a plugin group onto the next side, as it would any other item', async () => {
+    const { spy } = installBridges()
     await openPage()
     const callout = await openCallout('Left plugins')
 
-    expect(within(callout).queryByRole('radiogroup', { name: 'Side' })).toBeNull()
+    fireEvent.click(within(callout).getByRole('button', { name: 'Move later' }))
+    await settle()
+
+    expect(lastWrittenLayout(spy('topbar.setLayout')).slots.center).toEqual(['launcher', 'plugins-left'])
+    expect(laneItems('center')).toEqual(['Left plugins'])
   })
 
   it('opens the pages it links to', async () => {
     installBridges()
     const onNavigate = await openPage()
-    const callout = await openCallout('Clock')
+    const callout = await openCallout('System tray')
 
-    fireEvent.click(within(callout).getByRole('button', { name: settingsPage('calendar')?.label }))
+    fireEvent.click(within(callout).getByRole('button', { name: /Manage tray icons/ }))
 
-    expect(onNavigate).toHaveBeenCalledWith(settingsPageRoute('calendar'))
+    expect(onNavigate).toHaveBeenCalledWith(settingsPageRoute('tray-icons'))
+  })
+
+  it('opens on the Clock callout, with the hover calendar and the Google account, when asked for the clock', async () => {
+    installBridges()
+    await openPage('clock')
+
+    const callout = calloutFor('Clock')
+    expect(chip('Clock').getAttribute('aria-expanded')).toBe('true')
+    expect(within(callout).getByRole('radiogroup', { name: 'Days shown' })).toBeTruthy()
+    expect(within(callout).getByRole('switch', { name: 'Show Google Tasks' })).toBeTruthy()
+    expect(within(callout).getByRole('button', { name: 'Connect' })).toBeTruthy()
   })
 })
 

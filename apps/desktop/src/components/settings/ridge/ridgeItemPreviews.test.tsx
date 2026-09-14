@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { createElement } from 'react'
 import { TOPBAR_ITEMS } from '../../topbar/layout/topbarLayout'
+import { clearWidgets, registerContribution } from '../../../plugins/pluginRegistry'
 import { RIDGE_ITEM_PREVIEWS } from './ridgeItemPreviewMap'
 import { RIDGE_PRESENCE_NOTES, ridgeItemIsSample } from './ridgeSamples'
 import { absentRidgePreviewData, liveRidgePreviewData, ridgeTrayIcon } from './ridgeTestFixtures'
 
 const ITEM_IDS = TOPBAR_ITEMS.map((item) => item.id)
+const ELEMENT_IDS = TOPBAR_ITEMS.filter((item) => item.kind === 'element').map((item) => item.id)
+const PLUGIN_GROUP_IDS = TOPBAR_ITEMS.filter((item) => item.kind === 'plugin-group').map((item) => item.id)
 const INTERACTIVE_SELECTOR = "button, a, input, select, textarea, [tabindex], [role='button'], [contenteditable]"
 
 function renderPreview(id: TopbarItemId, data: RidgePreviewData, darkText = false): HTMLElement {
@@ -29,13 +32,34 @@ function imageSources(container: HTMLElement) {
   return Array.from(container.querySelectorAll('img')).map((image) => image.getAttribute('src'))
 }
 
+function registerWidget(slot: TopbarSlot, text: string, order = 0) {
+  registerContribution({
+    type: 'topbar-widget',
+    id: `com.example.${text.toLowerCase()}:default`,
+    component: () => createElement('span', null, text),
+    slot,
+    order,
+  })
+}
+
+function CrashingWidget(): never {
+  throw new Error('the widget crashed')
+}
+
+afterEach(() => {
+  clearWidgets()
+  vi.restoreAllMocks()
+})
+
 describe.each(ITEM_IDS)('the %s preview', (id) => {
   it.each([true, false])('renders nothing a pointer or key can act on when darkText is %s', (darkText) => {
     for (const data of [liveRidgePreviewData(), absentRidgePreviewData()]) {
       expect(renderPreview(id, data, darkText).querySelectorAll(INTERACTIVE_SELECTOR)).toHaveLength(0)
     }
   })
+})
 
+describe.each(ELEMENT_IDS)('the %s preview', (id) => {
   it('marks itself as a sample exactly when ridgeItemIsSample says it is one', () => {
     for (const data of [liveRidgePreviewData(), absentRidgePreviewData()]) {
       expect(isMarkedSample(renderPreview(id, data))).toBe(ridgeItemIsSample(id, data))
@@ -43,17 +67,24 @@ describe.each(ITEM_IDS)('the %s preview', (id) => {
   })
 })
 
+describe.each(PLUGIN_GROUP_IDS)('the %s preview', (id) => {
+  it('never stands in with a sample, drawing only the widgets that are live', () => {
+    for (const data of [liveRidgePreviewData(), absentRidgePreviewData()]) {
+      expect(isMarkedSample(renderPreview(id, data))).toBe(false)
+    }
+  })
+})
+
 describe('ridgeItemIsSample', () => {
-  it('stands in only for the notice while every other item has live data', () => {
+  it('stands in for nothing while every item has live data', () => {
     const data = liveRidgePreviewData()
-    expect(ITEM_IDS.filter((id) => ridgeItemIsSample(id, data))).toEqual(['notice'])
+    expect(ITEM_IDS.filter((id) => ridgeItemIsSample(id, data))).toEqual([])
   })
 
   it('stands in for every item the bar would leave out', () => {
     const data = absentRidgePreviewData()
     expect(ITEM_IDS.filter((id) => ridgeItemIsSample(id, data))).toEqual([
       'plugins-left',
-      'notice',
       'tray',
       'media',
       'microphone',
@@ -63,10 +94,10 @@ describe('ridgeItemIsSample', () => {
 })
 
 describe('RIDGE_PRESENCE_NOTES', () => {
-  it('says, in terms of Ridge, when each item that can be absent shows', () => {
+  it('says when each item that can be absent shows, without calling the bar the top bar', () => {
     const data = absentRidgePreviewData()
     for (const id of ITEM_IDS.filter((item) => ridgeItemIsSample(item, data))) {
-      expect(RIDGE_PRESENCE_NOTES[id]).toMatch(/Ridge/)
+      expect(RIDGE_PRESENCE_NOTES[id]).toBeTruthy()
       expect(RIDGE_PRESENCE_NOTES[id]).not.toMatch(/top ?bar/i)
     }
   })
@@ -200,16 +231,27 @@ describe('StatusPreview', () => {
 })
 
 describe('the plugin group previews', () => {
-  it('name each plugin widget on its own side', () => {
+  it('draw the live widgets registered on their own side, in their order', () => {
+    registerWidget('left', 'Weather')
+    registerWidget('right', 'Notes', 2)
+    registerWidget('right', 'Radar', 1)
     const data = liveRidgePreviewData()
     expect(renderPreview('plugins-left', data).textContent).toBe('Weather')
-    expect(renderPreview('plugins-right', data).textContent).toBe('Notes')
+    expect(renderPreview('plugins-right', data).textContent).toBe('RadarNotes')
   })
 
-  it('stand in with a lone puzzle glyph when no plugin places a widget there', () => {
-    const container = renderPreview('plugins-right', absentRidgePreviewData())
-    expect(iconNames(container)).toEqual(['lucide-puzzle'])
+  it('draw nothing while no widget is live on their side', () => {
+    registerWidget('left', 'Weather')
+    const container = renderPreview('plugins-right', liveRidgePreviewData())
     expect(container.textContent).toBe('')
+    expect(iconNames(container)).toEqual([])
+  })
+
+  it('keep a widget that crashes from taking the others down', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    registerContribution({ type: 'topbar-widget', id: 'com.example.broken:default', component: CrashingWidget, slot: 'left' })
+    registerWidget('left', 'Weather', 1)
+    expect(renderPreview('plugins-left', liveRidgePreviewData()).textContent).toBe('Weather')
   })
 })
 

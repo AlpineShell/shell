@@ -2,7 +2,7 @@ import { TOPBAR_SLOTS, topbarSlotAcceptsItem, visibleTopbarSlotItems } from '../
 import {
   TOPBAR_STEP_OFFSETS,
   moveTopbarItem,
-  stepTopbarItem,
+  stepTopbarItemPast,
   topbarItemPosition,
 } from '../../topbar/layout/topbarLayoutEdits'
 import { clamp } from './ridgeGeometry'
@@ -72,9 +72,10 @@ function laneEndIndex(items: TopbarLayoutItem[], id: TopbarItemId, slot: TopbarS
 export function stepGrabbedPosition(
   items: TopbarLayoutItem[],
   id: TopbarItemId,
-  step: RidgeKeyStep
+  step: RidgeKeyStep,
+  isDrawn?: (id: TopbarItemId) => boolean
 ): TopbarLayoutItem[] {
-  if (step === 'earlier' || step === 'later') return stepTopbarItem(items, id, step)
+  if (step === 'earlier' || step === 'later') return stepTopbarItemPast(items, id, step, isDrawn)
   const position = topbarItemPosition(items, id)
   if (!position) return items
   const index = step === 'first' ? 0 : laneEndIndex(items, id, position.slot)

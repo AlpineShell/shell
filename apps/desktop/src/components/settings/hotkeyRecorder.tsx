@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react'
+import { RotateCcw } from 'lucide-react'
+import { IconButton } from '@alpine/ui'
 
 const SPECIAL_KEY_MAP: Record<string, string> = {
   ' ': 'Space',
@@ -83,14 +85,11 @@ export default function HotkeyRecorder({ value, fallback, onChange, disabled }: 
   const display = recording ? (draft ? formatHotkey(draft) : 'Press keys…') : formatHotkey(value)
 
   return (
-    <div className="flex shrink-0 items-center gap-3">
+    <div className="flex shrink-0 items-center gap-2">
       {showReset && (
-        <button
-          onClick={() => onChange(fallback)}
-          className="focus-ring cursor-pointer text-xs text-ink-quiet underline decoration-line-strong underline-offset-4 transition-colors hover:text-ink-primary"
-        >
-          reset
-        </button>
+        <IconButton label="Reset" onClick={() => onChange(fallback)}>
+          <RotateCcw size={14} />
+        </IconButton>
       )}
       <button
         ref={recorderRef}

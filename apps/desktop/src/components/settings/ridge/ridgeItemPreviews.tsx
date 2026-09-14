@@ -8,7 +8,7 @@ import MicrophoneFace from '../../topbar/faces/microphoneFace'
 import StatusFace from '../../topbar/faces/statusFace'
 import ClockFace from '../../topbar/faces/clockFace'
 import { formatClock, formatClockDate, resolveTimeFormat } from '../../topbar/calendar/calendarLayout'
-import RidgePluginGroupFace from './ridgePluginGroupFace'
+import RidgeLivePluginWidgets from './ridgeLivePluginWidgets'
 import {
   RIDGE_SAMPLE_MEDIA_TITLE,
   RIDGE_SAMPLE_MICROPHONE_APPS,
@@ -36,8 +36,7 @@ export function SystemMenuPreview({ darkText }: RidgeItemPreviewProps) {
 }
 
 export function LeftPluginsPreview({ data, darkText }: RidgeItemPreviewProps) {
-  const face = <RidgePluginGroupFace widgets={data.plugins.left} darkText={darkText} />
-  return ridgeItemIsSample('plugins-left', data) ? asSample(face) : face
+  return <RidgeLivePluginWidgets slot="left" data={data} darkText={darkText} />
 }
 
 export function NoticePreview({ darkText }: RidgeItemPreviewProps) {
@@ -84,8 +83,7 @@ export function StatusPreview({ data, darkText }: RidgeItemPreviewProps) {
 }
 
 export function RightPluginsPreview({ data, darkText }: RidgeItemPreviewProps) {
-  const face = <RidgePluginGroupFace widgets={data.plugins.right} darkText={darkText} />
-  return ridgeItemIsSample('plugins-right', data) ? asSample(face) : face
+  return <RidgeLivePluginWidgets slot="right" data={data} darkText={darkText} />
 }
 
 export function ClockPreview({ data, darkText }: RidgeItemPreviewProps) {

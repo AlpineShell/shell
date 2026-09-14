@@ -1,25 +1,23 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { CirclePlus, Palette, RotateCcw } from 'lucide-react'
-import { Button, ConfirmButton, IconButton, PageHeader } from '@alpine/ui'
-import { settingsPage, settingsPageRoute } from '../../settings/registry'
+import { CirclePlus, RotateCcw } from 'lucide-react'
+import { ConfirmButton, IconButton, PageHeader } from '@alpine/ui'
+import { settingsPage } from '../../settings/registry'
 import { highlightedSetting, onHighlightedSetting } from '../../hooks/useHighlightedSetting'
 import { useRidgeEditor } from '../../hooks/useRidgeEditor'
 import { useRidgePreviewData } from '../../hooks/useRidgePreviewData'
-import {
-  EMPTY_TOPBAR_LAYOUT,
-  TOPBAR_SLOTS,
-  resolveTopbarLayout,
-  topbarSlotAcceptsItem,
-  visibleTopbarSlotItems,
-} from '../topbar/layout/topbarLayout'
-import { stepTopbarItem } from '../topbar/layout/topbarLayoutEdits'
+import { useRidgeLivePlugins } from '../../hooks/useRidgeLivePlugins'
+import { useOutsidePointer } from '../../hooks/useOutsidePointer'
+import { EMPTY_TOPBAR_LAYOUT, resolveTopbarLayout } from '../topbar/layout/topbarLayout'
+import { stepTopbarItemPast } from '../topbar/layout/topbarLayoutEdits'
+import { useTopbarWidgets } from '../../plugins/pluginRegistry'
 import { ridgeHiddenAnnouncement, ridgeShownAnnouncement } from './ridge/ridgeAnnouncements'
 import { ridgeHighlightRing } from './ridge/ridgeHighlight'
-import { ridgeItemForSetting } from './ridge/ridgeItemCatalogue'
+import { ridgeCanAddItem, ridgeDrawsItem, ridgeItemForSetting } from './ridge/ridgeItemCatalogue'
 import { nextFocusedItem, ridgeFocusOrder } from './ridge/ridgeKeyboard'
 import RidgeAddMenu from './ridge/ridgeAddMenu'
 import RidgeCallout from './ridge/ridgeCallout'
 import RidgeCanvas from './ridge/ridgeCanvas'
+import RidgeColorSection from './ridge/ridgeColorSection'
 import RidgeHiddenItemNotice from './ridge/ridgeHiddenItemNotice'
 
 const RESET_SETTING = 'ridge-layout-reset'
@@ -27,10 +25,6 @@ const RESET_SETTING = 'ridge-layout-reset'
 const PAGE_SUBTITLE = 'Drag an item to move it, or click it for its settings.'
 
 const ADD_LABEL = 'Add to Ridge'
-
-const APPEARANCE_LABEL = 'Color and theme'
-
-const CHANGES_CAPTION = 'Changes reach Ridge on every monitor as soon as you make them.'
 
 const RESET_LABEL = 'Reset Ridge'
 
@@ -54,17 +48,13 @@ function hiddenOpenItem(items: TopbarLayoutItem[], openItem: TopbarItemId | null
   return openItem !== null && !isShownOnRidge(items, openItem) ? openItem : null
 }
 
-function sidesFor(id: TopbarItemId): TopbarSlot[] {
-  return TOPBAR_SLOTS.filter((slot) => topbarSlotAcceptsItem(slot, id))
-}
-
-function canStep(items: TopbarLayoutItem[], id: TopbarItemId, direction: TopbarStepDirection): boolean {
-  return stepTopbarItem(items, id, direction) !== items
-}
-
-function sideTarget(items: TopbarLayoutItem[], item: TopbarLayoutItem, slot: TopbarSlot): TopbarItemTarget {
-  const arrivesFromTheLeft = TOPBAR_SLOTS.indexOf(item.slot) < TOPBAR_SLOTS.indexOf(slot)
-  return { slot, index: arrivesFromTheLeft ? 0 : visibleTopbarSlotItems(items, slot).length }
+function canStep(
+  items: TopbarLayoutItem[],
+  id: TopbarItemId,
+  direction: TopbarStepDirection,
+  isDrawn: (id: TopbarItemId) => boolean
+): boolean {
+  return stepTopbarItemPast(items, id, direction, isDrawn) !== items
 }
 
 function neighbourOnceHidden(items: TopbarLayoutItem[], id: TopbarItemId): TopbarItemId | null {
@@ -77,20 +67,23 @@ function buttonIn(anchor: HTMLElement | null): HTMLButtonElement | null {
   return anchor?.querySelector('button') ?? null
 }
 
-export default function RidgePage({ onNavigate }: RidgePageProps) {
+export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
   const previewData = useRidgePreviewData()
+  useRidgeLivePlugins()
   const editor = useRidgeEditor()
+  const liveWidgetCounts = { left: useTopbarWidgets('left').length, right: useTopbarWidgets('right').length }
+  const isDrawn = (id: TopbarItemId) => ridgeDrawsItem(id, liveWidgetCounts)
   const canvas = useRef<RidgeCanvasHandle>(null)
   const addAnchor = useRef<HTMLDivElement>(null)
   const resetAnchor = useRef<HTMLDivElement>(null)
   const addMenuId = useId()
-  const [openItem, setOpenItem] = useState(() => calloutForHighlight(highlightedSetting()))
+  const [openItem, setOpenItem] = useState(() => calloutForHighlight(highlightedSetting()) ?? initialItem ?? null)
   const [adding, setAdding] = useState(false)
   const [resetting, setResetting] = useState(false)
   const highlight = useSyncExternalStore(onHighlightedSetting, highlightedSetting)
   const resetUnavailable = editor.isDefault || resetting
-  const appearanceRoute = settingsPageRoute('appearance')
   const hiddenItem = hiddenOpenItem(editor.items, openItem)
+  const addableItems = hiddenItemIds(editor.items).filter((id) => ridgeCanAddItem(id, previewData))
 
   useEffect(
     () =>
@@ -104,6 +97,8 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
   useLayoutEffect(() => {
     if (highlight === RESET_SETTING && !resetUnavailable) buttonIn(resetAnchor.current)?.focus()
   }, [highlight, resetUnavailable])
+
+  useOutsidePointer(addAnchor, adding, closeAddMenu)
 
   function focusAddButton() {
     buttonIn(addAnchor.current)?.focus()
@@ -122,14 +117,9 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
     canvas.current?.focusItem(id)
   }
 
-  function moveToSide(item: TopbarLayoutItem, slot: TopbarSlot) {
-    abandonCanvasGrab()
-    editor.move(item.id, sideTarget(editor.items, item, slot))
-  }
-
   function stepFromCallout(id: TopbarItemId, direction: TopbarStepDirection) {
     abandonCanvasGrab()
-    editor.step(id, direction)
+    editor.step(id, direction, isDrawn)
   }
 
   function hideFromCallout(id: TopbarItemId) {
@@ -146,6 +136,10 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
   function closeHiddenItemNotice() {
     setOpenItem(null)
     focusAddButton()
+  }
+
+  function closeAddMenu() {
+    setAdding(false)
   }
 
   function dismissAddMenu() {
@@ -180,10 +174,8 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
         item={item}
         previewData={previewData}
         highlightedSetting={highlight}
-        sides={sidesFor(id)}
-        canStepEarlier={canStep(editor.items, id, 'earlier')}
-        canStepLater={canStep(editor.items, id, 'later')}
-        onSide={(slot) => moveToSide(item, slot)}
+        canStepEarlier={canStep(editor.items, id, 'earlier', isDrawn)}
+        canStepLater={canStep(editor.items, id, 'later', isDrawn)}
         onStep={(direction) => stepFromCallout(id, direction)}
         onHide={() => hideFromCallout(id)}
         onNavigate={onNavigate}
@@ -193,71 +185,62 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
   }
 
   return (
-    <div className="flex w-full flex-col gap-section">
-      <PageHeader title={settingsPage('ridge')?.label ?? ''} subtitle={PAGE_SUBTITLE}>
-        {appearanceRoute !== null && (
-          <Button variant="outline" size="sm" icon={<Palette size={14} />} onClick={() => onNavigate(appearanceRoute)}>
-            {APPEARANCE_LABEL}
-          </Button>
-        )}
-        <div ref={addAnchor} className="flex">
-          <IconButton
-            label={ADD_LABEL}
-            aria-expanded={adding}
-            aria-controls={adding ? addMenuId : undefined}
-            onClick={() => setAdding((open) => !open)}
+    <div className="relative flex w-full flex-1 flex-col gap-section">
+      <div>
+        <PageHeader title={settingsPage('ridge')?.label ?? ''} subtitle={PAGE_SUBTITLE}>
+          <div
+            ref={resetAnchor}
+            data-setting={RESET_SETTING}
+            className={`flex rounded-field transition-colors duration-300 ${ridgeHighlightRing(highlight === RESET_SETTING)}`}
           >
-            <CirclePlus size={16} />
-          </IconButton>
-        </div>
-      </PageHeader>
-      {adding && (
-        <div className="flex justify-end">
-          <RidgeAddMenu
-            id={addMenuId}
-            items={hiddenItemIds(editor.items)}
-            onSelect={addItem}
-            onDismiss={dismissAddMenu}
-            onNavigate={onNavigate}
-          />
-        </div>
-      )}
-      <RidgeCanvas
-        ref={canvas}
-        editor={editor}
-        previewData={previewData}
-        openItem={openItem}
-        onOpenItemChange={setOpenItem}
-        onNothingLeftToFocus={focusAddButton}
-        renderCallout={renderCallout}
-      />
+            <ConfirmButton
+              iconOnly
+              confirmOnly
+              label={RESET_LABEL}
+              confirmLabel={RESET_CONFIRM_LABEL}
+              icon={<RotateCcw size={16} />}
+              busy={resetting}
+              disabled={editor.isDefault}
+              onConfirm={resetRidge}
+            />
+          </div>
+          <div ref={addAnchor} className="relative flex">
+            <IconButton
+              label={ADD_LABEL}
+              aria-expanded={adding}
+              aria-controls={adding ? addMenuId : undefined}
+              onClick={() => setAdding((open) => !open)}
+            >
+              <CirclePlus size={16} />
+            </IconButton>
+            {adding && (
+              <div className="absolute top-full right-0 z-40 mt-2 w-88">
+                <RidgeAddMenu id={addMenuId} items={addableItems} previewData={previewData} onSelect={addItem} onDismiss={dismissAddMenu} />
+              </div>
+            )}
+          </div>
+        </PageHeader>
+      </div>
+      <div className="flex flex-col">
+        <RidgeCanvas
+          ref={canvas}
+          editor={editor}
+          previewData={previewData}
+          openItem={openItem}
+          onOpenItemChange={setOpenItem}
+          onNothingLeftToFocus={focusAddButton}
+          renderCallout={renderCallout}
+        />
+      </div>
+      <RidgeColorSection />
       {hiddenItem !== null && (
         <RidgeHiddenItemNotice item={hiddenItem} onAdd={() => addItem(hiddenItem)} onClose={closeHiddenItemNotice} />
       )}
-      <footer className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <p className="text-xs text-ink-quiet">{CHANGES_CAPTION}</p>
-          {editor.error && (
-            <p role="alert" className="text-xs text-danger">
-              {editor.error}
-            </p>
-          )}
-        </div>
-        <div
-          ref={resetAnchor}
-          data-setting={RESET_SETTING}
-          className={`flex shrink-0 rounded-full transition-colors duration-300 ${ridgeHighlightRing(highlight === RESET_SETTING)}`}
-        >
-          <ConfirmButton
-            label={RESET_LABEL}
-            confirmLabel={RESET_CONFIRM_LABEL}
-            icon={<RotateCcw size={14} />}
-            busy={resetting}
-            disabled={editor.isDefault}
-            onConfirm={resetRidge}
-          />
-        </div>
-      </footer>
+      {editor.error && (
+        <p role="alert" className="text-xs text-danger">
+          {editor.error}
+        </p>
+      )}
     </div>
   )
 }

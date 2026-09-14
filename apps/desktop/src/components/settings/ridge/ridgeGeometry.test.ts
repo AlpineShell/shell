@@ -7,6 +7,8 @@ import {
   leaderPath,
   resolveDropTarget,
   ridgeBoxWithin,
+  ridgeCalloutPlacement,
+  ridgeFitScale,
   ridgeLayoutMode,
 } from './ridgeGeometry'
 
@@ -30,7 +32,6 @@ const lane = (slot: TopbarSlot, frame: RidgeBox, chips: RidgeChipBox[] = []): Ri
 const LEFT_LANE = lane('left', box(0, 0, MINIMUM_CANVAS_WIDTH, 40), [
   chip('system-menu', 8, 40, 4, 36),
   chip('plugins-left', 44, 76, 4, 36),
-  chip('notice', 80, 200, 4, 36),
 ])
 const CENTER_LANE = lane('center', box(0, 48, MINIMUM_CANVAS_WIDTH, 88), [chip('launcher', 246, 278, 52, 84)])
 const RIGHT_LANE = lane('right', box(0, 96, MINIMUM_CANVAS_WIDTH, 136), [
@@ -116,9 +117,9 @@ describe('resolveDropTarget', () => {
     expect(resolveDropTarget(overlapping, { x: 70, y: 125 }, 'clock')).toEqual({ kind: 'hide' })
   })
 
-  it('refuses a plugin group over another side', () => {
-    expect(resolveDropTarget(STACKED, { x: 300, y: 60 }, 'plugins-right')).toEqual({ kind: 'refused', slot: 'center' })
-    expect(resolveDropTarget(STACKED, { x: 300, y: 20 }, 'plugins-right')).toEqual({ kind: 'refused', slot: 'left' })
+  it('accepts a plugin group over any side', () => {
+    expect(resolveDropTarget(STACKED, { x: 300, y: 60 }, 'plugins-right')).toEqual({ kind: 'lane', slot: 'center', index: 1 })
+    expect(resolveDropTarget(STACKED, { x: 300, y: 20 }, 'plugins-right')).toEqual({ kind: 'lane', slot: 'left', index: 2 })
   })
 
   it('accepts a plugin group over its own side', () => {
@@ -163,7 +164,7 @@ describe('caretBox', () => {
   })
 
   it('stays inside the lane', () => {
-    const flush = lane('left', box(0, 0, MINIMUM_CANVAS_WIDTH, 40), [chip('notice', 0, 120, 4, 36)])
+    const flush = lane('left', box(0, 0, MINIMUM_CANVAS_WIDTH, 40), [chip('system-menu', 0, 120, 4, 36)])
 
     expect(caretBox(flush, 0, 'clock')).toEqual(box(0, 4, 2, 36))
   })
@@ -241,6 +242,36 @@ describe('edgeScrollDelta', () => {
 
   it('ignores where the pointer is across the scroller', () => {
     expect(edgeScrollDelta({ x: -500, y: 120 }, SCROLLER)).toBe(-6)
+  })
+})
+
+describe('ridgeFitScale', () => {
+  it('leaves Ridge at full size while it fits', () => {
+    expect(ridgeFitScale(1015, 800)).toBe(1)
+    expect(ridgeFitScale(800, 800)).toBe(1)
+  })
+
+  it('shrinks Ridge by just enough to fit a narrower canvas', () => {
+    expect(ridgeFitScale(400, 800)).toBe(0.5)
+  })
+
+  it('leaves Ridge at full size before it has been measured', () => {
+    expect(ridgeFitScale(400, 0)).toBe(1)
+  })
+})
+
+describe('ridgeCalloutPlacement', () => {
+  it('opens the callout below Ridge while it fits there', () => {
+    expect(ridgeCalloutPlacement(200, 200, 500)).toBe('below')
+  })
+
+  it('opens the callout above Ridge when only the room above holds it', () => {
+    expect(ridgeCalloutPlacement(200, 120, 300)).toBe('above')
+  })
+
+  it('takes the roomier side when neither holds the callout', () => {
+    expect(ridgeCalloutPlacement(400, 120, 300)).toBe('above')
+    expect(ridgeCalloutPlacement(400, 300, 120)).toBe('below')
   })
 })
 

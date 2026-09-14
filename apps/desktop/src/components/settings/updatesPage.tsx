@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react'
-import { Button, EmptyState, IconButton, ListRow, PageHeader, Spinner } from '@alpine/ui'
+import { Button, EmptyState, IconButton, ListRow, PageHeader } from '@alpine/ui'
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
+import PageSpinner from './pageSpinner'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
@@ -67,16 +68,7 @@ export default function UpdatesPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader
-        title="Updates"
-        subtitle={headerDescription({
-          checking,
-          installing,
-          restartRequired,
-          hasUpdates: hasRows,
-          lastCheckedAt: windows.state.lastCheckedAt,
-        })}
-      >
+      <PageHeader title="Updates">
         <IconButton
           label="Check for updates"
           onClick={refresh}
@@ -100,7 +92,6 @@ export default function UpdatesPage() {
             <ListRow
               icon={<AlertTriangle size={20} className="text-warning" />}
               title="Restart required"
-              detail="Restart your device to finish installing Windows updates."
               actions={
                 <Button size="sm" onClick={restart} icon={<RotateCcw size={14} />}>
                   Restart now
@@ -136,7 +127,7 @@ export default function UpdatesPage() {
                   detail={[
                     update.kb,
                     update.tier === 'feature'
-                      ? 'Major version upgrade — installed separately'
+                      ? 'Installs separately'
                       : update.tier === 'enablement'
                         ? 'Version upgrade'
                         : update.sizeBytes > 0
@@ -158,42 +149,19 @@ export default function UpdatesPage() {
         </div>
       )}
 
-      {showEmptyState && (
+      {showEmptyState && checking && <PageSpinner label="Checking for updates" />}
+      {showEmptyState && !checking && (
         <EmptyState
-          icon={checking ? <Spinner size={22} /> : <CheckCircle2 size={26} className="text-success" />}
-          title={checking ? 'Checking for updates…' : "You're up to date"}
-          detail={
-            checking
-              ? undefined
-              : `Alpine Shell ${alpine.state.currentVersion}${
-                  windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''
-                }`
-          }
+          variant="plain"
+          icon={<CheckCircle2 size={14} className="text-success" />}
+          title="You're up to date"
+          detail={`Alpine Shell ${alpine.state.currentVersion}${
+            windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''
+          }`}
         />
       )}
     </div>
   )
-}
-
-function headerDescription({
-  checking,
-  installing,
-  restartRequired,
-  hasUpdates,
-  lastCheckedAt,
-}: {
-  checking: boolean
-  installing: boolean
-  restartRequired: boolean
-  hasUpdates: boolean
-  lastCheckedAt: number | null
-}): string {
-  if (checking) return 'Checking for updates…'
-  if (installing) return 'Installing Windows updates — this may take a while.'
-  if (restartRequired) return 'Restart to finish installing updates.'
-  if (hasUpdates) return 'Updates are available.'
-  if (lastCheckedAt) return `Last checked ${formatTime(lastCheckedAt)}`
-  return "Your system is up to date."
 }
 
 function alpineDetail(state: UpdateState): string {

@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { AlertTriangle, ArrowLeftRight, ChevronDown, ChevronUp, Keyboard, Languages, Plus, Trash2 } from 'lucide-react'
-import { Badge, Button, Card, EmptyState, IconButton, Row, SearchPicker, Select } from '@alpine/ui'
+import { useCallback, useRef, useState } from 'react'
+import { ArrowLeftRight, ChevronDown, ChevronUp, Keyboard, Plus, Trash2 } from 'lucide-react'
+import { Badge, Card, ConfirmButton, EmptyState, IconButton, Row, SearchPicker, Select } from '@alpine/ui'
 import { useKeyboardLayout } from '../../hooks/useKeyboardLayout'
+import { useOutsidePointer } from '../../hooks/useOutsidePointer'
 import { scoreField } from '../../lib/launcherSearch'
 import RegistryPage from './registryPage'
 
@@ -15,6 +16,11 @@ export default function InputPage() {
     languages,
     defaultInputMethod,
     availableLayouts,
+    availableLanguages,
+    languageError,
+    addingLanguage,
+    addLanguage,
+    removeLanguage,
     addLayout,
     removeLayout,
     reorderLayouts,
@@ -26,12 +32,17 @@ export default function InputPage() {
     {
       group: LAYOUTS_GROUP,
       order: 1,
-      replaces: ['keyboard-layouts', 'keyboard-layout-remove', 'switch-input-method'],
+      replaces: ['keyboard-layouts', 'keyboard-layout-remove', 'switch-input-method', 'language-add', 'language-remove'],
       content: (
         <LanguageList
           languages={languages}
+          availableLanguages={availableLanguages}
           availableLayouts={availableLayouts}
           defaultInputMethod={defaultInputMethod}
+          languageError={languageError}
+          addingLanguage={addingLanguage}
+          onAddLanguage={addLanguage}
+          onRemoveLanguage={removeLanguage}
           onAdd={addLayout}
           onRemove={removeLayout}
           onReorder={reorderLayouts}
@@ -53,51 +64,39 @@ export default function InputPage() {
     },
   ]
 
-  return (
-    <RegistryPage
-      page="input"
-      slots={slots}
-      lead={
-        <p className="text-sm text-ink-quiet">
-          Listing, adding, removing and reordering layouts, and choosing the default input method, are per-user
-          Windows settings. They change your account only, take effect at once, and never ask for administrator
-          rights.
-        </p>
-      }
-      groupSubtitles={{
-        [LAYOUTS_GROUP]: 'Your languages and the layouts attached to each, in the order Windows cycles them.',
-        [INPUT_METHOD_GROUP]: 'The layout Windows starts you in, whichever language comes first.',
-      }}
-    />
-  )
+  return <RegistryPage page="input" slots={slots} />
 }
 
-function removalWarning(
-  language: KeyboardLanguage,
-  layout: KeyboardInputMethod,
-  defaultInputMethod: string | null
-): string | null {
-  if (language.layouts.length === 1) {
-    return `${layout.name} is the only layout ${language.autonym} has. Removing it leaves that language with nothing to type in.`
-  }
-  if (layout.tip === defaultInputMethod) {
-    return `${layout.name} is your default input method. Removing it hands the default back to the first layout in the list.`
-  }
-  return null
+function languageOptionLabel(option: KeyboardLanguageOption): string {
+  return option.nativeName === option.name ? option.name : `${option.name} — ${option.nativeName}`
+}
+
+function languageCountLabel(count: number): string {
+  return count === 1 ? '1 language' : `${count} languages`
 }
 
 function LanguageList({
   languages,
+  availableLanguages,
   availableLayouts,
   defaultInputMethod,
+  languageError,
+  addingLanguage,
+  onAddLanguage,
+  onRemoveLanguage,
   onAdd,
   onRemove,
   onReorder,
   onActivate,
 }: {
   languages: KeyboardLanguage[]
+  availableLanguages: KeyboardLanguageOption[]
   availableLayouts: KeyboardLayoutOption[]
   defaultInputMethod: string | null
+  languageError: string | null
+  addingLanguage: boolean
+  onAddLanguage: (tag: string) => void
+  onRemoveLanguage: (tag: string) => void
   onAdd: (tag: string, layoutId: string) => void
   onRemove: (tag: string, tip: string) => void
   onReorder: (tag: string, tips: string[]) => void
@@ -105,32 +104,96 @@ function LanguageList({
 }) {
   if (languages.length === 0) {
     return (
-      <EmptyState
-        icon={<Languages size={20} />}
-        title="No language list yet."
-        detail="Windows has not reported your languages yet. Reopen Settings to ask again."
-      />
+      <EmptyState variant="plain" title="Windows has not reported your languages yet." />
     )
   }
 
   return (
     <div className="flex flex-col gap-3">
+      <AddLanguageBar
+        languages={languages}
+        availableLanguages={availableLanguages}
+        adding={addingLanguage}
+        onAdd={onAddLanguage}
+      />
+      {languageError && (
+        <p role="alert" className="text-xs text-danger">
+          {languageError}
+        </p>
+      )}
       {languages.map((language) => (
         <LanguageCard
           key={language.tag}
           language={language}
           availableLayouts={availableLayouts}
           defaultInputMethod={defaultInputMethod}
+          canRemoveLanguage={languages.length > 1}
+          onRemoveLanguage={onRemoveLanguage}
           onAdd={onAdd}
           onRemove={onRemove}
           onReorder={onReorder}
           onActivate={onActivate}
         />
       ))}
-      <p className="text-xs text-ink-quiet">
-        Switching a layout applies to the window in front, which is this one while Settings has focus. Windows can
-        refuse the request, so treat it as best effort. It does not change what any other window types in.
-      </p>
+    </div>
+  )
+}
+
+function AddLanguageBar({
+  languages,
+  availableLanguages,
+  adding,
+  onAdd,
+}: {
+  languages: KeyboardLanguage[]
+  availableLanguages: KeyboardLanguageOption[]
+  adding: boolean
+  onAdd: (tag: string) => void
+}) {
+  const [picking, setPicking] = useState(false)
+  const pickerAnchor = useRef<HTMLDivElement>(null)
+  const closePicker = useCallback(() => setPicking(false), [])
+
+  useOutsidePointer(pickerAnchor, picking, closePicker)
+
+  const inList = new Set(languages.map((language) => language.tag.toLowerCase()))
+  const options = availableLanguages
+    .filter((option) => !inList.has(option.tag.toLowerCase()))
+    .map((option) => ({ value: option.tag, label: languageOptionLabel(option), detail: option.tag }))
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-xs text-ink-quiet">
+        {adding ? 'Adding the language…' : languageCountLabel(languages.length)}
+      </span>
+      <div ref={pickerAnchor} className="relative flex">
+        <IconButton
+          label="Add language"
+          aria-expanded={picking}
+          onClick={() => setPicking((open) => !open)}
+          disabled={adding || options.length === 0}
+        >
+          <Plus size={15} />
+        </IconButton>
+        {picking && (
+          <div className="absolute top-full right-0 z-40 mt-2 w-88">
+            <Card className="p-3">
+              <SearchPicker
+                label="Add a language"
+                placeholder={`Search ${options.length} languages`}
+                options={options}
+                emptyMessage="No language matches that."
+                score={scoreField}
+                onSelect={(tag) => {
+                  setPicking(false)
+                  onAdd(tag)
+                }}
+                onDismiss={closePicker}
+              />
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -139,6 +202,8 @@ function LanguageCard({
   language,
   availableLayouts,
   defaultInputMethod,
+  canRemoveLanguage,
+  onRemoveLanguage,
   onAdd,
   onRemove,
   onReorder,
@@ -147,13 +212,18 @@ function LanguageCard({
   language: KeyboardLanguage
   availableLayouts: KeyboardLayoutOption[]
   defaultInputMethod: string | null
+  canRemoveLanguage: boolean
+  onRemoveLanguage: (tag: string) => void
   onAdd: (tag: string, layoutId: string) => void
   onRemove: (tag: string, tip: string) => void
   onReorder: (tag: string, tips: string[]) => void
   onActivate: (tip: string) => void
 }) {
   const [picking, setPicking] = useState(false)
-  const [confirming, setConfirming] = useState<string | null>(null)
+  const pickerAnchor = useRef<HTMLDivElement>(null)
+  const closePicker = useCallback(() => setPicking(false), [])
+
+  useOutsidePointer(pickerAnchor, picking, closePicker)
 
   const attached = new Set(language.layouts.map((layout) => layout.layoutId))
   const options = availableLayouts
@@ -170,52 +240,51 @@ function LanguageCard({
     onReorder(language.tag, next)
   }
 
-  function requestRemove(layout: KeyboardInputMethod) {
-    if (removalWarning(language, layout, defaultInputMethod)) setConfirming(layout.tip)
-    else onRemove(language.tag, layout.tip)
-  }
-
-  function confirmRemove(layout: KeyboardInputMethod) {
-    setConfirming(null)
-    onRemove(language.tag, layout.tip)
-  }
-
   return (
-    <Card className="overflow-hidden">
+    <Card>
       <div className="flex items-center justify-between gap-3 border-b border-line-hairline px-3 py-2.5">
-        <div className="min-w-0">
-          <div className="truncate text-dense text-ink-primary">{language.autonym}</div>
-          <div className="truncate text-xs text-ink-quiet">
-            {language.name} · {language.tag}
+        <div className="min-w-0 truncate text-dense text-ink-primary">{language.autonym}</div>
+        <div className="flex items-center gap-1.5">
+          <div ref={pickerAnchor} className="relative flex">
+            <IconButton
+              label="Add layout"
+              aria-expanded={picking}
+              onClick={() => setPicking((open) => !open)}
+              disabled={options.length === 0}
+            >
+              <Plus size={15} />
+            </IconButton>
+            {picking && (
+              <div className="absolute top-full right-0 z-40 mt-2 w-88">
+                <Card className="p-3">
+                  <SearchPicker
+                    label={`Add a keyboard layout to ${language.autonym}`}
+                    placeholder={`Search ${options.length} installed layouts`}
+                    options={options}
+                    emptyMessage="No installed layout matches that."
+                    score={scoreField}
+                    onSelect={(layoutId) => {
+                      setPicking(false)
+                      onAdd(language.tag, layoutId)
+                    }}
+                    onDismiss={closePicker}
+                  />
+                </Card>
+              </div>
+            )}
           </div>
+          {canRemoveLanguage && (
+            <ConfirmButton
+              label="Remove language"
+              confirmLabel="Remove language"
+              icon={<Trash2 size={15} />}
+              iconOnly
+              confirmOnly
+              onConfirm={() => onRemoveLanguage(language.tag)}
+            />
+          )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          icon={<Plus size={14} />}
-          onClick={() => setPicking(true)}
-          disabled={picking || options.length === 0}
-        >
-          Add layout
-        </Button>
       </div>
-
-      {picking && (
-        <div className="border-b border-line-hairline p-3">
-          <SearchPicker
-            label={`Add a keyboard layout to ${language.autonym}`}
-            placeholder={`Search ${options.length} installed layouts`}
-            options={options}
-            emptyMessage="No installed layout matches that."
-            score={scoreField}
-            onSelect={(layoutId) => {
-              setPicking(false)
-              onAdd(language.tag, layoutId)
-            }}
-            onDismiss={() => setPicking(false)}
-          />
-        </div>
-      )}
 
       {language.layouts.length === 0 ? (
         <p className="px-3 py-3 text-xs text-ink-quiet">
@@ -249,29 +318,15 @@ function LanguageCard({
                 >
                   <ArrowLeftRight size={15} />
                 </IconButton>
-                <IconButton
+                <ConfirmButton
                   label={`Remove ${layout.name}`}
-                  variant="danger"
-                  onClick={() => requestRemove(layout)}
-                >
-                  <Trash2 size={15} />
-                </IconButton>
+                  confirmLabel="Remove layout"
+                  icon={<Trash2 size={15} />}
+                  iconOnly
+                  confirmOnly
+                  onConfirm={() => onRemove(language.tag, layout.tip)}
+                />
               </div>
-
-              {confirming === layout.tip && (
-                <div className="flex items-center gap-2 border-t border-line-hairline bg-warning/10 px-3 py-2 text-xs text-warning">
-                  <AlertTriangle size={13} className="shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    {removalWarning(language, layout, defaultInputMethod)}
-                  </span>
-                  <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
-                    Keep it
-                  </Button>
-                  <Button size="sm" variant="danger" onClick={() => confirmRemove(layout)}>
-                    Remove anyway
-                  </Button>
-                </div>
-              )}
             </li>
           ))}
         </ul>
@@ -300,7 +355,7 @@ function DefaultInputMethodRow({
   return (
     <Row
       label="Default input method"
-      description="Windows types with this layout in new windows, whichever language is first in your list."
+      info="Windows types with this layout in new windows, whichever language is first in your list."
     >
       <Select
         label="Default input method"

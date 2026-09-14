@@ -1,21 +1,27 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react'
-import { Puzzle } from 'lucide-react'
-import { Button, Card, SearchPicker, type SearchPickerOption } from '@alpine/ui'
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { Card, SearchPicker, type SearchPickerOption } from '@alpine/ui'
 import { scoreField } from '../../../lib/launcherSearch'
-import { settingsPageRoute } from '../../../settings/registry'
-import { topbarItemLabel } from '../../topbar/layout/topbarLayout'
+import { settingsEntry } from '../../../settings/registry'
+import { ridgeItemPluginIcon, ridgeItemSearchEntryId, ridgeItemTitle } from './ridgeItemCatalogue'
 
 const ADD_MENU_LABEL = 'Add to Ridge'
 
 const NOTHING_HIDDEN = 'Everything is already on Ridge.'
 
-function hiddenItemOption(id: TopbarItemId): SearchPickerOption {
-  return { value: id, label: topbarItemLabel(id) }
+const OPTION_ICON_SIZE = 14
+
+function hiddenItemIcon(id: TopbarItemId, data: RidgePreviewData): ReactNode {
+  const pluginIcon = ridgeItemPluginIcon(id, data)
+  if (pluginIcon) return <img src={pluginIcon} alt="" className="size-3.5 rounded-sm object-contain" />
+  const Icon = settingsEntry(ridgeItemSearchEntryId(id))?.icon
+  return Icon ? <Icon size={OPTION_ICON_SIZE} /> : null
 }
 
-export default function RidgeAddMenu({ id, items, onSelect, onDismiss, onNavigate }: RidgeAddMenuProps) {
-  const pluginsRoute = settingsPageRoute('plugins')
+function hiddenItemOption(id: TopbarItemId, data: RidgePreviewData): SearchPickerOption {
+  return { value: id, label: ridgeItemTitle(id, data), icon: hiddenItemIcon(id, data) }
+}
 
+export default function RidgeAddMenu({ id, items, previewData, onSelect, onDismiss }: RidgeAddMenuProps) {
   function dismissOnEscape(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'Escape' || event.defaultPrevented) return
     event.preventDefault()
@@ -34,7 +40,7 @@ export default function RidgeAddMenu({ id, items, onSelect, onDismiss, onNavigat
           <SearchPicker
             label={ADD_MENU_LABEL}
             placeholder="Find a hidden item"
-            options={items.map(hiddenItemOption)}
+            options={items.map((item) => hiddenItemOption(item, previewData))}
             emptyMessage="No hidden item matches that."
             score={scoreField}
             onSelect={selectHiddenItem}
@@ -42,17 +48,6 @@ export default function RidgeAddMenu({ id, items, onSelect, onDismiss, onNavigat
           />
         ) : (
           <NothingHidden />
-        )}
-        {pluginsRoute !== null && (
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Puzzle size={14} />}
-            onClick={() => onNavigate(pluginsRoute)}
-            className="self-start"
-          >
-            Get plugins
-          </Button>
         )}
       </Card>
     </div>

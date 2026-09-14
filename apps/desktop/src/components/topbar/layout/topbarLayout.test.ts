@@ -19,7 +19,7 @@ const visibleIdsInSlot = (items: TopbarLayoutItem[], slot: TopbarSlot) =>
 describe('default model', () => {
   it('reproduces the shipped bar when nothing is stored', () => {
     const items = resolveTopbarLayout(null)
-    expect(visibleIdsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left', 'notice'])
+    expect(visibleIdsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left'])
     expect(visibleIdsInSlot(items, 'center')).toEqual(['launcher'])
     expect(visibleIdsInSlot(items, 'right')).toEqual(['tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'])
   })
@@ -61,8 +61,8 @@ describe('ordering', () => {
   })
 
   it('puts an unmentioned item that opens its slot in the catalogue at the front', () => {
-    const items = resolveTopbarLayout({ slots: { left: ['plugins-left', 'notice'], center: [], right: [] }, hidden: [] })
-    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left', 'notice'])
+    const items = resolveTopbarLayout({ slots: { left: ['plugins-left'], center: [], right: [] }, hidden: [] })
+    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left'])
   })
 
   it('anchors unmentioned items to the catalogue rather than the end of the slot', () => {
@@ -72,10 +72,10 @@ describe('ordering', () => {
 
   it('ignores unknown ids', () => {
     const items = resolveTopbarLayout({
-      slots: { left: ['weather', 'notice', 'system-menu'], center: [], right: [] },
+      slots: { left: ['weather', 'plugins-left', 'system-menu'], center: [], right: [] },
       hidden: [],
     })
-    expect(idsInSlot(items, 'left')).toEqual(['notice', 'system-menu', 'plugins-left'])
+    expect(idsInSlot(items, 'left')).toEqual(['plugins-left', 'system-menu'])
   })
 
   it('keeps the first placement when an id is stored twice', () => {
@@ -94,17 +94,18 @@ describe('ordering', () => {
   it('survives a malformed stored layout', () => {
     const malformed = { slots: { left: 'nope', center: null, right: [7, 'clock'] }, hidden: 'none' }
     const items = resolveTopbarLayout(malformed as unknown as StoredTopbarLayout)
-    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left', 'notice'])
+    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left'])
     expect(idsInSlot(items, 'right')).toEqual(['tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'])
     expect(items.every((item) => item.visible)).toBe(true)
   })
 })
 
 describe('plugin groups', () => {
-  it('pins a plugin group to the slot its contributions declare', () => {
-    const items = resolveTopbarLayout({ slots: { left: ['plugins-right'], center: [], right: [] }, hidden: [] })
-    expect(idsInSlot(items, 'left')).not.toContain('plugins-right')
-    expect(idsInSlot(items, 'right')).toContain('plugins-right')
+  it('places a plugin group on whichever side it is stored on', () => {
+    const items = resolveTopbarLayout({ slots: { left: ['plugins-right'], center: ['plugins-left'], right: [] }, hidden: [] })
+    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-right'])
+    expect(idsInSlot(items, 'center')).toEqual(['plugins-left', 'launcher'])
+    expect(idsInSlot(items, 'right')).not.toContain('plugins-right')
   })
 
   it('still reorders a plugin group inside its own slot', () => {
@@ -143,10 +144,10 @@ describe('serialisation', () => {
   })
 
   it('stores every slot and the hidden set', () => {
-    const stored = storeTopbarLayout(resolveTopbarLayout({ slots: { left: [], center: [], right: [] }, hidden: ['notice'] }))
-    expect(stored.slots.left).toEqual(['system-menu', 'plugins-left', 'notice'])
+    const stored = storeTopbarLayout(resolveTopbarLayout({ slots: { left: [], center: [], right: [] }, hidden: ['plugins-left'] }))
+    expect(stored.slots.left).toEqual(['system-menu', 'plugins-left'])
     expect(stored.slots.center).toEqual(['launcher'])
-    expect(stored.hidden).toEqual(['notice'])
+    expect(stored.hidden).toEqual(['plugins-left'])
   })
 })
 
@@ -167,11 +168,20 @@ describe('topbarSlotAcceptsItem', () => {
     ['center', 'clock', true],
     ['left', 'tray', true],
     ['left', 'plugins-left', true],
-    ['center', 'plugins-left', false],
-    ['right', 'plugins-left', false],
+    ['center', 'plugins-left', true],
+    ['right', 'plugins-left', true],
     ['right', 'plugins-right', true],
-    ['left', 'plugins-right', false],
+    ['center', 'plugins-right', true],
+    ['left', 'plugins-right', true],
   ])('lets the %s side take %s: %s', (slot, id, accepted) => {
     expect(topbarSlotAcceptsItem(slot, id)).toBe(accepted)
+  })
+
+  it('refuses an id that is not a bar item', () => {
+    expect(topbarSlotAcceptsItem('left', 'weather' as TopbarItemId)).toBe(false)
+  })
+
+  it('refuses a side that is not a slot', () => {
+    expect(topbarSlotAcceptsItem('top' as TopbarSlot, 'clock')).toBe(false)
   })
 })

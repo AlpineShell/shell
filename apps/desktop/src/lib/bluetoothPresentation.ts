@@ -84,13 +84,15 @@ export function deviceActionLabel(device: BluetoothDevice): string {
   return `${device.name}, ${deviceStatusLabel(device)}`
 }
 
+export const CHECKING_BLUETOOTH = 'Checking Bluetooth…'
+
 export function radioEmptyStateTitle(state: BluetoothState): string | null {
   const { state: radioState, pending } = state.radio
   if (isRadioOff(state)) return 'Bluetooth off'
   if (!pending && radioState === 'unavailable') return 'No Bluetooth adapter'
-  if (!state.devicesAvailable) return radioState === 'unknown' ? 'Checking Bluetooth…' : 'Bluetooth status unavailable'
+  if (!state.devicesAvailable) return radioState === 'unknown' ? CHECKING_BLUETOOTH : 'Bluetooth status unavailable'
   if (state.devices.length > 0) return null
-  return radioState === 'unknown' && !pending ? 'Checking Bluetooth…' : 'No paired devices'
+  return radioState === 'unknown' && !pending ? CHECKING_BLUETOOTH : 'No paired devices'
 }
 
 export function radioErrorLabel(error: BluetoothRadioError | null): string | null {

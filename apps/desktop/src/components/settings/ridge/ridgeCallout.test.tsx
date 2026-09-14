@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { settingsPageRoute } from '../../../settings/registry'
-import { TOPBAR_SLOTS, findTopbarItem } from '../../topbar/layout/topbarLayout'
+import { findTopbarItem } from '../../topbar/layout/topbarLayout'
 import { RIDGE_PRESENCE_NOTES } from './ridgeSamples'
-import { absentRidgePreviewData, liveRidgePreviewData } from './ridgeTestFixtures'
+import { absentRidgePreviewData, liveRidgePreviewData, ridgePluginWidget } from './ridgeTestFixtures'
+
+const NOTES_LOGO = 'alpine-plugin://com.example.notes/logo.png'
 
 let RidgeCallout: typeof import('./ridgeCallout').default
 let ridgeItemEntries: typeof import('./ridgeItemCatalogue').ridgeItemEntries
@@ -46,14 +48,13 @@ function installBridges() {
 
 function renderCallout(id: TopbarItemId, overrides: Partial<RidgeCalloutProps> = {}) {
   const bridges = installBridges()
-  const handlers = { onSide: vi.fn(), onStep: vi.fn(), onHide: vi.fn(), onNavigate: vi.fn(), onClose: vi.fn() }
+  const handlers = { onStep: vi.fn(), onHide: vi.fn(), onNavigate: vi.fn(), onClose: vi.fn() }
   const slot = findTopbarItem(id)?.slot ?? 'right'
   render(
     <RidgeCallout
       item={{ id, slot, order: 0, visible: true }}
       previewData={liveRidgePreviewData()}
       highlightedSetting={null}
-      sides={TOPBAR_SLOTS}
       canStepEarlier
       canStepLater
       {...handlers}
@@ -73,9 +74,9 @@ function settingRow(id: string): Element {
   return row
 }
 
-function clockFollowingWindows(): RidgePreviewData {
+function notesWithLogo(): RidgePreviewData {
   const live = liveRidgePreviewData()
-  return { ...live, clock: { ...live.clock, prefs: { ...live.clock.prefs, timeFormat: 'auto', systemTimeFormat: '12h' } } }
+  return { ...live, plugins: { ...live.plugins, right: [{ ...ridgePluginWidget('right', 'Notes'), pluginIcon: NOTES_LOGO }] } }
 }
 
 beforeEach(async () => {
@@ -145,11 +146,20 @@ describe('the callout settings', () => {
     expect(screen.getByRole('button', { name: 'Win' })).toBeTruthy()
   })
 
-  it('offers the time format, and says the clock follows Windows while it is automatic', async () => {
-    renderCallout('clock', { previewData: clockFollowingWindows() })
+  it('offers the time format as 12-hour or 24-hour, and nothing else', async () => {
+    renderCallout('clock')
     await settle()
-    expect(screen.getByRole('radiogroup', { name: 'Time format' })).toBeTruthy()
-    expect(screen.getByText('Following Windows (12-hour).')).toBeTruthy()
+    const timeFormats = within(screen.getByRole('radiogroup', { name: 'Time format' })).getAllByRole('radio')
+    expect(timeFormats.map((option) => option.textContent)).toEqual(['12-hour', '24-hour'])
+  })
+
+  it('carries the hover calendar settings and the Google account on the Clock callout', async () => {
+    renderCallout('clock')
+    await settle()
+    expect(screen.getByRole('radiogroup', { name: 'Days shown' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Show Google Tasks' })).toBeTruthy()
+    expect(screen.getByText('Google Calendar')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy()
   })
 
   it('draws one row for each of its settings the registry holds', async () => {
@@ -208,30 +218,21 @@ describe('the callout links and notes', () => {
     expect(onNavigate).toHaveBeenCalledWith(settingsPageRoute(page))
   })
 
-  it('explains an item Ridge is only drawing a sample of', async () => {
+  it('explains an item Ridge is only drawing a sample of behind an info icon', async () => {
     renderCallout('microphone', { previewData: absentRidgePreviewData() })
     await settle()
-    expect(screen.getByText(RIDGE_PRESENCE_NOTES.microphone ?? '')).toBeTruthy()
+    expect(screen.getByRole('img', { name: RIDGE_PRESENCE_NOTES.microphone })).toBeTruthy()
   })
 
   it('has nothing to explain once the item is live', async () => {
     renderCallout('microphone')
     await settle()
     expect(screen.queryByText(RIDGE_PRESENCE_NOTES.microphone ?? '')).toBeNull()
+    expect(screen.queryByRole('img')).toBeNull()
   })
 })
 
 describe('the callout placement', () => {
-  it('moves the item to another side, and ignores the side it is already on', async () => {
-    const { onSide } = renderCallout('clock')
-    await settle()
-    expect(screen.getByRole('radio', { name: 'Right' }).getAttribute('aria-checked')).toBe('true')
-    fireEvent.click(screen.getByRole('radio', { name: 'Left' }))
-    fireEvent.click(screen.getByRole('radio', { name: 'Right' }))
-    expect(onSide).toHaveBeenCalledOnce()
-    expect(onSide).toHaveBeenCalledWith('left')
-  })
-
   it('steps the item later, and refuses to step past the start of its side', async () => {
     const { onStep } = renderCallout('clock', { canStepEarlier: false })
     await settle()
@@ -250,20 +251,34 @@ describe('the callout placement', () => {
     expect(screen.getByRole('button', { name: 'Move earlier' }).hasAttribute('disabled')).toBe(false)
   })
 
-  it('hides the item', async () => {
+  it('removes the item from Ridge with its trash button', async () => {
     const { onHide } = renderCallout('media')
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from Ridge' }))
     expect(onHide).toHaveBeenCalledOnce()
   })
 
-  it('tells a plugin group it stays on its own side, lists its widgets and opens Plugins', async () => {
-    const { onNavigate } = renderCallout('plugins-right', { sides: ['right'] })
+  it('offers no side to pick, only the steps along the bar', async () => {
+    renderCallout('clock')
     await settle()
     expect(screen.queryByRole('radiogroup', { name: 'Side' })).toBeNull()
-    expect(screen.getByText('Always on the right. Plugin groups stay on their own side.')).toBeTruthy()
-    expect(screen.getByRole('list', { name: 'Plugin widgets' }).textContent).toBe('Notes')
+    expect(screen.queryByRole('radio', { name: 'Left' })).toBeNull()
+  })
+})
+
+describe('a plugin group callout', () => {
+  it('names itself after the plugins on its side and opens Plugins', async () => {
+    const { onNavigate } = renderCallout('plugins-right')
+    await settle()
+    expect(screen.getByRole('region', { name: 'Notes settings' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('Notes')
     fireEvent.click(screen.getByRole('button', { name: 'Plugins' }))
     expect(onNavigate).toHaveBeenCalledWith(settingsPageRoute('plugins'))
+  })
+
+  it('heads itself with the plugin logo', async () => {
+    renderCallout('plugins-right', { previewData: notesWithLogo() })
+    await settle()
+    expect(screen.getByRole('region', { name: 'Notes settings' }).querySelector('img')?.getAttribute('src')).toBe(NOTES_LOGO)
   })
 })

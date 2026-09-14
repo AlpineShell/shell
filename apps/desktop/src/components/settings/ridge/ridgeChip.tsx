@@ -19,18 +19,18 @@ function grabbedClass(darkText: boolean): string {
   return darkText ? '-translate-y-px bg-black/10' : '-translate-y-px bg-white/15'
 }
 
-function sampleClass(darkText: boolean): string {
+function itemOutlineClass(darkText: boolean): string {
   return darkText ? 'outline-1 outline-dashed outline-black/35' : 'outline-1 outline-dashed outline-white/40'
 }
 
-function chipClass({ darkText, expanded, grabbed, lifted, sample }: RidgeChipProps): string {
+function chipClass({ darkText, expanded, grabbed, lifted }: RidgeChipProps): string {
   return [
     CHIP_BASE_CLASS,
     hoverClass(darkText),
     focusRingClass(darkText),
+    itemOutlineClass(darkText),
     expanded || grabbed ? markedRingClass(darkText) : '',
     grabbed ? grabbedClass(darkText) : '',
-    sample ? sampleClass(darkText) : '',
     lifted ? 'opacity-30' : '',
   ].join(' ')
 }
