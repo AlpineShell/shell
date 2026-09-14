@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Bluetooth, Image as ImageIcon, RotateCcw, Wifi } from 'lucide-react'
+import { Bluetooth, Image as ImageIcon, PanelTop, Wifi } from 'lucide-react'
 import { NavRow } from '@alpine/ui'
 import { useWallpaper } from '../../hooks/useWallpaper'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
@@ -10,7 +10,7 @@ const HOME_ROWS: { page: SettingsPageId; icon: ReactNode; description: string }[
   { page: 'wallpaper', icon: <ImageIcon size={18} />, description: 'Change background image' },
   { page: 'wifi', icon: <Wifi size={18} />, description: 'Connect to networks' },
   { page: 'bluetooth', icon: <Bluetooth size={18} />, description: 'Pair and manage Bluetooth devices' },
-  { page: 'revert', icon: <RotateCcw size={18} />, description: 'Switch back to Windows Explorer temporarily or for good, or remove Alpine Shell' },
+  { page: 'ridge', icon: <PanelTop size={18} />, description: 'Arrange Ridge and choose its color' },
 ]
 
 function readCache(): SystemInfo | null {
