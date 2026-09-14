@@ -23,6 +23,14 @@ export default defineConfig({
           include: ['electron/**/*.test.js'],
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'scripts',
+          environment: 'node',
+          include: ['scripts/**/*.test.js'],
+        },
+      },
     ],
   },
 })

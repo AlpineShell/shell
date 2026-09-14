@@ -1044,6 +1044,9 @@ process.on('SIGTERM', gracefulShutdown)
 process.on('SIGBREAK', gracefulShutdown)
 process.on('SIGHUP', gracefulShutdown)
 
+const { listenForLauncherQuit } = require('./devLauncherControl')
+if (isDev) listenForLauncherQuit({ pipePath: process.env.ALPINE_DEV_CONTROL_PIPE, quit: () => app.quit() })
+
 process.on('uncaughtException', (err) => {
   console.error('[main] Uncaught exception:', err)
 })
