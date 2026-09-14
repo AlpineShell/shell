@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { processKey, bandLabel, bandTone } from './appsShared'
+import { formatMemory, processKey } from './appsShared'
 
 describe('processKey', () => {
   it('returns null for nullish or empty targets', () => {
@@ -28,18 +28,16 @@ describe('processKey', () => {
   })
 })
 
-describe('bandLabel', () => {
-  it('maps each band to its capitalized label', () => {
-    expect(bandLabel('light')).toBe('Light')
-    expect(bandLabel('moderate')).toBe('Moderate')
-    expect(bandLabel('heavy')).toBe('Heavy')
+describe('formatMemory', () => {
+  it('shows whole megabytes below a gigabyte', () => {
+    expect(formatMemory(412 * 1024 ** 2)).toBe('412 MB')
   })
-})
 
-describe('bandTone', () => {
-  it('highlights only the heavy band', () => {
-    expect(bandTone('heavy')).toBe('warning')
-    expect(bandTone('light')).toBe('neutral')
-    expect(bandTone('moderate')).toBe('neutral')
+  it('never shows zero megabytes for a running app', () => {
+    expect(formatMemory(1024)).toBe('1 MB')
+  })
+
+  it('shows gigabytes with one decimal from a gigabyte up', () => {
+    expect(formatMemory(1.25 * 1024 ** 3)).toBe('1.3 GB')
   })
 })

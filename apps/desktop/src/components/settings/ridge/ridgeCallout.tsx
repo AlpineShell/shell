@@ -1,8 +1,9 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react'
+import { useEffect, useRef, type ComponentType, type KeyboardEvent } from 'react'
 import { ArrowLeft, ArrowRight, ChevronRight, Trash2, X } from 'lucide-react'
 import { Card, IconButton, InfoTip } from '@alpine/ui'
 import { settingsEntry, settingsPageRoute } from '../../../settings/registry'
 import { entryRowContent, registryPageRendersEntry } from '../registryRowContent'
+import RidgeCalendarAccount from './ridgeCalendarAccount'
 import { ridgeHighlightRing } from './ridgeHighlight'
 import {
   RIDGE_ITEM_DETAILS,
@@ -11,6 +12,10 @@ import {
   ridgeItemSearchEntryId,
   ridgeItemTitle,
 } from './ridgeItemCatalogue'
+
+const RIDGE_ITEM_PANELS: Partial<Record<TopbarItemId, ComponentType>> = {
+  clock: RidgeCalendarAccount,
+}
 
 const WIDE_CONTROLS_STACKED = true
 
@@ -39,11 +44,17 @@ export default function RidgeCallout(props: RidgeCalloutProps) {
       <Card className="flex flex-col gap-4 p-4">
         <CalloutHeader {...props} />
         <CalloutSettings {...props} />
+        <CalloutPanel {...props} />
         <CalloutLinks {...props} />
         <CalloutActions {...props} />
       </Card>
     </div>
   )
+}
+
+function CalloutPanel({ item }: RidgeCalloutProps) {
+  const Panel = RIDGE_ITEM_PANELS[item.id]
+  return Panel ? <Panel /> : null
 }
 
 function CalloutHeader({ item, previewData, onClose }: RidgeCalloutProps) {

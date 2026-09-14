@@ -1,41 +1,18 @@
-import { useState } from 'react'
-import { ExternalLink, FileType } from 'lucide-react'
-import { Badge, Button, EmptyState, ListRow, PageHeader, Spinner } from '@alpine/ui'
+import { FileType } from 'lucide-react'
+import { Badge, EmptyState, ListRow, PageHeader, Spinner } from '@alpine/ui'
 import { useFileHandlers } from '../../hooks/useFileHandlers'
 
 export default function AppsDefaultsPage() {
-  const { handlers, loading, refresh } = useFileHandlers()
-  const [opening, setOpening] = useState(false)
-
-  async function openWindowsDefaults() {
-    setOpening(true)
-    try {
-      await window.fileHandlers.chooseDefault()
-      await refresh()
-    } finally {
-      setOpening(false)
-    }
-  }
+  const { handlers, loading } = useFileHandlers()
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader
-        title="Default apps"
-        subtitle="File types your plugins can open. Windows decides which app actually opens each one."
-      >
-        <Button variant="outline" size="sm" onClick={openWindowsDefaults} busy={opening} icon={<ExternalLink size={14} />}>
-          Open Windows settings
-        </Button>
-      </PageHeader>
+      <PageHeader title="Default apps" />
 
       <div className="flex flex-col gap-1">
-        {loading && <EmptyState icon={<Spinner size={20} />} title="Looking for file types…" />}
+        {loading && <EmptyState variant="plain" icon={<Spinner size={14} />} title="Looking for file types…" />}
         {!loading && handlers.length === 0 && (
-          <EmptyState
-            icon={<FileType size={20} />}
-            title="No plugin claims a file type yet."
-            detail="Install a plugin that opens files and the types it handles show up here."
-          />
+          <EmptyState variant="plain" title="No plugin opens a file type yet." />
         )}
 
         {handlers.map((handler) => (
@@ -49,6 +26,7 @@ export default function AppsDefaultsPage() {
 function FileTypeRow({ handler }: { handler: FileHandlerState }) {
   return (
     <ListRow
+      variant="plain"
       icon={<FileType size={16} className="text-ink-faint" />}
       title={handler.extension}
       badges={handler.isDefault && <Badge tone="success">Default</Badge>}
@@ -58,12 +36,6 @@ function FileTypeRow({ handler }: { handler: FileHandlerState }) {
 }
 
 function FileTypeDetail({ handler }: { handler: FileHandlerState }) {
-  if (handler.isDefault) return <>{handler.pluginName} opens these files.</>
-  if (!handler.holder) return <>{handler.pluginName} can open these files. Nothing on your PC opens them yet.</>
-  return (
-    <>
-      {handler.pluginName} can open these files. Windows opens them with{' '}
-      <span className="font-mono">{handler.holder}</span>.
-    </>
-  )
+  if (handler.isDefault || !handler.holder) return <>{handler.pluginName}</>
+  return <span className="font-mono">{handler.holder}</span>
 }

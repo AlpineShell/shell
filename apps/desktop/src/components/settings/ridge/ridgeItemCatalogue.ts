@@ -42,7 +42,7 @@ export const RIDGE_ITEM_DETAILS: Record<TopbarItemId, RidgeItemDetail> = {
   microphone: { entries: [], links: [], note: presenceNote('microphone') },
   status: { entries: [], links: [pageLink('wifi'), pageLink('bluetooth'), pageLink('battery')], note: noNote },
   'plugins-right': { entries: [], links: [pageLink('plugins')], note: presenceNote('plugins-right') },
-  clock: { entries: ['clock-time-format'], links: [pageLink('calendar')], note: noNote },
+  clock: { entries: ['clock-time-format', 'calendar-days', 'calendar-show-tasks'], links: [], note: noNote },
 }
 
 export function ridgeItemSearchEntryId(id: TopbarItemId): string {

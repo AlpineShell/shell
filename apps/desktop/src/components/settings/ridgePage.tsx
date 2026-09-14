@@ -61,7 +61,7 @@ function buttonIn(anchor: HTMLElement | null): HTMLButtonElement | null {
   return anchor?.querySelector('button') ?? null
 }
 
-export default function RidgePage({ onNavigate }: RidgePageProps) {
+export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
   const previewData = useRidgePreviewData()
   useRidgeLivePlugins()
   const editor = useRidgeEditor()
@@ -69,7 +69,7 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
   const addAnchor = useRef<HTMLDivElement>(null)
   const resetAnchor = useRef<HTMLDivElement>(null)
   const addMenuId = useId()
-  const [openItem, setOpenItem] = useState(() => calloutForHighlight(highlightedSetting()))
+  const [openItem, setOpenItem] = useState(() => calloutForHighlight(highlightedSetting()) ?? initialItem ?? null)
   const [adding, setAdding] = useState(false)
   const [resetting, setResetting] = useState(false)
   const highlight = useSyncExternalStore(onHighlightedSetting, highlightedSetting)

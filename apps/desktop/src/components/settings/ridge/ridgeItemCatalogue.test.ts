@@ -65,7 +65,7 @@ describe('RIDGE_ITEM_DETAILS', () => {
     ['microphone', [], []],
     ['status', [], ['wifi', 'bluetooth', 'battery']],
     ['plugins-right', [], ['plugins']],
-    ['clock', ['clock-time-format'], ['calendar']],
+    ['clock', ['clock-time-format', 'calendar-days', 'calendar-show-tasks'], []],
   ])('gives the %s callout its settings and its links', (id, entries, pages) => {
     expect(RIDGE_ITEM_DETAILS[id].entries).toEqual(entries)
     expect(RIDGE_ITEM_DETAILS[id].links.map((link) => link.page)).toEqual(pages)

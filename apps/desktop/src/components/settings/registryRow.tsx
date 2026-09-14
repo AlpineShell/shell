@@ -1,26 +1,31 @@
-import type { ReactNode } from 'react'
-import { Button, Row, Segmented, Select, Slider, Toggle } from '@alpine/ui'
+import { useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { Button, IconButton, Row, Segmented, Select, Slider, Toggle } from '@alpine/ui'
 import { useSettingsValue } from '../../hooks/useSettingsValue'
+import { useOutsidePointer } from '../../hooks/useOutsidePointer'
 import HotkeyRecorder from './hotkeyRecorder'
+
+const ACTION_ICON_SIZE = 16
 
 export function ActionRow({
   entry,
   description,
   info,
   actionLabel,
+  actionIcon: ActionIcon,
   run,
 }: {
   entry: SettingsEntry
   description: string
   info?: string
   actionLabel: string
+  actionIcon: SettingsIcon
   run: () => Promise<unknown>
 }) {
   return (
     <Row label={entry.label} info={info} description={description}>
-      <Button variant="outline" size="sm" onClick={() => { run().catch(() => {}) }}>
-        {actionLabel}
-      </Button>
+      <IconButton label={actionLabel} onClick={() => { run().catch(() => {}) }}>
+        <ActionIcon size={ACTION_ICON_SIZE} />
+      </IconButton>
     </Row>
   )
 }
@@ -34,31 +39,33 @@ function controlTakesItsOwnLine(entry: SettingsValueEntry): boolean {
 export function ValueRow({ entry, description, info, wideControlStacked = false }: ValueRowProps) {
   const { value, staged, restartRequired, error, write, confirm, cancel } = useSettingsValue(entry)
   const proposed = staged !== undefined
+  const stacked = wideControlStacked && controlTakesItsOwnLine(entry)
+  const holder = useRef<HTMLDivElement>(null)
+
+  useOutsidePointer(holder, proposed, cancel)
+
+  function cancelOnEscape(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Escape' || !proposed) return
+    event.preventDefault()
+    cancel()
+  }
 
   return (
-    <div className="flex flex-col gap-2">
-      <Row label={entry.label} info={info} description={description} stacked={wideControlStacked && controlTakesItsOwnLine(entry)}>
-        <EntryControl entry={entry} value={staged ?? value} pending={proposed} onChange={write} />
+    <div ref={holder} className="flex flex-col gap-2" onKeyDown={cancelOnEscape}>
+      <Row label={entry.label} info={info} description={description} stacked={stacked}>
+        <div className="flex items-center gap-2">
+          {proposed && (
+            <Button variant="primary" size="sm" aria-label={`Apply ${entry.label.toLowerCase()}`} onClick={confirm}>
+              Apply
+            </Button>
+          )}
+          <div className={stacked ? 'min-w-0 flex-1' : 'flex'}>
+            <EntryControl entry={entry} value={staged ?? value} pending={proposed} onChange={write} />
+          </div>
+        </div>
       </Row>
-      {proposed && <ConfirmBar label={entry.label} onConfirm={confirm} onCancel={cancel} />}
       {restartRequired && <Note>Restart Alpine Shell to finish applying this.</Note>}
       {error && <Note danger>{error}</Note>}
-    </div>
-  )
-}
-
-function ConfirmBar({ label, onConfirm, onCancel }: { label: string; onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-field border border-warning/40 bg-warning/10 px-3 py-2">
-      <span className="text-xs text-ink-secondary">Not applied yet.</span>
-      <span className="flex shrink-0 items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button variant="primary" size="sm" onClick={onConfirm}>
-          {`Apply ${label.toLowerCase()}`}
-        </Button>
-      </span>
     </div>
   )
 }

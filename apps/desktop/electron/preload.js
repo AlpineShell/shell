@@ -602,6 +602,9 @@ contextBridge.exposeInMainWorld('shell', {
   keyboard: {
     availableLayouts: () => ipcRenderer.invoke('keyboard/layouts-available'),
     languages: () => ipcRenderer.invoke('keyboard/languages-get'),
+    availableLanguages: () => ipcRenderer.invoke('keyboard/languages-available'),
+    addLanguage: (tag) => ipcRenderer.invoke('keyboard/language-add', { tag }),
+    removeLanguage: (tag) => ipcRenderer.invoke('keyboard/language-remove', { tag }),
     addLayout: (tag, layoutId) => ipcRenderer.invoke('keyboard/layout-add', { tag, layoutId }),
     removeLayout: (tag, tip) => ipcRenderer.invoke('keyboard/layout-remove', { tag, tip }),
     reorderLayouts: (tag, tips) => ipcRenderer.invoke('keyboard/layouts-reorder', { tag, tips }),

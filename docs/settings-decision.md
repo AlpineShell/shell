@@ -328,6 +328,11 @@ the controls genuinely differ:
   layout of a language leaves that language with nothing to type in, and the layout that is
   the *default input method* silently hands the default to whatever is first in the list.
   Those stop in the row and name which case it is before doing anything.
+- **`language-add`** is `instant` and **`language-remove`** is `confirm`. Adding a language
+  appends it to the same `Set-WinUserLanguageList` write, and Windows attaches that
+  language's usual layout. Removing one drops every layout it carries at once, so it asks
+  first, and the last language offers no remove at all because Windows needs one. Both
+  re-read the list afterwards and report it when Windows did not do what was asked.
 - **`switch-input-method`** is `instant` and best effort. Changing the active layout affects
   the calling thread, so a shell can only ask: it posts `WM_INPUTLANGCHANGEREQUEST` to the
   foreground window. Windows may ignore it, and the foreground window is the settings window
@@ -449,6 +454,8 @@ test failure too.
 | `input` | instant | A page-level entry; the page's controls disagree about `applies` and each declares its own. |
 | `keyboard-layouts` | instant | Adding a layout or reordering the list is a per-user `Set-WinUserLanguageList` write that needs no sign-out and is undone by doing the opposite. |
 | `keyboard-layout-remove` | confirm | Removing a spare layout goes straight through. Removing the last layout of a language, or the one that is the default input method, stops and names which case it is first — those two leave you with nothing to type in, or silently hand the default to whatever is first in the list. |
+| `language-add` | instant | Adding a language is the same per-user `Set-WinUserLanguageList` write as adding a layout: no elevation, no sign-out, and removing the language again undoes it. |
+| `language-remove` | confirm | Removing a language takes every layout attached to it off the list in one write, so the button asks before it does anything. The last language has no remove button at all, because Windows needs at least one. |
 | `switch-input-method` | instant | Best effort by construction: it posts `WM_INPUTLANGCHANGEREQUEST` to the foreground window, which Windows may ignore. Nothing is persisted, so there is nothing to half-apply. |
 | `default-input-method` | instant | `Set-WinDefaultInputMethodOverride`, per-user, no elevation, no sign-out, undone by choosing another. |
 | `tray` | instant | A page-level entry, filed under Ridge now that the System tray page has folded into it. The launcher opens its tray submenu from it, and the tray's own settings each declare their own. |

@@ -6,7 +6,6 @@ import AppsRunningPage from './appsRunningPage'
 import AppsStartupPage from './appsStartupPage'
 import BatteryPage from './batteryPage'
 import BluetoothSettingsPage from './bluetoothSettingsPage'
-import CalendarPage from './calendarPage'
 import DisplaysPage from './displaysPage'
 import InputPage from './inputPage'
 import PluginsPage from './pluginsPage'
@@ -27,7 +26,7 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'ridge': (navigate) => <RidgePage onNavigate={navigate} />,
   'ridge/tray-icons': () => <TrayIconsPage />,
   'search': () => <SearchPage />,
-  'calendar': () => <CalendarPage />,
+  'calendar': (navigate) => <RidgePage onNavigate={navigate} initialItem="clock" />,
   'input': () => <InputPage />,
   'tiling': () => <TilingPage />,
   'battery': () => <BatteryPage />,
@@ -64,16 +63,24 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
       'tray-overflow',
       'tray-all-monitors',
       'clock-time-format',
+      'calendar-days',
+      'calendar-show-tasks',
       'topbar-color',
       'topbar-color-automatic',
       'topbar-adapt-to-apps',
     ],
   },
   'search': { registryRows: true, renderedByThePage: [] },
-  'calendar': { registryRows: true, renderedByThePage: [] },
   'input': {
     registryRows: true,
-    renderedByThePage: ['keyboard-layouts', 'keyboard-layout-remove', 'switch-input-method', 'default-input-method'],
+    renderedByThePage: [
+      'keyboard-layouts',
+      'keyboard-layout-remove',
+      'switch-input-method',
+      'language-add',
+      'language-remove',
+      'default-input-method',
+    ],
   },
   'tiling': { registryRows: true, renderedByThePage: [] },
   'battery': { registryRows: true, renderedByThePage: ['battery-saver'] },

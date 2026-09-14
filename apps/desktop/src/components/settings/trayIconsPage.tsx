@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react'
-import { Card, IconButton, PageTitle, Section } from '@alpine/ui'
+import { IconButton, PageTitle, Section } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useTrayIcons } from '../../hooks/useTrayIcons'
 import { useTrayLayout } from '../../hooks/useTrayLayout'
@@ -35,12 +35,10 @@ export default function TrayIconsPage() {
     <div className="flex w-full flex-col gap-section">
       <PageTitle title={settingsPage('tray-icons')?.label ?? ''} />
 
-      {icons.length === 0 && (
-        <p className="text-sm text-ink-quiet">No tray icons are currently running. App icons appear here once their apps add them to the notification area.</p>
-      )}
+      {icons.length === 0 && <p className="text-sm text-ink-quiet">No tray icons running.</p>}
 
       {visible.length > 0 && (
-        <Section title="Shown" subtitle="Icons displayed on Ridge. Reorder them or move them to the hidden area.">
+        <Section title="Shown">
           <div className="flex flex-col gap-1">
             {visible.map((icon, i) => (
               <Row key={icon.id} icon={icon}>
@@ -60,7 +58,7 @@ export default function TrayIconsPage() {
       )}
 
       {overflow.length > 0 && (
-        <Section title="Hidden" subtitle="Icons tucked into the overflow flyout.">
+        <Section title="Hidden">
           <div className="flex flex-col gap-1">
             {overflow.map((icon) => (
               <Row key={icon.id} icon={icon}>
@@ -78,14 +76,10 @@ export default function TrayIconsPage() {
 
 function Row({ icon, children }: { icon: TrayIcon; children: React.ReactNode }) {
   return (
-    <Card className="flex h-11 items-center gap-3 px-3">
-      {icon.icon ? (
-        <img src={icon.icon} alt="" className="h-5 w-5 shrink-0" draggable={false} />
-      ) : (
-        <div className="h-5 w-5 shrink-0 rounded bg-surface-3" />
-      )}
-      <span className="min-w-0 flex-1 truncate text-dense text-ink-primary">{icon.tooltip || 'Tray icon'}</span>
+    <div className="flex h-11 items-center gap-3">
+      {icon.icon && <img src={icon.icon} alt="" className="h-5 w-5 shrink-0" draggable={false} />}
+      <span className="min-w-0 flex-1 truncate text-dense text-ink-primary">{icon.tooltip}</span>
       <div className="flex shrink-0 items-center gap-1">{children}</div>
-    </Card>
+    </div>
   )
 }

@@ -6,6 +6,7 @@ import {
   FolderOpen,
   Puzzle,
   RefreshCw,
+  RotateCw,
   ShieldCheck,
   Store,
   Trash2,
@@ -62,6 +63,7 @@ function InstalledCard({
             {!plugin.preset && (
               <ConfirmButton
                 iconOnly
+                confirmOnly
                 label="Uninstall"
                 confirmLabel={`Uninstall ${plugin.name}`}
                 icon={<Trash2 size={16} />}
@@ -247,42 +249,31 @@ export default function PluginsPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader
-        title="Plugins"
-        subtitle="Browse the marketplace and install with one click, or drop a plugin folder into your plugins directory."
-      />
+      <PageHeader title="Plugins" />
 
       <div className="flex items-center justify-between gap-3">
         <Segmented label="Plugin view" options={tabs} value={tab} onChange={setTab} />
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           {tab === 'installed' ? (
             <>
-              <Button variant="outline" size="sm" onClick={() => window.plugins.openFolder()} icon={<FolderOpen size={14} />}>
-                Open plugins folder
-              </Button>
-              <Button variant="ghost" size="sm" onClick={reload} busy={reloading} icon={<RefreshCw size={14} />}>
-                Reload
-              </Button>
+              <IconButton label="Open plugins folder" onClick={() => window.plugins.openFolder()}>
+                <FolderOpen size={16} />
+              </IconButton>
+              <IconButton label="Reload" onClick={reload} busy={reloading}>
+                <RotateCw size={16} />
+              </IconButton>
             </>
           ) : (
-            <Button variant="ghost" size="sm" onClick={loadBrowse} busy={browse.status === 'loading'} icon={<RefreshCw size={14} />}>
-              Refresh
-            </Button>
+            <IconButton label="Refresh" onClick={loadBrowse} busy={browse.status === 'loading'}>
+              <RefreshCw size={16} />
+            </IconButton>
           )}
         </div>
       </div>
 
       {tab === 'installed' ? (
         plugins.length === 0 ? (
-          <EmptyState
-            icon={<Puzzle size={22} />}
-            title="No plugins installed yet."
-            action={
-              <Button variant="outline" size="sm" onClick={() => setTab('browse')} icon={<Store size={14} />}>
-                Browse the marketplace
-              </Button>
-            }
-          />
+          <EmptyState variant="plain" title="No plugins installed yet." />
         ) : (
           <ul className="flex flex-col gap-1.5">
             {plugins.map((plugin) => (
@@ -297,20 +288,16 @@ export default function PluginsPage() {
           </ul>
         )
       ) : browse.status === 'loading' ? (
-        <EmptyState icon={<Spinner size={22} />} title="Loading marketplace…" />
+        <EmptyState variant="plain" icon={<Spinner size={14} />} title="Loading marketplace…" />
       ) : browse.status === 'error' ? (
         <EmptyState
-          icon={<AlertTriangle size={22} className="text-warning" />}
+          variant="plain"
+          icon={<AlertTriangle size={14} className="text-warning" />}
           title="Couldn't reach the marketplace."
           detail={browse.base && <span className="font-mono break-all">{browse.base}</span>}
-          action={
-            <Button variant="outline" size="sm" onClick={loadBrowse} icon={<RefreshCw size={14} />}>
-              Try again
-            </Button>
-          }
         />
       ) : browse.plugins.length === 0 ? (
-        <EmptyState icon={<Store size={22} />} title="No plugins published yet." />
+        <EmptyState variant="plain" title="No plugins published yet." />
       ) : (
         <ul className="flex flex-col gap-1.5">
           {browse.plugins.map((plugin) => (

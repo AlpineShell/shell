@@ -122,7 +122,40 @@ function composeKeyboardLayoutHandle(tip) {
   return (((layoutId & 0xffff) << 16) | localeId) >>> 0
 }
 
+function parseLanguageCatalogue(raw) {
+  const languages = []
+  const seen = new Set()
+  for (const line of String(raw ?? '').split(/\r?\n/)) {
+    const [rawTag, nativeName, englishName] = line.split('\t')
+    const tag = String(rawTag ?? '').trim()
+    if (!isSafeLanguageTag(tag) || seen.has(tag.toLowerCase())) continue
+    seen.add(tag.toLowerCase())
+    const name = (englishName ?? '').trim() || tag
+    languages.push({ tag, name, nativeName: (nativeName ?? '').trim() || name })
+  }
+  return languages.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function hasLanguageTag(languages, tag) {
+  const wanted = String(tag ?? '').trim().toLowerCase()
+  return languages.some((language) => language.tag.toLowerCase() === wanted)
+}
+
+function buildAddLanguageCommand(tag) {
+  if (!isSafeLanguageTag(tag)) return null
+  return `$list = Get-WinUserLanguageList; $list.Add('${tag.trim()}'); Set-WinUserLanguageList -LanguageList $list -Force -WarningAction SilentlyContinue`
+}
+
+function buildRemoveLanguageCommand(tag) {
+  if (!isSafeLanguageTag(tag)) return null
+  return `$list = Get-WinUserLanguageList; $target = $null; foreach ($language in $list) { if ($language.LanguageTag -eq '${tag.trim()}') { $target = $language } }; if ($target -and $list.Count -gt 1) { [void]$list.Remove($target); Set-WinUserLanguageList -LanguageList $list -Force -WarningAction SilentlyContinue }`
+}
+
 module.exports = {
+  parseLanguageCatalogue,
+  hasLanguageTag,
+  buildAddLanguageCommand,
+  buildRemoveLanguageCommand,
   parseInputMethodTip,
   formatInputMethodTip,
   parseInputMethodTips,

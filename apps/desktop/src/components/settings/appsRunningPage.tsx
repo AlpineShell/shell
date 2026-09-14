@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { AppWindow, Boxes, Search } from 'lucide-react'
-import { Avatar, Badge, ConfirmButton, EmptyState, ListRow, PageHeader, Spinner, TextField } from '@alpine/ui'
+import { AppWindow, Boxes, Search, X } from 'lucide-react'
+import { Avatar, ConfirmButton, EmptyState, ListRow, PageHeader, TextField } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { bandLabel, bandTone } from './appsShared'
+import { formatMemory } from './appsShared'
+import PageSpinner from './pageSpinner'
 
 export default function AppsRunningPage() {
   const running = useRunningApps()
@@ -24,7 +25,7 @@ export default function AppsRunningPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title={settingsPage('apps-running')?.label ?? ''} subtitle="Apps using your computer right now. You can close ones you're not using.">
+      <PageHeader title={settingsPage('apps-running')?.label ?? ''}>
         <TextField
           label="Search running apps"
           value={query}
@@ -35,38 +36,36 @@ export default function AppsRunningPage() {
         />
       </PageHeader>
 
-      <div className="flex flex-col gap-1">
-        {running.length === 0 && <EmptyState icon={<Spinner size={20} />} title="Looking at what's running…" />}
-        {running.length > 0 && visible.length === 0 && (
-          <EmptyState icon={<Search size={20} />} title="No apps match your search." />
-        )}
+      {running.length === 0 && <PageSpinner label="Looking at what's running" />}
+      {running.length > 0 && visible.length === 0 && <EmptyState variant="plain" title="No apps match your search." />}
 
+      <div className="flex flex-col">
         {foreground.map((app) => (
           <RunningRow key={app.name} app={app} />
         ))}
 
         {background.length > 0 && (
-          <div className="mt-1">
+          <div className="mt-3">
             <ListRow
-              icon={<Boxes size={18} className="text-ink-faint" />}
-              title={`Running in the background (${background.length})`}
-              detail="Helpers and services running without a window — usually started by your apps."
+              variant="plain"
+              icon={<Boxes size={16} className="text-ink-faint" />}
+              title={`In the background · ${background.length}`}
+              muted
               onActivate={() => setBackgroundOpen((v) => !v)}
               expanded={showBackground}
-            >
-              {showBackground && (
-                <div className="flex flex-col gap-1 px-2 pb-2">
-                  {background.map((app) => (
-                    <RunningRow key={app.name} app={app} />
-                  ))}
-                </div>
-              )}
-            </ListRow>
+            />
           </div>
         )}
+
+        {showBackground && background.map((app) => <RunningRow key={app.name} app={app} />)}
       </div>
     </div>
   )
+}
+
+function runningDetail(app: RunningApp): string {
+  const memory = formatMemory(app.memory)
+  return app.count > 1 ? `${memory} · ${app.count} processes` : memory
 }
 
 function RunningRow({ app }: { app: RunningApp }) {
@@ -83,14 +82,11 @@ function RunningRow({ app }: { app: RunningApp }) {
 
   return (
     <ListRow
-      icon={<Avatar src={app.icon} alt={app.friendlyName} size="sm" fallback={<AppWindow size={14} strokeWidth={1.75} />} />}
+      variant="plain"
+      revealActions
+      icon={<Avatar src={app.icon} alt={app.friendlyName} fallback={<AppWindow size={16} strokeWidth={1.75} />} />}
       title={app.friendlyName}
-      badges={
-        <>
-          {app.count > 1 && <Badge>{app.count}</Badge>}
-          <Badge tone={bandTone(app.band)}>{bandLabel(app.band)}</Badge>
-        </>
-      }
+      detail={runningDetail(app)}
       actions={
         <ConfirmButton
           variant="ghost"
@@ -98,7 +94,9 @@ function RunningRow({ app }: { app: RunningApp }) {
           confirmLabel="Force close"
           onConfirm={close}
           busy={busy}
-          className="min-w-20"
+          icon={<X size={14} />}
+          iconOnly
+          confirmOnly
         />
       }
     />

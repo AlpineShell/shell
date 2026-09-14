@@ -87,7 +87,18 @@ const RIDGE_DESCRIPTION = 'Arrange the bar across the top of your screen, and se
 
 const RIDGE_KEYWORDS = ['ridge', 'top bar', 'topbar', 'menu bar', 'status bar', 'bar layout']
 
-const PAGES_FOLDED_INTO_RIDGE = ['system tray', 'appearance', 'color', 'colour', 'ridge color']
+const PAGES_FOLDED_INTO_RIDGE = [
+  'system tray',
+  'appearance',
+  'color',
+  'colour',
+  'ridge color',
+  'calendar',
+  'google calendar',
+  'google',
+  'agenda',
+  'schedule',
+]
 
 export const SETTINGS_PAGES: SettingsPage[] = [
   {
@@ -144,17 +155,6 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     section: 'personalization',
     kind: 'settings',
     order: 3,
-  },
-  {
-    id: 'calendar',
-    route: 'calendar',
-    label: 'Calendar',
-    description: 'Google account and what the hover calendar shows',
-    keywords: ['calendar', 'google', 'agenda', 'schedule'],
-    icon: CalendarDays,
-    section: 'personalization',
-    kind: 'settings',
-    order: 4,
   },
   {
     id: 'input',
@@ -541,7 +541,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'topbar-search-icon',
     label: 'Show search button on Ridge',
-    description: 'Display the search button on Ridge. The hotkey still works either way.',
+    description: 'The hotkey still works when the button is hidden.',
     hint: 'Show the search button on Ridge',
     keywords: ['search icon', 'top bar', 'launcher button'],
     icon: Search,
@@ -772,7 +772,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     description: 'How many days the hover calendar shows at once.',
     keywords: ['days shown', 'calendar days', 'agenda length', 'three days', 'hover calendar'],
     icon: CalendarDays,
-    page: 'calendar',
+    page: 'ridge',
     group: 'Hover calendar',
     order: 2,
     applies: 'instant',
@@ -795,10 +795,10 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'calendar-show-tasks',
     label: 'Show Google Tasks',
-    description: 'Display tasks with a due date alongside your events, like Google Calendar.',
+    description: 'Tasks with a due date show beside your events.',
     keywords: ['google tasks', 'tasks', 'todo', 'to-do', 'due dates', 'calendar'],
     icon: ListTodo,
-    page: 'calendar',
+    page: 'ridge',
     group: 'Hover calendar',
     order: 3,
     applies: 'instant',
@@ -896,7 +896,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'launcher-max-results',
     label: 'Maximum results',
-    description: 'The most apps and options Search will show at once, before and after you type.',
+    description: 'How many results Search shows at once.',
     keywords: ['maximum results', 'max results', 'result count', 'list length', 'how many results'],
     icon: ListOrdered,
     page: 'search',
@@ -939,7 +939,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'keyboard-layout-remove',
     label: 'Remove a keyboard layout',
-    description: 'Take a layout off a language. The last layout of a language, or the default one, asks first.',
+    description: 'Take a layout off a language. Asks first.',
     hint: 'Take a keyboard layout off a language',
     keywords: [
       'remove keyboard layout',
@@ -954,6 +954,32 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     page: 'input',
     group: 'Languages and layouts',
     order: 2,
+    applies: 'confirm',
+    control: { kind: 'navigate', path: 'input' },
+  },
+  {
+    id: 'language-add',
+    label: 'Add a language',
+    description: 'Add a language to your list. Windows attaches its usual keyboard layout to it.',
+    hint: 'Add a language to your list',
+    keywords: ['add language', 'add input language', 'new language', 'language', 'keyboard', 'typing'],
+    icon: Languages,
+    page: 'input',
+    group: 'Languages and layouts',
+    order: 5,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'input' },
+  },
+  {
+    id: 'language-remove',
+    label: 'Remove a language',
+    description: 'Take a language and its layouts off your list. Asks first, and always keeps one.',
+    hint: 'Take a language off your list',
+    keywords: ['remove language', 'delete language', 'remove input language', 'language', 'keyboard', 'typing'],
+    icon: Trash2,
+    page: 'input',
+    group: 'Languages and layouts',
+    order: 6,
     applies: 'confirm',
     control: { kind: 'navigate', path: 'input' },
   },
@@ -1015,7 +1041,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'tiling-enabled',
     label: 'Enable window tiling',
-    description: 'Arrange windows into layouts. When off, Windows behaves normally.',
+    description: 'Arrange windows into layouts.',
     keywords: ['enable tiling', 'window tiling', 'tile windows', 'turn off tiling', 'window manager'],
     icon: LayoutDashboard,
     page: 'tiling',
@@ -1126,6 +1152,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     control: {
       kind: 'action',
       actionLabel: 'Reset split sizes',
+      actionIcon: RotateCcw,
       run: () => window.shell.tiling.setConfig({ ratios: {} }),
     },
   },
@@ -1184,7 +1211,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'tiling-oversized-placement',
     label: 'Oversized window placement',
-    description: 'Whether an oversized window floats centered on screen or aligns to its zone edge.',
+    description: 'Where a window too big for its zone goes.',
     keywords: ['placement', 'center window', 'edge align', 'oversized', 'float'],
     icon: Maximize2,
     page: 'tiling',
@@ -1263,7 +1290,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'battery-saver-dimming',
     label: 'Battery saver dimming',
-    description: 'Lower the brightness of the built-in display, and put it back when battery saver ends.',
+    description: 'Dims the built-in display while battery saver is on.',
     hint: 'Dim the displays while battery saver is on',
     keywords: ['battery saver dimming', 'dim', 'brightness', 'power saving', 'screen'],
     icon: Sun,

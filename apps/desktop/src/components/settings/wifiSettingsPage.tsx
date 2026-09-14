@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Lock, RefreshCw, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from 'lucide-react'
+import { EthernetPort, Lock, RefreshCw, Wifi, WifiHigh, WifiLow, WifiZero } from 'lucide-react'
 import { Button, EmptyState, IconButton, ListRow, PageHeader, Spinner, TextField, Toggle } from '@alpine/ui'
+import { useNetworkStatus } from '../../hooks/useNetwork'
+import PageSpinner from './pageSpinner'
 
 function SignalIcon({ signal, className, size }: { signal: number; className: string; size: number }) {
   if (signal >= 70) return <Wifi className={className} size={size} />
@@ -18,6 +20,7 @@ export default function WifiSettingsPage() {
   const [passwordFor, setPasswordFor] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const networkStatus = useNetworkStatus()
 
   useEffect(() => {
     window.shell.network.wifiNetworks().then((cached) => {
@@ -79,6 +82,8 @@ export default function WifiSettingsPage() {
     setDisconnecting(null)
   }
 
+  const onEthernet = networkStatus.connected && networkStatus.type === 'ethernet'
+
   return (
     <div className="flex w-full flex-col gap-5">
       <PageHeader title="Wi-Fi">
@@ -88,12 +93,12 @@ export default function WifiSettingsPage() {
         <Toggle label="Wi-Fi" checked={enabled} onChange={toggleRadio} />
       </PageHeader>
 
-      {!enabled ? (
-        <EmptyState icon={<WifiOff size={20} />} title="Wi-Fi off" />
-      ) : scanning && networks.length === 0 ? (
-        <EmptyState icon={<Spinner size={20} />} title="Scanning…" />
+      {onEthernet && <ListRow icon={<EthernetPort size={20} className="text-ink-primary" />} title="Ethernet" detail="Connected" />}
+
+      {!enabled ? null : scanning && networks.length === 0 ? (
+        <PageSpinner label="Scanning for networks" />
       ) : networks.length === 0 ? (
-        <EmptyState icon={<WifiOff size={20} />} title="No networks found" />
+        onEthernet ? null : <EmptyState variant="plain" title="No networks found" />
       ) : (
         <div className="flex flex-col gap-1">
           {networks.map((n) => (

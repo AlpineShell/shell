@@ -786,6 +786,18 @@ declare global {
     state: KeyboardLayoutState
   }
 
+  interface KeyboardLanguageOption {
+    tag: string
+    name: string
+    nativeName: string
+  }
+
+  interface KeyboardLanguageChangeResult {
+    ok: boolean
+    error: string | null
+    state: KeyboardLayoutState
+  }
+
   interface CalendarConnection {
     connected: boolean
     email: string | null
@@ -941,7 +953,7 @@ declare global {
 
   type SettingsPanelControl =
     | { kind: 'navigate'; path: string }
-    | { kind: 'action'; actionLabel: string; run(): Promise<unknown> }
+    | { kind: 'action'; actionLabel: string; actionIcon: SettingsIcon; run(): Promise<unknown> }
     | { kind: 'brightness' }
     | { kind: 'wallpaper' }
     | { kind: 'wifi' }
@@ -1073,13 +1085,15 @@ declare global {
     placement: RidgeCalloutPlacement
   }
 
-  interface ElementSize {
-    width: number
-    height: number
-  }
 
   interface RidgeFitProps {
     children: import('react').ReactNode
+  }
+
+  interface RidgeFitMeasurement {
+    width: number
+    height: number
+    floor: number
   }
 
   interface RidgeRgb {
@@ -1388,6 +1402,7 @@ declare global {
 
   interface RidgePageProps {
     onNavigate: (path: string) => void
+    initialItem?: TopbarItemId
   }
 
   interface AppearancePageProps {
@@ -1694,6 +1709,9 @@ declare global {
       keyboard: {
         availableLayouts: () => Promise<KeyboardLayoutOption[]>
         languages: () => Promise<KeyboardLanguage[]>
+        availableLanguages: () => Promise<KeyboardLanguageOption[]>
+        addLanguage: (tag: string) => Promise<KeyboardLanguageChangeResult>
+        removeLanguage: (tag: string) => Promise<KeyboardLanguageChangeResult>
         addLayout: (tag: string, layoutId: string) => Promise<KeyboardLayoutState>
         removeLayout: (tag: string, tip: string) => Promise<KeyboardLayoutState>
         reorderLayouts: (tag: string, tips: string[]) => Promise<KeyboardLayoutState>
