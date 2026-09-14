@@ -81,6 +81,7 @@ export default function TopBar() {
                     {renderSlot(layout, "left")}
                 </div>
                 <div ref={centerCluster} className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center gap-1 z-1">
+                    <NoticeStatus />
                     {renderSlot(layout, "center")}
                 </div>
                 <div ref={rightCluster} className="flex items-center gap-1 mr-1 relative z-1 self-stretch">

@@ -570,7 +570,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     id: 'media-visualizer',
     label: 'Media visualizer',
     description:
-      "Show the audio visualizer instead of the playing app's icon. The bars only animate for audio playing on this PC, so leave this off if you often play to other devices.",
+      'Bars instead of the app icon while audio plays.',
     hint: 'Show the audio visualizer on Ridge',
     keywords: ['media', 'visualizer', 'audio', 'top bar'],
     icon: AudioLines,
@@ -587,7 +587,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'clock-time-format',
     label: 'Time format',
-    description: 'Show the clock as a 12-hour or 24-hour time, or follow whatever Windows is set to.',
+    description: '12-hour, 24-hour or the Windows setting.',
     keywords: ['time format', 'clock', '12 hour', '24 hour', 'am pm', 'military time'],
     icon: Clock,
     page: 'ridge',
@@ -643,7 +643,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     id: 'tray-overflow',
     label: 'Show overflow arrow',
     description:
-      'Show the chevron that holds hidden icons. When off, the arrow is hidden and hidden icons are managed only from Manage tray icons.',
+      'The arrow that holds hidden icons.',
     keywords: ['overflow arrow', 'chevron', 'hidden icons', 'tray', 'expand'],
     icon: ChevronUp,
     page: 'ridge',
@@ -672,7 +672,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'tray-all-monitors',
     label: 'Show tray on all monitors',
-    description: 'Mirror the tray onto Ridge on every display. When off, it appears only on your primary display.',
+    description: 'Off keeps it on the primary display.',
     keywords: ['all monitors', 'every display', 'mirror tray', 'primary display', 'multi monitor'],
     icon: Monitor,
     page: 'ridge',
@@ -689,7 +689,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'power-confirm',
     label: 'Confirm power menu actions',
-    description: "Ask a second time before Log Out, Restart or Shut Down from Ridge's power menu. Search always asks.",
+    description: 'Ask again before Log Out, Restart or Shut Down.',
     hint: "Ask a second time before Ridge's power menu acts",
     keywords: ['reassurance dialog', 'confirm shut down', 'confirm restart', 'confirm log out', 'ask before shutting down'],
     icon: ShieldCheck,

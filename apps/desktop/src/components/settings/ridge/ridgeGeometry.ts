@@ -34,6 +34,11 @@ export function ridgeLayoutMode(width: number): RidgeLayoutMode {
   return width >= RIDGE_STRIP_MIN_WIDTH ? 'strip' : 'stacked'
 }
 
+export function ridgeFitScale(available: number, natural: number): number {
+  if (natural <= 0 || available >= natural) return 1
+  return available / natural
+}
+
 export function ridgeBoxWithin(box: RidgeBox, frame: RidgeBox): RidgeBox {
   return {
     left: box.left - frame.left,

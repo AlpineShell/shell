@@ -1065,6 +1065,26 @@ declare global {
 
   type RidgeLayoutMode = 'strip' | 'stacked'
 
+  interface ElementSize {
+    width: number
+    height: number
+  }
+
+  interface RidgeFitProps {
+    children: import('react').ReactNode
+  }
+
+  interface RidgeLivePluginWidgetsProps {
+    slot: RidgePluginSlot
+    data: RidgePreviewData
+    darkText: boolean
+  }
+
+  interface RidgePluginBoundaryProps {
+    id: string
+    children: import('react').ReactNode
+  }
+
   type RidgePluginSlot = Exclude<TopbarSlot, 'center'>
 
   type RidgeVisibilityStep =
@@ -1311,10 +1331,8 @@ declare global {
     item: TopbarLayoutItem
     previewData: RidgePreviewData
     highlightedSetting: string | null
-    sides: TopbarSlot[]
     canStepEarlier: boolean
     canStepLater: boolean
-    onSide: (slot: TopbarSlot) => void
     onStep: (direction: TopbarStepDirection) => void
     onHide: () => void
     onNavigate: (path: string) => void

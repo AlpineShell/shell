@@ -3,7 +3,6 @@ export const TOPBAR_SLOTS: TopbarSlot[] = ['left', 'center', 'right']
 export const TOPBAR_ITEMS: TopbarItemDefinition[] = [
   { id: 'system-menu', slot: 'left', kind: 'element', label: 'Power menu' },
   { id: 'plugins-left', slot: 'left', kind: 'plugin-group', label: 'Left plugins' },
-  { id: 'notice', slot: 'left', kind: 'element', label: 'Notices' },
   { id: 'launcher', slot: 'center', kind: 'element', label: 'Search button' },
   { id: 'tray', slot: 'right', kind: 'element', label: 'System tray' },
   { id: 'media', slot: 'right', kind: 'element', label: 'Media' },

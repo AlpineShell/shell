@@ -21,10 +21,8 @@ function dropStateClass(state: RidgeLaneDropState, darkText: boolean): string {
 }
 
 function stripOutlineClass(moving: boolean, darkText: boolean): string {
-  if (moving) return darkText ? 'outline-1 outline-dashed outline-black/25' : 'outline-1 outline-dashed outline-white/30'
-  return darkText
-    ? 'empty:outline-1 empty:outline-dashed empty:outline-black/25'
-    : 'empty:outline-1 empty:outline-dashed empty:outline-white/30'
+  if (!moving) return ''
+  return darkText ? 'outline-1 outline-dashed outline-black/25' : 'outline-1 outline-dashed outline-white/30'
 }
 
 function outlineClass(mode: RidgeLayoutMode, state: RidgeLaneDropState, moving: boolean, darkText: boolean): string {
@@ -56,7 +54,7 @@ export default function RidgeLane({
         aria-label={`${label} side`}
         data-ridge-lane={slot}
         data-drop-state={dropState}
-        className={`relative z-10 flex flex-wrap items-center gap-1 transition-colors ${SIDE_ALIGNMENT[slot]} ${MODE_CLASSES[mode]} ${outline} ${dropStateClass(dropState, surface.darkText)}`}
+        className={`relative z-10 flex items-center gap-1 transition-colors ${SIDE_ALIGNMENT[slot]} ${MODE_CLASSES[mode]} ${outline} ${dropStateClass(dropState, surface.darkText)}`}
         style={stacked ? { backgroundColor: surface.bg } : undefined}
       >
         {children}

@@ -12,12 +12,12 @@ export const RIDGE_SAMPLE_NOTICE: NoticeFaceProps['notice'] = {
 }
 
 export const RIDGE_PRESENCE_NOTES: Partial<Record<TopbarItemId, string>> = {
-  'plugins-left': 'Widgets that plugins place on the left of Ridge show here.',
-  notice: 'Shows on Ridge only while Alpine Shell has a notice for you.',
-  tray: 'Shows on Ridge once apps put icons in the system tray.',
-  media: 'Shows on Ridge only while something is playing.',
-  microphone: 'Shows on Ridge only while an app is using the microphone.',
-  'plugins-right': 'Widgets that plugins place on the right of Ridge show here.',
+  'plugins-left': 'Plugin widgets show here.',
+  notice: 'Shows while there is a notice.',
+  tray: 'Shows once apps add tray icons.',
+  media: 'Shows while something plays.',
+  microphone: 'Shows while an app uses the mic.',
+  'plugins-right': 'Plugin widgets show here.',
 }
 
 const SAMPLE_TRAY_ICON_IDS = ['sample-tray-first', 'sample-tray-second', 'sample-tray-third']

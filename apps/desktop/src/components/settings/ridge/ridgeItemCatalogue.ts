@@ -1,5 +1,11 @@
 import { settingsEntry, settingsPage } from '../../../settings/registry'
-import { TOPBAR_ITEMS, TOPBAR_ITEM_SETTING_GATES, findTopbarItem, isTopbarItemGated } from '../../topbar/layout/topbarLayout'
+import {
+  TOPBAR_ITEMS,
+  TOPBAR_ITEM_SETTING_GATES,
+  findTopbarItem,
+  isTopbarItemGated,
+  topbarItemLabel,
+} from '../../topbar/layout/topbarLayout'
 import { RIDGE_PRESENCE_NOTES, ridgeItemIsSample } from './ridgeSamples'
 
 const RIDGE_ITEM_ENTRY_PREFIX = 'ridge-item-'
@@ -70,4 +76,19 @@ export function ridgePluginGroupWidgets(id: TopbarItemId, data: RidgePreviewData
   const definition = findTopbarItem(id)
   if (!definition || definition.kind !== 'plugin-group' || definition.slot === 'center') return null
   return data.plugins[definition.slot]
+}
+
+function uniquePluginNames(widgets: RidgePluginWidget[]): string[] {
+  return [...new Set(widgets.map((widget) => widget.pluginName))]
+}
+
+export function ridgeItemTitle(id: TopbarItemId, data: RidgePreviewData): string {
+  const names = uniquePluginNames(ridgePluginGroupWidgets(id, data) ?? [])
+  return names.length > 0 ? names.join(', ') : topbarItemLabel(id)
+}
+
+export function ridgeDrawsItem(id: TopbarItemId, liveWidgetCounts: Record<RidgePluginSlot, number>): boolean {
+  const definition = findTopbarItem(id)
+  if (!definition || definition.kind !== 'plugin-group' || definition.slot === 'center') return true
+  return liveWidgetCounts[definition.slot] > 0
 }
