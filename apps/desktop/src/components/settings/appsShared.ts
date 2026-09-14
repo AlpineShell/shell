@@ -1,3 +1,4 @@
+import type { BadgeTone } from '@alpine/ui'
 export function bandLabel(band: 'light' | 'moderate' | 'heavy'): string {
   return band === 'heavy' ? 'Heavy' : band === 'moderate' ? 'Moderate' : 'Light'
 }

@@ -10,17 +10,7 @@ import {
   Store,
   Trash2,
 } from 'lucide-react'
-import Avatar from '../ui/avatar'
-import Badge from '../ui/badge'
-import Button from '../ui/button'
-import ConfirmButton from '../ui/confirmButton'
-import EmptyState from '../ui/emptyState'
-import IconButton from '../ui/iconButton'
-import ListRow from '../ui/listRow'
-import PageHeader from '../ui/pageHeader'
-import Segmented from '../ui/segmented'
-import Spinner from '../ui/spinner'
-import Toggle from '../ui/toggle'
+import { Avatar, Badge, Button, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, Segmented, Spinner, Toggle, type SegmentedOption } from '@alpine/ui'
 
 type PluginTab = 'installed' | 'browse'
 

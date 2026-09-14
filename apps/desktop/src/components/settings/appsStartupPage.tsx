@@ -1,19 +1,10 @@
 import { useMemo, useState } from 'react'
 import { AppWindow, FolderOpen, Lock, Search, ShieldAlert } from 'lucide-react'
+import { Avatar, Badge, Button, EmptyState, IconButton, ListRow, PageHeader, Spinner, TextField, Toggle } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import { useRunningApps } from '../../hooks/useRunningApps'
 import { processKey } from './appsShared'
-import Avatar from '../ui/avatar'
-import Badge from '../ui/badge'
-import Button from '../ui/button'
-import EmptyState from '../ui/emptyState'
-import IconButton from '../ui/iconButton'
-import ListRow from '../ui/listRow'
-import PageHeader from '../ui/pageHeader'
-import Spinner from '../ui/spinner'
-import TextField from '../ui/textField'
-import Toggle from '../ui/toggle'
 
 export default function AppsStartupPage() {
   const startup = useStartupApps()

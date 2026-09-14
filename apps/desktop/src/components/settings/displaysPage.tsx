@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { RotateCw, Star, MonitorCheck } from 'lucide-react'
+import { Button, PageTitle, Row, Section, Slider } from '@alpine/ui'
 import { useDisplays } from '../../hooks/useDisplays'
 import { useMonitors } from '../../hooks/useMonitors'
 import { useHighlightedSetting } from '../../hooks/useHighlightedSetting'
-import PageTitle from '../ui/pageTitle'
-import Section from '../ui/section'
-import Row from '../ui/row'
-import Slider from '../ui/slider'
-import Button from '../ui/button'
 
 const SNAP_SCREEN_PX = 16
 const KEEP_CHANGES_SECONDS = 15

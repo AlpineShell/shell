@@ -11,213 +11,10 @@ declare global {
     preference: ThemePreference
   }
 
-  interface SectionProps {
-    title: string
-    subtitle?: string
-    children: import('react').ReactNode
-  }
-
-  interface PageTitleProps {
-    title: string
-    subtitle?: string
-  }
-
-  interface CardProps {
-    className?: string
-    children: import('react').ReactNode
-  }
-
-  interface RowProps {
-    label: string
-    description?: import('react').ReactNode
-    disabled?: boolean
-    children?: import('react').ReactNode
-  }
-
-  interface NavRowProps {
-    label: string
-    description?: string
-    icon?: import('react').ReactNode
-    onClick: () => void
-  }
-
-  interface ToggleProps {
-    checked: boolean
-    onChange: (value: boolean) => void
-    label: string
-    disabled?: boolean
-    pending?: boolean
-  }
-
-  interface SegmentedOption<T> {
-    value: T
-    label: import('react').ReactNode
-  }
-
-  interface SegmentedProps<T extends string | number> {
-    options: SegmentedOption<T>[]
-    value: T
-    onChange: (value: T) => void
-    label?: string
-  }
-
-  interface SelectOption<T> {
-    value: T
-    label: string
-  }
-
-  interface SelectProps<T extends string> {
-    options: SelectOption<T>[]
-    value: T
-    onChange: (value: T) => void
-    label: string
-  }
-
-  interface SliderProps {
-    min: number
-    max: number
-    step?: number
-    value: number
-    onChange: (value: number) => void
-    label: string
-    suffix?: string
-  }
-
-  type ButtonVariant = 'primary' | 'outline' | 'ghost' | 'danger' | 'dangerOutline'
-
-  type ButtonSize = 'sm' | 'md'
-
-  interface ButtonProps {
-    onClick: () => void
-    children: import('react').ReactNode
-    variant?: ButtonVariant
-    size?: ButtonSize
-    icon?: import('react').ReactNode
-    busy?: boolean
-    disabled?: boolean
-    className?: string
-  }
-
-  interface ConfirmButtonProps {
-    label: string
-    confirmLabel: string
-    onConfirm: () => void
-    variant?: ButtonVariant
-    confirmVariant?: ButtonVariant
-    size?: ButtonSize
-    icon?: import('react').ReactNode
-    iconOnly?: boolean
-    busy?: boolean
-    disabled?: boolean
-    className?: string
-  }
-
-  type IconButtonVariant = 'ghost' | 'danger'
-
-  interface IconButtonProps {
-    onClick: () => void
-    label: string
-    children: import('react').ReactNode
-    variant?: IconButtonVariant
-    busy?: boolean
-    disabled?: boolean
-    className?: string
-  }
-
-  interface SpinnerProps {
-    size?: number
-  }
-
-  type AvatarSize = 'sm' | 'md'
-
-  interface AvatarProps {
-    src?: string | null
-    alt: string
-    fallback: import('react').ReactNode
-    size?: AvatarSize
-  }
-
-  type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger'
-
-  interface BadgeProps {
-    tone?: BadgeTone
-    children: import('react').ReactNode
-  }
-
-  interface EmptyStateProps {
-    icon?: import('react').ReactNode
-    title: string
-    detail?: import('react').ReactNode
-    action?: import('react').ReactNode
-  }
-
-  interface PageHeaderProps {
-    title: string
-    subtitle?: string
-    children?: import('react').ReactNode
-  }
-
-  interface ListRowProps {
-    icon?: import('react').ReactNode
-    title: string
-    badges?: import('react').ReactNode
-    detail?: import('react').ReactNode
-    actions?: import('react').ReactNode
-    onActivate?: () => void
-    activateLabel?: string
-    expanded?: boolean
-    disabled?: boolean
-    muted?: boolean
-    children?: import('react').ReactNode
-  }
-
-  interface TextFieldProps {
-    value: string
-    onChange: (value: string) => void
-    label: string
-    placeholder?: string
-    type?: 'text' | 'password'
-    icon?: import('react').ReactNode
-    invalid?: boolean
-    onSubmit?: () => void
-    className?: string
-    ref?: import('react').Ref<HTMLInputElement>
-  }
-
-  interface SearchFieldProps {
-    value: string
-    onChange: (value: string) => void
-    label: string
-    placeholder?: string
-    hint?: string
-    onKeyDown?: (event: import('react').KeyboardEvent<HTMLInputElement>) => void
-    controls?: string
-    activeDescendant?: string
-    ref?: import('react').Ref<HTMLInputElement>
-  }
-
-  interface SearchPickerOption {
-    value: string
-    label: string
-    detail?: string
-    disabled?: boolean
-  }
-
-  interface SearchPickerProps {
-    options: SearchPickerOption[]
-    onSelect: (value: string) => void
-    onDismiss: () => void
-    label: string
-    placeholder?: string
-    emptyMessage?: string
-  }
-
-  interface PickerTileProps {
-    onClick: () => void
-    label: string
-    selected?: boolean
-    className?: string
-    children: import('react').ReactNode
+  interface ValueRowProps {
+    entry: SettingsValueEntry
+    description: string
+    wideControlStacked?: boolean
   }
 
   type SetupOutcomeTone = 'success' | 'danger'
@@ -799,6 +596,104 @@ declare global {
     order?: number
   }
 
+  interface TopbarSurface {
+    bg: string
+    darkText: boolean
+    borderColor: string
+  }
+
+  interface TopbarItemTarget {
+    slot: TopbarSlot
+    index: number
+  }
+
+  type TopbarStepDirection = 'earlier' | 'later'
+
+  type TopbarGatedItemId = Extract<TopbarItemId, 'launcher' | 'tray'>
+
+  type TopbarItemSettingGates = Readonly<Record<TopbarGatedItemId, string>>
+
+  interface TopbarLayoutEditor {
+    items: TopbarLayoutItem[]
+    error: string | null
+    commit(items: TopbarLayoutItem[]): Promise<boolean>
+    reset(): Promise<boolean>
+  }
+
+  interface TopbarInteractiveZone {
+    left: number
+    right: number
+  }
+
+  type PowerAction = 'shutdown' | 'restart' | 'logout'
+
+  type PowerMenuPress = { run: PowerAction } | { armed: PowerAction }
+
+  interface SystemMenuFaceProps {
+    darkText: boolean
+  }
+
+  interface SystemMenuActionsProps {
+    darkText: boolean
+    confirmRequired: boolean
+  }
+
+  interface NoticeFaceProps {
+    notice: Pick<ShellNotice, 'title' | 'message' | 'tone' | 'busy'>
+    darkText: boolean
+  }
+
+  interface LauncherFaceProps {
+    darkText: boolean
+  }
+
+  type TrayFaceIcon = Pick<TrayIcon, 'id' | 'tooltip' | 'icon'>
+
+  interface TrayFaceProps {
+    icons: TrayFaceIcon[]
+    showCaret: boolean
+    darkText: boolean
+  }
+
+  interface TrayIconGlyphProps {
+    src: string
+  }
+
+  interface TrayCaretGlyphProps {
+    darkText: boolean
+  }
+
+  interface MusicBarsGlyphProps {
+    peak: number
+    color: string
+  }
+
+  interface MediaFaceProps {
+    title: string
+    appIcon: string | null
+    peak: number
+    darkText: boolean
+  }
+
+  interface MicrophoneFaceProps {
+    apps: string[]
+    darkText: boolean
+  }
+
+  interface StatusFaceProps {
+    bluetooth: BluetoothState
+    network: Pick<NetworkStatus, 'signal' | 'connected' | 'type'>
+    radioOn: boolean
+    battery: Pick<BatteryStatus, 'percent' | 'charging' | 'hasBattery'>
+    darkText: boolean
+  }
+
+  interface ClockFaceProps {
+    time: string
+    date: string
+    darkText: boolean
+  }
+
   type AlpineHtml = (strings: TemplateStringsArray, ...values: unknown[]) => import('react').ReactNode
 
   interface AlpineStoreRuntime {
@@ -964,10 +859,10 @@ declare global {
     | 'revert'
     | 'appearance'
     | 'wallpaper'
+    | 'ridge'
     | 'search'
     | 'calendar'
     | 'input'
-    | 'tray'
     | 'tray-icons'
     | 'tiling'
     | 'battery'
@@ -1018,12 +913,12 @@ declare global {
 
   interface SettingsSelectControl {
     kind: 'select'
-    options: readonly SelectOption<string>[]
+    options: readonly import('@alpine/ui').SelectOption<string>[]
   }
 
   interface SettingsSegmentedControl {
     kind: 'segmented'
-    options: readonly SelectOption<string | number>[]
+    options: readonly import('@alpine/ui').SelectOption<string | number>[]
   }
 
   interface SettingsColorControl {
@@ -1168,6 +1063,286 @@ declare global {
     disabled?: boolean
   }
 
+  type RidgeLayoutMode = 'strip' | 'stacked'
+
+  type RidgePluginSlot = Exclude<TopbarSlot, 'center'>
+
+  type RidgeVisibilityStep =
+    | { kind: 'layout'; items: TopbarLayoutItem[] }
+    | { kind: 'layout-reset' }
+    | { kind: 'gate'; item: TopbarGatedItemId; visible: boolean }
+
+  interface RidgeGates {
+    visible: Record<TopbarGatedItemId, boolean>
+    setGate(item: TopbarGatedItemId, visible: boolean): Promise<boolean>
+  }
+
+  interface RidgeEditor {
+    layout: TopbarLayoutItem[]
+    items: TopbarLayoutItem[]
+    error: string | null
+    isDefault: boolean
+    commit(layout: TopbarLayoutItem[]): Promise<boolean>
+    move(id: TopbarItemId, target: TopbarItemTarget): Promise<boolean>
+    step(id: TopbarItemId, direction: TopbarStepDirection): Promise<boolean>
+    show(id: TopbarItemId): Promise<boolean>
+    hide(id: TopbarItemId): Promise<boolean>
+    reset(): Promise<boolean>
+  }
+
+  interface RidgePoint {
+    x: number
+    y: number
+  }
+
+  interface RidgeBox {
+    left: number
+    top: number
+    right: number
+    bottom: number
+  }
+
+  interface RidgeChipBox extends RidgeBox {
+    id: TopbarItemId
+  }
+
+  interface RidgeLaneBox extends RidgeBox {
+    slot: TopbarSlot
+    chips: RidgeChipBox[]
+  }
+
+  interface RidgeDragGeometry {
+    lanes: RidgeLaneBox[]
+    hideZone: RidgeBox | null
+  }
+
+  type RidgeDropTarget =
+    | { kind: 'lane'; slot: TopbarSlot; index: number }
+    | { kind: 'hide' }
+    | { kind: 'refused'; slot: TopbarSlot }
+
+  interface RidgeDragSetup {
+    measure: () => RidgeDragGeometry
+    scrollContainer: () => HTMLElement | null
+    ghost: import('react').RefObject<HTMLDivElement | null>
+    caret: import('react').RefObject<HTMLDivElement | null>
+    onLift(id: TopbarItemId): void
+    onTarget(target: RidgeDropTarget | null): void
+    onDrop(id: TopbarItemId, target: RidgeDropTarget | null): void
+    onCancel(): void
+  }
+
+  interface RidgeDragControls {
+    start(event: import('react').PointerEvent<HTMLElement>, id: TopbarItemId): void
+    takeSuppressedClick(): boolean
+  }
+
+  interface RidgeDragSession {
+    id: TopbarItemId
+    element: HTMLElement
+    origin: RidgePoint
+    grabOffset: RidgePoint
+    pointer: RidgePoint
+    active: boolean
+    geometry: RidgeDragGeometry | null
+    target: RidgeDropTarget | null
+    scroller: HTMLElement | null
+    scrollTimer: number | null
+  }
+
+  type RidgeKeyStep = 'earlier' | 'later' | 'first' | 'last'
+
+  type RidgeKeyIntent =
+    | { kind: 'grab' }
+    | { kind: 'drop' }
+    | { kind: 'cancel' }
+    | { kind: 'hide' }
+    | { kind: 'focus'; step: RidgeKeyStep }
+    | { kind: 'move'; step: RidgeKeyStep }
+    | { kind: 'native' }
+
+  interface RidgeClockPreviewData {
+    now: Date
+    prefs: ClockPrefs
+  }
+
+  interface RidgeStatusPreviewData {
+    battery: BatteryStatus
+    bluetooth: BluetoothState
+    network: NetworkStatus
+  }
+
+  interface RidgeMediaPreviewData {
+    playback: MediaPlayback
+    showVisualizer: boolean
+  }
+
+  interface RidgeTrayPreviewData {
+    visible: TrayIcon[]
+    overflow: TrayIcon[]
+    showOverflow: boolean
+  }
+
+  interface RidgePluginWidget {
+    id: string
+    pluginId: string
+    pluginName: string
+    slot: RidgePluginSlot
+    order: number
+  }
+
+  interface RidgePreviewData {
+    color: TopBarColor | null
+    clock: RidgeClockPreviewData
+    status: RidgeStatusPreviewData
+    media: RidgeMediaPreviewData
+    microphone: MicrophoneStatus
+    tray: RidgeTrayPreviewData
+    plugins: Record<RidgePluginSlot, RidgePluginWidget[]>
+  }
+
+  interface RidgeItemPreviewProps {
+    data: RidgePreviewData
+    darkText: boolean
+  }
+
+  type RidgeItemPreview = import('react').ComponentType<RidgeItemPreviewProps>
+
+  interface RidgePluginGroupFaceProps {
+    widgets: RidgePluginWidget[]
+    darkText: boolean
+  }
+
+  interface RidgeItemLink {
+    label: string
+    page: SettingsPageId
+    detail?(data: RidgePreviewData): string | null
+  }
+
+  interface RidgeItemDetail {
+    entries: string[]
+    links: RidgeItemLink[]
+    note(data: RidgePreviewData): string | null
+  }
+
+  interface RidgeCanvasHandle {
+    focusItem(id: TopbarItemId): void
+    abandonGrab(): void
+    announce(message: string): void
+  }
+
+  interface RidgeCanvasProps {
+    editor: RidgeEditor
+    previewData: RidgePreviewData
+    openItem: TopbarItemId | null
+    onOpenItemChange: (id: TopbarItemId | null) => void
+    onNothingLeftToFocus: () => void
+    renderCallout: (id: TopbarItemId) => import('react').ReactNode
+    measure?: () => RidgeDragGeometry
+    scrollContainer?: () => HTMLElement | null
+    ref?: import('react').Ref<RidgeCanvasHandle>
+  }
+
+  interface RidgeStripProps {
+    surface: TopbarSurface
+    lanes: Record<TopbarSlot, import('react').ReactNode>
+    ref?: import('react').Ref<HTMLDivElement>
+  }
+
+  type RidgeLaneDropState = 'idle' | 'accept' | 'refuse'
+
+  interface RidgeLaneProps {
+    slot: TopbarSlot
+    label: string
+    mode: RidgeLayoutMode
+    surface: TopbarSurface
+    dropState?: RidgeLaneDropState
+    moving?: boolean
+    children?: import('react').ReactNode
+    ref?: import('react').Ref<HTMLDivElement>
+  }
+
+  interface RidgeChipProps {
+    id: TopbarItemId
+    label: string
+    darkText: boolean
+    tabbable: boolean
+    expanded: boolean
+    grabbed: boolean
+    controls?: string
+    lifted?: boolean
+    sample?: boolean
+    describedBy?: string
+    onClick: () => void
+    onKeyDown?: (event: import('react').KeyboardEvent<HTMLButtonElement>) => void
+    onKeyUp?: (event: import('react').KeyboardEvent<HTMLButtonElement>) => void
+    onPointerDown?: (event: import('react').PointerEvent<HTMLButtonElement>) => void
+    onFocus?: () => void
+    children: import('react').ReactNode
+    ref?: import('react').Ref<HTMLButtonElement>
+  }
+
+  interface RidgeDragLayerProps {
+    surface: TopbarSurface
+    ghost: import('react').ReactNode | null
+    ghostRef?: import('react').Ref<HTMLDivElement>
+    caretRef?: import('react').Ref<HTMLDivElement>
+  }
+
+  interface RidgeHideZoneProps {
+    active: boolean
+    targeted: boolean
+    ref?: import('react').Ref<HTMLDivElement>
+  }
+
+  interface RidgeAnnouncerProps {
+    message: string
+  }
+
+  interface RidgeCalloutFrameProps {
+    id: string
+    mode: RidgeLayoutMode
+    children: import('react').ReactNode
+    ref?: import('react').Ref<HTMLDivElement>
+    leaderRef?: import('react').Ref<SVGPathElement>
+  }
+
+  interface RidgeCalloutProps {
+    item: TopbarLayoutItem
+    previewData: RidgePreviewData
+    highlightedSetting: string | null
+    sides: TopbarSlot[]
+    canStepEarlier: boolean
+    canStepLater: boolean
+    onSide: (slot: TopbarSlot) => void
+    onStep: (direction: TopbarStepDirection) => void
+    onHide: () => void
+    onNavigate: (path: string) => void
+    onClose: () => void
+  }
+
+  interface RidgeAddMenuProps {
+    id?: string
+    items: TopbarItemId[]
+    onSelect: (id: TopbarItemId) => void
+    onDismiss: () => void
+    onNavigate: (path: string) => void
+  }
+
+  interface RidgeHiddenItemNoticeProps {
+    item: TopbarItemId
+    onAdd: () => void
+    onClose: () => void
+  }
+
+  interface RidgePageProps {
+    onNavigate: (path: string) => void
+  }
+
+  interface AppearancePageProps {
+    onNavigate: (path: string) => void
+  }
+
   interface Window {
     alpineBoot?: AlpineBootState
     fileHandlers: {
@@ -1270,6 +1445,7 @@ declare global {
     }
     topbar: {
       setActiveRegion: (region: TopbarActiveRegion | null) => void
+      setInteractiveZones: (zones: TopbarInteractiveZone[]) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => () => void
       colorOverride: () => Promise<TopBarColor | null>
@@ -1356,7 +1532,7 @@ declare global {
       }
       network: {
         wifiSignal: () => Promise<NetworkStatus>
-        onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => void
+        onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => () => void
         wifiScan: () => Promise<WifiNetwork[] | null>
         wifiNetworks: () => Promise<WifiNetwork[]>
         onWifiScanUpdated: (callback: (data: WifiNetwork[]) => void) => () => void
@@ -1395,7 +1571,10 @@ declare global {
         keepDisplayLayout: () => Promise<{ ok: boolean }>
         revertDisplayLayout: () => Promise<DisplayInfo[]>
         onDisplaysChanged: (callback: (data: DisplayInfo[]) => void) => () => void
-        powerAction: (action: 'shutdown' | 'restart' | 'logout') => Promise<void>
+        powerAction: (action: PowerAction) => Promise<void>
+        powerConfirm: () => Promise<boolean>
+        setPowerConfirm: (value: boolean) => Promise<boolean>
+        onPowerConfirmChanged: (callback: (value: boolean) => void) => () => void
         onResume: (callback: () => void) => () => void
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>
@@ -1418,11 +1597,11 @@ declare global {
       }
       tray: {
         icons: () => Promise<TrayIcon[]>
-        onIconsChanged: (callback: (data: TrayIcon[]) => void) => void
+        onIconsChanged: (callback: (data: TrayIcon[]) => void) => () => void
         click: (id: string, button: 'left' | 'right', x: number, y: number) => Promise<void>
         layout: () => Promise<TrayLayout>
         setLayout: (layout: TrayLayout) => Promise<TrayLayout>
-        onLayoutChanged: (callback: (data: TrayLayout) => void) => void
+        onLayoutChanged: (callback: (data: TrayLayout) => void) => () => void
         display: () => Promise<TrayDisplaySetting>
         setDisplay: (showOnAllMonitors: boolean) => Promise<TrayDisplaySetting>
         onDisplayChanged: (callback: (data: TrayDisplaySetting) => void) => () => void

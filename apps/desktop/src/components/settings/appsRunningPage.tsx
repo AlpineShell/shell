@@ -1,16 +1,9 @@
 import { useMemo, useState } from 'react'
 import { AppWindow, Boxes, Search } from 'lucide-react'
+import { Avatar, Badge, ConfirmButton, EmptyState, ListRow, PageHeader, Spinner, TextField } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useRunningApps } from '../../hooks/useRunningApps'
 import { bandLabel, bandTone } from './appsShared'
-import Avatar from '../ui/avatar'
-import Badge from '../ui/badge'
-import ConfirmButton from '../ui/confirmButton'
-import EmptyState from '../ui/emptyState'
-import ListRow from '../ui/listRow'
-import PageHeader from '../ui/pageHeader'
-import Spinner from '../ui/spinner'
-import TextField from '../ui/textField'
 
 export default function AppsRunningPage() {
   const running = useRunningApps()

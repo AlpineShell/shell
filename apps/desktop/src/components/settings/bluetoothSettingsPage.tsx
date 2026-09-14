@@ -1,10 +1,5 @@
 import { Bluetooth, BluetoothConnected, Plus, RefreshCw, Unlink, Wrench } from 'lucide-react'
-import EmptyState from '../ui/emptyState'
-import IconButton from '../ui/iconButton'
-import ListRow from '../ui/listRow'
-import PageHeader from '../ui/pageHeader'
-import Spinner from '../ui/spinner'
-import Toggle from '../ui/toggle'
+import { EmptyState, IconButton, ListRow, PageHeader, Spinner, Toggle } from '@alpine/ui'
 import { useBluetooth } from '../../hooks/useBluetooth'
 import { useBluetoothRescan } from '../../hooks/useBluetoothRescan'
 import {

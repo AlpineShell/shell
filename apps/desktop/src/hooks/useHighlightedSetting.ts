@@ -27,6 +27,14 @@ export function highlightSetting(id: string) {
   }, HIGHLIGHT_DURATION)
 }
 
+export function highlightedSetting(): string | null {
+  return highlighted
+}
+
+export function onHighlightedSetting(listener: (id: string | null) => void): () => void {
+  return subscribe(() => listener(highlighted))
+}
+
 export function useHighlightedSetting(id: string): boolean {
   return useSyncExternalStore(subscribe, () => highlighted === id)
 }

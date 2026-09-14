@@ -1,12 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Check, X, AlertTriangle, FlaskConical } from 'lucide-react'
+import { Button, Card, IconButton, PageTitle, Row, Toggle } from '@alpine/ui'
 import { useTheme } from '../../hooks/useTheme'
-import Button from '../ui/button'
-import Card from '../ui/card'
-import IconButton from '../ui/iconButton'
-import PageTitle from '../ui/pageTitle'
-import Row from '../ui/row'
-import Toggle from '../ui/toggle'
 
 type Page = 'welcome' | 'options' | 'installing' | 'complete' | 'error'
 

@@ -1,11 +1,12 @@
 import { Component, useRef, useState, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
 import { useDarkText } from "../themeContext";
 import { useTrayIcons } from "../../hooks/useTrayIcons";
 import { useTrayLayout } from "../../hooks/useTrayLayout";
 import { useTrayDisplay } from "../../hooks/useTrayDisplay";
 import { useTraySettings } from "../../hooks/useTraySettings";
 import { composeTray } from "./tray/composeTray";
+import { TrayCaretGlyph, TrayIconGlyph } from "./faces/trayFace";
+import { TRAY_CARET_SLOT_CLASS, TRAY_CLUSTER_CLASS, TRAY_ICON_SLOT_CLASS } from "./faces/faceClasses";
 import PopupMenu from "./shared/popupMenu";
 
 const DRAG_THRESHOLD = 5;
@@ -186,7 +187,7 @@ function SystemTrayInner() {
     const draggedIcon = dragId ? visible.find((i) => i.id === dragId) || overflow.find((i) => i.id === dragId) : null;
 
     return (
-        <div ref={containerRef} className="flex items-center gap-0.5 self-stretch pr-2">
+        <div ref={containerRef} className={TRAY_CLUSTER_CLASS}>
             {visible.map((icon) => (
                 <button
                     key={icon.id}
@@ -200,9 +201,9 @@ function SystemTrayInner() {
                         e.preventDefault();
                         clickTray(icon.id, "right", e.currentTarget);
                     }}
-                    className={`flex items-center justify-center w-4 h-5 cursor-pointer transition-opacity ${dragId === icon.id ? "opacity-30" : "hover:opacity-90"}`}
+                    className={`${TRAY_ICON_SLOT_CLASS} cursor-pointer transition-opacity ${dragId === icon.id ? "opacity-30" : "hover:opacity-90"}`}
                 >
-                    {icon.icon ? <img src={icon.icon} alt="" className="w-3.5 h-3.5" draggable={false} /> : <div className="w-3 h-3 rounded-sm bg-white/20" />}
+                    <TrayIconGlyph src={icon.icon} />
                 </button>
             ))}
 
@@ -211,9 +212,9 @@ function SystemTrayInner() {
                     trigger={
                         <div
                             ref={caretRef}
-                            className={`flex items-center justify-center w-4 h-5 rounded-full transition-opacity ${overCaret ? (darkText ? "bg-black/20" : "bg-white/30") : "hover:opacity-60"}`}
+                            className={`${TRAY_CARET_SLOT_CLASS} transition-opacity ${overCaret ? (darkText ? "bg-black/20" : "bg-white/30") : "hover:opacity-60"}`}
                         >
-                            <ChevronDown size={12} color={darkText ? "black" : "white"} />
+                            <TrayCaretGlyph darkText={darkText} />
                         </div>
                     }
                 >

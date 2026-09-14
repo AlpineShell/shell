@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Bluetooth, Image as ImageIcon, RotateCcw, Wifi } from 'lucide-react'
+import { NavRow } from '@alpine/ui'
 import { useWallpaper } from '../../hooks/useWallpaper'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
-import NavRow from '../ui/navRow'
 
 const CACHE_KEY = 'alpine.systemInfo.v2'
 

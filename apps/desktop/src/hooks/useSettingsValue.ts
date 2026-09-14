@@ -78,30 +78,39 @@ function refusedMessage(reason: unknown): string {
   return message.trim().length > 0 ? message : 'Alpine could not apply that.'
 }
 
-function commit(store: SettingsValueStore, next: SettingsValue) {
+function startWrite(entry: SettingsValueEntry, next: SettingsValue): Promise<unknown> {
+  return new Promise((resolve) => resolve(entry.write(next)))
+}
+
+function commit(store: SettingsValueStore, next: SettingsValue): Promise<boolean> {
   const entry = store.entry
   store.pendingWrites += 1
   update(store, { value: next, staged: undefined, error: null })
-  Promise.resolve(entry.write(next))
+  return startWrite(entry, next)
     .then(() => {
       if (entry.applies === 'restart') update(store, { restartRequired: true })
+      return true
     })
     .catch((reason: unknown) => {
       update(store, { error: refusedMessage(reason) })
-      return entry.read().then((current) => update(store, { value: current })).catch(() => {})
+      return entry
+        .read()
+        .then((current) => update(store, { value: current }))
+        .catch(() => {})
+        .then(() => false)
     })
     .finally(() => {
       store.pendingWrites -= 1
     })
 }
 
-export function writeSettingsValue(entry: SettingsValueEntry, next: SettingsValue) {
+export function writeSettingsValue(entry: SettingsValueEntry, next: SettingsValue): Promise<boolean> {
   const store = settingsValueStore(entry)
   if (STAGED_APPLIES.includes(entry.applies)) {
     update(store, { staged: next, error: null })
-    return
+    return Promise.resolve(false)
   }
-  commit(store, next)
+  return commit(store, next)
 }
 
 export function confirmSettingsValue(entry: SettingsValueEntry) {
@@ -140,7 +149,9 @@ export function useSettingsValue(entry: SettingsValueEntry): SettingsValueBindin
     staged: snapshot.staged,
     restartRequired: snapshot.restartRequired,
     error: snapshot.error,
-    write: (next: SettingsValue) => writeSettingsValue(entry, next),
+    write: (next: SettingsValue) => {
+      writeSettingsValue(entry, next)
+    },
     confirm: () => confirmSettingsValue(entry),
     cancel: () => discardSettingsValue(entry),
   }

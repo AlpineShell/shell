@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "@alpine/ui/index.css";
+@source not "../vendor";
 
 @font-face {
   font-family: 'Geist';
@@ -45,137 +47,11 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-:root,
-:root[data-theme='light'] {
-  --alpine-ground: #d6d6d6;
-
-  --alpine-surface-0: var(--alpine-ground);
-  --alpine-surface-1: color-mix(in oklab, var(--alpine-ground), white 60%);
-  --alpine-surface-2: color-mix(in oklab, var(--alpine-ground), white 85%);
-  --alpine-surface-3: color-mix(in oklab, var(--alpine-ground), white 45%);
-
-  --alpine-line-hairline: rgba(0, 0, 0, 0.09);
-  --alpine-line-strong: rgba(0, 0, 0, 0.16);
-  --alpine-line-soft: rgba(0, 0, 0, 0.05);
-
-  --alpine-ink-primary: color-mix(in oklab, var(--alpine-ground), black 78%);
-  --alpine-ink-secondary: color-mix(in oklab, var(--alpine-ground), black 62%);
-  --alpine-ink-quiet: color-mix(in oklab, var(--alpine-ground), black 48%);
-  --alpine-ink-faint: color-mix(in oklab, var(--alpine-ground), black 32%);
-
-  --alpine-fill-solid: var(--alpine-ink-primary);
-  --alpine-fill-solid-hover: color-mix(in oklab, var(--alpine-ground), black 66%);
-  --alpine-on-solid: #ffffff;
-  --alpine-fill-subtle: color-mix(in oklab, var(--alpine-ground), white 70%);
-  --alpine-fill-ghost: rgba(0, 0, 0, 0.05);
-  --alpine-fill-track: rgba(0, 0, 0, 0.15);
-  --alpine-toggle-knob: #ffffff;
-
-  --alpine-focus-ring: var(--alpine-ink-primary);
-  --alpine-danger: #dc2626;
-  --alpine-success: #047857;
-  --alpine-warning: #b45309;
-  --alpine-scrim: rgba(0, 0, 0, 0.25);
-
-  --alpine-scrollbar-thumb: rgba(0, 0, 0, 0.18);
-  --alpine-scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
-
-  --alpine-shadow-float: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-}
-
-:root[data-theme='dark'] {
-  --alpine-ground: #202020;
-
-  --alpine-surface-0: var(--alpine-ground);
-  --alpine-surface-1: color-mix(in oklab, var(--alpine-ground), white 4%);
-  --alpine-surface-2: color-mix(in oklab, var(--alpine-ground), white 8%);
-  --alpine-surface-3: color-mix(in oklab, var(--alpine-ground), white 14%);
-
-  --alpine-line-hairline: rgba(255, 255, 255, 0.08);
-  --alpine-line-strong: rgba(255, 255, 255, 0.14);
-  --alpine-line-soft: rgba(255, 255, 255, 0.05);
-
-  --alpine-ink-primary: color-mix(in oklab, var(--alpine-ground), white 92%);
-  --alpine-ink-secondary: color-mix(in oklab, var(--alpine-ground), white 72%);
-  --alpine-ink-quiet: color-mix(in oklab, var(--alpine-ground), white 56%);
-  --alpine-ink-faint: color-mix(in oklab, var(--alpine-ground), white 38%);
-
-  --alpine-fill-solid: var(--alpine-ink-primary);
-  --alpine-fill-solid-hover: #ffffff;
-  --alpine-on-solid: var(--alpine-ground);
-  --alpine-fill-subtle: color-mix(in oklab, var(--alpine-ground), white 11%);
-  --alpine-fill-ghost: rgba(255, 255, 255, 0.06);
-  --alpine-fill-track: rgba(255, 255, 255, 0.18);
-  --alpine-toggle-knob: color-mix(in oklab, var(--alpine-ground), white 70%);
-
-  --alpine-focus-ring: var(--alpine-ink-primary);
-  --alpine-danger: #f87171;
-  --alpine-success: #34d399;
-  --alpine-warning: #fbbf24;
-  --alpine-scrim: rgba(0, 0, 0, 0.5);
-
-  --alpine-scrollbar-thumb: rgba(255, 255, 255, 0.16);
-  --alpine-scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
-
-  --alpine-shadow-float: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
-}
-
-@theme inline {
-  --color-surface-0: var(--alpine-surface-0);
-  --color-surface-1: var(--alpine-surface-1);
-  --color-surface-2: var(--alpine-surface-2);
-  --color-surface-3: var(--alpine-surface-3);
-
-  --color-line-hairline: var(--alpine-line-hairline);
-  --color-line-strong: var(--alpine-line-strong);
-  --color-line-soft: var(--alpine-line-soft);
-
-  --color-ink-primary: var(--alpine-ink-primary);
-  --color-ink-secondary: var(--alpine-ink-secondary);
-  --color-ink-quiet: var(--alpine-ink-quiet);
-  --color-ink-faint: var(--alpine-ink-faint);
-
-  --color-fill-solid: var(--alpine-fill-solid);
-  --color-fill-solid-hover: var(--alpine-fill-solid-hover);
-  --color-on-solid: var(--alpine-on-solid);
-  --color-fill-subtle: var(--alpine-fill-subtle);
-  --color-fill-ghost: var(--alpine-fill-ghost);
-  --color-fill-track: var(--alpine-fill-track);
-  --color-toggle-knob: var(--alpine-toggle-knob);
-
-  --color-focus-ring: var(--alpine-focus-ring);
-  --color-danger: var(--alpine-danger);
-  --color-success: var(--alpine-success);
-  --color-warning: var(--alpine-warning);
-  --color-scrim: var(--alpine-scrim);
-
-  --shadow-float: var(--alpine-shadow-float);
-}
-
 @theme {
   --color-systemBg: rgba(255, 255, 255, 0.7);
 
   --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  --font-display: 'Averia Serif Libre', Georgia, 'Times New Roman', serif;
-
-  --text-eyebrow: 0.6875rem;
-  --text-eyebrow--line-height: 1rem;
-  --text-eyebrow--font-weight: 600;
-  --text-eyebrow--letter-spacing: 0.05em;
-  --text-dense: 0.8125rem;
-  --text-dense--line-height: 1.25rem;
-
-  --radius-card: 0.75rem;
-  --radius-field: 0.5rem;
-
-  --spacing-stack: 1rem;
-  --spacing-gutter: 1.25rem;
-  --spacing-section: 2rem;
-
-  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-exit: cubic-bezier(0.32, 0, 0.67, 0);
-  --ease-state: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @property --slider-progress {
@@ -249,28 +125,6 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
-.ui-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 8px;
-  border-radius: 9999px;
-  background: linear-gradient(
-    to right,
-    var(--alpine-fill-solid) var(--slider-progress, 50%),
-    var(--alpine-fill-track) var(--slider-progress, 50%)
-  );
-  outline: none;
-  cursor: pointer;
-  transition: --slider-progress 0.15s ease-out;
-}
-
-.ui-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 0;
-  height: 0;
-}
-
 @keyframes menu-slide-in  { from { transform: translateY(-26px); } to { transform: translateY(0); } }
 @keyframes menu-slide-out { from { transform: translateY(0); } to { transform: translateY(-26px); } }
 @keyframes menu-fade-in   { from { opacity: 0; } to { opacity: 1; } }
@@ -317,11 +171,6 @@
 .settings-scope {
   font-family: var(--font-sans);
   color-scheme: light;
-}
-
-.focus-ring:focus-visible {
-  outline: 2px solid var(--alpine-focus-ring);
-  outline-offset: 2px;
 }
 
 :root[data-theme='dark'] .settings-scope {

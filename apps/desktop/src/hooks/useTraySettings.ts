@@ -1,12 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useShellState } from './useShellState'
+
+const DEFAULT_TRAY_SETTINGS: TraySettings = { enabled: true, showOverflow: true }
 
 export function useTraySettings() {
-  const [settings, setSettingsState] = useState<TraySettings>({ enabled: true, showOverflow: true })
-
-  useEffect(() => {
-    window.shell?.tray?.settings?.()?.then?.(setSettingsState)
-    window.shell?.tray?.onSettingsChanged?.(setSettingsState)
-  }, [])
-
+  const settings = useShellState(DEFAULT_TRAY_SETTINGS, window.shell.tray.settings, window.shell.tray.onSettingsChanged)
   return { settings }
 }

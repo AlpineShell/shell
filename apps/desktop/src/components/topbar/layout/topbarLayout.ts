@@ -1,17 +1,22 @@
 export const TOPBAR_SLOTS: TopbarSlot[] = ['left', 'center', 'right']
 
 export const TOPBAR_ITEMS: TopbarItemDefinition[] = [
-  { id: 'system-menu', slot: 'left', kind: 'element', label: 'System menu' },
-  { id: 'plugins-left', slot: 'left', kind: 'plugin-group', label: 'Plugins (left)' },
+  { id: 'system-menu', slot: 'left', kind: 'element', label: 'Power menu' },
+  { id: 'plugins-left', slot: 'left', kind: 'plugin-group', label: 'Left plugins' },
   { id: 'notice', slot: 'left', kind: 'element', label: 'Notices' },
-  { id: 'launcher', slot: 'center', kind: 'element', label: 'Search' },
+  { id: 'launcher', slot: 'center', kind: 'element', label: 'Search button' },
   { id: 'tray', slot: 'right', kind: 'element', label: 'System tray' },
   { id: 'media', slot: 'right', kind: 'element', label: 'Media' },
   { id: 'microphone', slot: 'right', kind: 'element', label: 'Microphone' },
-  { id: 'status', slot: 'right', kind: 'element', label: 'Status' },
-  { id: 'plugins-right', slot: 'right', kind: 'plugin-group', label: 'Plugins (right)' },
+  { id: 'status', slot: 'right', kind: 'element', label: 'Status icons' },
+  { id: 'plugins-right', slot: 'right', kind: 'plugin-group', label: 'Right plugins' },
   { id: 'clock', slot: 'right', kind: 'element', label: 'Clock' },
 ]
+
+export const TOPBAR_ITEM_SETTING_GATES: TopbarItemSettingGates = {
+  launcher: 'topbar-search-icon',
+  tray: 'tray-enabled',
+}
 
 export const EMPTY_TOPBAR_LAYOUT: StoredTopbarLayout = {
   slots: { left: [], center: [], right: [] },
@@ -22,13 +27,26 @@ export function findTopbarItem(id: string): TopbarItemDefinition | undefined {
   return TOPBAR_ITEMS.find((item) => item.id === id)
 }
 
+export function topbarItemLabel(id: TopbarItemId): string {
+  return findTopbarItem(id)?.label ?? id
+}
+
+export function isTopbarItemGated(id: TopbarItemId): id is TopbarGatedItemId {
+  return Object.hasOwn(TOPBAR_ITEM_SETTING_GATES, id)
+}
+
 function storedSlotIds(stored: StoredTopbarLayout | null | undefined, slot: TopbarSlot): string[] {
   const ids = stored?.slots?.[slot]
   return Array.isArray(ids) ? ids : []
 }
 
-function acceptsItem(definition: TopbarItemDefinition, slot: TopbarSlot): boolean {
+export function acceptsTopbarItem(definition: TopbarItemDefinition, slot: TopbarSlot): boolean {
   return definition.kind !== 'plugin-group' || definition.slot === slot
+}
+
+export function topbarSlotAcceptsItem(slot: TopbarSlot, id: TopbarItemId): boolean {
+  const definition = findTopbarItem(id)
+  return definition !== undefined && acceptsTopbarItem(definition, slot)
 }
 
 const EARLIER_IN_CATALOGUE = -1
@@ -66,7 +84,7 @@ function placeStoredItems(stored: StoredTopbarLayout | null | undefined): Record
   for (const slot of TOPBAR_SLOTS) {
     for (const id of storedSlotIds(stored, slot)) {
       const definition = findTopbarItem(id)
-      if (!definition || placed.has(definition.id) || !acceptsItem(definition, slot)) continue
+      if (!definition || placed.has(definition.id) || !acceptsTopbarItem(definition, slot)) continue
       placed.add(definition.id)
       bySlot[slot].push(definition.id)
     }

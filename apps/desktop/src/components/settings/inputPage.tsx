@@ -1,15 +1,9 @@
 import { useState } from 'react'
 import { AlertTriangle, ArrowLeftRight, ChevronDown, ChevronUp, Keyboard, Languages, Plus, Trash2 } from 'lucide-react'
+import { Badge, Button, Card, EmptyState, IconButton, Row, SearchPicker, Select } from '@alpine/ui'
 import { useKeyboardLayout } from '../../hooks/useKeyboardLayout'
+import { scoreField } from '../../lib/launcherSearch'
 import RegistryPage from './registryPage'
-import Badge from '../ui/badge'
-import Button from '../ui/button'
-import Card from '../ui/card'
-import EmptyState from '../ui/emptyState'
-import IconButton from '../ui/iconButton'
-import Row from '../ui/row'
-import SearchPicker from '../ui/searchPicker'
-import Select from '../ui/select'
 
 const LAYOUTS_GROUP = 'Languages and layouts'
 const INPUT_METHOD_GROUP = 'Input method'
@@ -213,6 +207,7 @@ function LanguageCard({
             placeholder={`Search ${options.length} installed layouts`}
             options={options}
             emptyMessage="No installed layout matches that."
+            score={scoreField}
             onSelect={(layoutId) => {
               setPicking(false)
               onAdd(language.tag, layoutId)

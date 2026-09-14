@@ -1,12 +1,7 @@
 import { useState } from 'react'
 import { ExternalLink, FileType } from 'lucide-react'
+import { Badge, Button, EmptyState, ListRow, PageHeader, Spinner } from '@alpine/ui'
 import { useFileHandlers } from '../../hooks/useFileHandlers'
-import Badge from '../ui/badge'
-import Button from '../ui/button'
-import EmptyState from '../ui/emptyState'
-import ListRow from '../ui/listRow'
-import PageHeader from '../ui/pageHeader'
-import Spinner from '../ui/spinner'
 
 export default function AppsDefaultsPage() {
   const { handlers, loading, refresh } = useFileHandlers()

@@ -1,11 +1,6 @@
 import type { ReactNode } from 'react'
+import { Button, Row, Segmented, Select, Slider, Toggle } from '@alpine/ui'
 import { useSettingsValue } from '../../hooks/useSettingsValue'
-import Row from '../ui/row'
-import Toggle from '../ui/toggle'
-import Slider from '../ui/slider'
-import Select from '../ui/select'
-import Segmented from '../ui/segmented'
-import Button from '../ui/button'
 import HotkeyRecorder from './hotkeyRecorder'
 
 export function ActionRow({
@@ -28,13 +23,19 @@ export function ActionRow({
   )
 }
 
-export function ValueRow({ entry, description }: { entry: SettingsValueEntry; description: string }) {
+const WIDE_CONTROLS = new Set<SettingsValueControl['kind']>(['slider', 'select', 'segmented', 'hotkey'])
+
+function controlTakesItsOwnLine(entry: SettingsValueEntry): boolean {
+  return WIDE_CONTROLS.has(entry.control.kind)
+}
+
+export function ValueRow({ entry, description, wideControlStacked = false }: ValueRowProps) {
   const { value, staged, restartRequired, error, write, confirm, cancel } = useSettingsValue(entry)
   const proposed = staged !== undefined
 
   return (
     <div className="flex flex-col gap-2">
-      <Row label={entry.label} description={description}>
+      <Row label={entry.label} description={description} stacked={wideControlStacked && controlTakesItsOwnLine(entry)}>
         <EntryControl entry={entry} value={staged ?? value} pending={proposed} onChange={write} />
       </Row>
       {proposed && <ConfirmBar label={entry.label} onConfirm={confirm} onCancel={cancel} />}

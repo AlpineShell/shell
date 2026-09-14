@@ -3,8 +3,11 @@ import {
   EMPTY_TOPBAR_LAYOUT,
   TOPBAR_ITEMS,
   findTopbarItem,
+  isTopbarItemGated,
   resolveTopbarLayout,
   storeTopbarLayout,
+  topbarItemLabel,
+  topbarSlotAcceptsItem,
   topbarSlotItems,
   visibleTopbarSlotItems,
 } from './topbarLayout'
@@ -144,5 +147,31 @@ describe('serialisation', () => {
     expect(stored.slots.left).toEqual(['system-menu', 'plugins-left', 'notice'])
     expect(stored.slots.center).toEqual(['launcher'])
     expect(stored.hidden).toEqual(['notice'])
+  })
+})
+
+describe('topbarItemLabel', () => {
+  it.each(TOPBAR_ITEMS)('names $id with its Ridge label, $label', ({ id, label }) => {
+    expect(topbarItemLabel(id)).toBe(label)
+  })
+})
+
+describe('isTopbarItemGated', () => {
+  it('names Search and Tray, the two items their own flags gate', () => {
+    expect(TOPBAR_ITEMS.map((item) => item.id).filter(isTopbarItemGated)).toEqual(['launcher', 'tray'])
+  })
+})
+
+describe('topbarSlotAcceptsItem', () => {
+  it.each<[TopbarSlot, TopbarItemId, boolean]>([
+    ['center', 'clock', true],
+    ['left', 'tray', true],
+    ['left', 'plugins-left', true],
+    ['center', 'plugins-left', false],
+    ['right', 'plugins-left', false],
+    ['right', 'plugins-right', true],
+    ['left', 'plugins-right', false],
+  ])('lets the %s side take %s: %s', (slot, id, accepted) => {
+    expect(topbarSlotAcceptsItem(slot, id)).toBe(accepted)
   })
 })

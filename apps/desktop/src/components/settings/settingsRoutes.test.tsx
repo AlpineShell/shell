@@ -70,6 +70,21 @@ describe('settings routes', () => {
     }
   })
 
+  it('renders Manage tray icons one level below Ridge, and no System tray page', () => {
+    const routes = Object.keys(SETTINGS_ROUTES)
+    expect(routes).toContain(settingsPageRoute('ridge'))
+    expect(settingsPageRoute('tray-icons')).toBe(`${settingsPageRoute('ridge')}/tray-icons`)
+    expect(routes).toContain(settingsPageRoute('tray-icons'))
+    expect(routes).not.toContain('tray')
+  })
+
+  it('says how Ridge renders every setting filed on it', () => {
+    const route = settingsPageRoute('ridge') as string
+    const filed = SETTINGS_REGISTRY.filter((entry) => entry.page === 'ridge' && entry.group !== SETTINGS_PAGE_GROUP)
+    expect(filed.length).toBeGreaterThan(0)
+    for (const entry of filed) expect(routeRendersEntry(route, entry), entry.id).toBe(true)
+  })
+
   it('claims to render only entries that belong to the route claiming them', () => {
     for (const [route, coverage] of Object.entries(SETTINGS_ROUTE_COVERAGE)) {
       expect(Object.keys(SETTINGS_ROUTES)).toContain(route)

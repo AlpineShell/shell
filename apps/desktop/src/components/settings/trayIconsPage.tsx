@@ -1,12 +1,9 @@
 import { ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react'
+import { Card, IconButton, PageTitle, Section } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useTrayIcons } from '../../hooks/useTrayIcons'
 import { useTrayLayout } from '../../hooks/useTrayLayout'
 import { composeTray } from '../topbar/tray/composeTray'
-import PageTitle from '../ui/pageTitle'
-import Section from '../ui/section'
-import IconButton from '../ui/iconButton'
-import Card from '../ui/card'
 
 export default function TrayIconsPage() {
   const icons = useTrayIcons()
@@ -43,7 +40,7 @@ export default function TrayIconsPage() {
       )}
 
       {visible.length > 0 && (
-        <Section title="Shown" subtitle="Icons displayed in the top bar. Reorder them or move them to the hidden area.">
+        <Section title="Shown" subtitle="Icons displayed on Ridge. Reorder them or move them to the hidden area.">
           <div className="flex flex-col gap-1">
             {visible.map((icon, i) => (
               <Row key={icon.id} icon={icon}>

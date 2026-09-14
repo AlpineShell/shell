@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   resolveTimeFormat,
   formatClock,
+  formatClockDate,
   formatHourLabel,
   stripHtml,
   layoutTimedEvents,
@@ -38,6 +39,21 @@ describe('formatClock', () => {
     expect(formatClock(new Date(2023, 0, 1, 14, 30), '12h')).toBe('2:30 PM')
     expect(formatClock(new Date(2023, 0, 1, 0, 0), '12h')).toBe('12:00 AM')
     expect(formatClock(new Date(2023, 0, 1, 12, 0), '12h')).toBe('12:00 PM')
+  })
+})
+
+describe('formatClockDate', () => {
+  it('writes the abbreviated month and the unpadded day', () => {
+    expect(formatClockDate(new Date(2026, 8, 12, 9, 41))).toBe('Sep 12')
+    expect(formatClockDate(new Date(2026, 2, 5))).toBe('Mar 5')
+  })
+  it('turns over to the next month at midnight', () => {
+    expect(formatClockDate(new Date(2026, 0, 31, 23, 59))).toBe('Jan 31')
+    expect(formatClockDate(new Date(2026, 1, 1, 0, 0))).toBe('Feb 1')
+  })
+  it('turns over from December to January at the year boundary', () => {
+    expect(formatClockDate(new Date(2025, 11, 31, 23, 59))).toBe('Dec 31')
+    expect(formatClockDate(new Date(2026, 0, 1, 0, 0))).toBe('Jan 1')
   })
 })
 
