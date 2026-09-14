@@ -14,6 +14,7 @@ declare global {
   interface ValueRowProps {
     entry: SettingsValueEntry
     description: string
+    info?: string
     wideControlStacked?: boolean
   }
 
@@ -1207,6 +1208,7 @@ declare global {
     id: string
     pluginId: string
     pluginName: string
+    pluginIcon: string | null
     slot: RidgePluginSlot
     order: number
   }

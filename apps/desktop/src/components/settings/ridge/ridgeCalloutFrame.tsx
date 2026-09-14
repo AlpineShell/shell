@@ -12,7 +12,7 @@ export default function RidgeCalloutFrame({ id, mode, children, ref, leaderRef }
       >
         <path ref={leaderRef} data-ridge-leader fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
       </svg>
-      <div className="relative z-10 w-full">
+      <div className="relative z-30 w-full">
         <div ref={ref} id={id} className="w-88 max-w-full">
           {children}
         </div>

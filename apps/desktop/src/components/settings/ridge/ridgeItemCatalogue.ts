@@ -22,15 +22,6 @@ function presenceNote(id: TopbarItemId): RidgeItemDetail['note'] {
   return (data) => (ridgeItemIsSample(id, data) ? (RIDGE_PRESENCE_NOTES[id] ?? null) : null)
 }
 
-function systemTimeFormatLabel(prefs: ClockPrefs): string {
-  return prefs.systemTimeFormat === '12h' ? '12-hour' : '24-hour'
-}
-
-function followingWindowsNote(data: RidgePreviewData): string | null {
-  const { prefs } = data.clock
-  return prefs.timeFormat === 'auto' ? `Following Windows (${systemTimeFormatLabel(prefs)}).` : null
-}
-
 function trayIconCounts(data: RidgePreviewData): string | null {
   const { visible, overflow } = data.tray
   if (visible.length + overflow.length === 0) return null
@@ -51,7 +42,7 @@ export const RIDGE_ITEM_DETAILS: Record<TopbarItemId, RidgeItemDetail> = {
   microphone: { entries: [], links: [], note: presenceNote('microphone') },
   status: { entries: [], links: [pageLink('wifi'), pageLink('bluetooth'), pageLink('battery')], note: noNote },
   'plugins-right': { entries: [], links: [pageLink('plugins')], note: presenceNote('plugins-right') },
-  clock: { entries: ['clock-time-format'], links: [pageLink('calendar')], note: followingWindowsNote },
+  clock: { entries: ['clock-time-format'], links: [pageLink('calendar')], note: noNote },
 }
 
 export function ridgeItemSearchEntryId(id: TopbarItemId): string {
@@ -85,6 +76,10 @@ function uniquePluginNames(widgets: RidgePluginWidget[]): string[] {
 export function ridgeItemTitle(id: TopbarItemId, data: RidgePreviewData): string {
   const names = uniquePluginNames(ridgePluginGroupWidgets(id, data) ?? [])
   return names.length > 0 ? names.join(', ') : topbarItemLabel(id)
+}
+
+export function ridgeItemPluginIcon(id: TopbarItemId, data: RidgePreviewData): string | null {
+  return ridgePluginGroupWidgets(id, data)?.find((widget) => widget.pluginIcon !== null)?.pluginIcon ?? null
 }
 
 export function ridgeDrawsItem(id: TopbarItemId, liveWidgetCounts: Record<RidgePluginSlot, number>): boolean {

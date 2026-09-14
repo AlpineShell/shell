@@ -39,13 +39,8 @@ function storedSlotIds(stored: StoredTopbarLayout | null | undefined, slot: Topb
   return Array.isArray(ids) ? ids : []
 }
 
-export function acceptsTopbarItem(definition: TopbarItemDefinition, slot: TopbarSlot): boolean {
-  return definition.kind !== 'plugin-group' || definition.slot === slot
-}
-
 export function topbarSlotAcceptsItem(slot: TopbarSlot, id: TopbarItemId): boolean {
-  const definition = findTopbarItem(id)
-  return definition !== undefined && acceptsTopbarItem(definition, slot)
+  return TOPBAR_SLOTS.includes(slot) && findTopbarItem(id) !== undefined
 }
 
 const EARLIER_IN_CATALOGUE = -1
@@ -83,7 +78,7 @@ function placeStoredItems(stored: StoredTopbarLayout | null | undefined): Record
   for (const slot of TOPBAR_SLOTS) {
     for (const id of storedSlotIds(stored, slot)) {
       const definition = findTopbarItem(id)
-      if (!definition || placed.has(definition.id) || !acceptsTopbarItem(definition, slot)) continue
+      if (!definition || placed.has(definition.id)) continue
       placed.add(definition.id)
       bySlot[slot].push(definition.id)
     }

@@ -11,14 +11,9 @@ import {
   Trash2,
 } from 'lucide-react'
 import { Avatar, Badge, Button, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, Segmented, Spinner, Toggle, type SegmentedOption } from '@alpine/ui'
+import { pluginLogoUrl } from '../../plugins/pluginAssets'
 
 type PluginTab = 'installed' | 'browse'
-
-function assetUrl(id: string, rel?: string | null): string | null {
-  if (!rel || rel.startsWith('lucide:')) return null
-  if (/^https?:\/\//i.test(rel)) return rel
-  return `alpine-plugin://${id}/${rel}`
-}
 
 function semverGt(a: string, b: string): boolean {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0)
@@ -46,7 +41,7 @@ function InstalledCard({
   removing: boolean
 }) {
   const enabled = plugin.enabled !== false
-  const logo = assetUrl(plugin.id, plugin.marketplace?.logo || plugin.icon)
+  const logo = pluginLogoUrl(plugin)
   const subtitle = plugin.marketplace?.shortDescription || plugin.description
   const version = versionLabel(plugin.version)
 
