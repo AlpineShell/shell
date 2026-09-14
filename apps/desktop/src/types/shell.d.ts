@@ -1082,6 +1082,30 @@ declare global {
     children: import('react').ReactNode
   }
 
+  interface RidgeRgb {
+    r: number
+    g: number
+    b: number
+  }
+
+  interface RidgeSwatchProps {
+    label: string
+    selected: boolean
+    onClick: () => void
+    background: string
+    light: boolean
+  }
+
+  interface RidgePresetMenuProps {
+    color: RidgeRgb | null
+    onPick: (color: RidgeRgb) => void
+  }
+
+  interface RidgePresetColor {
+    name: string
+    color: RidgeRgb
+  }
+
   interface RidgeLivePluginWidgetsProps {
     slot: RidgePluginSlot
     data: RidgePreviewData
@@ -1478,6 +1502,9 @@ declare global {
       colorOverride: () => Promise<TopBarColor | null>
       setColorOverride: (color: { r: number; g: number; b: number } | null) => Promise<TopBarColor | null>
       colorPalette: () => Promise<TopBarColor[]>
+      adaptToApps: () => Promise<boolean>
+      setAdaptToApps: (value: boolean) => Promise<boolean>
+      onAdaptToAppsChanged: (callback: (value: boolean) => void) => () => void
       searchIcon: () => Promise<boolean>
       setSearchIcon: (value: boolean) => Promise<boolean>
       onSearchIconChanged: (callback: (visible: boolean) => void) => () => void

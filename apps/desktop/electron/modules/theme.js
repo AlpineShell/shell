@@ -61,14 +61,7 @@ function getStorePath() {
 }
 
 function load() {
-  try {
-    const file = getStorePath()
-    if (!fs.existsSync(file)) return
-    const data = JSON.parse(fs.readFileSync(file, 'utf8'))
-    preference = toThemePreference(data.preference)
-  } catch (e) {
-    console.error('[theme] load error:', e.message)
-  }
+  preference = DEFAULT_PREFERENCE
 }
 
 function save() {
@@ -183,9 +176,9 @@ function publishIfChanged() {
   notifyThemeChange(theme)
 }
 
-function setPreference(value) {
+function setPreference() {
   ensureLoaded()
-  preference = toThemePreference(value)
+  preference = DEFAULT_PREFERENCE
   save()
   applyPreference()
   publishIfChanged()
@@ -203,7 +196,7 @@ module.exports = {
   followTopbarColor,
   handlers: {
     'theme/get': () => getTheme(),
-    'theme/set-preference': (_event, value) => setPreference(value),
+    'theme/set-preference': () => setPreference(),
   },
   start(b) {
     broadcast = b

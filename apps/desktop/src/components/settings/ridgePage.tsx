@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { CirclePlus, RotateCcw } from 'lucide-react'
 import { ConfirmButton, IconButton, PageHeader } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
@@ -6,7 +6,6 @@ import { highlightedSetting, onHighlightedSetting } from '../../hooks/useHighlig
 import { useRidgeEditor } from '../../hooks/useRidgeEditor'
 import { useRidgePreviewData } from '../../hooks/useRidgePreviewData'
 import { useRidgeLivePlugins } from '../../hooks/useRidgeLivePlugins'
-import { useElementSize } from '../../hooks/useElementSize'
 import { useOutsidePointer } from '../../hooks/useOutsidePointer'
 import { EMPTY_TOPBAR_LAYOUT, resolveTopbarLayout } from '../topbar/layout/topbarLayout'
 import { stepTopbarItem } from '../topbar/layout/topbarLayoutEdits'
@@ -17,6 +16,7 @@ import { nextFocusedItem, ridgeFocusOrder } from './ridge/ridgeKeyboard'
 import RidgeAddMenu from './ridge/ridgeAddMenu'
 import RidgeCallout from './ridge/ridgeCallout'
 import RidgeCanvas from './ridge/ridgeCanvas'
+import RidgeColorSection from './ridge/ridgeColorSection'
 import RidgeHiddenItemNotice from './ridge/ridgeHiddenItemNotice'
 
 const RESET_SETTING = 'ridge-layout-reset'
@@ -57,10 +57,6 @@ function neighbourOnceHidden(items: TopbarLayoutItem[], id: TopbarItemId): Topba
   return candidates.find((candidate) => candidate !== null && candidate !== id) ?? null
 }
 
-function pageCentringPadding(headerHeight: number): CSSProperties {
-  return { paddingBottom: `calc(${headerHeight}px + var(--spacing-section, 2rem))` }
-}
-
 function buttonIn(anchor: HTMLElement | null): HTMLButtonElement | null {
   return anchor?.querySelector('button') ?? null
 }
@@ -71,7 +67,6 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
   const editor = useRidgeEditor()
   const canvas = useRef<RidgeCanvasHandle>(null)
   const addAnchor = useRef<HTMLDivElement>(null)
-  const headerRef = useRef<HTMLDivElement>(null)
   const resetAnchor = useRef<HTMLDivElement>(null)
   const addMenuId = useId()
   const [openItem, setOpenItem] = useState(() => calloutForHighlight(highlightedSetting()))
@@ -81,7 +76,6 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
   const resetUnavailable = editor.isDefault || resetting
   const hiddenItem = hiddenOpenItem(editor.items, openItem)
   const addableItems = hiddenItemIds(editor.items).filter((id) => ridgeCanAddItem(id, previewData))
-  const headerHeight = useElementSize(headerRef).height
 
   useEffect(
     () =>
@@ -184,7 +178,7 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
 
   return (
     <div className="relative flex w-full flex-1 flex-col gap-section">
-      <div ref={headerRef}>
+      <div>
         <PageHeader title={settingsPage('ridge')?.label ?? ''} subtitle={PAGE_SUBTITLE}>
           <div
             ref={resetAnchor}
@@ -219,7 +213,7 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
           </div>
         </PageHeader>
       </div>
-      <div className="flex flex-1 flex-col" style={pageCentringPadding(headerHeight)}>
+      <div className="flex flex-col">
         <RidgeCanvas
           ref={canvas}
           editor={editor}
@@ -230,6 +224,7 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
           renderCallout={renderCallout}
         />
       </div>
+      <RidgeColorSection />
       {hiddenItem !== null && (
         <RidgeHiddenItemNotice item={hiddenItem} onAdd={() => addItem(hiddenItem)} onClose={closeHiddenItemNotice} />
       )}

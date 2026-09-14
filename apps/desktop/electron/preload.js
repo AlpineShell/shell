@@ -87,6 +87,13 @@ contextBridge.exposeInMainWorld('topbar', {
   colorOverride: () => ipcRenderer.invoke('topbar/color-override-get'),
   setColorOverride: (color) => ipcRenderer.invoke('topbar/color-override-set', color),
   colorPalette: () => ipcRenderer.invoke('topbar/color-palette'),
+  adaptToApps: () => ipcRenderer.invoke('topbar/fg-color-adapt-get'),
+  setAdaptToApps: (value) => ipcRenderer.invoke('topbar/fg-color-adapt-set', value),
+  onAdaptToAppsChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('topbar/fg-color-adapt-changed', handler)
+    return () => ipcRenderer.removeListener('topbar/fg-color-adapt-changed', handler)
+  },
   searchIcon: () => ipcRenderer.invoke('topbar/search-icon-get'),
   setSearchIcon: (value) => ipcRenderer.invoke('topbar/search-icon-set', value),
   onSearchIconChanged: (callback) => {

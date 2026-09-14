@@ -1,5 +1,4 @@
 import AboutPage from './aboutPage'
-import AppearancePage from './appearancePage'
 import AppsDefaultsPage from './appsDefaultsPage'
 import AppsHub from './appsHub'
 import AppsInstalledPage from './appsInstalledPage'
@@ -23,7 +22,7 @@ import WifiSettingsPage from './wifiSettingsPage'
 export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'home': (navigate) => <AboutPage onNavigate={navigate} />,
   'home/revert': () => <SystemRevertPage />,
-  'appearance': (navigate) => <AppearancePage onNavigate={navigate} />,
+  'appearance': (navigate) => <RidgePage onNavigate={navigate} />,
   'wallpaper': () => <WallpaperPage />,
   'ridge': (navigate) => <RidgePage onNavigate={navigate} />,
   'ridge/tray-icons': () => <TrayIconsPage />,
@@ -45,7 +44,6 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
 }
 
 export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
-  'appearance': { registryRows: true, renderedByThePage: ['topbar-color', 'topbar-color-automatic'] },
   'wallpaper': { registryRows: false, renderedByThePage: ['wallpaper'] },
   'ridge': {
     registryRows: false,
@@ -66,6 +64,9 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
       'tray-overflow',
       'tray-all-monitors',
       'clock-time-format',
+      'topbar-color',
+      'topbar-color-automatic',
+      'topbar-adapt-to-apps',
     ],
   },
   'search': { registryRows: true, renderedByThePage: [] },

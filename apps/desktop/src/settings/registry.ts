@@ -12,7 +12,6 @@ import {
   ChevronUp,
   Clock,
   Columns3,
-  Contrast,
   FileType,
   Frame,
   Grid2x2,
@@ -88,7 +87,7 @@ const RIDGE_DESCRIPTION = 'Arrange the bar across the top of your screen, and se
 
 const RIDGE_KEYWORDS = ['ridge', 'top bar', 'topbar', 'menu bar', 'status bar', 'bar layout']
 
-const PAGES_FOLDED_INTO_RIDGE = ['system tray']
+const PAGES_FOLDED_INTO_RIDGE = ['system tray', 'appearance', 'color', 'colour', 'ridge color']
 
 export const SETTINGS_PAGES: SettingsPage[] = [
   {
@@ -112,17 +111,6 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     section: 'home',
     kind: 'manager',
     order: 1,
-  },
-  {
-    id: 'appearance',
-    route: 'appearance',
-    label: 'Appearance',
-    description: 'Light or dark theme, and the colour of Ridge',
-    keywords: ['appearance', 'theme', 'dark mode', 'light mode', 'color', 'colour'],
-    icon: Palette,
-    section: 'personalization',
-    kind: 'settings',
-    order: 0,
   },
   {
     id: 'wallpaper',
@@ -358,12 +346,6 @@ export function settingsPageByRoute(route: string): SettingsPage | null {
 
 export function settingsPageRoute(id: SettingsPageId): string | null {
   return PAGES_BY_ID.get(id)?.route ?? null
-}
-
-const THEME_PREFERENCES: ThemePreference[] = ['topbar', 'system', 'light', 'dark']
-
-function toThemePreference(value: unknown): ThemePreference {
-  return THEME_PREFERENCES.includes(value as ThemePreference) ? (value as ThemePreference) : 'topbar'
 }
 
 function toTimeFormat(value: unknown): TimeFormat {
@@ -725,53 +707,13 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
 
   {
-    id: 'appearance',
-    label: 'Appearance',
-    description: 'Theme and the Ridge color',
-    keywords: ['appearance', 'ridge color', 'top bar', 'topbar', 'color', 'colour'],
-    icon: Palette,
-    page: 'appearance',
-    group: 'Page',
-    order: 0,
-    applies: 'instant',
-    control: { kind: 'navigate', path: 'appearance' },
-  },
-  {
-    id: 'theme',
-    label: 'Theme',
-    description: "Follow Ridge, follow Windows, or force light or dark for Alpine's own windows.",
-    hint: 'Follow Ridge or Windows, or force light or dark',
-    keywords: ['theme', 'dark mode', 'light mode', 'appearance', 'night mode', 'colour scheme', 'color scheme', 'top bar', 'topbar'],
-    icon: Contrast,
-    page: 'appearance',
-    group: 'Theme',
-    order: 1,
-    applies: 'instant',
-    defaultValue: 'topbar',
-    initial: () => window.shell.theme.initial.preference,
-    validate: toThemePreference,
-    read: () => window.shell.theme.get().then((theme) => theme.preference),
-    write: (value: string) => window.shell.theme.setPreference(toThemePreference(value)),
-    subscribe: (listener: (value: string) => void) =>
-      window.shell.theme.onChanged((theme) => listener(theme.preference)),
-    control: {
-      kind: 'segmented',
-      options: [
-        { value: 'topbar', label: 'Ridge' },
-        { value: 'system', label: 'System' },
-        { value: 'light', label: 'Light' },
-        { value: 'dark', label: 'Dark' },
-      ],
-    },
-  },
-  {
     id: 'topbar-color',
     label: 'Ridge color',
     description: 'Pick a preset or use a color from your wallpaper.',
     hint: 'Override the Ridge color',
     keywords: ['top bar color', 'topbar colour', 'accent', 'preset', 'swatch', 'palette', 'tint'],
     icon: Palette,
-    page: 'appearance',
+    page: 'ridge',
     group: 'Color',
     order: 2,
     applies: 'instant',
@@ -793,7 +735,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     hint: 'Follow the wallpaper color',
     keywords: ['automatic color', 'automatic colour', 'auto', 'wallpaper color', 'top bar', 'follow wallpaper'],
     icon: Sparkles,
-    page: 'appearance',
+    page: 'ridge',
     group: 'Color',
     order: 3,
     applies: 'instant',
@@ -807,6 +749,23 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     control: { kind: 'toggle' },
   },
 
+  {
+    id: 'topbar-adapt-to-apps',
+    label: 'Adapt to apps',
+    description: 'Ridge takes the color of a maximized app in front.',
+    hint: 'Take the color of the app in front',
+    keywords: ['adapt to apps', 'app color', 'window color', 'match app', 'foreground color'],
+    icon: Palette,
+    page: 'ridge',
+    group: 'Color',
+    order: 4,
+    applies: 'instant',
+    defaultValue: true,
+    read: () => window.topbar.adaptToApps(),
+    write: (value: boolean) => window.topbar.setAdaptToApps(value),
+    subscribe: (listener: (value: boolean) => void) => window.topbar.onAdaptToAppsChanged(listener),
+    control: { kind: 'toggle' },
+  },
   {
     id: 'calendar-days',
     label: 'Days shown',
