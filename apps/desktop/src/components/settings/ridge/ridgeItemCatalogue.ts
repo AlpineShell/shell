@@ -82,6 +82,11 @@ export function ridgeItemPluginIcon(id: TopbarItemId, data: RidgePreviewData): s
   return ridgePluginGroupWidgets(id, data)?.find((widget) => widget.pluginIcon !== null)?.pluginIcon ?? null
 }
 
+export function ridgeCanAddItem(id: TopbarItemId, data: RidgePreviewData): boolean {
+  const widgets = ridgePluginGroupWidgets(id, data)
+  return widgets === null || widgets.length > 0
+}
+
 export function ridgeDrawsItem(id: TopbarItemId, liveWidgetCounts: Record<RidgePluginSlot, number>): boolean {
   const definition = findTopbarItem(id)
   if (!definition || definition.kind !== 'plugin-group' || definition.slot === 'center') return true

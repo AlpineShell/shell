@@ -56,6 +56,7 @@ import {
   Wifi,
 } from 'lucide-react'
 import { TOPBAR_ITEMS, isTopbarItemGated, topbarItemLabel } from '../components/topbar/layout/topbarLayout'
+import { resolveTimeFormat } from '../components/topbar/calendar/calendarLayout'
 
 export const SETTINGS_PAGE_GROUP = 'Page'
 
@@ -369,6 +370,12 @@ function toTimeFormat(value: unknown): TimeFormat {
   return value === '12h' || value === '24h' ? value : 'auto'
 }
 
+const DEFAULT_TIME_FORMAT: ResolvedTimeFormat = '24h'
+
+function chosenTimeFormat(prefs: ClockPrefs | null): ResolvedTimeFormat {
+  return prefs ? resolveTimeFormat(prefs) : DEFAULT_TIME_FORMAT
+}
+
 function toCalendarDayCount(value: unknown): CalendarDayCount {
   return value === 2 || value === 3 ? value : 1
 }
@@ -587,24 +594,23 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'clock-time-format',
     label: 'Time format',
-    description: '12-hour, 24-hour or the Windows setting.',
+    description: 'How the clock on Ridge shows the time.',
     keywords: ['time format', 'clock', '12 hour', '24 hour', 'am pm', 'military time'],
     icon: Clock,
     page: 'ridge',
     group: topbarItemLabel('clock'),
     order: 1,
     applies: 'instant',
-    defaultValue: 'auto',
-    initial: () => toTimeFormat(window.shell.clock.initial?.timeFormat),
+    defaultValue: DEFAULT_TIME_FORMAT,
+    initial: () => chosenTimeFormat(window.shell.clock.initial),
     validate: toTimeFormat,
-    read: () => window.shell.clock.prefs().then((prefs) => prefs.timeFormat),
+    read: () => window.shell.clock.prefs().then(chosenTimeFormat),
     write: (value: string | number) => window.shell.clock.setPrefs({ timeFormat: toTimeFormat(value) }),
     subscribe: (listener: (value: string | number) => void) =>
-      window.shell.clock.onPrefsChanged((prefs) => listener(prefs.timeFormat)),
+      window.shell.clock.onPrefsChanged((prefs) => listener(chosenTimeFormat(prefs))),
     control: {
       kind: 'segmented',
       options: [
-        { value: 'auto', label: 'Auto' },
         { value: '12h', label: '12-hour' },
         { value: '24h', label: '24-hour' },
       ],

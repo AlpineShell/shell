@@ -1351,9 +1351,9 @@ declare global {
   interface RidgeAddMenuProps {
     id?: string
     items: TopbarItemId[]
+    previewData: RidgePreviewData
     onSelect: (id: TopbarItemId) => void
     onDismiss: () => void
-    onNavigate: (path: string) => void
   }
 
   interface RidgeHiddenItemNoticeProps {
