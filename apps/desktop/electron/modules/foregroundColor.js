@@ -24,6 +24,7 @@ const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
 
 const batterySaver = require('./batterySaver')
+const { isExposedOwnWindow } = require('./exposedOwnWindows')
 
 const SRCCOPY = 0x00CC0020
 
@@ -40,6 +41,7 @@ const sampledHwndPerDisplay = new Map()
 let startupIgnoreHwnd = null
 let displayRemovedListener = null
 let stopPolling = null
+let ridgeColoredWindowsProvider = null
 
 const ADAPT_STORE_FILE = 'foreground-color.json'
 let adaptToApps = true
@@ -194,6 +196,11 @@ function update(broadcast) {
   const displayId = getDisplayIdForWindow(hwnd)
   if (displayId == null) return
 
+  if (isExposedOwnWindow(hwnd, ridgeColoredWindowsProvider)) {
+    clearDisplay(displayId, broadcast)
+    return
+  }
+
   hwndPerDisplay.set(displayId, hwnd)
 
   if (sampledHwndPerDisplay.get(displayId) === hwnd && perDisplay.has(displayId)) return
@@ -245,6 +252,9 @@ module.exports = {
       }
       return result
     },
+  },
+  setRidgeColoredWindows(provider) {
+    ridgeColoredWindowsProvider = typeof provider === 'function' ? provider : null
   },
   start(broadcast) {
     const { app } = require('electron')

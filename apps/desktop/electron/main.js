@@ -558,6 +558,11 @@ function exposedOwnWindowHandles() {
   return handles
 }
 
+function ridgeColoredWindowHandles() {
+  if (!settingsWin || settingsWin.isDestroyed()) return []
+  try { return [settingsWin.getNativeWindowHandle().readUInt32LE(0)] } catch { return [] }
+}
+
 const SETTINGS_TITLE_BAR_HEIGHT = 48
 
 function settingsTitleBarOverlay() {
@@ -918,6 +923,7 @@ function startShellMode() {
   tiling.setShells(shells)
   tiling.setExposedOwnWindows(exposedOwnWindowHandles)
   winEvents.setExposedOwnWindows(exposedOwnWindowHandles)
+  foregroundColor.setRidgeColoredWindows(ridgeColoredWindowHandles)
   if (altTab && altTab.onTilingKey) {
     altTab.onTilingKey((direction, shift) => tiling.handleHotkey(direction, shift))
   }
