@@ -33,6 +33,7 @@ import {
   ridgeRefusedAnnouncement,
   ridgeSideLabel,
 } from './ridgeAnnouncements'
+import { ridgeCalloutPlacement } from './ridgeGeometry'
 import { ridgeDrawsItem, ridgeItemTitle } from './ridgeItemCatalogue'
 import { RIDGE_ITEM_PREVIEWS } from './ridgeItemPreviewMap'
 import { ridgeItemIsSample } from './ridgeSamples'
@@ -48,6 +49,7 @@ const LAYOUT_MODE: RidgeLayoutMode = 'strip'
 const RIDGE_BAR_FONT = 'system-ui, sans-serif'
 const REPEATED_MESSAGE_MARK = ' '
 const RIDGE_CHIP_SELECTOR = '[data-ridge-chip]'
+const CALLOUT_GAP = 12
 
 function laneDropState(target: RidgeDropTarget | null, slot: TopbarSlot): RidgeLaneDropState {
   if (target?.kind === 'lane' && target.slot === slot) return 'accept'
@@ -104,6 +106,7 @@ export default function RidgeCanvas({
   ref,
 }: RidgeCanvasProps) {
   const stageRef = useRef<HTMLDivElement>(null)
+  const stripAreaRef = useRef<HTMLDivElement>(null)
   const calloutRef = useRef<HTMLDivElement>(null)
   const leaderRef = useRef<SVGPathElement>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
@@ -118,6 +121,7 @@ export default function RidgeCanvas({
   const [announcement, setAnnouncement] = useState('')
   const [dragId, setDragId] = useState<TopbarItemId | null>(null)
   const [dropTarget, setDropTarget] = useState<RidgeDropTarget | null>(null)
+  const [placementFor, setPlacementFor] = useState<RidgeCalloutPlacementFor | null>(null)
 
   const calloutId = useId()
   const hintId = useId()
@@ -128,6 +132,8 @@ export default function RidgeCanvas({
   const order = ridgeFocusOrder(drawnItems)
   const tabbableId = activeId !== null && order.includes(activeId) ? activeId : (order[0] ?? null)
   const calloutItem = openItem !== null && order.includes(openItem) ? openItem : null
+  const calloutPlacement: RidgeCalloutPlacement =
+    placementFor !== null && placementFor.id === calloutItem ? placementFor.placement : 'below'
 
   function announce(message: string) {
     setAnnouncement((previous) => freshAnnouncement(previous, message))
@@ -334,6 +340,22 @@ export default function RidgeCanvas({
     if (document.activeElement !== chip) chip.focus()
   })
 
+  useLayoutEffect(() => {
+    const callout = calloutRef.current
+    const stripArea = stripAreaRef.current
+    const stage = stageRef.current
+    if (calloutItem === null || !callout || !stripArea || !stage) return
+    const strip = elementBox(stripArea)
+    const scroller = scrollContainer?.() ?? nearestScroller(stage)
+    const visibleBottom = scroller ? elementBox(scroller).bottom : window.innerHeight
+    const placement = ridgeCalloutPlacement(
+      callout.offsetHeight + CALLOUT_GAP,
+      visibleBottom - strip.bottom,
+      strip.top - elementBox(stage).top
+    )
+    if (placement !== calloutPlacement) setPlacementFor({ id: calloutItem, placement })
+  })
+
   function preview(id: TopbarItemId) {
     return createElement(RIDGE_ITEM_PREVIEWS[id], { data: previewData, darkText: surface.darkText })
   }
@@ -380,6 +402,14 @@ export default function RidgeCanvas({
     )
   }
 
+  function renderCalloutFrame(id: TopbarItemId) {
+    return (
+      <RidgeCalloutFrame id={calloutId} mode={LAYOUT_MODE} ref={calloutRef} leaderRef={leaderRef}>
+        {renderCallout(id)}
+      </RidgeCalloutFrame>
+    )
+  }
+
   const lanes = { left: renderLane('left'), center: renderLane('center'), right: renderLane('right') }
 
   return (
@@ -390,21 +420,21 @@ export default function RidgeCanvas({
         onBlur={onStageBlur}
         className={`relative grid flex-1 grid-cols-1 grid-rows-[1fr_auto_1fr] ${dragId ? 'cursor-grabbing' : ''}`}
       >
-        <div aria-hidden />
-        <div className="select-none" style={{ fontFamily: RIDGE_BAR_FONT }}>
+        <div className="relative">
+          {calloutItem && calloutPlacement === 'above' && (
+            <div className="absolute inset-x-0 bottom-0 flex flex-col pb-3">{renderCalloutFrame(calloutItem)}</div>
+          )}
+        </div>
+        <div ref={stripAreaRef} className="select-none" style={{ fontFamily: RIDGE_BAR_FONT }}>
           <RidgeFit>
             <RidgeStrip surface={surface} lanes={lanes} />
           </RidgeFit>
           <RidgeDragLayer surface={surface} ghost={dragId ? preview(dragId) : null} ghostRef={ghostRef} caretRef={caretRef} />
         </div>
         <div className="relative">
-          <div className="absolute inset-x-0 top-0 flex flex-col gap-3 pt-3">
-            {calloutItem && (
-              <RidgeCalloutFrame id={calloutId} mode={LAYOUT_MODE} ref={calloutRef} leaderRef={leaderRef}>
-                {renderCallout(calloutItem)}
-              </RidgeCalloutFrame>
-            )}
-          </div>
+          {calloutItem && calloutPlacement === 'below' && (
+            <div className="absolute inset-x-0 top-0 flex flex-col pt-3">{renderCalloutFrame(calloutItem)}</div>
+          )}
           <p id={hintId} className="sr-only">
             {RIDGE_KEYBOARD_HINT}
           </p>

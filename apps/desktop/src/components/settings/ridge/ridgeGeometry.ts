@@ -6,7 +6,7 @@ const EDGE_SCROLL_MAX_STEP = 12
 const CARET_WIDTH = 2
 const CARET_GAP = 2
 const LEADER_INSET = 16
-const LEADER_BEND_ABOVE_CALLOUT = 12
+const LEADER_BEND_NEAR_CALLOUT = 12
 
 const EMPTY_LANE_CARET_X: Record<TopbarSlot, (lane: RidgeBox) => number> = {
   left: (lane) => lane.left + CARET_GAP,
@@ -138,14 +138,28 @@ function leaderLandingX(x: number, callout: RidgeBox): number {
   return clamp(x, callout.left + inset, callout.right - inset)
 }
 
+function calloutSitsAbove(chip: RidgeBox, callout: RidgeBox): boolean {
+  return callout.bottom <= chip.top
+}
+
+function leaderBendY(startY: number, endY: number, above: boolean): number {
+  return above ? Math.min(startY, endY + LEADER_BEND_NEAR_CALLOUT) : Math.max(startY, endY - LEADER_BEND_NEAR_CALLOUT)
+}
+
 export function leaderPath(chip: RidgeBox, callout: RidgeBox): string {
+  const above = calloutSitsAbove(chip, callout)
   const startX = Math.round(middleX(chip))
-  const startY = Math.round(chip.bottom)
+  const startY = Math.round(above ? chip.top : chip.bottom)
   const endX = Math.round(leaderLandingX(startX, callout))
-  const endY = Math.round(callout.top)
+  const endY = Math.round(above ? callout.bottom : callout.top)
   if (startX === endX) return `M ${startX} ${startY} V ${endY}`
-  const bendY = Math.max(startY, endY - LEADER_BEND_ABOVE_CALLOUT)
-  return `M ${startX} ${startY} V ${bendY} H ${endX} V ${endY}`
+  return `M ${startX} ${startY} V ${leaderBendY(startY, endY, above)} H ${endX} V ${endY}`
+}
+
+export function ridgeCalloutPlacement(calloutHeight: number, spaceBelow: number, spaceAbove: number): RidgeCalloutPlacement {
+  if (calloutHeight <= spaceBelow) return 'below'
+  if (calloutHeight <= spaceAbove) return 'above'
+  return spaceAbove > spaceBelow ? 'above' : 'below'
 }
 
 function edgeScrollStep(distanceFromEdge: number): number {

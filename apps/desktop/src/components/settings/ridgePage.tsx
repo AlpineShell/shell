@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { CirclePlus, RotateCcw } from 'lucide-react'
 import { ConfirmButton, IconButton, PageHeader } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
@@ -6,6 +6,7 @@ import { highlightedSetting, onHighlightedSetting } from '../../hooks/useHighlig
 import { useRidgeEditor } from '../../hooks/useRidgeEditor'
 import { useRidgePreviewData } from '../../hooks/useRidgePreviewData'
 import { useRidgeLivePlugins } from '../../hooks/useRidgeLivePlugins'
+import { useElementSize } from '../../hooks/useElementSize'
 import { EMPTY_TOPBAR_LAYOUT, resolveTopbarLayout } from '../topbar/layout/topbarLayout'
 import { stepTopbarItem } from '../topbar/layout/topbarLayoutEdits'
 import { ridgeHiddenAnnouncement, ridgeShownAnnouncement } from './ridge/ridgeAnnouncements'
@@ -26,6 +27,8 @@ const ADD_LABEL = 'Add to Ridge'
 const RESET_LABEL = 'Reset Ridge'
 
 const RESET_CONFIRM_LABEL = 'Reset to default'
+
+const ADD_MENU_OFFSET = 8
 
 const FIRST_ITEM_AFTER_RESET = ridgeFocusOrder(resolveTopbarLayout(EMPTY_TOPBAR_LAYOUT))[0]
 
@@ -55,6 +58,10 @@ function neighbourOnceHidden(items: TopbarLayoutItem[], id: TopbarItemId): Topba
   return candidates.find((candidate) => candidate !== null && candidate !== id) ?? null
 }
 
+function pageCentringPadding(headerHeight: number): CSSProperties {
+  return { paddingBottom: `calc(${headerHeight}px + var(--spacing-section, 2rem))` }
+}
+
 function buttonIn(anchor: HTMLElement | null): HTMLButtonElement | null {
   return anchor?.querySelector('button') ?? null
 }
@@ -65,6 +72,7 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
   const editor = useRidgeEditor()
   const canvas = useRef<RidgeCanvasHandle>(null)
   const addAnchor = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
   const resetAnchor = useRef<HTMLDivElement>(null)
   const addMenuId = useId()
   const [openItem, setOpenItem] = useState(() => calloutForHighlight(highlightedSetting()))
@@ -73,6 +81,7 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
   const highlight = useSyncExternalStore(onHighlightedSetting, highlightedSetting)
   const resetUnavailable = editor.isDefault || resetting
   const hiddenItem = hiddenOpenItem(editor.items, openItem)
+  const headerHeight = useElementSize(headerRef).height
 
   useEffect(
     () =>
@@ -168,36 +177,38 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
   }
 
   return (
-    <div className="flex w-full flex-1 flex-col gap-section">
-      <PageHeader title={settingsPage('ridge')?.label ?? ''} subtitle={PAGE_SUBTITLE}>
-        <div
-          ref={resetAnchor}
-          data-setting={RESET_SETTING}
-          className={`flex rounded-field transition-colors duration-300 ${ridgeHighlightRing(highlight === RESET_SETTING)}`}
-        >
-          <ConfirmButton
-            iconOnly
-            label={RESET_LABEL}
-            confirmLabel={RESET_CONFIRM_LABEL}
-            icon={<RotateCcw size={16} />}
-            busy={resetting}
-            disabled={editor.isDefault}
-            onConfirm={resetRidge}
-          />
-        </div>
-        <div ref={addAnchor} className="flex">
-          <IconButton
-            label={ADD_LABEL}
-            aria-expanded={adding}
-            aria-controls={adding ? addMenuId : undefined}
-            onClick={() => setAdding((open) => !open)}
+    <div className="relative flex w-full flex-1 flex-col gap-section">
+      <div ref={headerRef}>
+        <PageHeader title={settingsPage('ridge')?.label ?? ''} subtitle={PAGE_SUBTITLE}>
+          <div
+            ref={resetAnchor}
+            data-setting={RESET_SETTING}
+            className={`flex rounded-field transition-colors duration-300 ${ridgeHighlightRing(highlight === RESET_SETTING)}`}
           >
-            <CirclePlus size={16} />
-          </IconButton>
-        </div>
-      </PageHeader>
+            <ConfirmButton
+              iconOnly
+              label={RESET_LABEL}
+              confirmLabel={RESET_CONFIRM_LABEL}
+              icon={<RotateCcw size={16} />}
+              busy={resetting}
+              disabled={editor.isDefault}
+              onConfirm={resetRidge}
+            />
+          </div>
+          <div ref={addAnchor} className="flex">
+            <IconButton
+              label={ADD_LABEL}
+              aria-expanded={adding}
+              aria-controls={adding ? addMenuId : undefined}
+              onClick={() => setAdding((open) => !open)}
+            >
+              <CirclePlus size={16} />
+            </IconButton>
+          </div>
+        </PageHeader>
+      </div>
       {adding && (
-        <div className="flex justify-end">
+        <div className="absolute right-0 z-40 flex justify-end" style={{ top: headerHeight + ADD_MENU_OFFSET }}>
           <RidgeAddMenu
             id={addMenuId}
             items={hiddenItemIds(editor.items)}
@@ -207,15 +218,17 @@ export default function RidgePage({ onNavigate }: RidgePageProps) {
           />
         </div>
       )}
-      <RidgeCanvas
-        ref={canvas}
-        editor={editor}
-        previewData={previewData}
-        openItem={openItem}
-        onOpenItemChange={setOpenItem}
-        onNothingLeftToFocus={focusAddButton}
-        renderCallout={renderCallout}
-      />
+      <div className="flex flex-1 flex-col" style={pageCentringPadding(headerHeight)}>
+        <RidgeCanvas
+          ref={canvas}
+          editor={editor}
+          previewData={previewData}
+          openItem={openItem}
+          onOpenItemChange={setOpenItem}
+          onNothingLeftToFocus={focusAddButton}
+          renderCallout={renderCallout}
+        />
+      </div>
       {hiddenItem !== null && (
         <RidgeHiddenItemNotice item={hiddenItem} onAdd={() => addItem(hiddenItem)} onClose={closeHiddenItemNotice} />
       )}

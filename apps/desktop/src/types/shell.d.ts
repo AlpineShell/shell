@@ -1066,6 +1066,13 @@ declare global {
 
   type RidgeLayoutMode = 'strip' | 'stacked'
 
+  type RidgeCalloutPlacement = 'below' | 'above'
+
+  interface RidgeCalloutPlacementFor {
+    id: TopbarItemId
+    placement: RidgeCalloutPlacement
+  }
+
   interface ElementSize {
     width: number
     height: number
