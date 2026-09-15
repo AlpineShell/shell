@@ -1,3 +1,4 @@
+import { pluginIdFromSettingsRoute } from '../../plugins/pluginSettingsPages'
 import AboutPage from './aboutPage'
 import AppsDefaultsPage from './appsDefaultsPage'
 import AppsHub from './appsHub'
@@ -8,6 +9,7 @@ import BatteryPage from './batteryPage'
 import BluetoothSettingsPage from './bluetoothSettingsPage'
 import DisplaysPage from './displaysPage'
 import InputPage from './inputPage'
+import PluginSettingsPage from './pluginSettingsPage'
 import PluginsPage from './pluginsPage'
 import RidgePage from './ridgePage'
 import SearchPage from './searchPage'
@@ -38,7 +40,7 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'apps/startup': () => <AppsStartupPage />,
   'apps/running': () => <AppsRunningPage />,
   'apps/defaults': () => <AppsDefaultsPage />,
-  'plugins': () => <PluginsPage />,
+  'plugins': (navigate) => <PluginsPage onNavigate={navigate} />,
   'updates': () => <UpdatesPage />,
 }
 
@@ -87,4 +89,11 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
   'apps/installed': { registryRows: false, renderedByThePage: ['app-uninstall'] },
   'apps/running': { registryRows: false, renderedByThePage: ['app-force-close'] },
   'plugins': { registryRows: false, renderedByThePage: ['plugin-uninstall'] },
+}
+
+export function settingsRouteView(path: string): SettingsRouteView | null {
+  const staticView = SETTINGS_ROUTES[path]
+  if (staticView) return staticView
+  const pluginId = pluginIdFromSettingsRoute(path)
+  return pluginId === null ? null : () => <PluginSettingsPage pluginId={pluginId} />
 }

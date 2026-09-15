@@ -7,12 +7,14 @@ import {
   Puzzle,
   RefreshCw,
   RotateCw,
+  Settings2,
   ShieldCheck,
   Store,
   Trash2,
 } from 'lucide-react'
 import { Avatar, Badge, Button, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, Segmented, Spinner, Toggle, type SegmentedOption } from '@alpine/ui'
 import { pluginLogoUrl } from '../../plugins/pluginAssets'
+import { pluginSettingsPage } from '../../plugins/pluginSettingsPages'
 
 type PluginTab = 'installed' | 'browse'
 
@@ -30,17 +32,7 @@ function versionLabel(version?: string | null): string | null {
   return version && version !== '0.0.0' ? `v${version}` : null
 }
 
-function InstalledCard({
-  plugin,
-  onToggle,
-  onUninstall,
-  removing,
-}: {
-  plugin: PluginRecord
-  onToggle: (p: PluginRecord) => void
-  onUninstall: (p: PluginRecord) => void
-  removing: boolean
-}) {
+function InstalledCard({ plugin, settingsRoute, removing, onToggle, onUninstall, onNavigate }: InstalledPluginCardProps) {
   const enabled = plugin.enabled !== false
   const logo = pluginLogoUrl(plugin)
   const subtitle = plugin.marketplace?.shortDescription || plugin.description
@@ -60,6 +52,11 @@ function InstalledCard({
         detail={subtitle || plugin.id}
         actions={
           <>
+            {settingsRoute && (
+              <IconButton label={`${plugin.name} settings`} onClick={() => onNavigate(settingsRoute)}>
+                <Settings2 size={16} />
+              </IconButton>
+            )}
             {!plugin.preset && (
               <ConfirmButton
                 iconOnly
@@ -137,7 +134,7 @@ function BrowseCard({
   )
 }
 
-export default function PluginsPage() {
+export default function PluginsPage({ onNavigate }: PluginsPageProps) {
   const [tab, setTab] = useState<PluginTab>('installed')
   const [plugins, setPlugins] = useState<PluginRecord[]>([])
   const [reloading, setReloading] = useState(false)
@@ -280,9 +277,11 @@ export default function PluginsPage() {
               <InstalledCard
                 key={plugin.id}
                 plugin={plugin}
+                settingsRoute={pluginSettingsPage(plugin)?.route ?? null}
+                removing={removingId === plugin.id}
                 onToggle={toggle}
                 onUninstall={uninstall}
-                removing={removingId === plugin.id}
+                onNavigate={onNavigate}
               />
             ))}
           </ul>

@@ -158,6 +158,15 @@ contextBridge.exposeInMainWorld('plugins', {
     ipcRenderer.on('plugins/reload', handler)
     return () => ipcRenderer.removeListener('plugins/reload', handler)
   },
+  settings: {
+    get: (pluginId) => ipcRenderer.invoke('plugins/settings-get', pluginId),
+    set: (pluginId, key, value) => ipcRenderer.invoke('plugins/settings-set', { pluginId, key, value }),
+    onChanged: (callback) => {
+      const handler = (_event, payload) => callback(payload)
+      ipcRenderer.on('plugins/settings-changed', handler)
+      return () => ipcRenderer.removeListener('plugins/settings-changed', handler)
+    },
+  },
 })
 
 contextBridge.exposeInMainWorld('fileHandlers', {

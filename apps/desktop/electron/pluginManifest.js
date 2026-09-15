@@ -6,6 +6,7 @@ const {
   satisfiesRange,
   MARKETPLACE_CATEGORIES,
   isSemver,
+  validatePluginSettings,
 } = require('@alpine/plugin-sdk')
 
 const CATEGORY_SET = new Set(MARKETPLACE_CATEGORIES)
@@ -61,9 +62,33 @@ function confinedFile(realBase, rel) {
   return st.isFile() ? real : null
 }
 
+function isSettingsPageIcon(realBase, icon) {
+  return typeof icon === 'string' && (icon.startsWith('lucide:') || !!confinedFile(realBase, icon))
+}
+
+function settingsPageProblem(page, realBase) {
+  if (typeof page.label !== 'string' || !page.label.trim()) return "'label' must be a non-empty string"
+  if (page.icon != null && !isSettingsPageIcon(realBase, page.icon)) return "'icon' must be 'lucide:<Name>' or a file inside the plugin folder"
+  if (page.topLevel != null && typeof page.topLevel !== 'boolean') return "'topLevel' must be true or false"
+  if (page.path != null && typeof page.path !== 'string') return "'path' must be a string"
+  return null
+}
+
+function settingsPage(page) {
+  return { ...page, icon: page.icon || null, topLevel: page.topLevel === true, export: page.export || null }
+}
+
+function validateSettings(raw, apiVersion, push) {
+  const { settings, issues } = validatePluginSettings(raw, apiVersion)
+  for (const issue of issues) push(`${issue.path}: ${issue.message}`)
+  return settings
+}
+
 function validateContributions(raw, apiVersion, realBase, push) {
   const out = {}
   if (!raw || typeof raw !== 'object') return out
+  const settings = validateSettings(raw.settings, apiVersion, push)
+  if (settings.length) out.settings = settings
   for (const key of CONTRIBUTION_KEYS) {
     const list = arr(raw[key])
     const kept = []
@@ -77,6 +102,12 @@ function validateContributions(raw, apiVersion, realBase, push) {
         continue
       }
       if (typeof c.since === 'number' && c.since > apiVersion) continue
+      if (key === 'settingsPages') {
+        const problem = settingsPageProblem(c, realBase)
+        if (problem) push(`contributes.settingsPages: ${problem}`)
+        else kept.push(settingsPage(c))
+        continue
+      }
       if (key === 'topbarWidgets' && !['left', 'center', 'right'].includes(c.slot)) {
         push(`contributes.topbarWidgets: invalid slot '${c.slot}'`)
         continue

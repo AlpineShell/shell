@@ -1,4 +1,6 @@
 import { getHost, hostReact } from './host'
+import type { PluginSettingValue } from './contributions'
+import type { PluginSettingState } from './settings'
 
 export function usePluginData<T>(channel: string, initial: T): T {
   return getHost().usePluginData<T>(channel, initial)
@@ -12,22 +14,10 @@ export const useTopbarTheme = (): { dark: boolean; bg: string } => {
   return host.useTopbarTheme ? host.useTopbarTheme() : { dark: host.useDarkText(), bg: host.useTopbarBg() }
 }
 
-export function usePluginSetting<T>(key: string, def: T): [T, (v: T) => void] {
+export function usePluginSetting<T extends PluginSettingValue = PluginSettingValue>(pluginId: string, key: string): PluginSettingState<T> {
   const host = getHost()
-  const R = hostReact()
-  const [value, setValue] = R.useState<T>(def)
-  R.useEffect(() => {
-    let alive = true
-    if (host.getSetting) host.getSetting<T>(key, def).then((v) => { if (alive) setValue(v) }).catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [key])
-  const set = (v: T) => {
-    setValue(v)
-    if (host.setSetting) void host.setSetting<T>(key, v)
-  }
-  return [value, set]
+  if (!host.usePluginSetting) throw new Error('[alpine-plugin-sdk] this Alpine Shell has no plugin settings')
+  return host.usePluginSetting<T>(pluginId, key)
 }
 
 export function useShell(): Record<string, (...args: unknown[]) => Promise<unknown>> {

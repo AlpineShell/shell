@@ -58,6 +58,36 @@ const { usePluginData } = window.alpine
 const usage = usePluginData('claude-usage', null)   // { ok, sessionPercent, limits, ... }
 ```
 
+## Settings (`contributes.settings`)
+
+Declare toggles, selects and sliders in `plugin.json` and the shell draws them: in your widget's Ridge
+callout (Settings → Ridge → click your widget) and on your plugin's own settings page (the gear on its
+row in Settings → Plugins). The shell stores the values and falls back to `default`.
+
+```json
+"contributes": {
+  "topbarWidgets": [{ "slot": "right" }],
+  "settings": [
+    { "key": "unit", "type": "select", "label": "Unit", "default": "c",
+      "options": [{ "value": "c", "label": "Celsius" }, { "value": "f", "label": "Fahrenheit" }] },
+    { "key": "showWind", "type": "toggle", "label": "Show wind", "info": "Adds the wind speed.", "default": false },
+    { "key": "refresh", "type": "slider", "label": "Refresh every", "default": 10, "min": 5, "max": 60, "step": 5, "unit": "min" }
+  ],
+  "settingsPages": [{ "label": "Weather", "export": "WeatherSettings", "topLevel": true }]
+}
+```
+
+`usePluginSetting(pluginId, key)` returns `[value, setValue]` and re-renders when the value changes
+anywhere. A backend reads `ctx.settings.get(key)` and listens with `ctx.settings.onChange((key, value) => …)`.
+
+```js
+const { usePluginSetting } = window.alpine
+const [unit] = usePluginSetting('com.alpine.weather', 'unit')
+```
+
+`settingsPages` is optional: a plugin with `settings` gets a page named after it. Declare one to rename the
+page, list it in the sidebar (`topLevel`), or render your own component (`export`) below the rows.
+
 ## Dropdowns (`PopupMenu`)
 
 The topbar is a transparent 24px strip, so a widget can't overflow with a plain element. Use the host's

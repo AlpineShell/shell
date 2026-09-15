@@ -7,6 +7,7 @@ import { useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { useDarkText, useTopbarBg } from '../components/themeContext'
 import PopupMenu from '../components/topbar/shared/popupMenu'
+import { usePluginSetting } from '../hooks/usePluginSetting'
 
 let installed = false
 
@@ -67,6 +68,7 @@ export function installPluginRuntime() {
     useDarkText,
     useTopbarBg,
     usePluginData,
+    usePluginSetting,
     sendCommand,
     store: { createStore, useStore, useShallow },
     PopupMenu,

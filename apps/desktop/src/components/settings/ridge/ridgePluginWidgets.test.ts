@@ -4,6 +4,8 @@ import { ridgePluginRecord } from './ridgeTestFixtures'
 
 const NOTES_PLUGIN = { id: 'com.example.notes', name: 'Notes' }
 
+const FAHRENHEIT: PluginSettingDeclaration = { key: 'fahrenheit', type: 'toggle', label: 'Fahrenheit', default: false }
+
 function pluginWithWidgets(topbarWidgets: unknown[], overrides: Partial<PluginRecord> = {}): PluginRecord {
   return ridgePluginRecord({ contributes: { topbarWidgets }, ...overrides })
 }
@@ -21,6 +23,7 @@ describe('pluginWidgetPlaceholders', () => {
         pluginId: 'com.example.weather',
         pluginName: 'Weather',
         pluginIcon: null,
+        pluginSettings: [],
         slot: 'left',
         order: 2,
       },
@@ -38,6 +41,11 @@ describe('pluginWidgetPlaceholders', () => {
     expect(pluginWidgetPlaceholders([withLogo], 'right')[0].pluginIcon).toBe('alpine-plugin://com.example.weather/logo.png')
   })
 
+  it("carries the plugin's settings, so its callout can list them", () => {
+    const records = [ridgePluginRecord({ contributes: { topbarWidgets: [{ slot: 'right' }], settings: [FAHRENHEIT] } })]
+    expect(pluginWidgetPlaceholders(records, 'right')[0].pluginSettings).toEqual([FAHRENHEIT])
+  })
+
   it.each<[string, Partial<PluginRecord>]>([
     ['disabled', { enabled: false }],
     ['unable to load', { loadable: false }],
@@ -53,6 +61,7 @@ describe('pluginWidgetPlaceholders', () => {
         pluginId: 'com.example.weather',
         pluginName: 'Weather',
         pluginIcon: null,
+        pluginSettings: [],
         slot: 'right',
         order: 0,
       },

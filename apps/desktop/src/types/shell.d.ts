@@ -511,6 +511,103 @@ declare global {
 
   type PluginListItem = PluginRecord
 
+  type PluginSettingDeclaration = import('@alpine/plugin-sdk').PluginSettingContribution
+
+  type PluginSettingValue = import('@alpine/plugin-sdk').PluginSettingValue
+
+  type PluginSettingValues = import('@alpine/plugin-sdk').PluginSettingValues
+
+  type PluginSettingsPageDeclaration = import('@alpine/plugin-sdk').SettingsPageContribution
+
+  interface PluginSettingsChange {
+    pluginId: string
+    values: PluginSettingValues
+  }
+
+  type PluginSettingWriteResult = { ok: true; values: PluginSettingValues } | { ok: false; error: string }
+
+  interface PluginSettingsPageEntry {
+    pluginId: string
+    pluginName: string
+    route: string
+    label: string
+    iconUrl: string | null
+    topLevel: boolean
+    exportName: string | null
+    entry: string
+    enabled: boolean
+    settings: PluginSettingDeclaration[]
+  }
+
+  interface PluginSettingGroup {
+    pluginId: string
+    pluginName: string
+    settings: PluginSettingDeclaration[]
+  }
+
+  interface PluginSettingRowsProps {
+    pluginId: string
+    settings: PluginSettingDeclaration[]
+    wideControlStacked?: boolean
+  }
+
+  interface PluginSettingsPageProps {
+    pluginId: string
+  }
+
+  interface PluginPageComponentProps {
+    page: PluginSettingsPageEntry
+    exportName: string
+  }
+
+  interface PluginPageBoundaryProps {
+    id: string
+    fallback: import('react').ReactNode
+    children: import('react').ReactNode
+  }
+
+  type PluginComponentLoad =
+    | { status: 'loading' }
+    | { status: 'missing' }
+    | { status: 'ready'; component: import('react').ComponentType }
+
+  interface PluginsPageProps {
+    onNavigate: (path: string) => void
+  }
+
+  interface InstalledPluginCardProps {
+    plugin: PluginRecord
+    settingsRoute: string | null
+    removing: boolean
+    onToggle: (plugin: PluginRecord) => void
+    onUninstall: (plugin: PluginRecord) => void
+    onNavigate: (path: string) => void
+  }
+
+  interface SettingsNavButtonProps {
+    label: string
+    active: boolean
+    icon: import('react').ReactNode
+    onClick: () => void
+  }
+
+  interface PluginPagesNavProps {
+    pages: PluginSettingsPageEntry[]
+    activeRoute: string | null
+    onNavigate: (path: string) => void
+  }
+
+  interface PluginPageIconProps {
+    page: PluginSettingsPageEntry
+    active: boolean
+  }
+
+  interface SettingsBreadcrumbProps {
+    path: string
+    pluginPages: PluginSettingsPageEntry[]
+    onNavigate: (path: string) => void
+  }
+
   interface MarketplacePlugin {
     id: string
     name: string
@@ -733,6 +830,7 @@ declare global {
     useDarkText: () => boolean
     useTopbarBg: () => string
     usePluginData: <T>(channel: string, initial: T) => T
+    usePluginSetting: <T extends PluginSettingValue = PluginSettingValue>(pluginId: string, key: string) => [T, (value: T) => void]
     sendCommand: (pluginId: string, name: string, payload?: unknown) => Promise<PluginCommandResult>
     store: AlpineStoreRuntime
     PopupMenu: import('react').ComponentType<{
@@ -1251,6 +1349,7 @@ declare global {
     pluginId: string
     pluginName: string
     pluginIcon: string | null
+    pluginSettings: PluginSettingDeclaration[]
     slot: RidgePluginSlot
     order: number
   }
@@ -1441,6 +1540,11 @@ declare global {
       getData: <T = unknown>(channel: string) => Promise<T | null>
       onData: <T = unknown>(channel: string, callback: (data: T) => void) => () => void
       onReload: (callback: () => void) => () => void
+      settings: {
+        get: (pluginId: string) => Promise<PluginSettingValues>
+        set: (pluginId: string, key: string, value: PluginSettingValue) => Promise<PluginSettingWriteResult>
+        onChanged: (callback: (change: PluginSettingsChange) => void) => () => void
+      }
     }
     alpine?: AlpinePluginRuntime
     setup: {

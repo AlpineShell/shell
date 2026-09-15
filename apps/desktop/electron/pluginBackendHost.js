@@ -1,6 +1,7 @@
 const path = require('path')
 const { utilityProcess } = require('electron')
 const plugins = require('./modules/plugins')
+const pluginSettings = require('./modules/pluginSettings')
 const pluginWindows = require('./pluginWindows')
 const { launchCommand } = require('./shellLaunch')
 
@@ -86,6 +87,7 @@ function startBackend(record) {
     id: record.id,
     dir: path.dirname(entry),
     entry,
+    settings: pluginSettings.getValues(record.id),
     launch: launchCommand({
       execPath: process.execPath,
       argv: process.argv,
@@ -108,8 +110,12 @@ function sendToBackend(pluginId, message) {
   try {
     state.proc.postMessage(message)
   } catch (e) {
-    console.error(`[plugin-backend:${pluginId}] window event failed:`, e && e.message)
+    console.error(`[plugin-backend:${pluginId}] ${message && message.type} message failed:`, e && e.message)
   }
+}
+
+function sendSettings(pluginId, values) {
+  sendToBackend(pluginId, { type: 'settings', values })
 }
 
 function sendCommand(id, name, payload, options) {
@@ -181,6 +187,7 @@ module.exports = {
     broadcastFn = broadcast
     pluginWindows.configure({ send: sendToBackend })
     pluginWindows.start()
+    pluginSettings.onSettingsChanged(sendSettings)
     plugins.onPluginsChanged(sync)
     sync()
   },
