@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { validatePluginSettings } from '@alpine/plugin-sdk'
 import { parseManifest } from './pluginManifest.js'
 
 let dir
@@ -120,6 +121,96 @@ describe('contributes.launcherFolders openCommand', () => {
 
   it('rejects an empty open command', () => {
     const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps', openCommand: '' }] }))
+    expect(record.valid).toBe(false)
+  })
+})
+
+const UNIT_SETTING = {
+  key: 'unit',
+  type: 'select',
+  label: 'Unit',
+  default: 'c',
+  options: [
+    { value: 'c', label: 'Celsius' },
+    { value: 'f', label: 'Fahrenheit' },
+  ],
+}
+
+const WIND_SETTING = { key: 'show-wind', type: 'toggle', label: 'Show wind', info: 'Adds the wind speed.', default: false }
+
+describe('contributes.settings', () => {
+  it('keeps valid settings on the record', () => {
+    const record = write(baseManifest({ settings: [UNIT_SETTING, WIND_SETTING] }))
+    expect(record.errors).toEqual([])
+    expect(record.contributes.settings).toEqual([UNIT_SETTING, WIND_SETTING])
+  })
+
+  it('drops an invalid setting and says which one and why', () => {
+    const refresh = { key: 'refresh', type: 'slider', label: 'Refresh', default: 5, min: 10, max: 1 }
+    const record = write(baseManifest({ settings: [UNIT_SETTING, refresh] }))
+    expect(record.contributes.settings).toEqual([UNIT_SETTING])
+    expect(record.errors).toEqual(["contributes.settings.refresh: a slider's 'min' must be less than its 'max'"])
+  })
+
+  it('drops a setting whose key another setting already uses', () => {
+    const record = write(baseManifest({ settings: [UNIT_SETTING, { ...WIND_SETTING, key: 'unit' }] }))
+    expect(record.contributes.settings).toEqual([UNIT_SETTING])
+    expect(record.errors).toEqual(['contributes.settings.unit: another setting already uses this key'])
+  })
+
+  it('applies exactly the rules the SDK applies', () => {
+    const declared = [
+      UNIT_SETTING,
+      { ...UNIT_SETTING, key: 'fallback', default: 'k' },
+      { key: 'bad key', type: 'toggle', label: 'Bad', default: true },
+      WIND_SETTING,
+      { key: 'later', type: 'toggle', label: 'Later', default: true, since: 99 },
+    ]
+    const sdk = validatePluginSettings(declared, 1)
+    const record = write(baseManifest({ settings: declared }))
+    expect(record.contributes.settings).toEqual(sdk.settings)
+    expect(record.errors).toEqual(sdk.issues.map((issue) => `${issue.path}: ${issue.message}`))
+  })
+
+  it('leaves settings off the record when none are declared', () => {
+    expect(write(baseManifest({})).contributes.settings).toBeUndefined()
+  })
+})
+
+describe('contributes.settingsPages', () => {
+  it('keeps a page and leaves its export unset when none is named', () => {
+    const record = write(baseManifest({ settingsPages: [{ label: 'Weather' }] }))
+    expect(record.errors).toEqual([])
+    expect(record.contributes.settingsPages).toEqual([{ label: 'Weather', icon: null, topLevel: false, export: null }])
+  })
+
+  it('keeps a named export, a lucide icon and a place in the sidebar', () => {
+    const page = { label: 'Weather', export: 'WeatherSettings', icon: 'lucide:CloudSun', topLevel: true }
+    const record = write(baseManifest({ settingsPages: [page] }))
+    expect(record.errors).toEqual([])
+    expect(record.contributes.settingsPages).toEqual([page])
+  })
+
+  it('keeps an icon that exists inside the plugin folder', () => {
+    fs.writeFileSync(path.join(dir, 'gear.png'), 'x')
+    const record = write(baseManifest({ settingsPages: [{ label: 'Weather', icon: 'gear.png' }] }))
+    expect(record.errors).toEqual([])
+    expect(record.contributes.settingsPages[0].icon).toBe('gear.png')
+  })
+
+  it('rejects a page without a label', () => {
+    const record = write(baseManifest({ settingsPages: [{ export: 'WeatherSettings' }] }))
+    expect(record.valid).toBe(false)
+    expect(record.contributes.settingsPages).toBeUndefined()
+  })
+
+  it('rejects an icon that escapes the plugin folder', () => {
+    const record = write(baseManifest({ settingsPages: [{ label: 'Weather', icon: '../../evil.png' }] }))
+    expect(record.valid).toBe(false)
+  })
+
+  it('rejects a topLevel that is not true or false', () => {
+    const record = write(baseManifest({ settingsPages: [{ label: 'Weather', topLevel: 'yes' }] }))
     expect(record.valid).toBe(false)
   })
 })

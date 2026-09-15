@@ -1,15 +1,11 @@
 import { useMemo } from 'react'
 import { pluginWidgetPlaceholders } from '../components/settings/ridge/ridgePluginWidgets'
-import { useShellState } from './useShellState'
+import { usePluginRecords } from './usePluginRecords'
 
-function subscribeToPluginReloads(callback: (records: PluginRecord[]) => void): () => void {
-  return window.plugins.onReload(() => {
-    window.plugins.list().then(callback).catch(() => {})
-  })
-}
+const NO_RECORDS: PluginRecord[] = []
 
 export function useRidgePluginWidgets(): Record<RidgePluginSlot, RidgePluginWidget[]> {
-  const records = useShellState<PluginRecord[]>([], window.plugins.list, subscribeToPluginReloads)
+  const records = usePluginRecords() ?? NO_RECORDS
   return useMemo(
     () => ({ left: pluginWidgetPlaceholders(records, 'left'), right: pluginWidgetPlaceholders(records, 'right') }),
     [records]

@@ -1,4 +1,5 @@
 export * from './constants'
 export * from './contributions'
 export * from './manifest'
+export * from './settings'
 export * from './validate'

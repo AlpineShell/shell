@@ -142,11 +142,19 @@ Contributions are declared in the manifest and each names an `export` string tha
 interface PluginContributions {
   topbarWidgets?:    TopbarWidgetContribution[]   // export, slot, order?, displayScope?, since?
   desktopWidgets?:   DesktopWidgetContribution[]   // export, defaultSize, minSize, displayScope?, since?
-  settingsPages?:    SettingsPageContribution[]    // export, label, icon?, path?, topLevel?, since?
+  settings?:         PluginSettingContribution[]   // key, type:'toggle'|'select'|'slider', label, info?, default, options? | min, max, step?, unit?
+  settingsPages?:    SettingsPageContribution[]    // export?, label, icon?, path?, topLevel?, since?
   launcherCommands?: LauncherCommandContribution[] // kind:'action'|'provider', export, since?
   backendModules?:   BackendModuleContribution[]   // export (SIGNED only), since?
 }
 ```
+
+`settings` are declarative: the host stores each plugin's values in `plugin-settings.json` under
+userData, draws them as rows in the plugin's Ridge callout and on its settings page, and hands them
+to the plugin through `usePluginSetting(pluginId, key)` in the renderer and `ctx.settings.get(key)` /
+`ctx.settings.onChange(listener)` in the backend. A plugin with `settings` or `settingsPages` gets a
+page at `plugins/<id>` in the settings window; `settingsPages[0]` names it, `export` renders a
+component from the renderer module below the rows, and `topLevel: true` adds it to the sidebar.
 
 Every contribution carries an optional `since: apiVersion`. The host mounts a contribution only when `since ≤ PLUGIN_API_VERSION`, so **additive SDK growth never strands old plugins** and a plugin using only stable surfaces keeps loading on a newer host.
 

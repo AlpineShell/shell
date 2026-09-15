@@ -10,6 +10,10 @@ export const MARKETPLACE_CATEGORIES = [
 
 export type MarketplaceCategory = (typeof MARKETPLACE_CATEGORIES)[number]
 
+export const PLUGIN_SETTING_TYPES = ['toggle', 'select', 'slider'] as const
+
+export const PLUGIN_SETTING_KEY_PATTERN = /^[a-zA-Z0-9_.-]+$/
+
 export function isSupportedApiVersion(v: number): boolean {
   return SUPPORTED_API_VERSIONS.includes(v)
 }

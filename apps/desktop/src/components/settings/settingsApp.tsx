@@ -1,17 +1,22 @@
 import { Component, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Puzzle } from 'lucide-react'
 import { SearchField } from '@alpine/ui'
 import { SETTINGS_PAGES, SETTINGS_SECTIONS, settingsPageByRoute } from '../../settings/registry'
 import { SETTINGS_SEARCH_LIMIT, searchSettings } from '../../settings/settingsSearch'
-import { SETTINGS_ROUTES } from './settingsRoutes'
+import { settingsRouteView } from './settingsRoutes'
 import SettingsSearchResults from './settingsSearchResults'
 import { highlightSetting } from '../../hooks/useHighlightedSetting'
 import { toggleSettingsValue } from '../../hooks/useSettingsValue'
+import { usePluginSettingsPages } from '../../hooks/usePluginSettingsPages'
 import { useTheme } from '../../hooks/useTheme'
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
 const nativeTitleBarHeight = { height: 'env(titlebar-area-height, 3rem)' }
+
+const NO_PLUGIN_PAGES: PluginSettingsPageEntry[] = []
+
+const PLUGIN_NAV_LABEL = 'Plugins'
 
 interface NavSection {
   id: SettingsSectionId
@@ -32,13 +37,14 @@ function navSections(): NavSection[] {
     .filter((section) => section.pages.length > 0)
 }
 
-function routeLabel(route: string): string {
-  return settingsPageByRoute(route)?.label ?? route
+function routeLabel(route: string, pluginPages: PluginSettingsPageEntry[]): string {
+  return settingsPageByRoute(route)?.label ?? pluginPages.find((page) => page.route === route)?.label ?? route
 }
 
 export default function SettingsApp() {
   useTheme()
 
+  const pluginPages = usePluginSettingsPages() ?? NO_PLUGIN_PAGES
   const [history, setHistory] = useState<string[]>(() => {
     const page = window.shell.windows.initialPage
     return page && page !== 'home' ? ['home', page] : ['home']
@@ -52,11 +58,13 @@ export default function SettingsApp() {
   const canBack = historyIndex > 0
   const canForward = historyIndex < history.length - 1
   const sections = navSections()
+  const sidebarPluginPages = pluginPages.filter((page) => page.topLevel)
 
   const ranked = useMemo(() => searchSettings(query), [query])
   const matches = useMemo(() => ranked.slice(0, SETTINGS_SEARCH_LIMIT), [ranked])
   const searching = query.trim().length > 0
   const selected = matches.length === 0 ? -1 : Math.min(activeIndex, matches.length - 1)
+  const pluginPageActive = !searching && sidebarPluginPages.some((page) => page.route === currentPath)
 
   const searchRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -148,8 +156,8 @@ export default function SettingsApp() {
   }, [])
 
   useEffect(() => {
-    window.shell.windows.setSettingsPage(routeLabel(currentPath))
-  }, [currentPath])
+    window.shell.windows.setSettingsPage(routeLabel(currentPath, pluginPages))
+  }, [currentPath, pluginPages])
 
   useEffect(() => {
     scrollRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
@@ -185,22 +193,20 @@ export default function SettingsApp() {
               )}
               {section.pages.map((page) => {
                 const Icon = page.icon
-                const active = page.route === topSegment && !searching
+                const active = page.route === topSegment && !searching && !pluginPageActive
                 return (
-                  <button
+                  <SettingsNavButton
                     key={page.id}
+                    label={page.label}
+                    active={active}
+                    icon={<Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />}
                     onClick={() => navigate(page.route as string)}
-                    className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
-                      active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
-                    }`}
-                  >
-                    <Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />
-                    {page.label}
-                  </button>
+                  />
                 )
               })}
             </div>
           ))}
+          <PluginPagesNav pages={sidebarPluginPages} activeRoute={searching ? null : currentPath} onNavigate={navigate} />
         </nav>
       </aside>
 
@@ -231,7 +237,7 @@ export default function SettingsApp() {
             </div>
 
             <div style={noDragRegion}>
-              <Breadcrumb path={currentPath} onNavigate={navigate} />
+              <Breadcrumb path={currentPath} pluginPages={pluginPages} onNavigate={navigate} />
             </div>
           </header>
         </div>
@@ -263,6 +269,47 @@ export default function SettingsApp() {
   )
 }
 
+function SettingsNavButton({ label, active, icon, onClick }: SettingsNavButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
+        active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  )
+}
+
+function PluginPagesNav({ pages, activeRoute, onNavigate }: PluginPagesNavProps) {
+  if (pages.length === 0) return null
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="px-3 pt-3 pb-1 text-eyebrow uppercase text-ink-faint select-none">{PLUGIN_NAV_LABEL}</span>
+      {pages.map((page) => {
+        const active = page.route === activeRoute
+        return (
+          <SettingsNavButton
+            key={page.route}
+            label={page.label}
+            active={active}
+            icon={<PluginPageIcon page={page} active={active} />}
+            onClick={() => onNavigate(page.route)}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+function PluginPageIcon({ page, active }: PluginPageIconProps) {
+  const opacity = active ? 'opacity-90' : 'opacity-60'
+  if (page.iconUrl) return <img src={page.iconUrl} alt="" className={`size-[15px] shrink-0 rounded-sm object-contain ${opacity}`} />
+  return <Puzzle size={15} className={opacity} />
+}
+
 class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
   static getDerivedStateFromError() {
@@ -280,7 +327,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boo
 }
 
 function PageRouter({ path, navigate }: { path: string; navigate: (p: string) => void }) {
-  return <>{SETTINGS_ROUTES[path]?.(navigate) ?? null}</>
+  return <>{settingsRouteView(path)?.(navigate) ?? null}</>
 }
 
 function breadcrumbTrail(path: string): string[] {
@@ -288,7 +335,7 @@ function breadcrumbTrail(path: string): string[] {
   return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
 }
 
-function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string) => void }) {
+function Breadcrumb({ path, pluginPages, onNavigate }: SettingsBreadcrumbProps) {
   const trail = breadcrumbTrail(path)
   return (
     <div className="flex items-center gap-1 select-none">
@@ -298,13 +345,13 @@ function Breadcrumb({ path, onNavigate }: { path: string; onNavigate: (p: string
           <span key={subpath} className="flex items-center gap-1">
             {index > 0 && <span className="text-dense text-ink-faint">/</span>}
             {isLast ? (
-              <span className="text-dense text-ink-primary underline decoration-line-strong underline-offset-4">{routeLabel(subpath)}</span>
+              <span className="text-dense text-ink-primary underline decoration-line-strong underline-offset-4">{routeLabel(subpath, pluginPages)}</span>
             ) : (
               <button
                 onClick={() => onNavigate(subpath)}
                 className="focus-ring cursor-pointer text-dense text-ink-quiet underline-offset-4 decoration-line-strong hover:text-ink-primary hover:underline"
               >
-                {routeLabel(subpath)}
+                {routeLabel(subpath, pluginPages)}
               </button>
             )}
           </span>

@@ -69,6 +69,15 @@ export function ridgePluginGroupWidgets(id: TopbarItemId, data: RidgePreviewData
   return data.plugins[definition.slot]
 }
 
+export function ridgePluginSettingGroups(id: TopbarItemId, data: RidgePreviewData): PluginSettingGroup[] {
+  const groups: PluginSettingGroup[] = []
+  for (const widget of ridgePluginGroupWidgets(id, data) ?? []) {
+    if (widget.pluginSettings.length === 0 || groups.some((group) => group.pluginId === widget.pluginId)) continue
+    groups.push({ pluginId: widget.pluginId, pluginName: widget.pluginName, settings: widget.pluginSettings })
+  }
+  return groups
+}
+
 function uniquePluginNames(widgets: RidgePluginWidget[]): string[] {
   return [...new Set(widgets.map((widget) => widget.pluginName))]
 }

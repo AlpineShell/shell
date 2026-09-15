@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, ChevronRight, Trash2, X } from 'lucide-react'
 import { Card, IconButton, InfoTip } from '@alpine/ui'
 import { settingsEntry, settingsPageRoute } from '../../../settings/registry'
 import { entryRowContent, registryPageRendersEntry } from '../registryRowContent'
+import PluginSettingRows from '../pluginSettingRows'
 import RidgeCalendarAccount from './ridgeCalendarAccount'
 import { ridgeHighlightRing } from './ridgeHighlight'
 import {
@@ -11,6 +12,7 @@ import {
   ridgeItemPluginIcon,
   ridgeItemSearchEntryId,
   ridgeItemTitle,
+  ridgePluginSettingGroups,
 } from './ridgeItemCatalogue'
 
 const RIDGE_ITEM_PANELS: Partial<Record<TopbarItemId, ComponentType>> = {
@@ -44,6 +46,7 @@ export default function RidgeCallout(props: RidgeCalloutProps) {
       <Card className="flex flex-col gap-4 p-4">
         <CalloutHeader {...props} />
         <CalloutSettings {...props} />
+        <CalloutPluginSettings {...props} />
         <CalloutPanel {...props} />
         <CalloutLinks {...props} />
         <CalloutActions {...props} />
@@ -104,6 +107,30 @@ function CalloutSettings({ item, highlightedSetting }: RidgeCalloutProps) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function CalloutPluginSettings({ item, previewData }: RidgeCalloutProps) {
+  const groups = ridgePluginSettingGroups(item.id, previewData)
+  if (groups.length === 0) return null
+
+  if (groups.length === 1) {
+    return (
+      <div className="flex flex-col gap-2">
+        <PluginSettingRows pluginId={groups[0].pluginId} settings={groups[0].settings} wideControlStacked={WIDE_CONTROLS_STACKED} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {groups.map((group) => (
+        <div key={group.pluginId} role="group" aria-label={group.pluginName} className="flex flex-col gap-2">
+          <h4 className="text-eyebrow uppercase text-ink-faint select-none">{group.pluginName}</h4>
+          <PluginSettingRows pluginId={group.pluginId} settings={group.settings} wideControlStacked={WIDE_CONTROLS_STACKED} />
+        </div>
+      ))}
     </div>
   )
 }

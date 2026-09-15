@@ -1,8 +1,10 @@
 const { openCommand } = require('./shellLaunch')
+const { createPluginSettings } = require('./pluginBackendSettings')
 
 let stopHandler = null
 let commandHandler = null
 let windowEventHandler = null
+let pluginSettings = null
 
 function post(message) {
   try {
@@ -17,6 +19,10 @@ function toText(value) {
   } catch {
     return String(value)
   }
+}
+
+function reportToHost(message) {
+  post({ type: 'log', args: [message] })
 }
 
 function makeContext(init) {
@@ -35,6 +41,7 @@ function makeContext(init) {
     onCommand(handler) {
       if (typeof handler === 'function') commandHandler = handler
     },
+    settings: pluginSettings.api,
     shell: {
       openCommand(url) {
         return openCommand(init.launch || { target: process.execPath, args: [] }, url)
@@ -84,6 +91,7 @@ async function runStop() {
 }
 
 async function startBackend(init) {
+  pluginSettings = createPluginSettings(init.settings, reportToHost)
   let mod
   try {
     mod = require(init.entry)
@@ -135,6 +143,8 @@ process.parentPort.on('message', async (event) => {
     await startBackend(msg)
   } else if (msg.type === 'command') {
     await runCommand(msg)
+  } else if (msg.type === 'settings') {
+    if (pluginSettings) pluginSettings.apply(msg.values)
   } else if (msg.type === 'window-event') {
     if (windowEventHandler) {
       try {

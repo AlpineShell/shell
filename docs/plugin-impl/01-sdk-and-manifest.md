@@ -238,9 +238,9 @@ export interface DesktopWidgetContribution extends BaseContribution {
 export interface SettingsPageContribution extends BaseContribution {
   label: string
   icon?: string
-  path?: string        // host namespaces to plugin/<id>/<path>
-  topLevel?: boolean
-}
+  path?: string        // reserved; the host serves the page at plugins/<id>
+  topLevel?: boolean   // also list the page in the settings sidebar
+}                      // export is optional here: it renders below the declared settings
 export interface LauncherCommandContribution extends BaseContribution {
   kind: 'action' | 'provider'
   title?: string
@@ -248,9 +248,15 @@ export interface LauncherCommandContribution extends BaseContribution {
 }
 export interface BackendModuleContribution extends BaseContribution {}   // export only; SIGNED-only [GATED]
 
+export type PluginSettingContribution =                                   // declarative, no export
+  | { key: string; type: 'toggle'; label: string; info?: string; default: boolean }
+  | { key: string; type: 'select'; label: string; info?: string; default: string; options: { value: string; label: string }[] }
+  | { key: string; type: 'slider'; label: string; info?: string; default: number; min: number; max: number; step?: number; unit?: string }
+
 export interface PluginContributions {
   topbarWidgets?: TopbarWidgetContribution[]
   desktopWidgets?: DesktopWidgetContribution[]
+  settings?: PluginSettingContribution[]        // Ridge callout + plugins/<id> page; read via usePluginSetting / ctx.settings
   settingsPages?: SettingsPageContribution[]
   launcherCommands?: LauncherCommandContribution[]
   backendModules?: BackendModuleContribution[]

@@ -1,3 +1,6 @@
+import type { PluginSettingValue } from './contributions'
+import type { PluginSettingState } from './settings'
+
 export type AlpineHtml = (strings: TemplateStringsArray, ...values: unknown[]) => import('react').ReactNode
 
 export interface AlpineHostStore {
@@ -16,8 +19,7 @@ export interface AlpineHost {
   useTopbarBg(): string
   useTopbarTheme?(): { dark: boolean; bg: string }
   usePluginData<T>(channel: string, initial: T): T
-  getSetting?<T>(key: string, def: T): Promise<T>
-  setSetting?<T>(key: string, val: T): Promise<void>
+  usePluginSetting?<T extends PluginSettingValue = PluginSettingValue>(pluginId: string, key: string): PluginSettingState<T>
   shell?: Record<string, (...args: unknown[]) => Promise<unknown>>
   PopupMenu: unknown
   React?: typeof import('react')

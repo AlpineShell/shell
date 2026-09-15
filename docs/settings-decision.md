@@ -212,13 +212,15 @@ Three shapes were chosen deliberately and are worth naming, because each trades 
   visible. The same reasoning applies to `group: 'Page'` on page-level entries: they render
   nothing, so they are filed under a group that says so.
 
-**Plugins are not implemented here.** `packages/plugin-sdk/src/contributions.ts` already
-declares `SettingsPageContribution` and `LauncherCommandContribution { keywords }`, and
-`electron/pluginManifest.js` allow-lists `settingsPages`. Neither is wired up, and this card
-does not wire them up. The shape does not prevent it: `SETTINGS_PAGES` and `SETTINGS_REGISTRY`
-are plain arrays of plain objects with no build-time-only types, and every consumer goes
-through `settingsEntry()` / `settingsPage()` lookups over a map built from them, so a
-runtime-appended entry is a matter of rebuilding those maps rather than changing the model.
+**Plugin settings sit beside the registry, not in it.** A plugin declares toggles, selects and
+sliders under `contributes.settings`, and may declare a page under `contributes.settingsPages`.
+Both are wired up: the settings show in the Ridge callout of the plugin group that holds the
+plugin's widgets, and on the plugin's own page at `plugins/<id>`, which its row on the Plugins
+page opens and which `topLevel: true` also lists in the sidebar. They are not appended to
+`SETTINGS_REGISTRY`. Each declaration becomes a value entry when it is drawn
+(`src/plugins/pluginSettingEntries.ts`), so plugin rows reuse `ValueRow` and `useSettingsValue`
+while staying out of search and out of the invariants this record argues for built-in settings.
+`LauncherCommandContribution` is still not wired up.
 
 ### One shape the type system could not express
 
