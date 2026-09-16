@@ -2,10 +2,17 @@ const fs = require('fs')
 
 const GWL_EXSTYLE = -20
 const GW_OWNER = 4
+const WS_EX_TRANSPARENT = 0x00000020
 const WS_EX_TOOLWINDOW = 0x00000080
 const WS_EX_APPWINDOW = 0x00040000
+const WS_EX_NOACTIVATE = 0x08000000
+const OVERLAY_WINDOW_EX_STYLES = WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+const DESKTOP_WINDOW_CLASSES = new Set(['Progman', 'WorkerW'])
+const DWMWA_EXTENDED_FRAME_BOUNDS = 9
 const DWMWA_CLOAKED = 14
+const RECT_BYTES = 16
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+const MAX_CLASS_NAME_CHARS = 256
 const MAX_IMAGE_PATH_CHARS = 520
 const DESCRIPTION_REVALIDATE_MS = 60000
 const DESCRIPTION_READ_TIMEOUT_MS = 2000
@@ -78,6 +85,9 @@ function loadBindings() {
   bindings = {
     EnumWindows: user32.func('__stdcall', 'EnumWindows', 'int', ['WindowEnumCallback *', 'intptr_t']),
     IsWindowVisible: user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t']),
+    IsIconic: user32.func('__stdcall', 'IsIconic', 'int', ['uintptr_t']),
+    GetClassNameW: user32.func('__stdcall', 'GetClassNameW', 'int', ['uintptr_t', 'void *', 'int']),
+    GetWindowRect: user32.func('__stdcall', 'GetWindowRect', 'int', ['uintptr_t', 'void *']),
     GetWindowLongW: user32.func('__stdcall', 'GetWindowLongW', 'int32', ['uintptr_t', 'int']),
     GetWindow: user32.func('__stdcall', 'GetWindow', 'uintptr_t', ['uintptr_t', 'uint32']),
     GetWindowTextW: user32.func('__stdcall', 'GetWindowTextW', 'int', ['uintptr_t', 'void *', 'int']),
@@ -137,12 +147,28 @@ function taskbarWindowPredicate(hwnd, probe) {
   return !probe.isCloaked(hwnd)
 }
 
+function onScreenWindowPredicate(hwnd, probe) {
+  if (!probe.isVisible(hwnd)) return false
+  if (probe.isMinimized(hwnd)) return false
+  if ((probe.exStyle(hwnd) & OVERLAY_WINDOW_EX_STYLES) !== 0) return false
+  if (DESKTOP_WINDOW_CLASSES.has(probe.className(hwnd))) return false
+  return !probe.isCloaked(hwnd)
+}
+
 const windowProbe = {
   isVisible(hwnd) {
     return loadBindings().IsWindowVisible(hwnd) !== 0
   },
+  isMinimized(hwnd) {
+    return loadBindings().IsIconic(hwnd) !== 0
+  },
   titleLength(hwnd) {
     return loadBindings().GetWindowTextLengthW(hwnd)
+  },
+  className(hwnd) {
+    const buffer = Buffer.alloc(MAX_CLASS_NAME_CHARS * 2)
+    const length = loadBindings().GetClassNameW(hwnd, buffer, MAX_CLASS_NAME_CHARS)
+    return readWideString(buffer, length)
   },
   exStyle(hwnd) {
     return loadBindings().GetWindowLongW(hwnd, GWL_EXSTYLE)
@@ -187,6 +213,24 @@ function windowProcessId(hwnd) {
   const buffer = Buffer.alloc(4)
   native.GetWindowThreadProcessId(hwnd, buffer)
   return buffer.readUInt32LE(0)
+}
+
+function readRect(buffer) {
+  return {
+    left: buffer.readInt32LE(0),
+    top: buffer.readInt32LE(4),
+    right: buffer.readInt32LE(8),
+    bottom: buffer.readInt32LE(12),
+  }
+}
+
+function windowFrameBounds(hwnd) {
+  const native = loadBindings()
+  const buffer = Buffer.alloc(RECT_BYTES)
+  if (native.DwmGetWindowAttribute && native.DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, buffer, RECT_BYTES) === 0) {
+    return readRect(buffer)
+  }
+  return native.GetWindowRect(hwnd, buffer) ? readRect(buffer) : null
 }
 
 function processImagePath(processId) {
@@ -294,17 +338,21 @@ function resolveFileDescription(exePath) {
 }
 
 module.exports = {
+  WS_EX_TRANSPARENT,
   WS_EX_TOOLWINDOW,
   WS_EX_APPWINDOW,
+  WS_EX_NOACTIVATE,
   readWideString,
   processNameFromPath,
   taskbarWindowPredicate,
+  onScreenWindowPredicate,
   collectEnumeratedWindow,
   windowProbe,
   enumerateWindows,
   releaseBindings,
   windowTitle,
   windowProcessId,
+  windowFrameBounds,
   processImagePath,
   resolveFileDescription,
 }

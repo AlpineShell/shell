@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useDarkText, useFullscreenWindow } from "../themeContext";
+import { useDarkText } from "../themeContext";
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded";
 import { useShellNotice } from "../../hooks/useShellNotice";
 import { SHOULDER, RADIUS, chromeSurfaceBounds, type ChromeAnchor } from "./chrome/chromeShape";
@@ -31,7 +31,6 @@ function accentClass(tone: ShellNoticeTone, darkText: boolean) {
 
 export default function NoticeStrip() {
     const darkText = useDarkText();
-    const outline = useFullscreenWindow();
 
     const live = useShellNotice();
     const [notice, setNotice] = useState<ShellNotice | null>(null);
@@ -111,7 +110,6 @@ export default function NoticeStrip() {
             centerX: shape.centerX,
             bodyWidth: shape.bodyWidth,
             fullHeight: shape.bodyHeight,
-            outline,
             anchor: shape.anchor,
             contentEl: clipRef.current,
         });
@@ -123,7 +121,7 @@ export default function NoticeStrip() {
             barBottom: BAR_BOTTOM,
             anchor: shape.anchor,
         }));
-    }, [notice, shape, outline, superseded]);
+    }, [notice, shape, superseded]);
 
     useEffect(() => {
         if (!notice || !shape) return;

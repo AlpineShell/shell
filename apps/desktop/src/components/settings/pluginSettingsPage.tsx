@@ -44,7 +44,7 @@ function PluginPageComponent({ page, exportName }: PluginPageComponentProps) {
   const theme = useTheme()
   if (load.status === 'loading') return null
   if (load.status === 'missing') return <PluginPageNote />
-  const surface = { darkText: theme.name === 'light', bg: theme.background, fullscreenWindow: false, onMenuOpenChange: ignoreMenuChange }
+  const surface = { darkText: theme.name === 'light', bg: theme.background, onMenuOpenChange: ignoreMenuChange }
   return (
     <ThemeProvider value={surface}>
       <PluginPageBoundary id={page.pluginId} fallback={<PluginPageNote />}>

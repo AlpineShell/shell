@@ -8,7 +8,7 @@ import {
 } from './chromeStore'
 
 function surface(id: number) {
-  return { id, centerX: 0, bodyWidth: 0, fullHeight: 0, outline: false, anchor: 'center' as const, contentEl: null }
+  return { id, centerX: 0, bodyWidth: 0, fullHeight: 0, anchor: 'center' as const, contentEl: null }
 }
 
 afterEach(() => {

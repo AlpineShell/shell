@@ -35,6 +35,7 @@ const appManager = require('./modules/appManager')
 const tiling = require('./modules/tiling')
 const minimizeToTopbar = require('./modules/minimizeToTopbar')
 const windowCorners = require('./modules/windowCorners')
+const windowCoverage = require('./modules/windowCoverage')
 const windowSystemMenu = require('./modules/windowSystemMenu')
 const winEvents = require('./modules/winEvents')
 const plugins = require('./modules/plugins')
@@ -798,7 +799,7 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers)
 
   theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
@@ -924,6 +925,7 @@ function startShellMode() {
   tiling.setShells(shells)
   tiling.setExposedOwnWindows(exposedOwnWindowHandles)
   winEvents.setExposedOwnWindows(exposedOwnWindowHandles)
+  windowCoverage.setExposedOwnWindows(exposedOwnWindowHandles)
   foregroundColor.setRidgeColoredWindows(ridgeColoredWindowHandles)
   if (altTab && altTab.onTilingKey) {
     altTab.onTilingKey((direction, shift) => tiling.handleHotkey(direction, shift))

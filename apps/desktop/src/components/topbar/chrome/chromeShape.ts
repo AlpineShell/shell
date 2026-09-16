@@ -71,15 +71,12 @@ export function surfaceFillPath(g: ChromeGeometry): string {
     return d + " Z";
 }
 
-export function barBorderPath(g: ChromeGeometry, hasSurface: boolean, surfaceOutline: boolean): string {
+export function barBorderPath(g: ChromeGeometry, hasSurface: boolean): string {
     const top = g.barBottom;
     if (!hasSurface) {
         return `M0 ${top} L${g.screenWidth} ${top}`;
     }
     const s = resolve(g);
-    if (!surfaceOutline) {
-        return `M0 ${top} L${s.leftTip} ${top} M${s.rightTip} ${top} L${g.screenWidth} ${top}`;
-    }
     let d = `M0 ${top} L${s.leftTip} ${top}`;
     if (s.leftShoulder) d += ` A${s.shoulder} ${s.shoulder} 0 0 1 ${s.bodyLeft} ${top + s.shoulder}`;
     d += ` L${s.bodyLeft} ${s.bottom - s.radius} A${s.radius} ${s.radius} 0 0 0 ${s.bodyLeft + s.radius} ${s.bottom}`;
@@ -87,4 +84,8 @@ export function barBorderPath(g: ChromeGeometry, hasSurface: boolean, surfaceOut
     d += ` L${s.bodyRight} ${top + (s.rightShoulder ? s.shoulder : 0)}`;
     if (s.rightShoulder) d += ` A${s.shoulder} ${s.shoulder} 0 0 1 ${s.rightTip} ${top}`;
     return d + ` L${g.screenWidth} ${top}`;
+}
+
+export function windowCoverageClipPath(rects: TopbarRegionBounds[]): string {
+    return rects.map((r) => `M${r.left} ${r.top} H${r.right} V${r.bottom} H${r.left} Z`).join(" ");
 }

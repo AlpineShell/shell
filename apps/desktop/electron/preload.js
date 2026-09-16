@@ -84,6 +84,12 @@ contextBridge.exposeInMainWorld('topbar', {
     ipcRenderer.on('topbar/fg-color-changed', handler)
     return () => ipcRenderer.removeListener('topbar/fg-color-changed', handler)
   },
+  windowCoverage: () => ipcRenderer.invoke('topbar/window-coverage'),
+  onWindowCoverageChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('topbar/window-coverage-changed', handler)
+    return () => ipcRenderer.removeListener('topbar/window-coverage-changed', handler)
+  },
   colorOverride: () => ipcRenderer.invoke('topbar/color-override-get'),
   setColorOverride: (color) => ipcRenderer.invoke('topbar/color-override-set', color),
   colorPalette: () => ipcRenderer.invoke('topbar/color-palette'),
