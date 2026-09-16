@@ -1,7 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import windowEnum from './windowEnum.js'
 
-const { readWideString, processNameFromPath, taskbarWindowPredicate, collectEnumeratedWindow, WS_EX_TOOLWINDOW, WS_EX_APPWINDOW } = windowEnum
+const {
+  readWideString,
+  processNameFromPath,
+  taskbarWindowPredicate,
+  onScreenWindowPredicate,
+  collectEnumeratedWindow,
+  WS_EX_TRANSPARENT,
+  WS_EX_TOOLWINDOW,
+  WS_EX_APPWINDOW,
+  WS_EX_NOACTIVATE,
+} = windowEnum
 
 const HWND = 0x1234
 
@@ -9,7 +19,9 @@ function probe(overrides) {
   const calls = []
   const base = {
     isVisible: () => true,
+    isMinimized: () => false,
     titleLength: () => 12,
+    className: () => 'Chrome_WidgetWin_1',
     exStyle: () => 0,
     hasOwner: () => false,
     isCloaked: () => false,
@@ -124,6 +136,46 @@ describe('taskbarWindowPredicate', () => {
       isCloaked: (hwnd) => { seen.push(hwnd); return false },
     })
     expect(seen).toEqual([HWND, HWND, HWND, HWND, HWND])
+  })
+})
+
+describe('onScreenWindowPredicate', () => {
+  it('accepts a visible, restored, uncloaked app window', () => {
+    expect(onScreenWindowPredicate(HWND, probe())).toBe(true)
+  })
+
+  it('rejects an invisible window', () => {
+    expect(onScreenWindowPredicate(HWND, probe({ isVisible: () => false }))).toBe(false)
+  })
+
+  it('rejects a minimized window', () => {
+    expect(onScreenWindowPredicate(HWND, probe({ isMinimized: () => true }))).toBe(false)
+  })
+
+  it.each([
+    ['a tool window', WS_EX_TOOLWINDOW],
+    ['a window that never takes focus', WS_EX_NOACTIVATE],
+    ['a click-through overlay', WS_EX_TRANSPARENT],
+  ])('rejects %s', (_label, exStyle) => {
+    expect(onScreenWindowPredicate(HWND, probe({ exStyle: () => exStyle }))).toBe(false)
+  })
+
+  it.each(['Progman', 'WorkerW'])('rejects the %s desktop window behind the apps', (className) => {
+    expect(onScreenWindowPredicate(HWND, probe({ className: () => className }))).toBe(false)
+  })
+
+  it('rejects a cloaked window', () => {
+    expect(onScreenWindowPredicate(HWND, probe({ isCloaked: () => true }))).toBe(false)
+  })
+
+  it('accepts an untitled, owned window that asks for no taskbar button', () => {
+    expect(onScreenWindowPredicate(HWND, probe({ titleLength: () => 0, hasOwner: () => true }))).toBe(true)
+  })
+
+  it('stops probing after the first rejection', () => {
+    const minimized = probe({ isMinimized: () => true })
+    onScreenWindowPredicate(HWND, minimized)
+    expect(minimized.calls).toEqual(['isVisible', 'isMinimized'])
   })
 })
 

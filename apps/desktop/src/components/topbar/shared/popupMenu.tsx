@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useTopbarBg, useFullscreenWindow } from "../../themeContext";
+import { useTopbarBg } from "../../themeContext";
 import { useSurfaceSuperseded } from "../../../hooks/useSurfaceSuperseded";
 import { SHOULDER, RADIUS, chromeSurfaceBounds, chromeContentBounds, type ChromeAnchor } from "../chrome/chromeShape";
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "../chrome/chromeStore";
@@ -23,7 +23,6 @@ interface PopupMenuProps {
 
 export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps) {
     const BG = useTopbarBg();
-    const outline = useFullscreenWindow();
 
     const wrapperRef = useRef<HTMLDivElement>(null);
     const clipRef = useRef<HTMLDivElement>(null);
@@ -105,7 +104,6 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             centerX: shape.centerX,
             bodyWidth: shape.bodyWidth,
             fullHeight: shape.bodyHeight,
-            outline,
             anchor: shape.anchor,
             contentEl: clipRef.current,
         });
@@ -127,7 +125,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
                 window.topbar.setActiveRegion(settled);
             }, REGION_SHRINK_DELAY_MS);
         }
-    }, [open, shape, outline]);
+    }, [open, shape]);
 
     useEffect(() => {
         if (!open || !shape) return;

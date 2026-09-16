@@ -143,6 +143,11 @@ interface TopbarRegionBounds {
 interface TopbarActiveRegion extends TopbarRegionBounds {
   contentBounds?: TopbarRegionBounds
 }
+
+interface DisplayWindowCoverage {
+  displayId: number
+  rects: TopbarRegionBounds[]
+}
 }
 
 declare global {
@@ -1643,6 +1648,8 @@ declare global {
       onMediaVisualizerChanged: (callback: (value: boolean) => void) => () => void
       foregroundColor: () => Promise<ForegroundColorData[]>
       onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => () => void
+      windowCoverage: () => Promise<DisplayWindowCoverage[]>
+      onWindowCoverageChanged: (callback: (coverage: DisplayWindowCoverage[]) => void) => () => void
       onCloseMenus: (callback: () => void) => () => void
       layout: () => Promise<StoredTopbarLayout>
       setLayout: (layout: TopbarLayoutPatch) => Promise<StoredTopbarLayout>

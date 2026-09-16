@@ -5,7 +5,7 @@ import { useBluetooth } from "../../hooks/useBluetooth"
 import { useBluetoothRescan } from "../../hooks/useBluetoothRescan"
 import { canToggleRadio, deviceActionLabel, deviceStatusLabel, displayedRadioOn, isRadioOff, nextDeviceAction, radioEmptyStateTitle } from "../../lib/bluetoothPresentation"
 import { moveSelection, resolveSelection } from "../../lib/listSelection"
-import { useDarkText, useFullscreenWindow } from "../themeContext"
+import { useDarkText } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
 import { useMonitors } from "../../hooks/useMonitors"
@@ -256,7 +256,6 @@ function runActions(query: string, run: RunResult): ContextAction[] {
 
 export default function LauncherPanel({ mode }: { mode?: string }) {
   const darkText = useDarkText()
-  const outline = useFullscreenWindow()
   const textColor = darkText ? "text-black" : "text-white"
   const dimText = darkText ? "text-black/50" : "text-white/50"
   const hoverBg = darkText ? "hover:bg-black/5" : "hover:bg-white/5"
@@ -524,7 +523,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       centerX: Math.round(window.innerWidth / 2),
       bodyWidth: panelWidth,
       fullHeight: h,
-      outline,
       anchor: "center",
       contentEl: panel,
     })
@@ -534,7 +532,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   useLayoutEffect(() => {
     registerSurface()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelWidth, outline])
+  }, [panelWidth])
 
   useEffect(() => {
     const body = bodyRef.current
@@ -548,7 +546,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       window.removeEventListener("resize", sync)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelWidth, outline])
+  }, [panelWidth])
 
   useEffect(() => () => clearChromeSurface(idRef.current), [])
 

@@ -28,7 +28,7 @@ function stubBridges(searchIconShown: boolean) {
 
 function onBar(ui: ReactElement, darkText = false) {
   return (
-    <ThemeProvider value={{ darkText, bg: 'rgb(31,32,32)', fullscreenWindow: false, onMenuOpenChange: () => {} }}>
+    <ThemeProvider value={{ darkText, bg: 'rgb(31,32,32)', onMenuOpenChange: () => {} }}>
       {ui}
     </ThemeProvider>
   )

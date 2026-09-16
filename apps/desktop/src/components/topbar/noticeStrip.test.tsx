@@ -110,7 +110,6 @@ describe("NoticeStrip as a chrome surface", () => {
                 centerX: 100,
                 bodyWidth: 100,
                 fullHeight: 100,
-                outline: false,
                 anchor: "center",
                 contentEl: null,
             });

@@ -12,6 +12,7 @@ import AltTabPanel from "./altTabPanel";
 import { warmRenderableEmojis } from "../../lib/emojiRenderable";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
+import { useWindowCoverage } from "../../hooks/useWindowCoverage";
 import { useTopbarLayout } from "../../hooks/useTopbarLayout";
 import { useTopbarInteractiveZones } from "../../hooks/useTopbarInteractiveZones";
 import { visibleTopbarSlotItems } from "./layout/topbarLayout";
@@ -45,13 +46,13 @@ const renderSlot = (layout: TopbarLayoutItem[], slot: TopbarSlot) =>
 export default function TopBar() {
     const wallpaperColor = useTopbarColor();
     const fgColor = useForegroundColor();
+    const windowCoverage = useWindowCoverage();
     const layout = useTopbarLayout();
     const leftCluster = useRef<HTMLDivElement>(null);
     const centerCluster = useRef<HTMLDivElement>(null);
     const rightCluster = useRef<HTMLDivElement>(null);
     useTopbarInteractiveZones(leftCluster, centerCluster, rightCluster);
     const { bg, darkText, borderColor } = topbarSurface(fgColor || wallpaperColor);
-    const fullscreenWindow = fgColor !== null;
     const [hovered, setHovered] = useState(false);
     const [launcherOpen, setLauncherOpen] = useState(false);
     const [launcherMode, setLauncherMode] = useState<string | undefined>(undefined);
@@ -69,8 +70,8 @@ export default function TopBar() {
     useEffect(() => warmRenderableEmojis(), []);
 
     return (
-        <ThemeProvider value={{ darkText, bg, fullscreenWindow, onMenuOpenChange: noop }}>
-            <ChromeCanvas barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} />
+        <ThemeProvider value={{ darkText, bg, onMenuOpenChange: noop }}>
+            <ChromeCanvas barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} windowCoverage={windowCoverage} />
             <div
                 className="w-full flex justify-between items-center h-6 relative z-10 transition-colors duration-300"
                 style={{ backgroundColor: bg }}

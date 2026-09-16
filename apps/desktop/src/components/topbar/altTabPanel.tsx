@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { useDarkText, useFullscreenWindow } from "../themeContext"
+import { useDarkText } from "../themeContext"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
 import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
@@ -54,7 +54,6 @@ function WindowEntry({ window, selected, darkText }: { window: AltTabWindow; sel
 
 export default function AltTabPanel() {
   const darkText = useDarkText()
-  const outline = useFullscreenWindow()
 
   const [windows, setWindows] = useState<AltTabWindow[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -127,11 +126,10 @@ export default function AltTabPanel() {
       centerX: Math.round(window.innerWidth / 2),
       bodyWidth: shape.bodyWidth,
       fullHeight: shape.bodyHeight,
-      outline,
       anchor: "center",
       contentEl: clip,
     })
-  }, [visible, shape, outline])
+  }, [visible, shape])
 
   useEffect(() => {
     if (!visible) return

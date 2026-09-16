@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SHOULDER, surfaceFillPath, barBorderPath, chromeSurfaceBounds, chromeContentBounds } from './chromeShape'
+import { SHOULDER, surfaceFillPath, barBorderPath, windowCoverageClipPath, chromeSurfaceBounds, chromeContentBounds } from './chromeShape'
 
 const surface = {
   centerX: 500,
@@ -49,17 +49,31 @@ describe('surfaceFillPath', () => {
 
 describe('barBorderPath', () => {
   it('draws a full-width line when there is no surface', () => {
-    expect(barBorderPath(centered, false, false)).toBe('M0 0 L1000 0')
-  })
-
-  it('breaks the line around the surface when not outlining it', () => {
-    expect(barBorderPath(centered, true, false)).toBe('M0 0 L386 0 M614 0 L1000 0')
+    expect(barBorderPath(centered, false)).toBe('M0 0 L1000 0')
   })
 
   it('traces the surface outline and rejoins the bar edges', () => {
-    const path = barBorderPath(centered, true, true)
-    expect(path.startsWith('M0 0 L386 0')).toBe(true)
-    expect(path.endsWith('L1000 0')).toBe(true)
+    expect(barBorderPath(centered, true)).toBe(
+      'M0 0 L386 0 A14 14 0 0 1 400 14 L400 26 A14 14 0 0 0 414 40 L586 40 A14 14 0 0 0 600 26 L600 14 A14 14 0 0 1 614 0 L1000 0',
+    )
+  })
+
+  it('runs straight down the anchored edge instead of rounding a shoulder', () => {
+    const path = barBorderPath({ ...centered, anchor: 'left' }, true)
+    expect(path.startsWith('M0 0 L400 0 L400 26')).toBe(true)
+  })
+})
+
+describe('windowCoverageClipPath', () => {
+  it('outlines each covered rectangle as its own closed subpath', () => {
+    expect(windowCoverageClipPath([
+      { left: 0, top: 24, right: 700, bottom: 1080 },
+      { left: 720, top: 36, right: 1920, bottom: 1080 },
+    ])).toBe('M0 24 H700 V1080 H0 Z M720 36 H1920 V1080 H720 Z')
+  })
+
+  it('is empty when no window covers the display', () => {
+    expect(windowCoverageClipPath([])).toBe('')
   })
 })
 

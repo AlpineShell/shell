@@ -18,6 +18,7 @@ vi.mock('../../lib/emojiRenderable', () => ({ warmRenderableEmojis: () => undefi
 vi.mock('../../plugins/loadPlugins', () => ({ loadTopbarPlugins: () => undefined }))
 vi.mock('../../hooks/useTopbarColor', () => ({ useTopbarColor: () => null }))
 vi.mock('../../hooks/useForegroundColor', () => ({ useForegroundColor: () => null }))
+vi.mock('../../hooks/useWindowCoverage', () => ({ useWindowCoverage: () => [] }))
 
 import TopBar from './topBar'
 

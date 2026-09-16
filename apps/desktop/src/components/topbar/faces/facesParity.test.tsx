@@ -253,7 +253,7 @@ const PARITY_CASES: ParityCase[] = [
 
 function onBar(ui: ReactElement, darkText: boolean) {
   return (
-    <ThemeProvider value={{ darkText, bg: 'rgb(31,32,32)', fullscreenWindow: false, onMenuOpenChange: () => {} }}>
+    <ThemeProvider value={{ darkText, bg: 'rgb(31,32,32)', onMenuOpenChange: () => {} }}>
       {ui}
     </ThemeProvider>
   )

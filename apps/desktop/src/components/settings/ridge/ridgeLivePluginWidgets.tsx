@@ -8,7 +8,7 @@ function ignoreMenuChange() {}
 
 export default function RidgeLivePluginWidgets({ slot, data, darkText }: RidgeLivePluginWidgetsProps) {
   const widgets = useTopbarWidgets(slot)
-  const theme = { darkText, bg: topbarSurface(data.color).bg, fullscreenWindow: false, onMenuOpenChange: ignoreMenuChange }
+  const theme = { darkText, bg: topbarSurface(data.color).bg, onMenuOpenChange: ignoreMenuChange }
   return (
     <ThemeProvider value={theme}>
       <span className="flex items-center gap-1">

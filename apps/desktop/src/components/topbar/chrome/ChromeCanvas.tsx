@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { surfaceFillPath, barBorderPath, RADIUS, type ChromeGeometry, type ChromeAnchor } from "./chromeShape";
+import { surfaceFillPath, barBorderPath, windowCoverageClipPath, RADIUS, type ChromeGeometry, type ChromeAnchor } from "./chromeShape";
 import { getChromeSurface, subscribeChromeSurface, type ChromeSurface } from "./chromeStore";
 
 const OPEN_MS = 460;
@@ -14,13 +14,14 @@ interface ChromeCanvasProps {
     bg: string;
     barBorderColor: string;
     hovered: boolean;
+    windowCoverage: TopbarRegionBounds[];
 }
 
-export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }: ChromeCanvasProps) {
+export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, windowCoverage }: ChromeCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const kickRef = useRef<(() => void) | undefined>(undefined);
-    const propsRef = useRef({ barHeight, bg, barBorderColor, hovered });
-    propsRef.current = { barHeight, bg, barBorderColor, hovered };
+    const propsRef = useRef({ barHeight, bg, barBorderColor, hovered, windowCoverage });
+    propsRef.current = { barHeight, bg, barBorderColor, hovered, windowCoverage };
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -38,7 +39,6 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
         let cx = 0;
         let halfBody = 0;
         let fullH = 0;
-        let outline = false;
         let anchor: ChromeAnchor = "center";
         let lastClearH = 0;
         let morphFrom: { cx: number; halfBody: number; fullH: number } | null = null;
@@ -95,13 +95,11 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                 cx = surface.centerX;
                 halfBody = surface.bodyWidth / 2;
                 fullH = surface.fullHeight;
-                outline = surface.outline;
                 anchor = surface.anchor;
                 contentEl = surface.contentEl;
                 morphFrom = null;
                 animateOpen(1, OPEN_MS, "out");
             } else if (surface && previous) {
-                outline = surface.outline;
                 anchor = surface.anchor;
                 contentEl = surface.contentEl;
                 morphFrom = { cx, halfBody, fullH };
@@ -155,10 +153,13 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
                 ctx.fillStyle = p.bg;
                 ctx.fill(new Path2D(surfaceFillPath(geom)));
             }
-            if (p.hovered || surfaceActive) {
+            if ((p.hovered || surfaceActive) && p.windowCoverage.length > 0) {
+                ctx.save();
+                ctx.clip(new Path2D(windowCoverageClipPath(p.windowCoverage)));
                 ctx.strokeStyle = p.barBorderColor;
                 ctx.lineWidth = 1;
-                ctx.stroke(new Path2D(barBorderPath(geom, surfaceActive, outline)));
+                ctx.stroke(new Path2D(barBorderPath(geom, surfaceActive)));
+                ctx.restore();
             }
 
             if (contentEl) {
@@ -215,7 +216,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered }:
 
     useEffect(() => {
         kickRef.current?.();
-    }, [barHeight, bg, barBorderColor, hovered]);
+    }, [barHeight, bg, barBorderColor, hovered, windowCoverage]);
 
     return (
         <canvas

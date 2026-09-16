@@ -5,7 +5,6 @@ export interface ChromeSurface {
     centerX: number;
     bodyWidth: number;
     fullHeight: number;
-    outline: boolean;
     anchor: ChromeAnchor;
     contentEl: HTMLElement | null;
 }
