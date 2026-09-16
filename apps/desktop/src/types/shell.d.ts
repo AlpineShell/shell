@@ -1505,6 +1505,19 @@ declare global {
     onNavigate: (path: string) => void
   }
 
+  type LauncherResultKind = 'open' | 'app' | 'tab' | 'bookmark' | 'setting' | 'wincmd'
+
+  interface LauncherMemory {
+    usage: Record<string, number>
+    queries: Record<string, Record<string, number>>
+  }
+
+  interface RankCandidate {
+    kind: LauncherResultKind
+    key: string
+    match: number
+  }
+
   interface Window {
     alpineBoot?: AlpineBootState
     fileHandlers: {
@@ -1582,8 +1595,9 @@ declare global {
       onShow: (callback: (data: { displayId: number; mode?: string }) => void) => void
       onStartClose: (callback: () => void) => () => void
       onHide: (callback: () => void) => () => void
-      scores: () => Promise<Record<string, number>>
-      onScoresChanged: (callback: (data: Record<string, number>) => void) => () => void
+      scores: () => Promise<LauncherMemory>
+      recordSelection: (key: string, query: string) => Promise<boolean>
+      onScoresChanged: (callback: (data: LauncherMemory) => void) => () => void
       recentApps: () => Promise<boolean>
       setRecentApps: (value: boolean) => Promise<boolean>
       onRecentAppsChanged: (callback: (value: boolean) => void) => () => void

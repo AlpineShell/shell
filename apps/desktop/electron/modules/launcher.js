@@ -9,7 +9,6 @@ const appxPackages = require('./appxPackages')
 const appActivator = require('../appActivator')
 const { shellExecute } = require('../shellExecute')
 const { shellLinkInShortcut } = require('../launcherDeepLink')
-const frecency = require('./frecency')
 const plugins = require('./plugins')
 const pluginBackendHost = require('../pluginBackendHost')
 const notice = require('./shellNotice')
@@ -591,7 +590,6 @@ function launchItem(item) {
   if (!item) return { success: false }
   if (item.shellLink && shellLinkOpener) {
     shellLinkOpener(item.shellLink)
-    frecency.record(item.target)
     return { success: true }
   }
   if (item.lnkPath) {
@@ -604,7 +602,6 @@ function launchItem(item) {
   } else if (item.appId) {
     appActivator.activate(item.appId)
   }
-  frecency.record(item.target)
   return { success: true }
 }
 
@@ -616,7 +613,6 @@ function launchAdminItem(item) {
   } else if (item.appId) {
     appActivator.activate(item.appId)
   }
-  frecency.record(item.target)
   return { success: true }
 }
 

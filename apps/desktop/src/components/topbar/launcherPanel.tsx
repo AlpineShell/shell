@@ -13,9 +13,10 @@ import { RADIUS } from "./chrome/chromeShape"
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/chromeStore"
 import { SETTINGS_REGISTRY, isSettingsValueEntry, settingsEntryHint, settingsPageRoute } from "../../settings/registry"
 import { useSettingsValues, writeSettingsValue } from "../../hooks/useSettingsValue"
-import { scoreField, scoreItem, deriveFields, frecencyKey, frecencyBoost, type SearchFields } from "../../lib/launcherSearch"
+import { scoreField, scoreItem, deriveFields, type SearchFields } from "../../lib/launcherSearch"
+import { adoptInstalledAppMatch, appResultKey, rankEntries, settingResultKey, tabResultKey, windowCommandResultKey } from "../../lib/launcherRanking"
 import { useApps } from "../../hooks/useApps"
-import { useFrecencyScores } from "../../hooks/useFrecencyScores"
+import { useLauncherMemory } from "../../hooks/useLauncherMemory"
 import { useLauncherRecentApps } from "../../hooks/useLauncherRecentApps"
 import { useLauncherMaxResults } from "../../hooks/useLauncherMaxResults"
 import { useLauncherShowBookmarks } from "../../hooks/useLauncherShowBookmarks"
@@ -127,7 +128,6 @@ function useRunCommand(query: string): RunResult | null {
 
 const RUN_ICONS = { folder: FolderOpen, file: FileText, url: Globe, shell: FolderOpen, command: Terminal }
 
-const NO_MATCHED_TABS: BrowserTab[] = []
 
 const BROWSER_TAB_LABELS: Record<string, string> = {
   chrome: "Chrome",
@@ -177,15 +177,58 @@ const ALPINE_SETTINGS_ITEM: LauncherItem = {
   icon: null,
 }
 
+type LauncherResult = RankCandidate & (
+  | { kind: "open"; app: OpenApp }
+  | { kind: "tab"; tab: BrowserTab }
+  | { kind: "setting"; setting: SettingsEntry }
+  | { kind: "wincmd"; cmd: WindowCommand }
+  | { kind: "app" | "bookmark"; item: LauncherItem }
+)
+
+type RankedResult = LauncherResult & { score: number }
+
+const RESULT_KIND_LIMITS: Partial<Record<LauncherResultKind, number>> = { open: 3, tab: TAB_RESULT_LIMIT, setting: 5 }
+
+function resultIdentity(result: LauncherResult): string {
+  if (result.kind === "open") return `open:${result.app.hwnd}`
+  if (result.kind === "tab") return `tab:${result.tab.hwnd}:${result.tab.index}`
+  if (result.kind === "setting") return `setting:${result.setting.id}`
+  if (result.kind === "wincmd") return `wincmd:${result.cmd.action}`
+  return `${result.kind}:${result.item.id}`
+}
+
+function resultTitle(result: LauncherResult): string {
+  if (result.kind === "open") return result.app.name
+  if (result.kind === "app" || result.kind === "bookmark") return result.item.name
+  return ""
+}
+
+function limitResultsByKind(ranked: RankedResult[]): RankedResult[] {
+  const shownOpenApps = ranked.filter((result) => result.kind === "open").slice(0, RESULT_KIND_LIMITS.open)
+  const openKeys = new Set(shownOpenApps.map((result) => result.key))
+  const openNames = new Set(shownOpenApps.map((result) => (result.kind === "open" ? result.app.name.toLowerCase() : "")))
+  const countsByKind = new Map<LauncherResultKind, number>()
+  const limited: RankedResult[] = []
+  for (const result of ranked) {
+    if (result.kind === "app" && (openKeys.has(result.key) || openNames.has(result.item.name.toLowerCase()))) continue
+    const count = countsByKind.get(result.kind) ?? 0
+    const limit = RESULT_KIND_LIMITS[result.kind]
+    if (limit !== undefined && count >= limit) continue
+    countsByKind.set(result.kind, count + 1)
+    limited.push(result)
+  }
+  return limited
+}
+
 interface ContextAction {
   label: string
   icon: typeof ShieldCheck
   action: () => void
 }
 
-function appActions(item: LauncherItem, onUninstall: (item: LauncherItem) => void): ContextAction[] {
+function appActions(item: LauncherItem, onUninstall: (item: LauncherItem) => void, onLaunch: () => void): ContextAction[] {
   const actions: ContextAction[] = [
-    { label: "Run as administrator", icon: ShieldCheck, action: () => window.launcher.launchAdmin(item.id) },
+    { label: "Run as administrator", icon: ShieldCheck, action: () => { onLaunch(); window.launcher.launchAdmin(item.id) } },
   ]
   if (item.lnkPath) {
     actions.push({ label: "Open file location", icon: FolderOpen, action: () => window.launcher.openLocation(item.id) })
@@ -222,7 +265,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
 
   const items = useApps()
   const [openApps, setOpenApps] = useState<OpenApp[]>([])
-  const scores = useFrecencyScores()
+  const memory = useLauncherMemory()
   const showRecentApps = useLauncherRecentApps()
   const showBookmarks = useLauncherShowBookmarks()
   const bookmarks = useBookmarks(showBookmarks)
@@ -529,135 +572,132 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const mapResult = useAddressLookup(query)
   const runResult = useRunCommand(activeCommand ? "" : query)
 
-  const matchedOpenApps = useMemo(() => {
+  const openAppCandidates = useMemo((): LauncherResult[] => {
     const q = query.trim()
     if (!q) return []
-    const matched: { app: OpenApp; s: number }[] = []
-    for (const app of openApps) {
+    return openApps.map((app) => {
       const nameScore = scoreField(q, app.name)
       const titleScore = app.path.toLowerCase() === ALPINE_SETTINGS_PATH ? -1 : scoreField(q, app.title)
-      const best = Math.max(nameScore, titleScore)
-      if (best >= 0) matched.push({ app, s: best })
-    }
-    matched.sort((a, b) => b.s - a.s)
-    return matched.slice(0, 3).map((r) => r.app)
+      return { kind: "open", key: appResultKey(app.path), match: Math.max(nameScore, titleScore), app }
+    })
   }, [query, openApps])
 
-  const matchedTabs = useMemo(() => {
+  const tabCandidates = useMemo((): LauncherResult[] => {
     const q = query.trim()
-    if (!q || browserTabs.length === 0) return NO_MATCHED_TABS
-    const matched: { tab: BrowserTab; s: number }[] = []
-    for (const tab of browserTabs) {
+    if (!q) return []
+    return browserTabs.map((tab) => {
       const host = tabMeta.get(tabKey(tab))?.host ?? tab.host
-      let s = scoreField(q, tab.title)
-      if (host) s = Math.max(s, scoreField(q, host) - TAB_HOST_PENALTY)
-      if (s >= 0) matched.push({ tab, s })
-    }
-    if (matched.length === 0) return NO_MATCHED_TABS
-    matched.sort((a, b) => b.s - a.s)
-    return matched.slice(0, TAB_RESULT_LIMIT).map((r) => r.tab)
+      let match = scoreField(q, tab.title)
+      if (host) match = Math.max(match, scoreField(q, host) - TAB_HOST_PENALTY)
+      return { kind: "tab", key: tabResultKey(host, tab.title), match, tab }
+    })
   }, [query, browserTabs, tabMeta])
 
-  const matchedSettings = useMemo(() => {
+  const settingCandidates = useMemo((): LauncherResult[] => {
     const q = query.trim()
     if (!q) return []
-    const out: { setting: SettingsEntry; s: number }[] = []
-    for (const setting of SETTINGS_REGISTRY) {
-      let best = scoreField(q, setting.label)
-      for (const k of setting.keywords) best = Math.max(best, scoreField(q, k))
-      if (best >= 0) out.push({ setting, s: best })
-    }
-    out.sort((a, b) => b.s - a.s)
-    return out.slice(0, 5).map((r) => r.setting)
+    return SETTINGS_REGISTRY.map((setting) => {
+      const match = setting.keywords.reduce((best, keyword) => Math.max(best, scoreField(q, keyword)), scoreField(q, setting.label))
+      return { kind: "setting", key: settingResultKey(setting.id), match, setting }
+    })
   }, [query])
 
-  const matchedWindowCommands = useMemo(() => {
+  const windowCommandCandidates = useMemo((): LauncherResult[] => {
     const q = query.trim()
     if (!q) return []
-    const out: { cmd: WindowCommand; s: number }[] = []
-    for (const cmd of WINDOW_COMMANDS) {
-      let best = scoreField(q, cmd.label)
-      for (const k of cmd.keywords) best = Math.max(best, scoreField(q, k))
-      if (best >= 0) out.push({ cmd, s: best })
-    }
-    out.sort((a, b) => b.s - a.s)
-    return out.map((r) => r.cmd)
+    return WINDOW_COMMANDS.map((cmd) => {
+      const match = cmd.keywords.reduce((best, keyword) => Math.max(best, scoreField(q, keyword)), scoreField(q, cmd.label))
+      return { kind: "wincmd", key: windowCommandResultKey(cmd.action), match, cmd }
+    })
   }, [query])
 
-  const results = useMemo(() => {
+  const appCandidates = useMemo((): LauncherResult[] => {
+    const q = query.trim()
+    if (!q) return []
+    const candidates: LauncherResult[] = []
+    for (const item of items) {
+      const fields = fieldsById.get(item.id)
+      if (fields) candidates.push({ kind: "app", key: appResultKey(item.target), match: scoreItem(q, fields), item })
+    }
+    for (const bookmark of bookmarkEntries) {
+      const match = Math.max(scoreItem(q, bookmark.fields), scoreField(q, bookmark.url) - BOOKMARK_URL_PENALTY)
+      candidates.push({ kind: "bookmark", key: appResultKey(bookmark.url), match, item: bookmark.item })
+    }
+    const alpineSettingsMatch = ALPINE_SETTINGS_KEYWORDS.reduce((best, keyword) => Math.max(best, scoreField(q, keyword)), -1)
+    candidates.push({ kind: "app", key: appResultKey(ALPINE_SETTINGS_PATH), match: alpineSettingsMatch, item: ALPINE_SETTINGS_ITEM })
+    return candidates
+  }, [query, items, fieldsById, bookmarkEntries])
+
+  const rankedResults = useMemo((): RankedResult[] => {
     const q = query.trim()
     if (!q) {
       if (!showRecentApps) return []
       return items
-        .map((item) => ({ item, f: scores[frecencyKey(item.target)] ?? 0 }))
-        .filter((entry) => entry.f > 0)
-        .sort((a, b) => b.f - a.f)
-        .map((entry) => entry.item)
+        .map((item): RankedResult => {
+          const key = appResultKey(item.target)
+          return { kind: "app", key, match: 0, item, score: memory.usage[key] ?? 0 }
+        })
+        .filter((result) => result.score > 0)
+        .sort((a, b) => b.score - a.score)
     }
-    const openPaths = new Set(matchedOpenApps.map((a) => a.path.toLowerCase()))
-    const openNames = new Set(matchedOpenApps.map((a) => a.name.toLowerCase()))
-    const scored: { item: LauncherItem; s: number }[] = []
-    for (const item of items) {
-      if (openPaths.has(item.target.toLowerCase())) continue
-      if (openNames.has(item.name.toLowerCase())) continue
-      const fields = fieldsById.get(item.id)
-      if (!fields) continue
-      const base = scoreItem(q, fields)
-      if (base < 0) continue
-      scored.push({ item, s: base + frecencyBoost(scores[frecencyKey(item.target)] ?? 0) })
+    const installedAppsByName = new Map<string, LauncherResult>()
+    for (const candidate of appCandidates) {
+      if (candidate.kind === "app") installedAppsByName.set(candidate.item.name.toLowerCase(), candidate)
     }
-    for (const bm of bookmarkEntries) {
-      const titleScore = scoreItem(q, bm.fields)
-      const urlScore = scoreField(q, bm.url) - BOOKMARK_URL_PENALTY
-      const best = Math.max(titleScore, urlScore)
-      if (best < 0) continue
-      scored.push({ item: bm.item, s: best + frecencyBoost(scores[frecencyKey(bm.url)] ?? 0) })
-    }
-    scored.sort((a, b) => b.s - a.s)
-    const settingsScore = ALPINE_SETTINGS_KEYWORDS.reduce((m, k) => Math.max(m, scoreField(q, k)), -1)
-    const settingsAlreadyOpen = matchedOpenApps.some((a) => a.path.toLowerCase() === ALPINE_SETTINGS_PATH)
-    const showSettings = settingsScore >= 0 && !settingsAlreadyOpen
-    const list = scored.map((r) => r.item)
-    if (showSettings) list.push(ALPINE_SETTINGS_ITEM)
-    return list
-  }, [query, items, fieldsById, bookmarkEntries, scores, showRecentApps, matchedOpenApps])
+    const openWindows = openAppCandidates.map((candidate) =>
+      candidate.kind === "open" ? adoptInstalledAppMatch(candidate, installedAppsByName.get(candidate.app.name.toLowerCase())) : candidate
+    )
+    const candidates = [...openWindows, ...tabCandidates, ...settingCandidates, ...windowCommandCandidates, ...appCandidates]
+    return limitResultsByKind(rankEntries(candidates, memory, q))
+  }, [query, items, memory, showRecentApps, openAppCandidates, tabCandidates, settingCandidates, windowCommandCandidates, appCandidates])
 
   const display = useMemo(() => {
-    let budget = Math.max(1, maxResults) - (mathResult ? 1 : 0) - (mapResult ? 1 : 0)
-    const take = (count: number) => {
-      const taken = Math.max(0, Math.min(budget, count))
-      budget -= taken
-      return taken
-    }
-    const openApps = matchedOpenApps.slice(0, take(matchedOpenApps.length))
-    const tabs = matchedTabs.slice(0, take(matchedTabs.length))
-    const settings = matchedSettings.slice(0, take(matchedSettings.length))
-    const winCmds = matchedWindowCommands.slice(0, take(matchedWindowCommands.length))
-    const apps = results.slice(0, take(results.length))
-    const showRun = !!runResult && take(1) > 0
-    return { openApps, tabs, settings, winCmds, apps, showRun }
-  }, [maxResults, mathResult, mapResult, runResult, matchedOpenApps, matchedTabs, matchedSettings, matchedWindowCommands, results])
+    const budget = Math.max(1, maxResults) - (mathResult ? 1 : 0) - (mapResult ? 1 : 0)
+    const results = rankedResults.slice(0, Math.max(0, budget))
+    return { results, showRun: !!runResult && budget - results.length > 0 }
+  }, [maxResults, mathResult, mapResult, runResult, rankedResults])
 
   const mathOffset = mathResult ? 1 : 0
-  const mapOffset = mathOffset + (mapResult ? 1 : 0)
-  const openOffset = mapOffset + display.openApps.length
-  const tabsOffset = openOffset + display.tabs.length
-  const settingsOffset = tabsOffset + display.settings.length
-  const winOffset = settingsOffset + display.winCmds.length
-  const runOffset = winOffset + display.apps.length
+  const resultsOffset = mathOffset + (mapResult ? 1 : 0)
+  const runOffset = resultsOffset + display.results.length
   const totalCount = runOffset + (display.showRun ? 1 : 0)
 
   const selectedEntry = useMemo(() => {
     if (mathResult && selected === 0) return { type: "math" as const }
     if (mapResult && selected === mathOffset) return { type: "map" as const, result: mapResult }
-    if (selected >= mapOffset && selected < openOffset) return { type: "open" as const, app: display.openApps[selected - mapOffset] }
-    if (selected >= openOffset && selected < tabsOffset) return { type: "tab" as const, tab: display.tabs[selected - openOffset] }
-    if (selected >= tabsOffset && selected < settingsOffset) return { type: "setting" as const, setting: display.settings[selected - tabsOffset] }
-    if (selected >= settingsOffset && selected < winOffset) return { type: "wincmd" as const, cmd: display.winCmds[selected - settingsOffset] }
-    if (selected >= winOffset && selected < runOffset) return { type: "app" as const, item: display.apps[selected - winOffset] }
+    if (selected >= resultsOffset && selected < runOffset) return { type: "result" as const, result: display.results[selected - resultsOffset] }
     if (display.showRun && runResult && selected === runOffset) return { type: "run" as const, run: runResult }
     return null
-  }, [selected, mathResult, mapResult, runResult, display, mathOffset, mapOffset, openOffset, tabsOffset, settingsOffset, winOffset, runOffset])
+  }, [selected, mathResult, mapResult, runResult, display, mathOffset, resultsOffset, runOffset])
+
+  const selectedSetting = selectedEntry?.type === "result" && selectedEntry.result.kind === "setting" ? selectedEntry.result.setting : null
+
+  function rememberPick(result: LauncherResult) {
+    window.launcher.recordSelection(result.key, query).catch(() => {})
+  }
+
+  function activateResult(result: LauncherResult) {
+    rememberPick(result)
+    if (result.kind === "open") {
+      window.alttab.activate(result.app.hwnd)
+      window.launcher.hide()
+    } else if (result.kind === "tab") {
+      activateBrowserTab(result.tab)
+    } else if (result.kind === "setting") {
+      activateSetting(result.setting)
+    } else if (result.kind === "wincmd") {
+      window.shell.apps.windowCommand(result.cmd.action)
+      window.launcher.hide()
+    } else if (result.kind === "bookmark") {
+      if (result.item.url) window.shell.bookmarks.open(result.item.url)
+      window.launcher.hide()
+    } else if (result.item.id === ALPINE_SETTINGS_ID) {
+      window.shell.windows.openSettings()
+      window.launcher.hide()
+    } else {
+      window.launcher.launch(result.item.id)
+    }
+  }
 
   function activateBrowserTab(tab: BrowserTab) {
     window.shell.browserTabs.activate(tab).catch(() => {})
@@ -678,23 +718,31 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
 
   const contextActions = useMemo(() => {
     if (!contextOpen || !selectedEntry) return []
-    if (selectedEntry.type === "app" && selectedEntry.item) return appActions(selectedEntry.item, runUninstall)
-    if (selectedEntry.type === "open") return openAppActions(selectedEntry.app)
+    if (selectedEntry.type === "result" && selectedEntry.result.kind === "app") {
+      const result = selectedEntry.result
+      return appActions(result.item, runUninstall, () => rememberPick(result))
+    }
+    if (selectedEntry.type === "result" && selectedEntry.result.kind === "open") return openAppActions(selectedEntry.result.app)
     if (selectedEntry.type === "run") return runActions(query, selectedEntry.run)
     return []
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextOpen, selectedEntry])
 
-  const tabsSectionRef = useRef({ query: "", count: 0 })
+  const shownResultsRef = useRef({ query: "", identities: [] as string[] })
   useEffect(() => {
-    const prev = tabsSectionRef.current
-    tabsSectionRef.current = { query, count: display.tabs.length }
-    if (prev.query !== query) return
-    const grown = display.tabs.length - prev.count
-    if (grown <= 0) return
-    if (selected >= openOffset) setSelected((s) => s + grown)
+    const previous = shownResultsRef.current
+    const identities = display.results.map(resultIdentity)
+    shownResultsRef.current = { query, identities }
+    if (previous.query !== query) {
+      setSelected(0)
+      return
+    }
+    const previousIdentity = previous.identities[selected - resultsOffset]
+    if (!previousIdentity) return
+    const index = identities.indexOf(previousIdentity)
+    if (index >= 0 && index + resultsOffset !== selected) setSelected(index + resultsOffset)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [display.tabs.length, query])
+  }, [display.results, query])
 
   useEffect(() => {
     if (selected >= totalCount) setSelected(0)
@@ -823,12 +871,13 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
         e.preventDefault()
         handleEmojiPick(emojiIndex)
       }
-    } else if (selectedEntry && selectedEntry.type === "setting" && (selectedEntry.setting.control.kind === "slider" || (selectedEntry.setting.control.kind === "brightness" && !brightnessIsSubmenu)) && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    } else if (selectedSetting && (selectedSetting.control.kind === "slider" || (selectedSetting.control.kind === "brightness" && !brightnessIsSubmenu)) && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       e.preventDefault()
-      adjustSetting(selectedEntry.setting, e.key === "ArrowRight" ? 1 : -1)
-    } else if (e.key === "ArrowRight" && selectedEntry && selectedEntry.type === "setting" && selectedEntry.setting.control.kind !== "toggle") {
+      adjustSetting(selectedSetting, e.key === "ArrowRight" ? 1 : -1)
+    } else if (e.key === "ArrowRight" && selectedEntry?.type === "result" && selectedSetting && selectedSetting.control.kind !== "toggle") {
       e.preventDefault()
-      activateSetting(selectedEntry.setting)
+      rememberPick(selectedEntry.result)
+      activateSetting(selectedSetting)
     } else if (e.key === "ArrowDown") {
       e.preventDefault()
       setSelected((s) => Math.min(s + 1, totalCount - 1))
@@ -836,9 +885,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       e.preventDefault()
       setSelected((s) => Math.max(s - 1, 0))
     } else if (e.key === "ArrowRight" && selectedEntry && (
-      selectedEntry.type === "open" ||
       selectedEntry.type === "run" ||
-      (selectedEntry.type === "app" && selectedEntry.item && selectedEntry.item.id !== ALPINE_SETTINGS_ID && !selectedEntry.item.isBookmark)
+      (selectedEntry.type === "result" && (selectedEntry.result.kind === "open" || (selectedEntry.result.kind === "app" && selectedEntry.result.item.id !== ALPINE_SETTINGS_ID)))
     )) {
       e.preventDefault()
       setContextOpen(true)
@@ -853,31 +901,12 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       } else if (selectedEntry.type === "map") {
         window.open(`https://www.openstreetmap.org/?mlat=${selectedEntry.result.lat}&mlon=${selectedEntry.result.lon}#map=16/${selectedEntry.result.lat}/${selectedEntry.result.lon}`)
         window.launcher.hide()
-      } else if (selectedEntry.type === "open") {
-        window.alttab.activate(selectedEntry.app.hwnd)
-        window.launcher.hide()
-      } else if (selectedEntry.type === "tab" && selectedEntry.tab) {
-        activateBrowserTab(selectedEntry.tab)
-      } else if (selectedEntry.type === "setting" && selectedEntry.setting) {
-        activateSetting(selectedEntry.setting)
-      } else if (selectedEntry.type === "wincmd" && selectedEntry.cmd) {
-        window.shell.apps.windowCommand(selectedEntry.cmd.action)
-        window.launcher.hide()
+      } else if (selectedEntry.type === "result") {
+        activateResult(selectedEntry.result)
       } else if (selectedEntry.type === "run" && selectedEntry.run) {
         if (selectedEntry.run.runInTerminal) window.shell.run.execTerminal(query)
         else window.shell.run.exec(query)
         window.launcher.hide()
-      } else if (selectedEntry.type === "app" && selectedEntry.item) {
-        const appItem = selectedEntry.item
-        if (appItem.isBookmark) {
-          if (appItem.url) window.shell.bookmarks.open(appItem.url)
-          window.launcher.hide()
-        } else if (appItem.id === ALPINE_SETTINGS_ID) {
-          window.shell.windows.openSettings()
-          window.launcher.hide()
-        } else {
-          window.launcher.launch(appItem.id)
-        }
       }
     }
   }
@@ -887,6 +916,174 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     const el = listRef.current?.children[selected] as HTMLElement | undefined
     if (el) el.scrollIntoView({ block: "nearest" })
   }, [selected, contextOpen])
+
+  function selectRow(idx: number) {
+    setSelected(idx)
+    setContextOpen(false)
+  }
+
+  function rowClass(idx: number) {
+    return `flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${idx === selected ? selectedBg : hoverBg}`
+  }
+
+  function renderSettingResult(result: LauncherResult & { kind: "setting" }, idx: number) {
+    const s = result.setting
+    const Icon = s.icon
+    const isSel = idx === selected
+    const control = s.control
+    if (control.kind === "brightness" && !brightnessIsSubmenu) {
+      const m = monitors[0]
+      const value = m ? m.brightness : 50
+      return (
+        <div
+          key={`setting-${s.id}`}
+          onMouseMove={() => selectRow(idx)}
+          className={`flex items-center gap-3 px-2.5 h-12 rounded-md transition-colors ${isSel ? selectedBg : hoverBg}`}
+        >
+          <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+          <input
+            type="range"
+            tabIndex={-1}
+            min={0}
+            max={100}
+            step={5}
+            value={value}
+            onChange={(e) => { const v = parseInt(e.target.value, 10); if (m) setBrightness(m.id, v); else window.shell.system.setBrightness(v) }}
+            onMouseUp={() => { rememberPick(result); requestAnimationFrame(() => inputRef.current?.focus()) }}
+            className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
+            style={{ "--slider-progress": `${value}%` } as React.CSSProperties}
+          />
+          <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{value}%</span>
+        </div>
+      )
+    }
+    if (control.kind === "slider") {
+      const value = typeof settingValues[s.id] === "number" ? (settingValues[s.id] as number) : control.min
+      return (
+        <div
+          key={`setting-${s.id}`}
+          onMouseMove={() => selectRow(idx)}
+          className={`flex items-center gap-3 px-2.5 h-12 rounded-md transition-colors ${isSel ? selectedBg : hoverBg}`}
+        >
+          <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+          <input
+            type="range"
+            tabIndex={-1}
+            min={control.min}
+            max={control.max}
+            step={control.step}
+            value={value}
+            onChange={(e) => setSliderValue(s, parseInt(e.target.value, 10))}
+            onMouseUp={() => { rememberPick(result); requestAnimationFrame(() => inputRef.current?.focus()) }}
+            className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
+            style={{ "--slider-progress": `${((value - control.min) / (control.max - control.min)) * 100}%` } as React.CSSProperties}
+          />
+          <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{value}{control.unit ?? ""}</span>
+        </div>
+      )
+    }
+    const on = settingValues[s.id] === true
+    return (
+      <button
+        key={`setting-${s.id}`}
+        onMouseMove={() => selectRow(idx)}
+        onClick={() => activateResult(result)}
+        className={rowClass(idx)}
+      >
+        <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className={`text-[13px] truncate ${textColor}`}>{s.label}</span>
+          <span className={`text-[11px] truncate ${dimText}`}>{settingsEntryHint(s)}</span>
+        </div>
+        {control.kind === "toggle" ? (
+          <span
+            className="relative shrink-0 rounded-full transition-colors"
+            style={{ width: 32, height: 18, backgroundColor: on ? (darkText ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.9)") : (darkText ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.18)") }}
+          >
+            <span className="absolute top-0.5 rounded-full transition-all" style={{ width: 14, height: 14, left: on ? 16 : 2, backgroundColor: on ? (darkText ? "rgb(255,255,255)" : "rgb(20,20,20)") : (darkText ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.7)") }} />
+          </span>
+        ) : (
+          <ChevronRight size={14} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
+        )}
+      </button>
+    )
+  }
+
+  function renderResult(result: RankedResult, idx: number) {
+    if (result.kind === "setting") return renderSettingResult(result, idx)
+    if (result.kind === "open") {
+      const app = result.app
+      return (
+        <button key={`open-${app.hwnd}`} onMouseMove={() => selectRow(idx)} onClick={() => activateResult(result)} className={rowClass(idx)}>
+          {app.icon ? (
+            <img src={app.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
+          ) : (
+            <div className={`w-7 h-7 shrink-0 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+          )}
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className={`text-[13px] truncate ${textColor}`}>{app.name}</span>
+            <span className={`text-[11px] truncate ${dimText}`}>{app.title}</span>
+          </div>
+        </button>
+      )
+    }
+    if (result.kind === "tab") {
+      const tab = result.tab
+      const windowIcon = openApps.find((a) => a.hwnd === tab.hwnd)?.icon
+      const meta = tabMeta.get(tabKey(tab))
+      const host = meta?.host ?? tab.host
+      return (
+        <button key={`tab-${tab.hwnd}-${tab.index}`} onMouseMove={() => selectRow(idx)} onClick={() => activateResult(result)} className={rowClass(idx)}>
+          <TabIcon favicon={meta?.favicon ?? tab.favicon} windowIcon={windowIcon} darkText={darkText} />
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className={`text-[13px] truncate ${textColor}`}>{tab.title}</span>
+            <span className={`text-[11px] truncate ${dimText}`}>{host ? `${host} · ` : ""}{browserTabLabel(tab.browser)} tab</span>
+          </div>
+        </button>
+      )
+    }
+    if (result.kind === "wincmd") {
+      const cmd = result.cmd
+      const Icon = cmd.icon
+      return (
+        <button key={`wincmd-${cmd.action}`} onMouseMove={() => selectRow(idx)} onClick={() => activateResult(result)} className={rowClass(idx)}>
+          <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className={`text-[13px] truncate ${textColor}`}>{cmd.label}</span>
+            <span className={`text-[11px] truncate ${dimText}`}>{cmd.hint}</span>
+          </div>
+        </button>
+      )
+    }
+    const item = result.item
+    const isAlpineSettings = item.id === ALPINE_SETTINGS_ID
+    const isBookmark = result.kind === "bookmark"
+    return (
+      <button key={`${result.kind}-${item.id}`} onMouseMove={() => selectRow(idx)} onClick={() => activateResult(result)} className={rowClass(idx)}>
+        {isBookmark ? (
+          <BookmarkIcon favicon={item.favicon} darkText={darkText} />
+        ) : isAlpineSettings ? (
+          <img src={window.shell.settingsIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
+        ) : item.icon ? (
+          <PluginBadged badge={item.badge} darkText={darkText}>
+            <img src={item.icon} alt="" className="w-7 h-7" draggable={false} />
+          </PluginBadged>
+        ) : (
+          <PluginBadged badge={item.badge} darkText={darkText}>
+            <div className={`w-7 h-7 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+          </PluginBadged>
+        )}
+        {isBookmark ? (
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
+            <span className={`text-[11px] truncate ${dimText}`}>{item.url}</span>
+          </div>
+        ) : (
+          <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
+        )}
+      </button>
+    )
+  }
 
   return createPortal(
     <div
@@ -918,7 +1115,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                 <span className={`flex-1 text-[15px] truncate ${textColor}`}>{subView ? subView.title : activeLabel}</span>
               ) : contextOpen && selectedEntry ? (
                 <span className={`flex-1 text-[15px] truncate ${textColor}`}>
-                  {selectedEntry.type === "app" ? selectedEntry.item?.name : selectedEntry.type === "open" ? selectedEntry.app.name : selectedEntry.type === "run" ? selectedEntry.run.display : ""}
+                  {selectedEntry.type === "result" ? resultTitle(selectedEntry.result) : selectedEntry.type === "run" ? selectedEntry.run.display : ""}
                 </span>
               ) : (
                 <input
@@ -1050,213 +1247,8 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           </div>
                         </button>
                       )}
-                      {display.openApps.map((app, i) => {
-                        const idx = mapOffset + i
-                        return (
-                          <button
-                            key={`open-${app.hwnd}`}
-                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
-                            onClick={() => { window.alttab.activate(app.hwnd); window.launcher.hide() }}
-                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
-                              idx === selected ? selectedBg : hoverBg
-                            }`}
-                          >
-                            {app.icon ? (
-                              <img src={app.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
-                            ) : (
-                              <div className={`w-7 h-7 shrink-0 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
-                            )}
-                            <div className="flex flex-col min-w-0 flex-1">
-                              <span className={`text-[13px] truncate ${textColor}`}>{app.name}</span>
-                              <span className={`text-[11px] truncate ${dimText}`}>{app.title}</span>
-                            </div>
-                          </button>
-                        )
-                      })}
-                      {display.tabs.length > 0 && display.openApps.length > 0 && (
-                        <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
-                      )}
-                      {display.tabs.map((tab, i) => {
-                        const idx = openOffset + i
-                        const windowIcon = openApps.find((a) => a.hwnd === tab.hwnd)?.icon
-                        const meta = tabMeta.get(tabKey(tab))
-                        const host = meta?.host ?? tab.host
-                        return (
-                          <button
-                            key={`tab-${tab.hwnd}-${tab.index}`}
-                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
-                            onClick={() => activateBrowserTab(tab)}
-                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
-                              idx === selected ? selectedBg : hoverBg
-                            }`}
-                          >
-                            <TabIcon favicon={meta?.favicon ?? tab.favicon} windowIcon={windowIcon} darkText={darkText} />
-                            <div className="flex flex-col min-w-0 flex-1">
-                              <span className={`text-[13px] truncate ${textColor}`}>{tab.title}</span>
-                              <span className={`text-[11px] truncate ${dimText}`}>{host ? `${host} · ` : ""}{browserTabLabel(tab.browser)} tab</span>
-                            </div>
-                          </button>
-                        )
-                      })}
-                      {(display.openApps.length > 0 || display.tabs.length > 0) && display.settings.length > 0 && (
-                        <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
-                      )}
-                      {display.settings.map((s, i) => {
-                        const idx = tabsOffset + i
-                        const Icon = s.icon
-                        const isSel = idx === selected
-                        const control = s.control
-                        if (control.kind === "brightness" && !brightnessIsSubmenu) {
-                          const m = monitors[0]
-                          const value = m ? m.brightness : 50
-                          return (
-                            <div
-                              key={`setting-${s.id}`}
-                              onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
-                              className={`flex items-center gap-3 px-2.5 h-12 rounded-md transition-colors ${isSel ? selectedBg : hoverBg}`}
-                            >
-                              <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
-                              <input
-                                type="range"
-                                tabIndex={-1}
-                                min={0}
-                                max={100}
-                                step={5}
-                                value={value}
-                                onChange={(e) => { const v = parseInt(e.target.value, 10); if (m) setBrightness(m.id, v); else window.shell.system.setBrightness(v) }}
-                                onMouseUp={() => requestAnimationFrame(() => inputRef.current?.focus())}
-                                className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
-                                style={{ "--slider-progress": `${value}%` } as React.CSSProperties}
-                              />
-                              <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{value}%</span>
-                            </div>
-                          )
-                        }
-                        if (control.kind === "slider") {
-                          const value = typeof settingValues[s.id] === "number" ? (settingValues[s.id] as number) : control.min
-                          return (
-                            <div
-                              key={`setting-${s.id}`}
-                              onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
-                              className={`flex items-center gap-3 px-2.5 h-12 rounded-md transition-colors ${isSel ? selectedBg : hoverBg}`}
-                            >
-                              <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
-                              <input
-                                type="range"
-                                tabIndex={-1}
-                                min={control.min}
-                                max={control.max}
-                                step={control.step}
-                                value={value}
-                                onChange={(e) => setSliderValue(s, parseInt(e.target.value, 10))}
-                                onMouseUp={() => requestAnimationFrame(() => inputRef.current?.focus())}
-                                className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
-                                style={{ "--slider-progress": `${((value - control.min) / (control.max - control.min)) * 100}%` } as React.CSSProperties}
-                              />
-                              <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{value}{control.unit ?? ""}</span>
-                            </div>
-                          )
-                        }
-                        const on = settingValues[s.id] === true
-                        return (
-                          <button
-                            key={`setting-${s.id}`}
-                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
-                            onClick={() => activateSetting(s)}
-                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${isSel ? selectedBg : hoverBg}`}
-                          >
-                            <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
-                            <div className="flex flex-col min-w-0 flex-1">
-                              <span className={`text-[13px] truncate ${textColor}`}>{s.label}</span>
-                              <span className={`text-[11px] truncate ${dimText}`}>{settingsEntryHint(s)}</span>
-                            </div>
-                            {control.kind === "toggle" ? (
-                              <span
-                                className="relative shrink-0 rounded-full transition-colors"
-                                style={{ width: 32, height: 18, backgroundColor: on ? (darkText ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.9)") : (darkText ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.18)") }}
-                              >
-                                <span className="absolute top-0.5 rounded-full transition-all" style={{ width: 14, height: 14, left: on ? 16 : 2, backgroundColor: on ? (darkText ? "rgb(255,255,255)" : "rgb(20,20,20)") : (darkText ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.7)") }} />
-                              </span>
-                            ) : (
-                              <ChevronRight size={14} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
-                            )}
-                          </button>
-                        )
-                      })}
-                      {display.winCmds.length > 0 && (display.openApps.length > 0 || display.tabs.length > 0 || display.settings.length > 0) && (
-                        <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
-                      )}
-                      {display.winCmds.map((cmd, i) => {
-                        const idx = settingsOffset + i
-                        const Icon = cmd.icon
-                        return (
-                          <button
-                            key={`wincmd-${cmd.action}`}
-                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
-                            onClick={() => { window.shell.apps.windowCommand(cmd.action); window.launcher.hide() }}
-                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
-                              idx === selected ? selectedBg : hoverBg
-                            }`}
-                          >
-                            <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
-                            <div className="flex flex-col min-w-0 flex-1">
-                              <span className={`text-[13px] truncate ${textColor}`}>{cmd.label}</span>
-                              <span className={`text-[11px] truncate ${dimText}`}>{cmd.hint}</span>
-                            </div>
-                          </button>
-                        )
-                      })}
-                      {(display.openApps.length > 0 || display.tabs.length > 0 || display.settings.length > 0 || display.winCmds.length > 0) && display.apps.length > 0 && (
-                        <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
-                      )}
-                      {display.apps.map((item, i) => {
-                        const idx = winOffset + i
-                        const isAlpineSettings = item.id === ALPINE_SETTINGS_ID
-                        const isBookmark = !!item.isBookmark
-                        return (
-                          <button
-                            key={item.id}
-                            onMouseMove={() => { setSelected(idx); setContextOpen(false) }}
-                            onClick={() => {
-                              if (isBookmark) {
-                                if (item.url) window.shell.bookmarks.open(item.url)
-                                window.launcher.hide()
-                              } else if (isAlpineSettings) {
-                                window.shell.windows.openSettings()
-                                window.launcher.hide()
-                              } else {
-                                window.launcher.launch(item.id)
-                              }
-                            }}
-                            className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${
-                              idx === selected ? selectedBg : hoverBg
-                            }`}
-                          >
-                            {isBookmark ? (
-                              <BookmarkIcon favicon={item.favicon} darkText={darkText} />
-                            ) : isAlpineSettings ? (
-                              <img src={window.shell.settingsIcon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
-                            ) : item.icon ? (
-                              <PluginBadged badge={item.badge} darkText={darkText}>
-                                <img src={item.icon} alt="" className="w-7 h-7" draggable={false} />
-                              </PluginBadged>
-                            ) : (
-                              <PluginBadged badge={item.badge} darkText={darkText}>
-                                <div className={`w-7 h-7 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
-                              </PluginBadged>
-                            )}
-                            {isBookmark ? (
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
-                                <span className={`text-[11px] truncate ${dimText}`}>{item.url}</span>
-                              </div>
-                            ) : (
-                              <span className={`text-[13px] truncate ${textColor}`}>{item.name}</span>
-                            )}
-                          </button>
-                        )
-                      })}
-                      {display.showRun && (winOffset > 0 || display.apps.length > 0) && (
+                      {display.results.map((result, i) => renderResult(result, resultsOffset + i))}
+                      {display.showRun && display.results.length > 0 && (
                         <div className={`h-px mx-2 my-0.5 ${darkText ? "bg-black/5" : "bg-white/5"}`} />
                       )}
                       {display.showRun && runResult && (() => {
