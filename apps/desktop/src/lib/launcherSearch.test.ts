@@ -110,3 +110,45 @@ describe("frecencyKey normalizes targets consistently", () => {
     expect(frecencyKey("")).toBe("")
   })
 })
+
+describe("scoreItem tolerates word order and small typos", () => {
+  it("matches words typed in a different order", () => {
+    expect(scoreItem("code visual", vscode)).toBeGreaterThan(0)
+    expect(scoreItem("chrome google", chrome)).toBeGreaterThan(0)
+  })
+
+  it("ranks the in-order query above the same words out of order", () => {
+    expect(scoreItem("visual code", vscode)).toBeGreaterThan(scoreItem("code visual", vscode))
+  })
+
+  it("finds an app despite a one-letter typo or swapped letters", () => {
+    expect(scoreItem("chorme", chrome)).toBeGreaterThan(-1)
+    expect(scoreItem("clacu", calculator)).toBeGreaterThan(-1)
+    expect(scoreItem("photoshp", photoshop)).toBeGreaterThan(-1)
+  })
+
+  it("ranks a typo match below any genuine match", () => {
+    expect(scoreItem("chorme", chrome)).toBeLessThan(scoreField("cl", "Calculator"))
+  })
+
+  it("does not guess at short or unrelated queries", () => {
+    expect(scoreItem("chx", chrome)).toBeLessThan(0)
+    expect(scoreItem("spotify", chrome)).toBeLessThan(0)
+  })
+})
+
+describe("a whole word inside a name beats letters scattered across it", () => {
+  it("ranks 'teams' in Microsoft Teams a tier above the scattered letters of Steam Support Center", () => {
+    const teams = scoreField("teams", "Microsoft Teams")
+    const steam = scoreField("teams", "Steam Support Center")
+    expect(Math.floor(teams / TIER_GAP)).toBeGreaterThan(Math.floor(steam / TIER_GAP))
+  })
+
+  it("scores the later word even when an earlier letter could start the match", () => {
+    expect(scoreField("code", "Visual Studio Code")).toBeGreaterThan(scoreField("vsc", "Visual Studio Code"))
+  })
+
+  it("still ranks a true prefix above a later word", () => {
+    expect(scoreField("micro", "Microsoft Teams")).toBeGreaterThan(scoreField("teams", "Microsoft Teams"))
+  })
+})

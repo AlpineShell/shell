@@ -2,7 +2,6 @@ const { shell } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const { execFile } = require('child_process')
-const frecency = require('./frecency')
 const browserFavicons = require('./browserFavicons')
 const firefoxData = require('./firefoxData')
 const chromiumPaths = require('./chromiumPaths')
@@ -162,7 +161,6 @@ module.exports = {
     'bookmarks/open': (_event, url) => {
       if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return { ok: false }
       shell.openExternal(url).catch((e) => console.error('[bookmarks] open error:', e.message))
-      frecency.record(url)
       return { ok: true }
     },
   },

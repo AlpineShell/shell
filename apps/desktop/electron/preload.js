@@ -257,6 +257,7 @@ contextBridge.exposeInMainWorld('launcher', {
     return () => ipcRenderer.removeListener('launcher/hide', handler)
   },
   scores: () => ipcRenderer.invoke('frecency/scores'),
+  recordSelection: (key, query) => ipcRenderer.invoke('frecency/record', key, query),
   onScoresChanged: (callback) => {
     const handler = (_, data) => callback(data)
     ipcRenderer.on('frecency/changed', handler)
