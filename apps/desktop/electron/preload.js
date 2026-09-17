@@ -310,6 +310,7 @@ contextBridge.exposeInMainWorld('setup', {
   revertPermanent: () => ipcRenderer.invoke('setup/revert-permanent'),
   setShell: () => ipcRenderer.invoke('setup/set-shell'),
   uninstall: () => ipcRenderer.invoke('setup/uninstall'),
+  fitWindowHeight: (height) => ipcRenderer.send('setup/fit-window-height', height),
   onProgress: (callback) => {
     ipcRenderer.on('setup/progress', (_, step) => callback(step))
   },

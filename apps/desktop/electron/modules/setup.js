@@ -7,7 +7,7 @@ const updater = require('./updater')
 const explorerShell = require('./explorerShell')
 const shellExclusivity = require('./shellExclusivity')
 
-const CURSOR_VARIANT = 'Bibata-Original-Ice'
+const CURSOR_VARIANT = 'Bibata-Modern-Ice'
 const REVERT_QUIT_DELAY_MS = 1200
 const REVERT_BLOCKED_MESSAGES = {
   [shellExclusivity.REVERT_BLOCKED_IN_DEVELOPMENT]: 'Unavailable in development.',

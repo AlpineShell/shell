@@ -521,11 +521,14 @@ function createScreenshotWindow() {
 }
 
 
+const SETUP_WINDOW_WIDTH = 480
+const SETUP_WINDOW_INITIAL_HEIGHT = 208
+
 let setupWin = null
 function createSetupWindow() {
   setupWin = new BrowserWindow({
-    width: 480,
-    height: 560,
+    width: SETUP_WINDOW_WIDTH,
+    height: SETUP_WINDOW_INITIAL_HEIGHT,
     frame: false,
     resizable: false,
     center: true,
@@ -821,6 +824,11 @@ app.whenReady().then(async () => {
       setupWin = null
     }
     startShellMode()
+  })
+
+  ipcMain.on('setup/fit-window-height', (_event, height) => {
+    if (!setupWin || setupWin.isDestroyed() || !Number.isFinite(height)) return
+    setupWin.setContentSize(SETUP_WINDOW_WIDTH, Math.ceil(height))
   })
 
   if (process.argv.includes('--setup')) {
