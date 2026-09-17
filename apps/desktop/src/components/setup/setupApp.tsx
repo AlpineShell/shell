@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Check, X, AlertTriangle, FlaskConical, Settings } from 'lucide-react'
+import { X, AlertTriangle, FlaskConical, Settings } from 'lucide-react'
 import { Button, Card, IconButton, PageTitle, Row, Toggle } from '@alpine/ui'
 import { useTheme } from '../../hooks/useTheme'
 import { useFitSetupWindow } from '../../hooks/useFitSetupWindow'
@@ -19,28 +19,11 @@ const wordmarkMask: React.CSSProperties = {
   WebkitMaskRepeat: 'no-repeat',
 }
 
-function OutcomeBadge({ tone, children }: OutcomeBadgeProps) {
+function FailureBadge() {
   return (
-    <div
-      className={`flex h-12 w-12 items-center justify-center rounded-full ${
-        tone === 'success' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
-      }`}
-    >
-      {children}
+    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger/10 text-danger">
+      <X size={24} strokeWidth={2.5} />
     </div>
-  )
-}
-
-function OutcomeNote({ tone, children }: OutcomeNoteProps) {
-  return (
-    <p className={`flex items-center gap-2 ${tone === 'warning' ? 'text-warning' : 'text-ink-quiet'}`}>
-      {tone === 'warning' ? (
-        <AlertTriangle size={11} className="shrink-0" />
-      ) : (
-        <Check size={11} className="shrink-0 text-success" />
-      )}
-      {children}
-    </p>
   )
 }
 
@@ -154,9 +137,7 @@ export default function SetupApp() {
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-4">
-                <OutcomeBadge tone="danger">
-                  <X size={24} strokeWidth={2.5} />
-                </OutcomeBadge>
+                <FailureBadge />
                 <PageTitle title={isUpdate ? 'Update failed' : 'Installation failed'} />
               </div>
               <p className="max-h-20 overflow-y-auto rounded-field border border-line-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all text-ink-secondary">
@@ -175,28 +156,12 @@ export default function SetupApp() {
           </div>
         )}
 
-        {page === 'complete' && result && (
+        {page === 'complete' && (
           <div className="flex flex-col gap-8">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-4">
-                <OutcomeBadge tone="success">
-                  <Check size={24} strokeWidth={2.5} />
-                </OutcomeBadge>
-                <PageTitle
-                  title={isUpdate ? 'Update complete' : 'Setup complete'}
-                  subtitle={`Restart your PC to ${isUpdate ? 'finish updating' : 'start using'} Alpine Shell.`}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5 text-xs">
-                {result.shell && <OutcomeNote tone="done">Set as default desktop environment</OutcomeNote>}
-                {result.startup && <OutcomeNote tone="done">Added to startup</OutcomeNote>}
-                {result.cursor && <OutcomeNote tone="done">Custom cursor installed</OutcomeNote>}
-                {result.gpoBlocked && (
-                  <OutcomeNote tone="warning">Group Policy may have blocked shell replacement</OutcomeNote>
-                )}
-              </div>
-            </div>
+            <PageTitle
+              title={isUpdate ? 'Update complete' : 'Setup complete'}
+              subtitle={`Restart your PC to ${isUpdate ? 'finish updating' : 'start using'} Alpine Shell.`}
+            />
 
             <div className="flex items-center gap-2">
               <Button className="flex-1" onClick={() => window.setup.restartWindows()}>

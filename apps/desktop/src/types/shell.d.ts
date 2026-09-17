@@ -15,20 +15,6 @@ declare global {
     wideControlStacked?: boolean
   }
 
-  type SetupOutcomeTone = 'success' | 'danger'
-
-  interface OutcomeBadgeProps {
-    tone: SetupOutcomeTone
-    children: import('react').ReactNode
-  }
-
-  type SetupNoteTone = 'done' | 'warning'
-
-  interface OutcomeNoteProps {
-    tone: SetupNoteTone
-    children: import('react').ReactNode
-  }
-
 interface OpenApp {
   id: number
   hwnd: number
