@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
+import { AppWindow, Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useBluetooth } from "../../hooks/useBluetooth"
 import { useBluetoothRescan } from "../../hooks/useBluetoothRescan"
 import { canToggleRadio, deviceActionLabel, deviceStatusLabel, displayedRadioOn, isRadioOff, nextDeviceAction, radioEmptyStateTitle } from "../../lib/bluetoothPresentation"
@@ -201,6 +201,12 @@ function resultTitle(result: LauncherResult): string {
   if (result.kind === "open") return result.app.name
   if (result.kind === "app" || result.kind === "bookmark") return result.item.name
   return ""
+}
+
+function betterMatch(a: LauncherResult | undefined, b: LauncherResult | undefined): LauncherResult | undefined {
+  if (!a) return b
+  if (!b) return a
+  return b.match > a.match ? b : a
 }
 
 function limitResultsByKind(ranked: RankedResult[]): RankedResult[] {
@@ -639,11 +645,15 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
         .sort((a, b) => b.score - a.score)
     }
     const installedAppsByName = new Map<string, LauncherResult>()
+    const installedAppsByKey = new Map<string, LauncherResult>()
     for (const candidate of appCandidates) {
-      if (candidate.kind === "app") installedAppsByName.set(candidate.item.name.toLowerCase(), candidate)
+      if (candidate.kind !== "app") continue
+      installedAppsByName.set(candidate.item.name.toLowerCase(), candidate)
+      installedAppsByKey.set(candidate.key, candidate)
     }
+    const installedAppFor = (app: OpenApp) => betterMatch(installedAppsByKey.get(appResultKey(app.path)), installedAppsByName.get(app.name.toLowerCase()))
     const openWindows = openAppCandidates.map((candidate) =>
-      candidate.kind === "open" ? adoptInstalledAppMatch(candidate, installedAppsByName.get(candidate.app.name.toLowerCase())) : candidate
+      candidate.kind === "open" ? adoptInstalledAppMatch(candidate, installedAppFor(candidate.app)) : candidate
     )
     const candidates = [...openWindows, ...tabCandidates, ...settingCandidates, ...windowCommandCandidates, ...appCandidates]
     return limitResultsByKind(rankEntries(candidates, memory, q))
@@ -1013,11 +1023,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       const app = result.app
       return (
         <button key={`open-${app.hwnd}`} onMouseMove={() => selectRow(idx)} onClick={() => activateResult(result)} className={rowClass(idx)}>
-          {app.icon ? (
-            <img src={app.icon} alt="" className="w-7 h-7 shrink-0" draggable={false} />
-          ) : (
-            <div className={`w-7 h-7 shrink-0 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
-          )}
+          <OpenWindowIcon icon={app.icon} darkText={darkText} />
           <div className="flex flex-col min-w-0 flex-1">
             <span className={`text-[13px] truncate ${textColor}`}>{app.name}</span>
             <span className={`text-[11px] truncate ${dimText}`}>{app.title}</span>
@@ -1308,6 +1314,24 @@ function TabIcon({ favicon, windowIcon, darkText }: { favicon?: string; windowIc
           <img src={windowIcon} alt="" style={{ width: 9, height: 9 }} draggable={false} />
         </span>
       )}
+    </div>
+  )
+}
+
+function OpenWindowIcon({ icon, darkText }: { icon?: string; darkText: boolean }) {
+  return (
+    <div className="relative w-7 h-7 shrink-0">
+      {icon ? (
+        <img src={icon} alt="" className="w-7 h-7" draggable={false} />
+      ) : (
+        <div className={`w-7 h-7 rounded ${darkText ? "bg-black/10" : "bg-white/10"}`} />
+      )}
+      <span
+        className="absolute flex items-center justify-center rounded-full"
+        style={{ right: -3, bottom: -3, width: 13, height: 13, backgroundColor: darkText ? "rgba(255,255,255,0.95)" : "rgba(24,24,27,0.95)" }}
+      >
+        <AppWindow size={9} strokeWidth={2.5} className={darkText ? "text-black/65" : "text-white/75"} />
+      </span>
     </div>
   )
 }
