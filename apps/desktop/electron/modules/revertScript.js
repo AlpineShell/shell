@@ -3,52 +3,52 @@ const DIRECTORY_REMOVE_TICKS = 30
 const MIN_PATH_COMPONENTS_BELOW_ROOT = 3
 const PROCESS_EXIT_SETTLE_SECONDS = 2
 const EXPLORER_START_SETTLE_SECONDS = 3
+const DIRECTORY_RETRY_SECONDS = 2
 
 const IMAGE_VAR = 'ALPINE_REVERT_IMAGE'
 const SHELL_KEY_VAR = 'ALPINE_REVERT_SHELL_KEY'
 const SHELL_EXE_VAR = 'ALPINE_REVERT_SHELL_EXE'
 const UNINSTALLER_VAR = 'ALPINE_REVERT_UNINSTALLER'
 const INSTALL_DIR_VAR = 'ALPINE_REVERT_INSTALL_DIR'
-const STILL_RUNNING_VAR = 'ALPINE_REVERT_STILL_RUNNING'
 
 function directoryVar(index) {
   return `ALPINE_REVERT_DIR_${index}`
 }
 
 function buildDelaySeconds(seconds) {
-  return `ping -n ${Math.max(1, Math.round(seconds)) + 1} 127.0.0.1 >nul`
+  return `Start-Sleep -Seconds ${Math.max(1, Math.round(seconds))}`
+}
+
+function buildFindAlpineProcess() {
+  return 'Get-Process -Name $imageName -ErrorAction SilentlyContinue'
 }
 
 function buildWaitForProcessExit() {
   return [
-    'set WAITTICKS=0',
-    ':alpine_wait_loop',
-    `tasklist /nh /fi "imagename eq %${IMAGE_VAR}%" | find /i "%${IMAGE_VAR}%" >nul`,
-    'if errorlevel 1 goto alpine_process_gone',
-    'set /a WAITTICKS+=1',
-    `if %WAITTICKS% GEQ ${PROCESS_WAIT_TICKS} goto alpine_wait_timeout`,
-    buildDelaySeconds(1),
-    'goto alpine_wait_loop',
-    ':alpine_wait_timeout',
-    `set ${STILL_RUNNING_VAR}=1`,
-    ':alpine_process_gone',
+    `$imageName = [System.IO.Path]::GetFileNameWithoutExtension($env:${IMAGE_VAR})`,
+    '$stillRunning = $false',
+    '$waitTicks = 0',
+    `while (${buildFindAlpineProcess()}) {`,
+    '  $waitTicks++',
+    `  if ($waitTicks -ge ${PROCESS_WAIT_TICKS}) { $stillRunning = $true; break }`,
+    `  ${buildDelaySeconds(1)}`,
+    '}',
   ]
 }
 
 function buildForceProcessExit() {
   return [
-    `if not defined ${STILL_RUNNING_VAR} goto alpine_force_done`,
-    `taskkill /f /im "%${IMAGE_VAR}%" >nul 2>&1`,
-    buildDelaySeconds(PROCESS_EXIT_SETTLE_SECONDS),
-    `tasklist /nh /fi "imagename eq %${IMAGE_VAR}%" | find /i "%${IMAGE_VAR}%" >nul`,
-    `if errorlevel 1 set "${STILL_RUNNING_VAR}="`,
-    ':alpine_force_done',
+    'if ($stillRunning) {',
+    `  ${buildFindAlpineProcess()} | Stop-Process -Force -ErrorAction SilentlyContinue`,
+    `  ${buildDelaySeconds(PROCESS_EXIT_SETTLE_SECONDS)}`,
+    `  if (-not (${buildFindAlpineProcess()})) { $stillRunning = $false }`,
+    '}',
   ]
 }
 
 function buildStartExplorer() {
   return [
-    'start "" explorer.exe',
+    'Start-Process -FilePath explorer.exe -WorkingDirectory $env:SystemRoot',
     buildDelaySeconds(EXPLORER_START_SETTLE_SECONDS),
   ]
 }
@@ -69,25 +69,32 @@ function isSafeDeletablePath(dirPath) {
 }
 
 function buildRemoveDirectory(index) {
-  const name = directoryVar(index)
-  const ref = `"%${name}%"`
-  const counter = `RMTICKS${index}`
+  const target = `$env:${directoryVar(index)}`
   return [
-    `if not defined ${name} goto alpine_removed_${index}`,
-    `set ${counter}=0`,
-    `:alpine_remove_${index}`,
-    `rd /s /q ${ref}`,
-    `if not exist ${ref} goto alpine_removed_${index}`,
-    `set /a ${counter}+=1`,
-    `if %${counter}% GEQ ${DIRECTORY_REMOVE_TICKS} goto alpine_removed_${index}`,
-    buildDelaySeconds(2),
-    `goto alpine_remove_${index}`,
-    `:alpine_removed_${index}`,
+    `if (${target}) {`,
+    `  for ($removeTick = 0; $removeTick -lt ${DIRECTORY_REMOVE_TICKS}; $removeTick++) {`,
+    `    Remove-Item -LiteralPath ${target} -Recurse -Force -ErrorAction SilentlyContinue`,
+    `    if (-not (Test-Path -LiteralPath ${target})) { break }`,
+    `    ${buildDelaySeconds(DIRECTORY_RETRY_SECONDS)}`,
+    '  }',
+    '}',
+  ]
+}
+
+function buildRunUninstaller() {
+  return [
+    `Start-Process -FilePath $env:${UNINSTALLER_VAR} -ArgumentList @('/S', ('_?=' + $env:${INSTALL_DIR_VAR})) -WorkingDirectory $env:TEMP -Wait`,
   ]
 }
 
 function buildScript(lines) {
-  return ['@echo off', 'setlocal', ...lines, 'del "%~f0"', ''].join('\r\n')
+  return [
+    "$ErrorActionPreference = 'SilentlyContinue'",
+    'Set-Location -LiteralPath $env:TEMP',
+    ...lines,
+    'Remove-Item -LiteralPath $PSCommandPath -Force',
+    '',
+  ].join('\r\n')
 }
 
 function buildHandBackToExplorer() {
@@ -104,7 +111,7 @@ function buildTemporaryRevertScript({ processImageName, shellKeyPath, shellExePa
     script: buildScript([
       ...buildHandBackToExplorer(),
       buildDelaySeconds(EXPLORER_START_SETTLE_SECONDS),
-      `reg add "%${SHELL_KEY_VAR}%" /v Shell /t REG_SZ /d "%${SHELL_EXE_VAR}%" /f >nul`,
+      `Set-ItemProperty -LiteralPath ('Registry::' + $env:${SHELL_KEY_VAR}) -Name Shell -Value $env:${SHELL_EXE_VAR}`,
     ]),
     env: {
       [IMAGE_VAR]: processImageName,
@@ -123,8 +130,8 @@ function buildPermanentRevertScript({ processImageName }) {
   }
 }
 
-function buildUninstallScript({ processImageName, uninstallerPath, installDir, deletableInstallDir, userDataDirs }) {
-  const candidates = [deletableInstallDir, ...(userDataDirs || [])].filter(Boolean)
+function buildUninstallScript({ processImageName, uninstallerPath, installDir, deletableInstallDir, userDataDirs, cacheDirs }) {
+  const candidates = [deletableInstallDir, ...(userDataDirs || []), ...(cacheDirs || [])].filter(Boolean)
   const removable = candidates.filter(isSafeDeletablePath)
   const skippedDirs = candidates.filter(dirPath => !isSafeDeletablePath(dirPath))
 
@@ -136,14 +143,14 @@ function buildUninstallScript({ processImageName, uninstallerPath, installDir, d
   removable.forEach((dirPath, index) => { env[directoryVar(index)] = dirPath })
 
   const cleanup = [
-    ...(uninstallerPath ? [`"%${UNINSTALLER_VAR}%" /S _?=%${INSTALL_DIR_VAR}%`] : []),
+    ...(uninstallerPath ? buildRunUninstaller() : []),
     ...removable.flatMap((_dirPath, index) => buildRemoveDirectory(index)),
   ]
 
   return {
     script: buildScript([
       ...buildHandBackToExplorer(),
-      ...(cleanup.length ? [`if defined ${STILL_RUNNING_VAR} goto alpine_skip_cleanup`, ...cleanup, ':alpine_skip_cleanup'] : []),
+      ...(cleanup.length ? ['if (-not $stillRunning) {', ...cleanup.map(line => `  ${line}`), '}'] : []),
     ]),
     env,
     skippedDirs,
