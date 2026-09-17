@@ -130,18 +130,6 @@ function stepGroup(title) {
   return api
 }
 
-function captureConsoleLog(fn) {
-  const captured = []
-  const original = console.log
-  console.log = (...args) => captured.push(args.join(' '))
-  try {
-    fn()
-  } finally {
-    console.log = original
-  }
-  return captured
-}
-
 function killImage(image) {
   return new Promise((resolve) => {
     exec(`taskkill /F /IM "${image}"`, () => resolve())
@@ -491,14 +479,6 @@ async function main() {
   process.stdout.write(`${c.gray}  ─── Windows Desktop Shell ───${c.reset}\n\n`)
 
   const prep = stepGroup('Preparing environment')
-
-  const credTask = prep.task('Google credentials')
-  try {
-    const logged = captureConsoleLog(() => require('./generateGoogleCredentials').run())
-    credTask.done((logged[0] || '').replace(/^\[credentials\]\s*/, ''))
-  } catch (e) {
-    credTask.fail(`skipped — ${e.message}`)
-  }
 
   const shellTask = prep.task('Detecting registered shell')
   userShell = await getRegisteredShell()

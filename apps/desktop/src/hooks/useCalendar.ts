@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 const DEFAULT_STATE: CalendarConnection = {
   connected: false,
   email: null,
-  hasCredentials: false,
   connecting: false,
   error: null,
 }

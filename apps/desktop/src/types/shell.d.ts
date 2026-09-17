@@ -901,7 +901,6 @@ declare global {
   interface CalendarConnection {
     connected: boolean
     email: string | null
-    hasCredentials: boolean
     connecting: boolean
     error: string | null
   }

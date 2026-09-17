@@ -5,9 +5,7 @@ const http = require('http')
 const crypto = require('crypto')
 
 const STORE_FILE = 'google-calendar.json'
-const SCOPES = 'openid email https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly'
-const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth'
-const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token'
+const AUTH_SERVICE_BASE = (process.env.ALPINE_AUTH_BASE || 'https://auth.alpineshell.com').replace(/\/+$/, '')
 const CALENDAR_BASE = 'https://www.googleapis.com'
 const TASKS_BASE = 'https://tasks.googleapis.com'
 const POLL_INTERVAL_MS = 5 * 60 * 1000
@@ -34,8 +32,6 @@ let storePath = null
 let broadcast = null
 
 let refreshToken = null
-let storedClientId = null
-let storedClientSecret = null
 let accountEmail = null
 let connected = false
 let connecting = false
@@ -53,14 +49,6 @@ let pendingRefresh = false
 let dataGeneration = 0
 let lastRange = null
 
-let defaultClientId = null
-let defaultClientSecret = null
-try {
-  const baked = require('./googleCredentials.generated')
-  if (baked && typeof baked.clientId === 'string' && baked.clientId) defaultClientId = baked.clientId
-  if (baked && typeof baked.clientSecret === 'string' && baked.clientSecret) defaultClientSecret = baked.clientSecret
-} catch { void 0 }
-
 function getStorePath() {
   if (!storePath) storePath = path.join(app.getPath('userData'), STORE_FILE)
   return storePath
@@ -70,18 +58,9 @@ function base64url(buffer) {
   return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-function getCredentials() {
-  const envId = process.env.ALPINE_GOOGLE_CLIENT_ID
-  const envSecret = process.env.ALPINE_GOOGLE_CLIENT_SECRET
-  if (envId && envSecret) return { clientId: envId.trim(), clientSecret: envSecret.trim(), source: 'env' }
-  if (storedClientId && storedClientSecret) return { clientId: storedClientId, clientSecret: storedClientSecret, source: 'stored' }
-  if (defaultClientId && defaultClientSecret) return { clientId: defaultClientId, clientSecret: defaultClientSecret, source: 'default' }
-  return null
-}
-
 function persist() {
   try {
-    const payload = JSON.stringify({ refreshToken, clientId: storedClientId, clientSecret: storedClientSecret, email: accountEmail })
+    const payload = JSON.stringify({ refreshToken, email: accountEmail })
     const dir = path.dirname(getStorePath())
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     if (safeStorage.isEncryptionAvailable()) {
@@ -110,10 +89,9 @@ function load() {
       text = raw.toString('utf8')
     }
     const data = JSON.parse(text)
-    if (typeof data.refreshToken === 'string') refreshToken = data.refreshToken
-    if (typeof data.clientId === 'string') storedClientId = data.clientId
-    if (typeof data.clientSecret === 'string') storedClientSecret = data.clientSecret
-    if (typeof data.email === 'string') accountEmail = data.email
+    const issuedByRetiredDesktopClient = typeof data.clientId === 'string'
+    if (typeof data.refreshToken === 'string' && !issuedByRetiredDesktopClient) refreshToken = data.refreshToken
+    if (typeof data.email === 'string' && refreshToken) accountEmail = data.email
     connected = !!refreshToken
   } catch (e) {
     console.error('[googleCalendar] load error:', e.message)
@@ -124,7 +102,6 @@ function getState() {
   return {
     connected,
     email: accountEmail,
-    hasCredentials: !!getCredentials(),
     connecting,
     error: lastError,
   }
@@ -154,27 +131,27 @@ function addDays(date, count) {
 const CALLBACK_HTML = '<!doctype html><html><head><meta charset="utf-8"><title>Alpine Shell</title></head><body style="font-family:system-ui;background:#111;color:#eee;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h2 style="font-weight:600">You can close this tab</h2><p style="opacity:.6">Alpine Shell is now connected to Google Calendar.</p></div></body></html>'
 
 function createLoopbackServer(expectedState) {
-  let resolveCode
-  let rejectCode
-  const codePromise = new Promise((resolve, reject) => {
-    resolveCode = resolve
-    rejectCode = reject
+  let resolveHandoff
+  let rejectHandoff
+  const handoffPromise = new Promise((resolve, reject) => {
+    resolveHandoff = resolve
+    rejectHandoff = reject
   })
-  codePromise.catch(() => {})
+  handoffPromise.catch(() => {})
   let settled = false
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1')
-    const code = url.searchParams.get('code')
+    const handoff = url.searchParams.get('handoff')
     const returnedState = url.searchParams.get('state')
     const error = url.searchParams.get('error')
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
     res.end(CALLBACK_HTML)
     if (settled) return
-    if (error) return finish(() => rejectCode(new Error(error)))
-    if (!code || returnedState !== expectedState) return finish(() => rejectCode(new Error('invalid-callback')))
-    finish(() => resolveCode(code))
+    if (error) return finish(() => rejectHandoff(new Error(error)))
+    if (!handoff || returnedState !== expectedState) return finish(() => rejectHandoff(new Error('invalid-callback')))
+    finish(() => resolveHandoff(handoff))
   })
-  const timer = setTimeout(() => finish(() => rejectCode(new Error('timeout'))), AUTH_TIMEOUT_MS)
+  const timer = setTimeout(() => finish(() => rejectHandoff(new Error('timeout'))), AUTH_TIMEOUT_MS)
   function finish(action) {
     if (settled) return
     settled = true
@@ -183,54 +160,44 @@ function createLoopbackServer(expectedState) {
     action()
   }
   function close() {
-    finish(() => rejectCode(new Error('aborted')))
+    finish(() => rejectHandoff(new Error('aborted')))
   }
-  server.on('error', (e) => finish(() => rejectCode(e)))
+  server.on('error', (e) => finish(() => rejectHandoff(e)))
   const listening = new Promise((resolve, reject) => {
     server.listen(0, '127.0.0.1', () => resolve(server.address().port))
     server.once('error', reject)
   })
-  return { codePromise, listening, close }
+  return { handoffPromise, listening, close }
 }
 
-async function exchangeCode(credentials, code, verifier, redirectUri) {
-  const body = new URLSearchParams({
-    client_id: credentials.clientId,
-    client_secret: credentials.clientSecret,
-    code,
-    code_verifier: verifier,
-    grant_type: 'authorization_code',
-    redirect_uri: redirectUri,
-  })
-  const res = await fetch(TOKEN_ENDPOINT, {
+async function postToAuthService(route, payload) {
+  const res = await fetch(`${AUTH_SERVICE_BASE}/google-calendar/${route}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error(`token-exchange-failed:${res.status}`)
-  return res.json()
+  const body = await res.json().catch(() => ({}))
+  return { status: res.status, ok: res.ok, body }
+}
+
+async function redeemHandoff(handoff, verifier) {
+  const { ok, status, body } = await postToAuthService('token', { handoff, code_verifier: verifier })
+  if (!ok) throw new Error(`token-exchange-failed:${status}`)
+  return body
 }
 
 async function refreshAccessToken() {
-  const credentials = getCredentials()
-  if (!credentials || !refreshToken) throw new Error('not-connected')
-  const body = new URLSearchParams({
-    client_id: credentials.clientId,
-    client_secret: credentials.clientSecret,
-    refresh_token: refreshToken,
-    grant_type: 'refresh_token',
-  })
-  const res = await fetch(TOKEN_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  })
-  if (!res.ok) throw new Error(`token-refresh-failed:${res.status}`)
-  const data = await res.json()
-  accessToken = data.access_token
-  accessTokenExpiry = Date.now() + (Number(data.expires_in) || 3600) * 1000
-  if (data.refresh_token) {
-    refreshToken = data.refresh_token
+  if (!refreshToken) throw new Error('not-connected')
+  const { ok, status, body } = await postToAuthService('refresh', { refresh_token: refreshToken })
+  if (status === 401) {
+    expireSession()
+    throw new Error('session-expired')
+  }
+  if (!ok) throw new Error(`token-refresh-failed:${status}`)
+  accessToken = body.access_token
+  accessTokenExpiry = Date.now() + (Number(body.expires_in) || 3600) * 1000
+  if (body.refresh_token) {
+    refreshToken = body.refresh_token
     persist()
   }
   return accessToken
@@ -260,15 +227,6 @@ async function api(base, pathAndQuery, token) {
   }
   if (!res.ok) throw await apiError(res)
   return res.json()
-}
-
-function decodeEmailFromIdToken(idToken) {
-  try {
-    const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString('utf8'))
-    return payload.email || null
-  } catch {
-    return null
-  }
 }
 
 async function fetchCalendarEvents(token, timeMin, timeMax) {
@@ -391,12 +349,6 @@ async function refreshData(range) {
 }
 
 async function connect() {
-  const credentials = getCredentials()
-  if (!credentials) {
-    lastError = 'no-credentials'
-    broadcastState()
-    return getState()
-  }
   if (connecting) return getState()
   connecting = true
   lastError = null
@@ -405,36 +357,20 @@ async function connect() {
   const verifier = base64url(crypto.randomBytes(32))
   const challenge = base64url(crypto.createHash('sha256').update(verifier).digest())
   const expectedState = base64url(crypto.randomBytes(16))
-  const persistCredentials = credentials.source !== 'env' && credentials.source !== 'default'
 
   let closeServer = () => {}
   try {
     const server = createLoopbackServer(expectedState)
     closeServer = server.close
     const port = await server.listening
-    const redirectUri = `http://127.0.0.1:${port}`
-    const authParams = new URLSearchParams({
-      client_id: credentials.clientId,
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: SCOPES,
-      code_challenge: challenge,
-      code_challenge_method: 'S256',
-      state: expectedState,
-      access_type: 'offline',
-      prompt: 'consent',
-    })
-    await shell.openExternal(`${AUTH_ENDPOINT}?${authParams}`)
-    const code = await server.codePromise
-    const tokenSet = await exchangeCode(credentials, code, verifier, redirectUri)
+    const connectParams = new URLSearchParams({ port: String(port), state: expectedState, code_challenge: challenge })
+    await shell.openExternal(`${AUTH_SERVICE_BASE}/google-calendar/connect?${connectParams}`)
+    const handoff = await server.handoffPromise
+    const tokenSet = await redeemHandoff(handoff, verifier)
     accessToken = tokenSet.access_token
     accessTokenExpiry = Date.now() + (Number(tokenSet.expires_in) || 3600) * 1000
     if (tokenSet.refresh_token) refreshToken = tokenSet.refresh_token
-    accountEmail = tokenSet.id_token ? decodeEmailFromIdToken(tokenSet.id_token) : accountEmail
-    if (persistCredentials) {
-      storedClientId = credentials.clientId
-      storedClientSecret = credentials.clientSecret
-    }
+    if (tokenSet.email) accountEmail = tokenSet.email
     connected = !!refreshToken
     lastError = connected ? null : 'no-refresh-token'
     dataGeneration++
@@ -463,6 +399,14 @@ function clearSession() {
   events = []
   tasks = []
   fetchedAt = null
+}
+
+function expireSession() {
+  clearSession()
+  lastError = 'session-expired'
+  persist()
+  broadcastState()
+  broadcastData()
 }
 
 function disconnect() {

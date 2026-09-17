@@ -65,11 +65,8 @@ jobs:
         working-directory: apps/desktop
         shell: bash
         env:
-          ALPINE_GOOGLE_CLIENT_ID: ${{ secrets.ALPINE_GOOGLE_CLIENT_ID }}
-          ALPINE_GOOGLE_CLIENT_SECRET: ${{ secrets.ALPINE_GOOGLE_CLIENT_SECRET }}
           UPDATE_PUBLIC_URL: ${{ vars.UPDATE_PUBLIC_URL }}
         run: |
-          node scripts/generateGoogleCredentials.js
           bunx vite build
           EXTRA=""
           if [ -n "$UPDATE_PUBLIC_URL" ]; then
