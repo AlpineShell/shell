@@ -6,8 +6,8 @@ const installer = require('./installer')
 const updater = require('./updater')
 const explorerShell = require('./explorerShell')
 const shellExclusivity = require('./shellExclusivity')
-const { CURSOR_STYLES, DEFAULT_CURSOR_STYLE, CURSOR_REGISTRY_MAP, cursorStyleOrDefault } = require('./cursorStyles')
 
+const CURSOR_VARIANT = 'Bibata-Modern-Ice'
 const REVERT_QUIT_DELAY_MS = 1200
 const REVERT_BLOCKED_MESSAGES = {
   [shellExclusivity.REVERT_BLOCKED_IN_DEVELOPMENT]: 'Unavailable in development.',
@@ -15,11 +15,31 @@ const REVERT_BLOCKED_MESSAGES = {
 }
 const XAML_START_MENU_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced'
 
-function getCursorSourceDir(style) {
+const CURSOR_REGISTRY_MAP = {
+  'Arrow': 'Pointer.cur',
+  'Help': 'Help.cur',
+  'AppStarting': 'Work.ani',
+  'Wait': 'Busy.ani',
+  'Crosshair': 'Cross.cur',
+  'IBeam': 'Text.cur',
+  'NWPen': 'Handwriting.cur',
+  'No': 'Unavailable.cur',
+  'SizeNS': 'Vert.cur',
+  'SizeWE': 'Horz.cur',
+  'SizeNWSE': 'Dgn1.cur',
+  'SizeNESW': 'Dgn2.cur',
+  'SizeAll': 'Move.cur',
+  'UpArrow': 'Alternate.cur',
+  'Hand': 'Link.cur',
+  'Pin': 'Pin.cur',
+  'Person': 'Person.cur',
+}
+
+function getCursorSourceDir() {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'cursor', style)
+    return path.join(process.resourcesPath, 'cursor', CURSOR_VARIANT)
   }
-  return path.join(__dirname, '..', '..', 'public', 'cursor', style)
+  return path.join(__dirname, '..', '..', 'public', 'cursor', CURSOR_VARIANT)
 }
 
 function getCursorInstallDir() {
@@ -40,8 +60,8 @@ function regQuery(keyPath, valueName) {
   }
 }
 
-function installCursors(style) {
-  const sourceDir = getCursorSourceDir(style)
+function installCursors() {
+  const sourceDir = getCursorSourceDir()
   const installDir = getCursorInstallDir()
 
   if (!fs.existsSync(installDir)) {
@@ -210,8 +230,6 @@ function getSetupStatus() {
     installedVersion: installer.getInstalledVersion(),
     currentVersion: app.getVersion(),
     isFirstRun: isFirstRun(),
-    cursorStyles: CURSOR_STYLES,
-    defaultCursorStyle: DEFAULT_CURSOR_STYLE,
   }
 }
 
@@ -328,7 +346,7 @@ module.exports = {
         try {
           progress('Installing cursor...')
           await yield_()
-          installCursors(cursorStyleOrDefault(options.cursorStyle))
+          installCursors()
           results.cursor = true
         } catch (e) {
           console.error('[setup] Cursor error:', e.message)

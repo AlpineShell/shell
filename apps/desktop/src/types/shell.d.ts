@@ -358,7 +358,6 @@ declare global {
   interface SetupOptions {
     shell: boolean
     cursor: boolean
-    cursorStyle: string
   }
 
   interface SetupResult {
@@ -385,8 +384,6 @@ declare global {
     installedVersion: string | null
     currentVersion: string
     isFirstRun: boolean
-    cursorStyles: string[]
-    defaultCursorStyle: string
   }
 
   type EmojiKeyMessage =

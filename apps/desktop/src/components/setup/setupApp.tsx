@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Check, X, AlertTriangle, FlaskConical, Settings } from 'lucide-react'
-import { Button, Card, IconButton, PageTitle, Row, Select, Toggle } from '@alpine/ui'
+import { Button, Card, IconButton, PageTitle, Row, Toggle } from '@alpine/ui'
 import { useTheme } from '../../hooks/useTheme'
 import { useFitSetupWindow } from '../../hooks/useFitSetupWindow'
 
@@ -17,10 +17,6 @@ const wordmarkMask: React.CSSProperties = {
   WebkitMaskSize: 'contain',
   maskRepeat: 'no-repeat',
   WebkitMaskRepeat: 'no-repeat',
-}
-
-function cursorStyleLabel(style: string) {
-  return style.replace(/^Bibata-/, '').replace('-', ' ')
 }
 
 function OutcomeBadge({ tone, children }: OutcomeBadgeProps) {
@@ -56,7 +52,6 @@ export default function SetupApp() {
 
   const [page, setPage] = useState<Page>('welcome')
   const [installCursor, setInstallCursor] = useState(true)
-  const [pickedCursorStyle, setPickedCursorStyle] = useState<string | null>(null)
   const [status, setStatus] = useState<SetupStatus | null>(null)
   const [result, setResult] = useState<SetupResult | null>(null)
   const [currentStep, setCurrentStep] = useState('')
@@ -70,12 +65,11 @@ export default function SetupApp() {
   const verb = isUpdate ? 'Update' : 'Install'
   const verbIng = isUpdate ? 'Updating' : 'Installing'
   const installing = page === 'installing'
-  const cursorStyle = pickedCursorStyle ?? status?.defaultCursorStyle ?? ''
 
   async function handleInstall() {
     setCurrentStep('')
     setPage('installing')
-    const res = await window.setup.install({ shell: true, cursor: installCursor, cursorStyle })
+    const res = await window.setup.install({ shell: true, cursor: installCursor })
     setResult(res)
     setPage(res.error ? 'error' : 'complete')
   }
@@ -148,19 +142,6 @@ export default function SetupApp() {
                   <Toggle label="Custom cursor" checked={installCursor} onChange={setInstallCursor} />
                 </Row>
               </Card>
-
-              {installCursor && status && (
-                <Card variant="borderless" className="px-4 py-3.5">
-                  <Row label="Cursor style" description="Modern is rounded, Original is sharp">
-                    <Select
-                      label="Cursor style"
-                      options={status.cursorStyles.map((style) => ({ value: style, label: cursorStyleLabel(style) }))}
-                      value={cursorStyle}
-                      onChange={setPickedCursorStyle}
-                    />
-                  </Row>
-                </Card>
-              )}
             </div>
 
             <Button className="w-full" onClick={() => setPage('welcome')}>

@@ -89,7 +89,8 @@
       },
       {
         "from": "public/cursor",
-        "to": "cursor"
+        "to": "cursor",
+        "filter": ["**/*", "!Bibata-Original-Ice/**"]
       },
       {
         "from": "electron/scripts",
