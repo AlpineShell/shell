@@ -11,11 +11,13 @@ import {
   settingResultKey,
   windowCommandResultKey,
 } from "./launcherRanking"
-import { deriveFields, scoreItem, TIER_GAP } from "./launcherSearch"
+import { deriveFields, scoreField, scoreItem, TIER_GAP } from "./launcherSearch"
 
 const YOUTUBE_TARGET = "C:\\Users\\me\\AppData\\Local\\Chromium\\YouTube.lnk"
 const YT_DLP_TARGET = "C:\\Tools\\yt-dlp.exe"
 const YOUTUBE_MUSIC_TARGET = "C:\\Users\\me\\AppData\\Local\\Chromium\\YouTube Music.lnk"
+const CHROME_TARGET = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+const NOTEPAD_TARGET = "C:\\Windows\\System32\\notepad.exe"
 
 function appCandidate(name: string, target: string, query: string) {
   return { kind: "app" as const, key: appResultKey(target), match: scoreItem(query, deriveFields({ name, target })), name }
@@ -99,6 +101,30 @@ describe("rankScore", () => {
     const open = { kind: "open" as const, key: "c:\\chrome.exe", match: 50_000 }
     const setting = { kind: "setting" as const, key: settingResultKey("chrome"), match: 50_000 }
     expect(rankScore(open, EMPTY_LAUNCHER_MEMORY, "chrome")).toBeGreaterThan(rankScore(setting, EMPTY_LAUNCHER_MEMORY, "chrome"))
+  })
+
+  it("keeps the learned pick first even when the result it beat has an open window", () => {
+    const youtube = appCandidate("YouTube", YOUTUBE_TARGET, "yt")
+    const youtubeMusic = appCandidate("YouTube Music", YOUTUBE_MUSIC_TARGET, "yt")
+    const youtubeWindow = { kind: "open" as const, key: youtube.key, match: youtube.match }
+    const memory = { usage: {}, queries: { [youtubeMusic.key]: { yt: 1 } } }
+    expect(rankScore(youtubeMusic, memory, "yt")).toBeGreaterThan(rankScore(youtubeWindow, memory, "yt"))
+  })
+})
+
+describe("open windows against installed apps", () => {
+  it("switches to the running window instead of launching the app it matches as well as", () => {
+    const chrome = appCandidate("Google Chrome", CHROME_TARGET, "chrome")
+    const chromeWindow = { kind: "open" as const, key: chrome.key, match: chrome.match }
+    const ranked = rankEntries([chrome, chromeWindow], EMPTY_LAUNCHER_MEMORY, "chrome")
+    expect(ranked.map((entry) => entry.kind)).toEqual(["open", "app"])
+  })
+
+  it("leaves a clearly better app match on top of an open window", () => {
+    const notepad = appCandidate("Notepad", NOTEPAD_TARGET, "note")
+    const chromeWindow = { kind: "open" as const, key: appResultKey(CHROME_TARGET), match: scoreField("note", "Release notes - Google Chrome") }
+    const ranked = rankEntries([chromeWindow, notepad], EMPTY_LAUNCHER_MEMORY, "note")
+    expect(ranked.map((entry) => entry.kind)).toEqual(["app", "open"])
   })
 })
 
