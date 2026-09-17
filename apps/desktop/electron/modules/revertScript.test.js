@@ -16,14 +16,17 @@ const {
 const ALPINE_EXE = 'C:\\Users\\Müller\\AppData\\Local\\Programs\\alpine-shell\\Alpine Shell.exe'
 const INSTALL_DIR = 'C:\\Users\\Müller\\AppData\\Local\\Programs\\alpine-shell'
 const USER_DATA_DIRS = ['C:\\Users\\Müller\\AppData\\Roaming\\alpine-shell', 'C:\\Users\\Müller\\AppData\\Roaming\\Alpine Shell']
+const CACHE_DIRS = ['C:\\Users\\Müller\\AppData\\Local\\alpine-shell-updater']
 const UNINSTALLER = `${INSTALL_DIR}\\Uninstall Alpine Shell.exe`
 const WINLOGON_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
 const IMAGE = 'Alpine Shell.exe'
+const START_EXPLORER = 'Start-Process -FilePath explorer.exe'
+const CONSOLE_TOOLS = /\b(tasklist|taskkill|find|findstr|ping|timeout|rd|reg|cmd)(\.exe)?\s/i
 
 function deletionTargets(env) {
   return Object.keys(env)
     .filter(key => key.startsWith('ALPINE_REVERT_DIR_'))
-    .sort()
+    .sort((a, b) => Number(a.split('_').pop()) - Number(b.split('_').pop()))
     .map(key => env[key])
 }
 
@@ -34,34 +37,45 @@ function uninstallHelper(overrides = {}) {
     installDir: INSTALL_DIR,
     deletableInstallDir: INSTALL_DIR,
     userDataDirs: USER_DATA_DIRS,
+    cacheDirs: CACHE_DIRS,
     ...overrides,
   })
 }
 
-describe('buildDelaySeconds', () => {
-  it('uses ping rather than timeout', () => {
-    expect(buildDelaySeconds(2)).toBe('ping -n 3 127.0.0.1 >nul')
-  })
+function allHelpers() {
+  return [
+    ['temporary', buildTemporaryRevertScript({ processImageName: IMAGE, shellKeyPath: WINLOGON_KEY, shellExePath: ALPINE_EXE })],
+    ['permanent', buildPermanentRevertScript({ processImageName: IMAGE })],
+    ['uninstall', uninstallHelper()],
+  ]
+}
 
-  it('never emits timeout, which returns errorlevel 125 under stdio ignore', () => {
-    expect(buildDelaySeconds(5)).not.toContain('timeout')
+describe('buildDelaySeconds', () => {
+  it('sleeps inside PowerShell', () => {
+    expect(buildDelaySeconds(2)).toBe('Start-Sleep -Seconds 2')
   })
 
   it('clamps to at least one second', () => {
-    expect(buildDelaySeconds(0)).toBe('ping -n 2 127.0.0.1 >nul')
+    expect(buildDelaySeconds(0)).toBe('Start-Sleep -Seconds 1')
+  })
+})
+
+describe('every helper runs without starting a console program', () => {
+  it.each(allHelpers())('%s', (_name, helper) => {
+    expect(helper.script).not.toMatch(CONSOLE_TOOLS)
   })
 })
 
 describe('buildWaitForProcessExit', () => {
   const lines = buildWaitForProcessExit().join('\n')
 
-  it('distinguishes a real exit from a timeout', () => {
-    expect(lines).toContain('if errorlevel 1 goto alpine_process_gone')
-    expect(lines).toContain('if %WAITTICKS% GEQ 60 goto alpine_wait_timeout')
+  it('looks the process up by name without its extension', () => {
+    expect(lines).toContain('GetFileNameWithoutExtension($env:ALPINE_REVERT_IMAGE)')
+    expect(lines).toContain('Get-Process -Name $imageName')
   })
 
-  it('records that the process outlived the wait', () => {
-    expect(lines).toContain('set ALPINE_REVERT_STILL_RUNNING=1')
+  it('distinguishes a real exit from a timeout', () => {
+    expect(lines).toContain('if ($waitTicks -ge 60) { $stillRunning = $true; break }')
   })
 })
 
@@ -69,50 +83,37 @@ describe('buildForceProcessExit', () => {
   const lines = buildForceProcessExit().join('\n')
 
   it('only forces an exit when the wait timed out', () => {
-    expect(buildForceProcessExit()[0]).toBe('if not defined ALPINE_REVERT_STILL_RUNNING goto alpine_force_done')
-    expect(lines).toContain('taskkill /f /im "%ALPINE_REVERT_IMAGE%"')
+    expect(buildForceProcessExit()[0]).toBe('if ($stillRunning) {')
+    expect(lines).toContain('Stop-Process -Force')
   })
 
   it('clears the still-running flag once the process is gone', () => {
-    expect(lines).toContain('if errorlevel 1 set "ALPINE_REVERT_STILL_RUNNING="')
+    expect(lines).toContain('{ $stillRunning = $false }')
   })
 })
 
 describe('buildHandBackToExplorer ordering', () => {
+  const { script } = buildPermanentRevertScript({ processImageName: IMAGE })
+
   it('forces the exit before starting Explorer', () => {
-    const lines = buildPermanentRevertScript({ processImageName: IMAGE }).script
-    expect(lines.indexOf('taskkill /f /im')).toBeLessThan(lines.indexOf('start "" explorer.exe'))
+    expect(script.indexOf('Stop-Process -Force')).toBeLessThan(script.indexOf(START_EXPLORER))
   })
 
   it('waits for a voluntary exit before forcing one', () => {
-    const lines = buildPermanentRevertScript({ processImageName: IMAGE }).script
-    expect(lines.indexOf(':alpine_wait_loop')).toBeLessThan(lines.indexOf('taskkill /f /im'))
-  })
-})
-
-describe('buildTemporaryRevertScript', () => {
-  const temporary = buildTemporaryRevertScript({ processImageName: IMAGE, shellKeyPath: WINLOGON_KEY, shellExePath: ALPINE_EXE })
-
-  it('lets Explorer settle before restoring the shell registration', () => {
-    expect(temporary.script.indexOf('start "" explorer.exe')).toBeLessThan(temporary.script.indexOf('reg add'))
-  })
-
-  it('waits after Explorer has started so a relaunched Alpine Shell reads the reverted registration', () => {
-    const afterExplorer = temporary.script.slice(temporary.script.indexOf('start "" explorer.exe'))
-    expect(afterExplorer.indexOf(buildDelaySeconds(3))).toBeLessThan(afterExplorer.indexOf('reg add'))
+    expect(script.indexOf('while (Get-Process')).toBeLessThan(script.indexOf('Stop-Process -Force'))
   })
 })
 
 describe('buildStartExplorer', () => {
   const lines = buildStartExplorer()
 
-  it('starts Explorer unconditionally, because a batch file cannot see who owns Shell_TrayWnd', () => {
-    expect(lines[0]).toBe('start "" explorer.exe')
+  it('starts Explorer unconditionally, because the helper cannot see who owns Shell_TrayWnd', () => {
+    expect(lines[0]).toContain(START_EXPLORER)
+    expect(lines.join('\n')).not.toContain('explorer -ErrorAction')
   })
 
-  it('never predicates the start on an explorer.exe process existing', () => {
-    expect(lines.join('\n')).not.toContain('tasklist')
-    expect(lines.join('\n')).not.toContain('errorlevel')
+  it('starts Explorer outside the install directory so it never holds it open', () => {
+    expect(lines[0]).toContain('-WorkingDirectory $env:SystemRoot')
   })
 
   it('lets the new Explorer settle', () => {
@@ -121,13 +122,17 @@ describe('buildStartExplorer', () => {
 })
 
 describe('every hand-back helper starts Explorer unconditionally', () => {
-  it.each([
-    ['temporary', buildTemporaryRevertScript({ processImageName: IMAGE, shellKeyPath: WINLOGON_KEY, shellExePath: ALPINE_EXE }).script],
-    ['permanent', buildPermanentRevertScript({ processImageName: IMAGE }).script],
-    ['uninstall', uninstallHelper().script],
-  ])('%s', (_name, script) => {
-    expect(script).toContain('start "" explorer.exe')
-    expect(script).not.toContain('imagename eq explorer.exe')
+  it.each(allHelpers())('%s', (_name, helper) => {
+    expect(helper.script).toContain(START_EXPLORER)
+    expect(helper.script).not.toMatch(/Get-Process -Name explorer/i)
+  })
+})
+
+describe('every helper leaves the install directory and cleans up after itself', () => {
+  it.each(allHelpers())('%s', (_name, helper) => {
+    const lines = helper.script.trimEnd().split('\r\n')
+    expect(lines[1]).toBe('Set-Location -LiteralPath $env:TEMP')
+    expect(lines.at(-1)).toBe('Remove-Item -LiteralPath $PSCommandPath -Force')
   })
 })
 
@@ -148,6 +153,7 @@ describe('isSafeDeletablePath', () => {
   it.each([
     INSTALL_DIR,
     ...USER_DATA_DIRS,
+    ...CACHE_DIRS,
     '\\\\fileserver\\profiles\\marc\\AppData\\Roaming\\alpine-shell',
   ])('accepts %s', (value) => {
     expect(isSafeDeletablePath(value)).toBe(true)
@@ -158,28 +164,25 @@ describe('buildRemoveDirectory', () => {
   const lines = buildRemoveDirectory(0).join('\n')
 
   it('skips the block when the directory variable is unset', () => {
-    expect(lines).toContain('if not defined ALPINE_REVERT_DIR_0 goto alpine_removed_0')
+    expect(buildRemoveDirectory(0)[0]).toBe('if ($env:ALPINE_REVERT_DIR_0) {')
+  })
+
+  it('removes by literal path so brackets in a folder name are not wildcards', () => {
+    expect(lines).toContain('Remove-Item -LiteralPath $env:ALPINE_REVERT_DIR_0 -Recurse -Force')
   })
 
   it('bounds the retry loop', () => {
-    expect(lines).toContain('if %RMTICKS0% GEQ 30 goto alpine_removed_0')
+    expect(lines).toContain('$removeTick -lt 30')
   })
 
-  it('uses a distinct label and counter per directory', () => {
-    const combined = [...buildRemoveDirectory(0), ...buildRemoveDirectory(1)].join('\n')
-    expect(combined).toContain(':alpine_remove_1')
-    expect(combined).toContain('set RMTICKS1=0')
+  it('reads a distinct variable per directory', () => {
+    expect(buildRemoveDirectory(1).join('\n')).toContain('$env:ALPINE_REVERT_DIR_1')
   })
 })
 
 describe('path handling is codepage-safe', () => {
-  it('keeps non-ASCII paths out of the batch body and passes them through the environment', () => {
-    const helpers = [
-      buildTemporaryRevertScript({ processImageName: IMAGE, shellKeyPath: WINLOGON_KEY, shellExePath: ALPINE_EXE }),
-      buildPermanentRevertScript({ processImageName: IMAGE }),
-      uninstallHelper(),
-    ]
-    for (const helper of helpers) {
+  it('keeps non-ASCII paths out of the script body and passes them through the environment', () => {
+    for (const [, helper] of allHelpers()) {
       expect(helper.script).toMatch(/^[\x00-\x7F]*$/)
       expect(helper.script).not.toContain('Müller')
     }
@@ -202,21 +205,18 @@ describe('buildTemporaryRevertScript', () => {
   })
 
   it('restores the Alpine exe, not explorer.exe, as the shell', () => {
-    expect(script).toContain('reg add "%ALPINE_REVERT_SHELL_KEY%" /v Shell /t REG_SZ /d "%ALPINE_REVERT_SHELL_EXE%" /f')
+    expect(script).toContain("Set-ItemProperty -LiteralPath ('Registry::' + $env:ALPINE_REVERT_SHELL_KEY) -Name Shell -Value $env:ALPINE_REVERT_SHELL_EXE")
     expect(env.ALPINE_REVERT_SHELL_EXE).toBe(ALPINE_EXE)
+    expect(env.ALPINE_REVERT_SHELL_KEY).toBe(WINLOGON_KEY)
   })
 
-  it('waits for Alpine to exit and starts Explorer before restoring the shell key', () => {
-    expect(script.indexOf(':alpine_process_gone')).toBeLessThan(script.indexOf('start "" explorer.exe'))
-    expect(script.indexOf('start "" explorer.exe')).toBeLessThan(script.indexOf('reg add'))
+  it('waits after Explorer has started so a relaunched Alpine Shell reads the reverted registration', () => {
+    const afterExplorer = script.slice(script.indexOf(START_EXPLORER))
+    expect(afterExplorer.indexOf(buildDelaySeconds(3))).toBeLessThan(afterExplorer.indexOf('Set-ItemProperty'))
   })
 
-  it('deletes nothing', () => {
-    expect(script).not.toContain('rd /s /q')
-  })
-
-  it('removes itself last', () => {
-    expect(script.trimEnd().endsWith('del "%~f0"')).toBe(true)
+  it('deletes nothing but itself', () => {
+    expect(script.match(/Remove-Item/g)).toHaveLength(1)
   })
 })
 
@@ -224,51 +224,45 @@ describe('buildPermanentRevertScript', () => {
   const { script } = buildPermanentRevertScript({ processImageName: IMAGE })
 
   it('never rewrites the shell key back to Alpine', () => {
-    expect(script).not.toContain('reg add')
+    expect(script).not.toContain('Set-ItemProperty')
   })
 
   it('still hands back to Explorer', () => {
-    expect(script).toContain('start "" explorer.exe')
+    expect(script).toContain(START_EXPLORER)
   })
 
-  it('deletes nothing', () => {
-    expect(script).not.toContain('rd /s /q')
+  it('deletes nothing but itself', () => {
+    expect(script.match(/Remove-Item/g)).toHaveLength(1)
   })
 })
 
 describe('buildUninstallScript', () => {
-  it('runs the NSIS uninstaller in place so cmd waits for it', () => {
+  it('runs the NSIS uninstaller in place and waits for it', () => {
     const { script } = uninstallHelper()
-    expect(script).toContain('"%ALPINE_REVERT_UNINSTALLER%" /S _?=%ALPINE_REVERT_INSTALL_DIR%')
+    expect(script).toContain("Start-Process -FilePath $env:ALPINE_REVERT_UNINSTALLER -ArgumentList @('/S', ('_?=' + $env:ALPINE_REVERT_INSTALL_DIR))")
+    expect(script).toMatch(/ALPINE_REVERT_UNINSTALLER[^\r\n]*-Wait/)
   })
 
   it('does not pass /currentuser, which this uninstaller never parses', () => {
     expect(uninstallHelper().script).not.toContain('/currentuser')
   })
 
-  it('removes the install directory itself, since _?= leaves it behind', () => {
-    const { env } = uninstallHelper()
-    expect(env.ALPINE_REVERT_DIR_0).toBe(INSTALL_DIR)
-  })
-
-  it('removes both user data directories', () => {
-    const { env } = uninstallHelper()
-    expect([env.ALPINE_REVERT_DIR_1, env.ALPINE_REVERT_DIR_2]).toEqual(USER_DATA_DIRS)
+  it('removes the install directory, both user data directories and the update cache', () => {
+    expect(deletionTargets(uninstallHelper().env)).toEqual([INSTALL_DIR, ...USER_DATA_DIRS, ...CACHE_DIRS])
   })
 
   it('skips the cleanup entirely when Alpine outlived the wait', () => {
     const { script } = uninstallHelper()
-    const guard = script.indexOf('if defined ALPINE_REVERT_STILL_RUNNING goto alpine_skip_cleanup')
+    const guard = script.indexOf('if (-not $stillRunning) {')
     expect(guard).toBeGreaterThan(-1)
     expect(guard).toBeLessThan(script.indexOf('_?='))
-    expect(guard).toBeLessThan(script.indexOf('rd /s /q'))
-    expect(script.indexOf(':alpine_skip_cleanup')).toBeLessThan(script.indexOf('del "%~f0"'))
+    expect(guard).toBeLessThan(script.indexOf('Remove-Item -LiteralPath $env:ALPINE_REVERT_DIR_0'))
   })
 
   it('never deletes an install directory the caller refused to mark deletable', () => {
     const { env, script } = uninstallHelper({ deletableInstallDir: null })
     expect(deletionTargets(env)).not.toContain(INSTALL_DIR)
-    expect(deletionTargets(env)).toEqual(USER_DATA_DIRS)
+    expect(deletionTargets(env)).toEqual([...USER_DATA_DIRS, ...CACHE_DIRS])
     expect(script).toContain('_?=')
   })
 
@@ -279,13 +273,13 @@ describe('buildUninstallScript', () => {
   })
 
   it('reports directories it refused to delete instead of dropping them silently', () => {
-    const { skippedDirs, env } = uninstallHelper({ userDataDirs: ['C:\\Users'] })
+    const { skippedDirs, env } = uninstallHelper({ userDataDirs: ['C:\\Users'], cacheDirs: [] })
     expect(skippedDirs).toEqual(['C:\\Users'])
     expect(deletionTargets(env)).toEqual([INSTALL_DIR])
   })
 
   it('waits for Alpine to exit before touching anything', () => {
     const { script } = uninstallHelper()
-    expect(script.indexOf(':alpine_process_gone')).toBeLessThan(script.indexOf('_?='))
+    expect(script.indexOf('while (Get-Process')).toBeLessThan(script.indexOf('_?='))
   })
 })

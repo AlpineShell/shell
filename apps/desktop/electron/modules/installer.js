@@ -11,6 +11,7 @@ const shellExclusivity = require('./shellExclusivity')
 const PRODUCT_NAME = 'Alpine Shell'
 const INSTALL_DIR_NAME = 'alpine-shell'
 const WINLOGON_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+const UPDATER_CACHE_DIR_NAME = `${INSTALL_DIR_NAME}-updater`
 const SHELL_OPT_OUT_FILE = '.shell-opt-out'
 const SHELL_HANDOFF_FILE = '.shell-handoff'
 const UPDATE_HANDOFF_FILE = '.update-in-progress'
@@ -44,6 +45,11 @@ function getDeletableInstallDir() {
 
 function getNsisUninstallerPath() {
   return path.join(getInstallDir(), `Uninstall ${PRODUCT_NAME}.exe`)
+}
+
+function getUpdaterCacheDirs() {
+  if (!process.env.LOCALAPPDATA) return []
+  return [path.join(process.env.LOCALAPPDATA, UPDATER_CACHE_DIR_NAME)]
 }
 
 function getUserDataDirs() {
@@ -178,13 +184,22 @@ function writeRevertHelper(scriptName, script) {
   return scriptPath
 }
 
+const REVERT_HELPER_POWERSHELL_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass']
+
+const START_REVERT_HELPER_OUTSIDE_JOB = [
+  "Start-Process -FilePath powershell.exe",
+  `-ArgumentList @(${REVERT_HELPER_POWERSHELL_ARGS.map(arg => `'${arg}'`).join(', ')}, '-File', ('"' + $env:ALPINE_REVERT_SCRIPT + '"'))`,
+  '-WorkingDirectory $env:TEMP -NoNewWindow -Wait',
+].join(' ')
+
 function launchRevertHelper(scriptPath, env) {
   const helper = { pid: null, running: false }
-  const child = spawn('cmd', ['/c', scriptPath], {
-    detached: true,
+  const workingDirectory = process.env.TEMP || os.tmpdir()
+  const child = spawn('powershell.exe', [...REVERT_HELPER_POWERSHELL_ARGS, '-Command', START_REVERT_HELPER_OUTSIDE_JOB], {
     stdio: 'ignore',
     windowsHide: true,
-    env: { ...process.env, ...env },
+    cwd: workingDirectory,
+    env: { ...process.env, ...env, ALPINE_REVERT_SCRIPT: scriptPath },
   })
   child.on('error', (e) => {
     helper.running = false
@@ -227,7 +242,7 @@ function revertShellTemporarily() {
       shellKeyPath: WINLOGON_KEY,
       shellExePath: getInstalledExePath(),
     })
-    const scriptPath = writeRevertHelper('alpine_revert_temporary.bat', helper.script)
+    const scriptPath = writeRevertHelper('alpine_revert_temporary.ps1', helper.script)
 
     if (!beginShellHandoff()) {
       console.error('[installer] Could not mark the shell hand-off — leaving the shell registration alone')
@@ -251,7 +266,7 @@ function revertShellTemporarily() {
 function revertShellPermanently() {
   try {
     const helper = revertScript.buildPermanentRevertScript({ processImageName: getProcessImageName() })
-    const scriptPath = writeRevertHelper('alpine_revert_permanent.bat', helper.script)
+    const scriptPath = writeRevertHelper('alpine_revert_permanent.ps1', helper.script)
 
     regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
     if (!isShellRevertedToExplorer()) return { success: false, error: SHELL_REVERT_FAILED }
@@ -357,8 +372,9 @@ function uninstall() {
       installDir: getInstallDir(),
       deletableInstallDir: getDeletableInstallDir(),
       userDataDirs: getUserDataDirs(),
+      cacheDirs: getUpdaterCacheDirs(),
     })
-    const scriptPath = writeRevertHelper('alpine_uninstall.bat', helper.script)
+    const scriptPath = writeRevertHelper('alpine_uninstall.ps1', helper.script)
 
     regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
     if (!isShellRevertedToExplorer()) return { success: false, error: SHELL_REVERT_FAILED, leftBehind: [] }
