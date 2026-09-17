@@ -358,6 +358,7 @@ declare global {
   interface SetupOptions {
     shell: boolean
     cursor: boolean
+    cursorStyle: string
   }
 
   interface SetupResult {
@@ -384,6 +385,8 @@ declare global {
     installedVersion: string | null
     currentVersion: string
     isFirstRun: boolean
+    cursorStyles: string[]
+    defaultCursorStyle: string
   }
 
   type EmojiKeyMessage =
@@ -1575,6 +1578,7 @@ declare global {
       revertPermanent: () => Promise<RevertResult>
       setShell: () => Promise<{ success: boolean }>
       uninstall: () => Promise<RevertResult>
+      fitWindowHeight: (height: number) => void
       onProgress: (callback: (step: string) => void) => void
     }
     launcher: {

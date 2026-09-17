@@ -2,14 +2,16 @@
 
 Alpine Shell bundles the **Bibata** cursor theme.
 
-- **Theme:** Bibata (white variants: Bibata-Modern-Ice and Bibata-Original-Ice)
+- **Theme:** Bibata, in six styles: Bibata-Modern-Ice, Bibata-Modern-Classic,
+  Bibata-Modern-Amber, Bibata-Original-Ice, Bibata-Original-Classic and
+  Bibata-Original-Amber
 - **Author:** Abdulkaiz Khatri (GitHub: [@ful1e5](https://github.com/ful1e5))
 - **Source:** https://github.com/ful1e5/Bibata_Cursor
 - **Version bundled:** v2.0.7 (Regular size, Windows packages)
 - **License:** GNU General Public License v3.0 (GPL-3.0)
 
 The full GPL-3.0 license text is included alongside the cursor assets in
-`Bibata-Modern-Ice/LICENSE` and `Bibata-Original-Ice/LICENSE`.
+each style's folder, for example `Bibata-Modern-Ice/LICENSE`.
 
 ## Licensing Note
 

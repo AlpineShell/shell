@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
-import { Check, X, AlertTriangle, FlaskConical } from 'lucide-react'
-import { Button, Card, IconButton, PageTitle, Row, Toggle } from '@alpine/ui'
+import { useState, useEffect, useRef } from 'react'
+import { Check, X, AlertTriangle, FlaskConical, Settings } from 'lucide-react'
+import { Button, Card, IconButton, PageTitle, Row, Select, Toggle } from '@alpine/ui'
 import { useTheme } from '../../hooks/useTheme'
+import { useFitSetupWindow } from '../../hooks/useFitSetupWindow'
 
 type Page = 'welcome' | 'options' | 'installing' | 'complete' | 'error'
 
@@ -16,6 +17,10 @@ const wordmarkMask: React.CSSProperties = {
   WebkitMaskSize: 'contain',
   maskRepeat: 'no-repeat',
   WebkitMaskRepeat: 'no-repeat',
+}
+
+function cursorStyleLabel(style: string) {
+  return style.replace(/^Bibata-/, '').replace('-', ' ')
 }
 
 function OutcomeBadge({ tone, children }: OutcomeBadgeProps) {
@@ -46,8 +51,12 @@ function OutcomeNote({ tone, children }: OutcomeNoteProps) {
 export default function SetupApp() {
   useTheme()
 
+  const frame = useRef<HTMLDivElement>(null)
+  useFitSetupWindow(frame)
+
   const [page, setPage] = useState<Page>('welcome')
   const [installCursor, setInstallCursor] = useState(true)
+  const [pickedCursorStyle, setPickedCursorStyle] = useState<string | null>(null)
   const [status, setStatus] = useState<SetupStatus | null>(null)
   const [result, setResult] = useState<SetupResult | null>(null)
   const [currentStep, setCurrentStep] = useState('')
@@ -60,11 +69,13 @@ export default function SetupApp() {
   const isUpdate = !!status && !status.isFirstRun
   const verb = isUpdate ? 'Update' : 'Install'
   const verbIng = isUpdate ? 'Updating' : 'Installing'
+  const installing = page === 'installing'
+  const cursorStyle = pickedCursorStyle ?? status?.defaultCursorStyle ?? ''
 
   async function handleInstall() {
     setCurrentStep('')
     setPage('installing')
-    const res = await window.setup.install({ shell: true, cursor: installCursor })
+    const res = await window.setup.install({ shell: true, cursor: installCursor, cursorStyle })
     setResult(res)
     setPage(res.error ? 'error' : 'complete')
   }
@@ -74,7 +85,7 @@ export default function SetupApp() {
   }
 
   return (
-    <div className="settings-scope flex h-screen w-screen flex-col overflow-hidden bg-surface-0 text-ink-primary">
+    <div ref={frame} className="settings-scope flex w-screen flex-col bg-surface-0 text-ink-primary">
       <div className="flex h-9 shrink-0 items-center justify-end px-2" style={dragRegion}>
         <div style={noDragRegion}>
           <IconButton label="Close" onClick={() => window.close()}>
@@ -83,35 +94,45 @@ export default function SetupApp() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col px-8 pt-1 pb-8">
-        {page === 'welcome' && (
-          <div className="flex flex-1 flex-col">
-            <div className="flex flex-1 flex-col justify-center">
+      <div className="px-8 pb-8">
+        {(page === 'welcome' || installing) && (
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-5">
               <div className="aspect-[193/34] h-8 bg-ink-primary" style={wordmarkMask} role="img" aria-label="Alpine Shell" />
-              <p className="mt-5 text-base text-ink-secondary">
-                Welcome to a faster, cleaner Windows experience
+              <p className="text-base text-ink-secondary">
+                {installing && currentStep ? currentStep : 'Welcome to a faster, cleaner Windows experience'}
               </p>
             </div>
-            <div className="flex flex-col gap-2.5">
-              <Button className="w-full" onClick={handleInstall}>
-                {verb}
+            <div className="flex items-center gap-2">
+              <Button className="flex-1" busy={installing} onClick={handleInstall}>
+                {installing ? verbIng : verb}
               </Button>
+              <IconButton
+                label={`Customize ${verb.toLowerCase()}`}
+                shape="round"
+                tooltip="topEnd"
+                disabled={installing}
+                onClick={() => setPage('options')}
+              >
+                <Settings size={16} />
+              </IconButton>
               {!isUpdate && (
-                <Button className="w-full" variant="outline" onClick={handleTestOut}>
-                  <FlaskConical size={14} />
-                  Test Out
-                  <span className="text-ink-quiet">Resets on restart</span>
-                </Button>
+                <IconButton
+                  label="Test out, resets on restart"
+                  shape="round"
+                  tooltip="topEnd"
+                  disabled={installing}
+                  onClick={handleTestOut}
+                >
+                  <FlaskConical size={16} />
+                </IconButton>
               )}
-              <Button className="w-full" variant="ghost" onClick={() => setPage('options')}>
-                Customize {verb}
-              </Button>
             </div>
           </div>
         )}
 
         {page === 'options' && (
-          <div className="flex flex-1 flex-col justify-between">
+          <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-5">
               <PageTitle title="Configure" subtitle="Choose what to set up." />
 
@@ -122,49 +143,51 @@ export default function SetupApp() {
                 </div>
               )}
 
-              <Card className="px-4 py-3.5">
+              <Card variant="borderless" className="px-4 py-3.5">
                 <Row label="Custom cursor" description="Install the Bibata cursor pack">
                   <Toggle label="Custom cursor" checked={installCursor} onChange={setInstallCursor} />
                 </Row>
               </Card>
+
+              {installCursor && status && (
+                <Card variant="borderless" className="px-4 py-3.5">
+                  <Row label="Cursor style" description="Modern is rounded, Original is sharp">
+                    <Select
+                      label="Cursor style"
+                      options={status.cursorStyles.map((style) => ({ value: style, label: cursorStyleLabel(style) }))}
+                      value={cursorStyle}
+                      onChange={setPickedCursorStyle}
+                    />
+                  </Row>
+                </Card>
+              )}
             </div>
 
-            <div className="flex flex-col gap-2.5">
-              <Button className="w-full" onClick={handleInstall}>
-                {verb}
-              </Button>
-              <Button className="w-full" variant="ghost" onClick={() => setPage('welcome')}>
-                Back
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {page === 'installing' && (
-          <div className="flex flex-1 flex-col items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-ink-primary" />
-            <p className="mt-5 text-sm text-ink-primary">{verbIng}</p>
-            <p className="mt-2 h-4 text-xs text-ink-quiet">{currentStep}</p>
+            <Button className="w-full" onClick={() => setPage('welcome')}>
+              Done
+            </Button>
           </div>
         )}
 
         {page === 'error' && result && (
-          <div className="flex flex-1 flex-col justify-between">
-            <div className="flex flex-col gap-5">
-              <OutcomeBadge tone="danger">
-                <X size={24} strokeWidth={2.5} />
-              </OutcomeBadge>
-              <PageTitle title={isUpdate ? 'Update failed' : 'Installation failed'} />
-              <p className="rounded-field border border-line-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all text-ink-secondary">
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-4">
+                <OutcomeBadge tone="danger">
+                  <X size={24} strokeWidth={2.5} />
+                </OutcomeBadge>
+                <PageTitle title={isUpdate ? 'Update failed' : 'Installation failed'} />
+              </div>
+              <p className="max-h-20 overflow-y-auto rounded-field border border-line-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all text-ink-secondary">
                 {result.error}
               </p>
             </div>
 
-            <div className="flex flex-col gap-2.5">
-              <Button className="w-full" onClick={() => setPage('options')}>
+            <div className="flex items-center gap-2">
+              <Button className="flex-1" onClick={() => setPage('welcome')}>
                 Try Again
               </Button>
-              <Button className="w-full" variant="ghost" onClick={() => window.close()}>
+              <Button variant="ghost" onClick={() => window.close()}>
                 Close
               </Button>
             </div>
@@ -172,15 +195,17 @@ export default function SetupApp() {
         )}
 
         {page === 'complete' && result && (
-          <div className="flex flex-1 flex-col justify-between">
-            <div className="flex flex-col gap-5">
-              <OutcomeBadge tone="success">
-                <Check size={24} strokeWidth={2.5} />
-              </OutcomeBadge>
-              <PageTitle
-                title={isUpdate ? 'Update complete' : 'Setup complete'}
-                subtitle={`Restart your PC to ${isUpdate ? 'finish updating' : 'start using'} Alpine Shell.`}
-              />
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-4">
+                <OutcomeBadge tone="success">
+                  <Check size={24} strokeWidth={2.5} />
+                </OutcomeBadge>
+                <PageTitle
+                  title={isUpdate ? 'Update complete' : 'Setup complete'}
+                  subtitle={`Restart your PC to ${isUpdate ? 'finish updating' : 'start using'} Alpine Shell.`}
+                />
+              </div>
 
               <div className="flex flex-col gap-1.5 text-xs">
                 {result.shell && <OutcomeNote tone="done">Set as default desktop environment</OutcomeNote>}
@@ -192,11 +217,11 @@ export default function SetupApp() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2.5">
-              <Button className="w-full" onClick={() => window.setup.restartWindows()}>
+            <div className="flex items-center gap-2">
+              <Button className="flex-1" onClick={() => window.setup.restartWindows()}>
                 Restart Now
               </Button>
-              <Button className="w-full" variant="ghost" onClick={() => window.close()}>
+              <Button variant="ghost" onClick={() => window.close()}>
                 Restart Later
               </Button>
             </div>
