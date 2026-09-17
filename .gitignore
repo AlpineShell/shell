@@ -16,7 +16,6 @@ release
 # Local secrets + baked Google client (never commit)
 .env
 .env.local
-apps/desktop/electron/modules/googleCredentials.generated.js
 apps/desktop/electron/marketplaceConfig.generated.js
 
 # Editor directories and files

@@ -9,7 +9,7 @@ const ACCOUNT_INFO = 'Shows your Google events and tasks in the hover calendar.'
 const FALLBACK_ACCOUNT_NAME = 'Google account'
 
 function connectErrorMessage(error: string): string {
-  if (error === 'no-credentials') return 'Google sign-in isn’t set up in this build.'
+  if (error === 'session-expired') return 'Your Google sign-in expired. Connect again.'
   if (error === 'timeout') return 'Sign-in timed out. Try again.'
   if (error === 'access_denied') return 'Access was denied in the browser.'
   return `Couldn’t connect (${error}).`
