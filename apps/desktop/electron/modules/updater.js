@@ -1,5 +1,5 @@
 const { app } = require('electron')
-const { autoUpdater } = require('electron-updater')
+const { autoUpdater, CancellationToken } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
 const installer = require('./installer')
@@ -11,6 +11,7 @@ const INITIAL_CHECK_DELAY_MS = 10000
 const UPDATER_PRECOMPILE_DELAY_MS = 60000
 const MAX_LOG_ENTRIES = 50
 const RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 5 * 60 * 1000]
+const DOWNLOAD_STALL_TIMEOUT_MS = 60 * 1000
 
 const state = {
   status: 'idle',
@@ -28,6 +29,8 @@ let downloadedFile = null
 let retryTimer = null
 let retryAttempt = 0
 let allowRetryForCurrentCheck = false
+let downloadCancellation = null
+let downloadStallTimer = null
 
 function setState(partial) {
   Object.assign(state, partial)
@@ -98,6 +101,35 @@ function runCheck(announce, allowRetry = false) {
   autoUpdater.checkForUpdates().catch(() => {})
 }
 
+function clearDownloadWatch() {
+  if (downloadStallTimer) clearTimeout(downloadStallTimer)
+  downloadStallTimer = null
+  downloadCancellation = null
+}
+
+function armDownloadStallTimer() {
+  if (downloadStallTimer) clearTimeout(downloadStallTimer)
+  downloadStallTimer = setTimeout(abandonStalledDownload, DOWNLOAD_STALL_TIMEOUT_MS)
+}
+
+function abandonStalledDownload() {
+  const cancellation = downloadCancellation
+  clearDownloadWatch()
+  if (cancellation) cancellation.cancel()
+  const message = `download stalled — no data for ${DOWNLOAD_STALL_TIMEOUT_MS / 1000}s`
+  pushLog('error', `Update error: ${message}`)
+  setState({ status: 'error', error: message })
+  allowRetryForCurrentCheck = true
+  scheduleRetry()
+}
+
+function startDownload() {
+  clearDownloadWatch()
+  downloadCancellation = new CancellationToken()
+  armDownloadStallTimer()
+  autoUpdater.downloadUpdate(downloadCancellation).catch(() => {})
+}
+
 autoUpdater.autoDownload = false
 autoUpdater.autoInstallOnAppQuit = false
 
@@ -121,16 +153,19 @@ autoUpdater.on('update-not-available', () => {
 })
 
 autoUpdater.on('download-progress', (progress) => {
+  if (downloadCancellation) armDownloadStallTimer()
   setState({ status: 'downloading', progressPercent: Math.round(progress.percent) })
 })
 
 autoUpdater.on('update-downloaded', (info) => {
+  clearDownloadWatch()
   downloadedFile = info.downloadedFile ?? null
   pushLog('info', `Downloaded version ${info.version} — ready to install`)
   setState({ status: 'downloaded', availableVersion: info.version, progressPercent: 100 })
 })
 
 autoUpdater.on('error', (err) => {
+  clearDownloadWatch()
   pushLog('error', `Update error: ${toMessage(err)}`)
   announceResult = false
   setState({ status: 'error', error: toMessage(err) })
@@ -158,7 +193,7 @@ module.exports = {
       if (app.isPackaged) {
         pushLog('info', `Downloading version ${state.availableVersion ?? ''}…`)
         setState({ status: 'downloading', progressPercent: 0 })
-        autoUpdater.downloadUpdate().catch(() => {})
+        startDownload()
       }
       return undefined
     },
