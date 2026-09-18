@@ -16,6 +16,9 @@ const YEAR_MS = 365 * DAY_MS
 const AUTH_BASE = 'https://auth.alpineshell.com'
 const WEBSITE_BASE = 'https://alpineshell.com'
 const DEVICE_ID = 'a'.repeat(64)
+const BIND_HASH = crypto.createHash('sha256').update('this-pc-binding').digest('base64url')
+const OTHER_BIND_HASH = crypto.createHash('sha256').update('another-pc-binding').digest('base64url')
+const BIND_CLAIM = { tier: 'tpm', hash: BIND_HASH }
 const USER_DATA = path.resolve(path.join(path.sep, 'alpine-test', 'userData'))
 const LICENCE_PATH = path.join(USER_DATA, 'licence.json')
 
@@ -106,7 +109,16 @@ function routedFetch(routes) {
   return fetch
 }
 
-function makeService({ files = {}, fetch, config = {}, readDeviceId = () => DEVICE_ID, fileSystem = memoryFileSystem(files) } = {}) {
+function fakeBinding({ produced = BIND_CLAIM, reproducible = [BIND_HASH] } = {}) {
+  return {
+    produce: vi.fn(() => (produced ? { ...produced } : null)),
+    verify: vi.fn((claim) => Boolean(claim) && reproducible.includes(claim.hash)),
+    forget: vi.fn(),
+    discard: vi.fn(),
+  }
+}
+
+function makeService({ files = {}, fetch, config = {}, readDeviceId = () => DEVICE_ID, fileSystem = memoryFileSystem(files), binding = fakeBinding() } = {}) {
   const broadcasts = []
   const openExternal = vi.fn(async () => undefined)
   const service = createLicenceService({
@@ -118,13 +130,14 @@ function makeService({ files = {}, fetch, config = {}, readDeviceId = () => DEVI
     fetch: fetch ?? routedFetch([]),
     readDeviceId,
     readDeviceName: () => 'DESKTOP-ABC123',
+    binding,
     log: () => undefined,
   })
   const broadcast = (channel, payload) => broadcasts.push({ channel, payload })
   const readRecord = () => (fileSystem.files.has(LICENCE_PATH) ? JSON.parse(fileSystem.files.get(LICENCE_PATH)) : null)
   const changed = () => broadcasts.filter((b) => b.channel === 'licence/changed').map((b) => b.payload)
   const progress = () => broadcasts.filter((b) => b.channel === 'licence/sign-in-progress').map((b) => b.payload)
-  return { service, fileSystem, broadcasts, broadcast, readRecord, changed, progress, openExternal }
+  return { service, fileSystem, broadcasts, broadcast, readRecord, changed, progress, openExternal, binding }
 }
 
 function withLicence(overrides = {}, serviceOptions = {}) {
@@ -183,9 +196,35 @@ describe('status from disk', () => {
       activationId: 'act_1',
       deviceName: 'Study PC',
       activatedAt: new Date(NOW - 2 * DAY_MS).toISOString(),
+      bindTier: null,
       deviceReadable: true,
       releaseBuild: true,
     })
+  })
+
+  it('is valid with a token bound to a proof this PC reproduces, and reports the tier', () => {
+    const { service, binding } = withLicence({ token: mintToken({ bind: BIND_CLAIM }), bindTier: 'tpm' })
+    expect(service.status()).toMatchObject({ state: 'valid', bindTier: 'tpm' })
+    expect(binding.verify).toHaveBeenCalledWith(BIND_CLAIM)
+  })
+
+  it('is unlicensed with the reason binding-mismatch when the proof cannot be reproduced on this PC', () => {
+    const { service } = withLicence({ token: mintToken({ bind: { tier: 'tpm', hash: OTHER_BIND_HASH } }), bindTier: 'tpm' })
+    expect(service.status()).toMatchObject({ state: 'unlicensed', reason: 'binding-mismatch', email: 'someone@example.com', bindTier: 'tpm' })
+    expect(service.currentToken()).toBeNull()
+    expect(() => service.requireValid()).toThrow('licence-required')
+  })
+
+  it('keeps an activation with no bind claim working without ever asking for a proof', () => {
+    const { service, binding } = withLicence({}, { binding: fakeBinding({ reproducible: [] }) })
+    expect(service.status()).toMatchObject({ state: 'valid', bindTier: null })
+    expect(binding.verify).not.toHaveBeenCalled()
+    expect(binding.produce).not.toHaveBeenCalled()
+  })
+
+  it('takes the tier from the token when the record predates the tier field', () => {
+    const { service } = withLicence({ token: mintToken({ bind: { tier: 'dpapi', hash: BIND_HASH } }) })
+    expect(service.status()).toMatchObject({ state: 'valid', bindTier: 'dpapi' })
   })
 
   it('stays valid forever with a token that carries no expiry, even offline for decades', () => {
@@ -320,7 +359,7 @@ describe('the device flow sign-in', () => {
 
     const activateCall = fetch.calls.find((call) => call.url.endsWith('/licences/activate'))
     expect(activateCall.headers.Authorization).toBe('Bearer sess_1')
-    expect(activateCall.body).toEqual({ deviceId: DEVICE_ID, deviceName: 'Study PC', appVersion: '1.2.3' })
+    expect(activateCall.body).toEqual({ deviceId: DEVICE_ID, deviceName: 'Study PC', appVersion: '1.2.3', bind: { tier: 'tpm', hash: BIND_HASH } })
 
     const signOut = fetch.calls.find((call) => call.url.endsWith('/api/auth/sign-out'))
     expect(signOut.headers.Authorization).toBe('Bearer sess_1')
@@ -333,6 +372,7 @@ describe('the device flow sign-in', () => {
       licenceId: 'lic_9',
       deviceName: 'Study PC',
       activatedAt: new Date(NOW + 15000).toISOString(),
+      bindTier: null,
     })
     expect(JSON.stringify(record)).not.toContain('sess_1')
 
@@ -381,8 +421,82 @@ describe('the device flow sign-in', () => {
     service.handlers['licence/sign-in'](null, { deviceName: 'Study PC' })
     await settle()
     await advance(5000)
-    expect(Object.keys(readRecord()).sort()).toEqual(['activatedAt', 'activationId', 'deviceName', 'email', 'licenceId', 'token'])
+    expect(Object.keys(readRecord()).sort()).toEqual(['activatedAt', 'activationId', 'bindTier', 'deviceName', 'email', 'licenceId', 'token'])
     expect(JSON.stringify(readRecord())).not.toContain('secret-9')
+  })
+
+  it('sends only the binding tier and hash, records the tier the server bound and forgets stale verdicts', async () => {
+    const binding = fakeBinding({ produced: { tier: 'dpapi', hash: BIND_HASH, secret: 'never-sent', publicBlob: 'never-sent' } })
+    const bound = { ...activated, token: mintToken({ jti: 'bound', bind: { tier: 'dpapi', hash: BIND_HASH } }) }
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: jsonResponse(200, { access_token: 'sess_7' }) },
+      { path: '/licences/activate', reply: jsonResponse(200, bound) },
+      { path: '/api/auth/sign-out', reply: jsonResponse(200, {}) },
+    ])
+    const { service, readRecord, broadcast } = makeService({ fetch, binding })
+    service.start(broadcast)
+    service.handlers['licence/sign-in'](null, { deviceName: 'Study PC' })
+    await settle()
+    await advance(5000)
+    const sent = fetch.calls.find((call) => call.url.endsWith('/licences/activate')).body
+    expect(sent.bind).toEqual({ tier: 'dpapi', hash: BIND_HASH })
+    expect(JSON.stringify(fetch.calls)).not.toContain('never-sent')
+    expect(readRecord()).toMatchObject({ bindTier: 'dpapi' })
+    expect(binding.forget).toHaveBeenCalledTimes(1)
+    expect(service.status()).toMatchObject({ state: 'valid', bindTier: 'dpapi' })
+  })
+
+  it('produces the binding once per sign-in, even while re-checking a 402 every 10 seconds', async () => {
+    let activations = 0
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: jsonResponse(200, { access_token: 'sess_8' }) },
+      { path: '/licences/activate', reply: () => { activations += 1; return activations < 3 ? jsonResponse(402, { error: 'no-licence' }) : jsonResponse(200, activated) } },
+      { path: '/api/auth/sign-out', reply: jsonResponse(200, {}) },
+    ])
+    const { service, binding, broadcast } = makeService({ fetch })
+    service.start(broadcast)
+    service.handlers['licence/sign-in']()
+    await settle()
+    await advance(5000)
+    await advance(2 * NO_LICENCE_RECHECK_MS)
+    expect(activations).toBe(3)
+    expect(binding.produce).toHaveBeenCalledTimes(1)
+    expect(fetch.calls.filter((call) => call.url.endsWith('/licences/activate')).every((call) => call.body.bind.hash === BIND_HASH)).toBe(true)
+  })
+
+  it('activates without a binding when no tier is usable, and the token then carries none', async () => {
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: jsonResponse(200, { access_token: 'sess_9' }) },
+      { path: '/licences/activate', reply: jsonResponse(200, activated) },
+      { path: '/api/auth/sign-out', reply: jsonResponse(200, {}) },
+    ])
+    const { service, readRecord, broadcast } = makeService({ fetch, binding: fakeBinding({ produced: null, reproducible: [] }) })
+    service.start(broadcast)
+    service.handlers['licence/sign-in']()
+    await settle()
+    await advance(5000)
+    const sent = fetch.calls.find((call) => call.url.endsWith('/licences/activate')).body
+    expect(sent).not.toHaveProperty('bind')
+    expect(readRecord()).toMatchObject({ bindTier: null })
+    expect(service.status().state).toBe('valid')
+  })
+
+  it('refuses a token bound to a proof this PC cannot reproduce instead of writing it', async () => {
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: jsonResponse(200, { access_token: 'sess_10' }) },
+      { path: '/licences/activate', reply: jsonResponse(200, { ...activated, token: mintToken({ bind: { tier: 'tpm', hash: OTHER_BIND_HASH } }) }) },
+    ])
+    const { service, progress, readRecord, broadcast } = makeService({ fetch })
+    service.start(broadcast)
+    service.handlers['licence/sign-in']()
+    await settle()
+    await advance(5000)
+    expect(progress().at(-1).outcome).toEqual({ kind: 'error', message: 'binding-unverifiable' })
+    expect(readRecord()).toBeNull()
   })
 
   it('adds five seconds on slow_down and reports a denial', async () => {
@@ -556,14 +670,15 @@ describe('the device flow sign-in', () => {
 })
 
 describe('release and links', () => {
-  it('releases the activation with the licence token, deletes the file and reports unlicensed', async () => {
+  it('releases the activation with the licence token, deletes the file and the binding material, and reports unlicensed', async () => {
     const fetch = routedFetch([{ path: '/licences/release-self', reply: jsonResponse(200, { ok: true }) }])
-    const { service, readRecord, changed, broadcast } = withLicence({}, { fetch })
+    const { service, readRecord, changed, broadcast, binding } = withLicence({}, { fetch })
     const token = readRecord().token
     service.start(broadcast)
     const status = await service.handlers['licence/release']()
     expect(fetch.calls[0]).toMatchObject({ url: `${AUTH_BASE}/licences/release-self`, headers: { Authorization: `Bearer ${token}` } })
     expect(readRecord()).toBeNull()
+    expect(binding.discard).toHaveBeenCalledTimes(1)
     expect(status).toMatchObject({ state: 'unlicensed', reason: 'missing' })
     expect(changed().at(-1)).toMatchObject({ state: 'unlicensed', reason: 'missing' })
   })

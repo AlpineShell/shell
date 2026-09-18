@@ -15,7 +15,7 @@ describe('the startup plan for a licence', () => {
   })
 
   it('opens the sign-in window only when there is no verifiable licence on this PC', () => {
-    for (const reason of ['missing', 'unreadable', 'unverifiable', 'device-mismatch']) {
+    for (const reason of ['missing', 'unreadable', 'unverifiable', 'device-mismatch', 'binding-mismatch']) {
       expect(planStartupForLicence(status('unlicensed', reason)).openSignIn).toBe(true)
     }
     expect(planStartupForLicence(status('valid')).openSignIn).toBe(false)

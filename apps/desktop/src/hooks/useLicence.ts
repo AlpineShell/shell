@@ -8,6 +8,7 @@ const initialStatus: LicenceStatus = {
   activationId: null,
   deviceName: null,
   activatedAt: null,
+  bindTier: null,
   deviceReadable: true,
   releaseBuild: false,
 }

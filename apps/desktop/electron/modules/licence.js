@@ -3,6 +3,8 @@ const fs = require('fs')
 const { loadLicenceConfig, DEVICE_CLIENT_ID } = require('../licenceConfig')
 const { verifyLicenceToken } = require('../licenceToken')
 const { evaluateLicenceState } = require('../licenceState')
+const { isBindClaim, isBindingTier } = require('../licenceBinding')
+const { createLicenceBindingLadder } = require('../licenceBindingProviders')
 const deviceIdentity = require('../deviceIdentity')
 const { guardHandlers } = require('../trustedSenders')
 
@@ -68,13 +70,20 @@ function defaultDependencies() {
     now: () => Date.now(),
     readDeviceId: () => deviceIdentity.readDeviceId(),
     readDeviceName: () => deviceIdentity.readDeviceName(),
+    binding: null,
     log: (message) => console.error(`[licence] ${message}`),
   }
+}
+
+function bindTierOf(record, claims) {
+  if (record && isBindingTier(record.bindTier)) return record.bindTier
+  return claims && isBindClaim(claims.bind) ? claims.bind.tier : null
 }
 
 function createLicenceService(overrides = {}) {
   const deps = { ...defaultDependencies(), ...overrides }
   const config = deps.config || loadLicenceConfig()
+  const binding = deps.binding || createLicenceBindingLadder({ userDataDirectory: deps.userDataDirectory, fileSystem: deps.fileSystem, log: deps.log })
 
   let broadcast = null
   let cachedDeviceId = null
@@ -140,16 +149,21 @@ function createLicenceService(overrides = {}) {
       activationId: record ? stringOrNull(record.activationId) : null,
       deviceName: record ? stringOrNull(record.deviceName) : null,
       activatedAt: record ? stringOrNull(record.activatedAt) : null,
+      bindTier: bindTierOf(record, claims),
       deviceReadable: currentDeviceId !== null,
       releaseBuild: config.isReleaseBuild === true,
     }
+  }
+
+  function proveBinding(claim) {
+    return binding.verify(claim)
   }
 
   function evaluateFromDisk() {
     const { file, record } = readLicenceFile()
     const currentDeviceId = deviceId()
     const claims = record ? verifiedClaims(record.token) : null
-    const decision = evaluateLicenceState({ claims, deviceId: currentDeviceId, licenceFile: file, config })
+    const decision = evaluateLicenceState({ claims, deviceId: currentDeviceId, licenceFile: file, config, proveBinding })
     return { record, claims, decision, status: buildStatus(record, claims, decision, currentDeviceId) }
   }
 
@@ -198,6 +212,7 @@ function createLicenceService(overrides = {}) {
   }
 
   function persistActivation(body, deviceName) {
+    const claims = verifiedClaims(body.token)
     writeRecord({
       token: body.token,
       activationId: body.activationId,
@@ -205,7 +220,13 @@ function createLicenceService(overrides = {}) {
       licenceId: body.licence ? stringOrNull(body.licence.id) : null,
       deviceName,
       activatedAt: isoOrNull(deps.now()),
+      bindTier: bindTierOf(null, claims),
     })
+    binding.forget()
+  }
+
+  function tokenBindingHolds(claims) {
+    return claims.bind === undefined || claims.bind === null || proveBinding(claims.bind)
   }
 
   function signOutSession(sessionToken) {
@@ -218,7 +239,9 @@ function createLicenceService(overrides = {}) {
     if (response.status === 200) {
       const complete = typeof body.token === 'string' && typeof body.activationId === 'string'
       if (!complete) return { kind: 'error', message: 'activate-incomplete' }
-      if (!verifiedClaims(body.token)) return { kind: 'error', message: 'token-unverifiable' }
+      const claims = verifiedClaims(body.token)
+      if (!claims) return { kind: 'error', message: 'token-unverifiable' }
+      if (!tokenBindingHolds(claims)) return { kind: 'error', message: 'binding-unverifiable' }
       return {
         kind: 'activated',
         email: body.account ? stringOrNull(body.account.email) : null,
@@ -257,7 +280,9 @@ function createLicenceService(overrides = {}) {
   async function activateWithFlow(flow, options) {
     const id = deviceId()
     if (!id) return { kind: 'device-unreadable' }
+    if (flow.bind === undefined) flow.bind = binding.produce()
     const payload = { deviceId: id, deviceName: flow.deviceName, appVersion: deps.appVersion() }
+    if (flow.bind) payload.bind = { tier: flow.bind.tier, hash: flow.bind.hash }
     if (typeof options.replaceActivationId === 'string' && options.replaceActivationId) payload.replaceActivationId = options.replaceActivationId
     const response = await postJson(`${config.authBase}/licences/activate`, payload, { authorization: `Bearer ${flow.sessionToken}` })
     if (flow.cancelled) return { kind: 'error', message: 'cancelled' }
@@ -344,7 +369,7 @@ function createLicenceService(overrides = {}) {
 
   async function startSignIn(options) {
     cancelSignIn()
-    const flow = { cancelled: false, sessionToken: null, recheckTimer: null, recheckDeadline: null, deviceName: chosenDeviceName(options) }
+    const flow = { cancelled: false, sessionToken: null, recheckTimer: null, recheckDeadline: null, deviceName: chosenDeviceName(options), bind: undefined }
     signInFlow = flow
     setProgress({ phase: 'starting' })
     try {
@@ -379,6 +404,7 @@ function createLicenceService(overrides = {}) {
   async function release() {
     await releaseSelf()
     deleteRecord()
+    binding.discard()
     const status = evaluateFromDisk().status
     reportStatus(status)
     return status

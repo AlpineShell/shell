@@ -1,4 +1,5 @@
 const crypto = require('crypto')
+const { isBindClaim } = require('./licenceBinding')
 
 const LICENCE_TOKEN_TYPE = 'alpine-licence+jwt'
 const LICENCE_TOKEN_ALGORITHM = 'EdDSA'
@@ -67,6 +68,10 @@ function hasWellFormedOptionalClaims(payload) {
   return OPTIONAL_NUMBER_CLAIMS.every((name) => payload[name] === undefined || Number.isFinite(payload[name]))
 }
 
+function hasWellFormedBindClaim(payload) {
+  return payload.bind === undefined || payload.bind === null || isBindClaim(payload.bind)
+}
+
 function normaliseIssuer(value) {
   return typeof value === 'string' ? value.trim().replace(/\/+$/, '') : ''
 }
@@ -101,6 +106,7 @@ function verifyLicenceToken(token, options = {}) {
   if (!signatureMatches(signingInput, signature, publicKey)) return failure('bad-signature')
   if (!hasRequiredClaims(payload)) return failure('missing-claims')
   if (!hasWellFormedOptionalClaims(payload)) return failure('malformed-claims')
+  if (!hasWellFormedBindClaim(payload)) return failure('malformed-claims')
   if (issuer !== undefined && normaliseIssuer(payload.iss) !== normaliseIssuer(issuer)) return failure('wrong-issuer')
   if (!audienceMatches(payload.aud, audience)) return failure('wrong-audience')
   if (now !== undefined) {

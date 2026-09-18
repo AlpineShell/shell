@@ -157,4 +157,17 @@ describe('verifyLicenceToken', () => {
   it('never trusts an empty key list', () => {
     expect(verifyLicenceToken(mintToken(signingKey), { ...fullOptions, publicKeys: [] })).toMatchObject({ ok: false, reason: 'unknown-kid' })
   })
+
+  it('carries a well-formed bind claim through and treats a missing or null one as no binding', () => {
+    const bind = { tier: 'tpm', hash: 'c'.repeat(43) }
+    expect(verifyLicenceToken(mintToken(signingKey, { bind }), fullOptions)).toMatchObject({ ok: true, claims: { bind } })
+    expect(verifyLicenceToken(mintToken(signingKey, { bind: null }), fullOptions).ok).toBe(true)
+    expect(verifyLicenceToken(mintToken(signingKey), fullOptions).claims.bind).toBeUndefined()
+  })
+
+  it('rejects a bind claim with an unknown tier or a hash that is not base64url sha256', () => {
+    for (const bind of [{ tier: 'cpu', hash: 'c'.repeat(43) }, { tier: 'tpm', hash: 'c'.repeat(64) }, { tier: 'tpm' }, 'tpm', [], 7]) {
+      expect(verifyLicenceToken(mintToken(signingKey, { bind }), fullOptions)).toMatchObject({ ok: false, reason: 'malformed-claims' })
+    }
+  })
 })

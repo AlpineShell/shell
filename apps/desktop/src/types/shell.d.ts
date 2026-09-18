@@ -385,7 +385,9 @@ declare global {
 
   type LicenceState = 'development' | 'valid' | 'unlicensed'
 
-  type LicenceUnlicensedReason = 'missing' | 'unreadable' | 'unverifiable' | 'device-mismatch'
+  type LicenceUnlicensedReason = 'missing' | 'unreadable' | 'unverifiable' | 'device-mismatch' | 'binding-mismatch'
+
+  type LicenceBindingTier = 'tpm' | 'dpapi' | 'machine'
 
   interface LicenceStatus {
     state: LicenceState
@@ -395,6 +397,7 @@ declare global {
     activationId: string | null
     deviceName: string | null
     activatedAt: string | null
+    bindTier: LicenceBindingTier | null
     deviceReadable: boolean
     releaseBuild: boolean
   }
