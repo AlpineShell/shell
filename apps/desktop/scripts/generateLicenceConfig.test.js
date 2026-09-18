@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import crypto from 'crypto'
 
-const { buildLicenceConfig, renderModule, mergeSettings } = await import('./generateLicenceConfig.js')
+const { buildLicenceConfig, normaliseMarketplacePublicKey, renderModule, renderMarketplaceKeyModule, mergeSettings } = await import('./generateLicenceConfig.js')
 
 function spkiPem() {
   return crypto.generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' }).toString()
@@ -70,5 +70,36 @@ describe('mergeSettings', () => {
     expect(merged.ALPINE_AUTH_BASE).toBe('https://env.example')
     expect(merged.ALPINE_RELEASE_BUILD).toBe('1')
     expect(merged.ALPINE_WEBSITE_BASE).toBe('')
+  })
+
+  it('carries the marketplace public key', () => {
+    expect(mergeSettings({}, { ALPINE_MARKETPLACE_PUBKEY: key.spkiPem }).ALPINE_MARKETPLACE_PUBKEY).toBe(key.spkiPem)
+    expect(mergeSettings({}, {}).ALPINE_MARKETPLACE_PUBKEY).toBe('')
+  })
+})
+
+describe('normaliseMarketplacePublicKey', () => {
+  it('accepts a PEM, an escaped one-line PEM and a base64 PEM', () => {
+    expect(normaliseMarketplacePublicKey(key.spkiPem)).toBe(key.spkiPem)
+    expect(normaliseMarketplacePublicKey(key.spkiPem.replace(/\n/g, '\\n'))).toBe(key.spkiPem)
+    expect(normaliseMarketplacePublicKey(Buffer.from(key.spkiPem).toString('base64'))).toBe(key.spkiPem)
+  })
+
+  it('returns null when unset and refuses anything that is not an Ed25519 key', () => {
+    expect(normaliseMarketplacePublicKey('')).toBeNull()
+    expect(normaliseMarketplacePublicKey(undefined)).toBeNull()
+    const rsa = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey.export({ type: 'spki', format: 'pem' }).toString()
+    expect(() => normaliseMarketplacePublicKey(rsa)).toThrow(/not an Ed25519/)
+    expect(() => normaliseMarketplacePublicKey('garbage')).toThrow(/not an Ed25519/)
+  })
+})
+
+describe('renderMarketplaceKeyModule', () => {
+  it('writes a CommonJS module the signature check can require', () => {
+    for (const pem of [key.spkiPem, null]) {
+      const module = { exports: {} }
+      new Function('module', renderMarketplaceKeyModule(pem))(module)
+      expect(module.exports).toEqual({ publicKeyPem: pem })
+    }
   })
 })

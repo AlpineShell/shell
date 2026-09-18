@@ -18,6 +18,7 @@ release
 .env.local
 apps/desktop/electron/marketplaceConfig.generated.js
 apps/desktop/electron/licenceConfig.generated.js
+apps/desktop/electron/marketplacePublicKey.generated.js
 
 # Editor directories and files
 .vscode/*
