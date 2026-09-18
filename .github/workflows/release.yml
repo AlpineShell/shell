@@ -7,13 +7,6 @@ on:
 permissions:
   contents: write
 
-# --- Storage / update channel configuration ---
-# The store is Railway/MinIO (STORAGE_* secrets). Installers bake the Railway
-# update URL (apps/desktop/package.json build.publish.url), so builds check
-# Railway with no per-release config.
-#   * STORAGE_* secrets    -> installer + latest.yml upload to Railway/MinIO
-#   * UPDATE_PUBLIC_URL var -> optional override of the baked update URL
-
 jobs:
   build-and-publish:
     runs-on: blacksmith-4vcpu-windows-2025
@@ -67,6 +60,7 @@ jobs:
         env:
           ALPINE_RELEASE_BUILD: '1'
           ALPINE_LICENCE_PUBLIC_KEYS: ${{ secrets.ALPINE_LICENCE_PUBLIC_KEYS }}
+          ALPINE_MARKETPLACE_PUBKEY: ${{ secrets.ALPINE_MARKETPLACE_PUBKEY }}
           ALPINE_UPGRADE_GRACE_UNTIL: ${{ vars.ALPINE_UPGRADE_GRACE_UNTIL }}
           ALPINE_AUTH_BASE: ${{ vars.ALPINE_AUTH_BASE }}
           ALPINE_WEBSITE_BASE: ${{ vars.ALPINE_WEBSITE_BASE }}
@@ -78,20 +72,24 @@ jobs:
         run: |
           test -f electron/licenceConfig.generated.js || { echo "::error::electron/licenceConfig.generated.js was not written"; exit 1; }
           node -e "const c=require('./electron/licenceConfig.generated.js');const kids=(c.publicKeys||[]).map(k=>k&&k.kid).filter(Boolean);if(c.isReleaseBuild!==true||kids.length===0){console.error('::error::licence config must be a release build with at least one kid');process.exit(1)}console.log('licence kids: '+kids.join(', '))"
+          test -f electron/marketplacePublicKey.generated.js || { echo "::error::electron/marketplacePublicKey.generated.js was not written"; exit 1; }
+          node -e "const k=require('./electron/marketplacePublicKey.generated.js');if(typeof k.publicKeyPem!=='string'){console.log('::warning::no marketplace public key baked; set the ALPINE_MARKETPLACE_PUBKEY secret so this build can verify plugin signatures');process.exit(0)}console.log('marketplace public key baked')"
 
       - name: Build installer
         working-directory: apps/desktop
         shell: bash
-        env:
-          UPDATE_PUBLIC_URL: ${{ vars.UPDATE_PUBLIC_URL }}
         run: |
           bunx vite build
-          EXTRA=""
-          if [ -n "$UPDATE_PUBLIC_URL" ]; then
-            echo "Baking update URL: $UPDATE_PUBLIC_URL"
-            EXTRA="-c.publish.url=$UPDATE_PUBLIC_URL"
-          fi
-          bunx electron-builder --win --publish never $EXTRA
+          bunx electron-builder --win --publish never
+
+      - name: Verify the baked update feed
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          FEED="$(node -e "console.log(require('./package.json').build.publish.url)")"
+          test -f release/win-unpacked/resources/app-update.yml || { echo "::error::app-update.yml was not written"; exit 1; }
+          grep -F "url: $FEED" release/win-unpacked/resources/app-update.yml || { echo "::error::app-update.yml does not point at $FEED"; cat release/win-unpacked/resources/app-update.yml; exit 1; }
+          echo "update feed: $FEED"
 
       - name: Publish installer + latest.yml to Railway
         working-directory: apps/desktop
@@ -102,7 +100,6 @@ jobs:
           STORAGE_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
           STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
           STORAGE_FORCE_PATH_STYLE: ${{ secrets.STORAGE_FORCE_PATH_STYLE }}
-          STORAGE_PUBLIC_URL: ${{ vars.UPDATE_PUBLIC_URL }}
         run: node scripts/publish.js
 
       - name: Attach installer to GitHub Release

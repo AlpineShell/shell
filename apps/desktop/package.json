@@ -119,7 +119,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "https://bucket-production-4979d.up.railway.app/alpine-shell/",
+      "url": "https://auth.alpineshell.com/releases/",
       "channel": "latest",
       "useMultipleRangeRequest": false
     }
