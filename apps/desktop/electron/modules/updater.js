@@ -11,8 +11,9 @@ const UPDATER_PRECOMPILE_DELAY_MS = 60000
 const MAX_LOG_ENTRIES = 50
 const RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 5 * 60 * 1000]
 const DOWNLOAD_STALL_TIMEOUT_MS = 60 * 1000
-const LICENCE_STATES_WITH_UPDATES = new Set(['valid', 'grace'])
 const SIGN_IN_FOR_UPDATES_MESSAGE = 'Sign in to get updates'
+const UPDATES_REFUSED_FOR_LICENCE_MESSAGE = 'Updates are not available for this licence. Alpine Shell keeps working as it is.'
+const FEED_STATUS_CODES_REFUSING_LICENCE = new Set([401, 403])
 
 const state = {
   status: 'idle',
@@ -84,6 +85,10 @@ function toMessage(e) {
   return e == null ? 'unknown' : e.message || String(e)
 }
 
+function feedRefusedLicence(e) {
+  return Boolean(e) && FEED_STATUS_CODES_REFUSING_LICENCE.has(e.statusCode)
+}
+
 function clearRetry() {
   if (retryTimer) clearTimeout(retryTimer)
   retryTimer = null
@@ -103,7 +108,6 @@ function scheduleRetry() {
 }
 
 function feedAuthorization() {
-  if (!LICENCE_STATES_WITH_UPDATES.has(licence.status().state)) return null
   const token = licence.currentToken()
   return token ? `Bearer ${token}` : null
 }
@@ -221,8 +225,14 @@ function bindAutoUpdater(updater) {
 
   updater.on('error', (err) => {
     clearDownloadWatch()
-    pushLog('error', `Update error: ${toMessage(err)}`)
     announceResult = false
+    if (feedRefusedLicence(err)) {
+      clearRetry()
+      pushLog('error', UPDATES_REFUSED_FOR_LICENCE_MESSAGE)
+      setState({ status: 'error', error: UPDATES_REFUSED_FOR_LICENCE_MESSAGE })
+      return
+    }
+    pushLog('error', `Update error: ${toMessage(err)}`)
     setState({ status: 'error', error: toMessage(err) })
     if (allowRetryForCurrentCheck) scheduleRetry()
   })
@@ -250,6 +260,7 @@ module.exports = {
   INITIAL_CHECK_DELAY_MS,
   CHECK_INTERVAL_MS,
   SIGN_IN_FOR_UPDATES_MESSAGE,
+  UPDATES_REFUSED_FOR_LICENCE_MESSAGE,
 
   handlers: {
     'updates/get-state': () => state,
