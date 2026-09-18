@@ -61,6 +61,24 @@ jobs:
       - name: Build SDK
         run: bun run sdk:build
 
+      - name: Bake licence config
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          ALPINE_RELEASE_BUILD: '1'
+          ALPINE_LICENCE_PUBLIC_KEYS: ${{ secrets.ALPINE_LICENCE_PUBLIC_KEYS }}
+          ALPINE_UPGRADE_GRACE_UNTIL: ${{ vars.ALPINE_UPGRADE_GRACE_UNTIL }}
+          ALPINE_AUTH_BASE: ${{ vars.ALPINE_AUTH_BASE }}
+          ALPINE_WEBSITE_BASE: ${{ vars.ALPINE_WEBSITE_BASE }}
+        run: node scripts/generateLicenceConfig.js
+
+      - name: Verify the baked licence config
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          test -f electron/licenceConfig.generated.js || { echo "::error::electron/licenceConfig.generated.js was not written"; exit 1; }
+          node -e "const c=require('./electron/licenceConfig.generated.js');const kids=(c.publicKeys||[]).map(k=>k&&k.kid).filter(Boolean);if(c.isReleaseBuild!==true||kids.length===0){console.error('::error::licence config must be a release build with at least one kid');process.exit(1)}console.log('licence kids: '+kids.join(', '))"
+
       - name: Build installer
         working-directory: apps/desktop
         shell: bash
