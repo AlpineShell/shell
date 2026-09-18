@@ -299,22 +299,63 @@ contextBridge.exposeInMainWorld('launcher', {
   },
 })
 
-contextBridge.exposeInMainWorld('setup', {
-  status: () => ipcRenderer.invoke('setup/status'),
-  install: (options) => ipcRenderer.invoke('setup/install', options),
-  skip: () => ipcRenderer.invoke('setup/skip'),
-  testOut: () => ipcRenderer.invoke('setup/test-out'),
-  relaunch: () => ipcRenderer.invoke('setup/relaunch'),
-  restartWindows: () => ipcRenderer.invoke('setup/restart-windows'),
-  revertTemporary: () => ipcRenderer.invoke('setup/revert-temporary'),
-  revertPermanent: () => ipcRenderer.invoke('setup/revert-permanent'),
-  setShell: () => ipcRenderer.invoke('setup/set-shell'),
-  uninstall: () => ipcRenderer.invoke('setup/uninstall'),
-  fitWindowHeight: (height) => ipcRenderer.send('setup/fit-window-height', height),
-  onProgress: (callback) => {
-    ipcRenderer.on('setup/progress', (_, step) => callback(step))
-  },
-})
+function pageMode() {
+  try {
+    return new URLSearchParams(window.location.search).get('mode')
+  } catch {
+    return null
+  }
+}
+
+const MACHINE_CHANGING_PAGE_MODES = new Set(['setup', 'settings'])
+const currentPageMode = pageMode()
+
+if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
+  contextBridge.exposeInMainWorld('setup', {
+    status: () => ipcRenderer.invoke('setup/status'),
+    install: (options) => ipcRenderer.invoke('setup/install', options),
+    skip: () => ipcRenderer.invoke('setup/skip'),
+    testOut: () => ipcRenderer.invoke('setup/test-out'),
+    relaunch: () => ipcRenderer.invoke('setup/relaunch'),
+    restartWindows: () => ipcRenderer.invoke('setup/restart-windows'),
+    revertTemporary: () => ipcRenderer.invoke('setup/revert-temporary'),
+    revertPermanent: () => ipcRenderer.invoke('setup/revert-permanent'),
+    setShell: () => ipcRenderer.invoke('setup/set-shell'),
+    uninstall: () => ipcRenderer.invoke('setup/uninstall'),
+    fitWindowHeight: (height) => ipcRenderer.send('setup/fit-window-height', height),
+    onProgress: (callback) => {
+      ipcRenderer.on('setup/progress', (_, step) => callback(step))
+    },
+  })
+
+  contextBridge.exposeInMainWorld('licence', {
+    status: () => ipcRenderer.invoke('licence/status'),
+    signIn: () => ipcRenderer.invoke('licence/sign-in'),
+    signInState: () => ipcRenderer.invoke('licence/sign-in-state'),
+    cancelSignIn: () => ipcRenderer.invoke('licence/cancel-sign-in'),
+    activate: (options) => ipcRenderer.invoke('licence/activate', options),
+    openCheckout: () => ipcRenderer.invoke('licence/open-checkout'),
+    openAccount: () => ipcRenderer.invoke('licence/open-account'),
+    release: () => ipcRenderer.invoke('licence/release'),
+    refreshNow: () => ipcRenderer.invoke('licence/refresh-now'),
+    onSignInProgress: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('licence/sign-in-progress', handler)
+      return () => ipcRenderer.removeListener('licence/sign-in-progress', handler)
+    },
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('licence/changed', handler)
+      return () => ipcRenderer.removeListener('licence/changed', handler)
+    },
+  })
+}
+
+if (currentPageMode === 'desktop') {
+  window.addEventListener('online', () => {
+    ipcRenderer.invoke('licence/online').catch(() => {})
+  })
+}
 
 contextBridge.exposeInMainWorld('shell', {
   settingsIcon: bootSettingsIcon,

@@ -372,6 +372,68 @@ declare global {
     isFirstRun: boolean
   }
 
+  type LicenceState = 'development' | 'valid' | 'grace' | 'unlicensed' | 'lapsed'
+
+  type LicenceGraceReason =
+    | 'expired'
+    | 'device-unreadable'
+    | 'upgrade'
+    | 'refunded'
+    | 'disputed'
+    | 'moved'
+    | 'released'
+    | 'conflict'
+    | 'account-deleted'
+    | 'invalid'
+
+  interface LicenceStatus {
+    state: LicenceState
+    reason: LicenceGraceReason | null
+    graceUntil: string | null
+    email: string | null
+    licenceId: string | null
+    activationId: string | null
+    deviceName: string | null
+    expiresAt: string | null
+    lastRefreshAt: string | null
+    movedTo: string | null
+    deviceReadable: boolean
+    releaseBuild: boolean
+  }
+
+  interface LicenceSeatActivation {
+    id: string
+    licenceId: string
+    deviceName: string
+    lastSeenAt: string | null
+  }
+
+  type LicenceActivationOutcome =
+    | { kind: 'activated'; email: string | null; licenceId: string | null }
+    | { kind: 'no-licence'; email: string | null }
+    | { kind: 'seats-in-use'; activations: LicenceSeatActivation[] }
+    | { kind: 'move-limit'; retryAt: string | null }
+    | { kind: 'mode-mismatch' }
+    | { kind: 'replacement-not-yours' }
+    | { kind: 'session-expired' }
+    | { kind: 'device-unreadable' }
+    | { kind: 'unreachable' }
+    | { kind: 'error'; message: string }
+
+  type LicenceSignInPhase = 'idle' | 'starting' | 'waiting' | 'activating' | 'done' | 'denied' | 'expired' | 'error'
+
+  interface LicenceSignInProgress {
+    phase: LicenceSignInPhase
+    userCode: string | null
+    verificationUri: string | null
+    outcome: LicenceActivationOutcome | null
+    error: string | null
+  }
+
+  interface LicenceActivateOptions {
+    replaceActivationId?: string
+  }
+
   type EmojiKeyMessage =
     | { kind: 'char'; value: string }
     | { kind: 'backspace' | 'enter' | 'escape' | 'left' | 'right' | 'up' | 'down' }
@@ -1563,6 +1625,19 @@ declare global {
       uninstall: () => Promise<RevertResult>
       fitWindowHeight: (height: number) => void
       onProgress: (callback: (step: string) => void) => void
+    }
+    licence: {
+      status: () => Promise<LicenceStatus>
+      signIn: () => Promise<LicenceSignInProgress>
+      signInState: () => Promise<LicenceSignInProgress>
+      cancelSignIn: () => Promise<LicenceSignInProgress>
+      activate: (options?: LicenceActivateOptions) => Promise<LicenceActivationOutcome>
+      openCheckout: () => Promise<void>
+      openAccount: () => Promise<void>
+      release: () => Promise<LicenceStatus>
+      refreshNow: () => Promise<LicenceStatus>
+      onSignInProgress: (callback: (progress: LicenceSignInProgress) => void) => () => void
+      onChanged: (callback: (status: LicenceStatus) => void) => () => void
     }
     launcher: {
       index: () => Promise<LauncherItem[]>

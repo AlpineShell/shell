@@ -37,7 +37,10 @@ React hooks in `src/hooks/` follow a consistent pattern:
 - Hooks with setters (useVolume, useMonitors) add optimistic local state updates
 
 ### IPC Bridge
-`electron/preload.js` exposes `window.shell` and `window.topbar` APIs via Electron's context bridge. Types are defined globally in `src/types/shell.d.ts`.
+`electron/preload.js` exposes `window.shell` and `window.topbar` APIs via Electron's context bridge. Types are defined globally in `src/types/shell.d.ts`. `window.setup` and `window.licence` exist only on pages whose mode is `setup` or `settings`, so plugin widgets and plugin windows never see them.
+
+### Licence Module
+`electron/modules/licence.js` owns the desktop side of licensing: it reads `<userData>/licence.json`, verifies the Ed25519 licence token offline against the public keys baked into `electron/licenceConfig.generated.js` (written by `scripts/generateLicenceConfig.js`; a release build reads only that file and ignores every environment variable), computes the state (`development`, `valid`, `grace`, `unlicensed`, `lapsed`) with the pure state machine in `electron/licenceState.js`, runs the device-flow sign-in against the auth service and refreshes the token in the background. The trust root is the baked key list only: never add a key cache under userData or an environment override that a release build honours. Every handler that changes the machine (registering the shell, the Run entry, test-out, startup into shell mode) must call `licence.requireValid()` in the main process before acting; the renderer is never the gate.
 
 ## Commands
 

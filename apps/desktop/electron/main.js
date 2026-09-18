@@ -74,6 +74,7 @@ const { processAutostart } = require('./modules/autostart')
 const installer = require('./modules/installer')
 const updater = require('./modules/updater')
 const windowsUpdate = require('./modules/windowsUpdate')
+const licence = require('./modules/licence')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -802,7 +803,7 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, licence)
 
   theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
