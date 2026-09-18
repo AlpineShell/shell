@@ -330,14 +330,14 @@ if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
 
   contextBridge.exposeInMainWorld('licence', {
     status: () => ipcRenderer.invoke('licence/status'),
-    signIn: () => ipcRenderer.invoke('licence/sign-in'),
+    defaultDeviceName: () => ipcRenderer.invoke('licence/default-device-name'),
+    signIn: (options) => ipcRenderer.invoke('licence/sign-in', options),
     signInState: () => ipcRenderer.invoke('licence/sign-in-state'),
     cancelSignIn: () => ipcRenderer.invoke('licence/cancel-sign-in'),
     activate: (options) => ipcRenderer.invoke('licence/activate', options),
     openCheckout: () => ipcRenderer.invoke('licence/open-checkout'),
     openAccount: () => ipcRenderer.invoke('licence/open-account'),
     release: () => ipcRenderer.invoke('licence/release'),
-    refreshNow: () => ipcRenderer.invoke('licence/refresh-now'),
     onSignInProgress: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('licence/sign-in-progress', handler)
@@ -348,12 +348,6 @@ if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
       ipcRenderer.on('licence/changed', handler)
       return () => ipcRenderer.removeListener('licence/changed', handler)
     },
-  })
-}
-
-if (currentPageMode === 'desktop') {
-  window.addEventListener('online', () => {
-    ipcRenderer.invoke('licence/online').catch(() => {})
   })
 }
 

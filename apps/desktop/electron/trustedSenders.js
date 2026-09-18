@@ -51,11 +51,10 @@ function guardHandler(handler) {
   }
 }
 
-function guardHandlers(handlers, { except = [] } = {}) {
-  const openChannels = new Set(except)
+function guardHandlers(handlers) {
   const guarded = {}
   for (const [channel, handler] of Object.entries(handlers)) {
-    guarded[channel] = openChannels.has(channel) ? handler : guardHandler(handler)
+    guarded[channel] = guardHandler(handler)
   }
   return guarded
 }

@@ -1,18 +1,18 @@
 import { Badge, Button, Card, ConfirmButton, Row } from '@alpine/ui'
 import { useLicence } from '../../hooks/useLicence'
 
-const STATE_BADGE: Record<LicenceState, { tone: 'neutral' | 'success' | 'warning' | 'danger'; label: string }> = {
+const STATE_BADGE: Record<LicenceState, { tone: 'neutral' | 'success' | 'danger'; label: string }> = {
   development: { tone: 'neutral', label: 'Development build' },
   valid: { tone: 'success', label: 'Licensed' },
-  grace: { tone: 'warning', label: 'Needs attention' },
   unlicensed: { tone: 'danger', label: 'Not licensed' },
-  lapsed: { tone: 'danger', label: 'Lapsed' },
 }
 
-function formatVerified(iso: string | null) {
+const SIGN_OUT_NOTE = 'Signing out frees this licence for another PC. Alpine Shell keeps working here without updates and asks you to sign in again the next time it starts.'
+
+function formatActivated(iso: string | null) {
   const parsed = iso ? Date.parse(iso) : NaN
-  if (!Number.isFinite(parsed)) return 'never'
-  return new Date(parsed).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  if (!Number.isFinite(parsed)) return null
+  return `activated ${new Date(parsed).toLocaleDateString(undefined, { dateStyle: 'medium' })}`
 }
 
 function licenceDescription(status: LicenceStatus) {
@@ -21,7 +21,7 @@ function licenceDescription(status: LicenceStatus) {
     status.email,
     status.licenceId ? `licence ${status.licenceId}` : null,
     status.deviceName ? `on ${status.deviceName}` : null,
-    `last verified ${formatVerified(status.lastRefreshAt)}`,
+    formatActivated(status.activatedAt),
   ].filter(Boolean)
   return parts.join(', ')
 }
@@ -50,11 +50,7 @@ export default function LicenceRow() {
           )}
         </div>
       </Row>
-      {status.activationId && (
-        <p className="mt-2 text-xs text-ink-quiet">
-          Signing out hands this PC's desktop back to Windows Explorer at the next sign-in. You can sign in again any time to get it back.
-        </p>
-      )}
+      {status.activationId && <p className="mt-2 text-xs text-ink-quiet">{SIGN_OUT_NOTE}</p>}
     </Card>
   )
 }
