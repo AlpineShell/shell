@@ -623,6 +623,7 @@ describe('the device flow sign-in', () => {
 
   it.each([
     [429, { error: 'move-limit', retryAt: '2026-10-01T00:00:00.000Z' }, { kind: 'move-limit', retryAt: '2026-10-01T00:00:00.000Z' }],
+    [429, { error: 'rate-limited' }, { kind: 'error', message: 'rate-limited' }],
     [403, { error: 'licence-mode-mismatch' }, { kind: 'mode-mismatch' }],
     [403, { error: 'replacement-not-yours' }, { kind: 'replacement-not-yours' }],
     [401, {}, { kind: 'session-expired' }],

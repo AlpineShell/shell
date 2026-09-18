@@ -417,7 +417,7 @@ function createLicenceService(overrides = {}) {
     if (response.status === 409 && body.error === 'seats-in-use') {
       return { kind: 'seats-in-use', activations: Array.isArray(body.activations) ? body.activations.filter(Boolean).map(seatFromServer) : [] }
     }
-    if (response.status === 429) return { kind: 'move-limit', retryAt: typeof body.retryAt === 'string' ? body.retryAt : null }
+    if (response.status === 429 && body.error === 'move-limit') return { kind: 'move-limit', retryAt: typeof body.retryAt === 'string' ? body.retryAt : null }
     if (response.status === 403 && body.error === 'licence-mode-mismatch') return { kind: 'mode-mismatch' }
     if (response.status === 403 && body.error === 'replacement-not-yours') return { kind: 'replacement-not-yours' }
     if (response.status === 401) return { kind: 'session-expired' }
