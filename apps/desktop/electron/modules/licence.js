@@ -17,6 +17,8 @@ const PERIODIC_EVALUATION_MS = 6 * HOUR_MS
 const REFRESH_AFTER_MS = 24 * HOUR_MS
 const REFRESH_WHEN_REMAINING_MS = 7 * DAY_MS
 const HIGH_WATER_MARK_WRITE_STEP_MS = MINUTE_MS
+const WRITE_RETRY_DELAY_MS = 30 * 1000
+const REVOKED_RECHECK_AFTER_MS = 12 * HOUR_MS
 const TRANSIENT_RETRY_DELAYS_MS = [MINUTE_MS, 5 * MINUTE_MS, 30 * MINUTE_MS, 6 * HOUR_MS]
 const DEVICE_CODE_DEFAULT_INTERVAL_S = 5
 const DEVICE_CODE_SLOW_DOWN_S = 5
@@ -144,7 +146,9 @@ function createLicenceService(overrides = {}) {
     try {
       const file = licenceFilePath()
       deps.fileSystem.mkdirSync(path.dirname(file), { recursive: true })
-      deps.fileSystem.writeFileSync(file, JSON.stringify(record, null, 2))
+      const tempFile = `${file}.tmp`
+      deps.fileSystem.writeFileSync(tempFile, JSON.stringify(record, null, 2))
+      deps.fileSystem.renameSync(tempFile, file)
       return true
     } catch (error) {
       deps.log(`could not write ${LICENCE_FILE_NAME}: ${error.message}`)
@@ -189,11 +193,25 @@ function createLicenceService(overrides = {}) {
     }
   }
 
-  function raiseHighWaterMark(record, now) {
+  function secretStatusOf(record) {
+    if (typeof record.activationSecretEncrypted !== 'string' || !record.activationSecretEncrypted) return 'absent'
+    try {
+      const secret = deps.decryptSecret(record.activationSecretEncrypted)
+      return typeof secret === 'string' && secret ? 'ok' : 'unreadable'
+    } catch {
+      return 'unreadable'
+    }
+  }
+
+  function persistEvaluationMarks(record, now, secretStatus) {
     if (!record) return
+    const patch = {}
     const current = toMs(record.highWaterMark) ?? 0
-    if (now - current < HIGH_WATER_MARK_WRITE_STEP_MS) return
-    writeRecord({ ...record, highWaterMark: isoOrNull(now) })
+    if (now - current >= HIGH_WATER_MARK_WRITE_STEP_MS) patch.highWaterMark = isoOrNull(now)
+    if (secretStatus === 'unreadable' && !record.secretUnreadableSince) patch.secretUnreadableSince = isoOrNull(now)
+    if (secretStatus !== 'unreadable' && record.secretUnreadableSince) patch.secretUnreadableSince = null
+    if (Object.keys(patch).length === 0) return
+    writeRecord({ ...record, ...patch })
   }
 
   function buildStatus(record, claims, decision, currentDeviceId) {
@@ -218,6 +236,8 @@ function createLicenceService(overrides = {}) {
     const now = deps.now()
     const currentDeviceId = deviceId()
     const claims = record ? verifiedClaims(record.token) : null
+    const secretStatus = record && claims ? secretStatusOf(record) : 'ok'
+    const secretUnreadableSince = secretStatus === 'unreadable' ? (record.secretUnreadableSince ?? isoOrNull(now)) : null
     const decision = evaluateLicenceState({
       claims,
       deviceId: currentDeviceId,
@@ -225,8 +245,10 @@ function createLicenceService(overrides = {}) {
       now,
       config,
       install: { setupComplete: isSetupComplete(), shellRegisteredToAlpine: () => deps.isShellRegisteredToAlpine() },
+      secretStatus,
+      secretUnreadableSince,
     })
-    raiseHighWaterMark(record, now)
+    persistEvaluationMarks(record, now, secretStatus)
     return { record, claims, decision, status: buildStatus(record, claims, decision, currentDeviceId) }
   }
 
@@ -308,11 +330,21 @@ function createLicenceService(overrides = {}) {
     return expiry === null || expiry - now < REFRESH_WHEN_REMAINING_MS
   }
 
+  function scheduleWriteRetry() {
+    clearRetryTimer()
+    retryTimer = unrefTimer(setTimeout(() => {
+      retryTimer = null
+      refreshIfDue({ force: true }).catch((error) => deps.log(`write retry failed: ${error.message}`))
+    }, WRITE_RETRY_DELAY_MS))
+    deps.log('could not persist the refreshed licence; retrying before the replay window closes')
+    return 'write-failed'
+  }
+
   function applyRefreshedToken(record, body, now) {
     const claims = verifiedClaims(body.token)
     if (!claims) return scheduleTransientRetry('unverifiable-token')
     const serverTime = Math.max(toMs(body.serverTime) ?? 0, tokenIssuedAtMs(claims) ?? 0, toMs(record.lastServerTime) ?? 0)
-    writeRecord({
+    const written = writeRecord({
       ...record,
       token: body.token,
       activationSecretEncrypted: encryptedSecretOrNull(body.activationSecret),
@@ -322,7 +354,9 @@ function createLicenceService(overrides = {}) {
       revokedAt: null,
       revokedReason: null,
       movedTo: null,
+      secretUnreadableSince: null,
     })
+    if (!written) return scheduleWriteRetry()
     transientFailures = 0
     clearRetryTimer()
     reportStatus(evaluateFromDisk().status, true)
@@ -332,7 +366,7 @@ function createLicenceService(overrides = {}) {
   function applyRevocation(record, error, body, now) {
     writeRecord({
       ...record,
-      revokedAt: isoOrNull(now),
+      revokedAt: record.revokedAt ?? isoOrNull(now),
       revokedReason: REVOCATION_REASON_BY_ERROR[error],
       movedTo: typeof body.movedTo === 'string' ? body.movedTo : null,
       highWaterMark: isoOrNull(now),
@@ -358,9 +392,15 @@ function createLicenceService(overrides = {}) {
   async function refreshIfDue({ force = false } = {}) {
     const record = readRecord()
     if (!record || typeof record.token !== 'string' || typeof record.activationId !== 'string') return 'nothing-to-refresh'
-    if (record.revokedAt) return 'revoked'
+    let effectiveForce = force
+    if (record.revokedAt) {
+      const revokedMs = toMs(record.revokedAt)
+      const dueForRecheck = force || (revokedMs !== null && deps.now() - revokedMs >= REVOKED_RECHECK_AFTER_MS)
+      if (!dueForRecheck) return 'revoked'
+      effectiveForce = true
+    }
     const claims = verifiedClaims(record.token)
-    if (!force && !refreshDue(record, claims, deps.now())) return 'not-due'
+    if (!effectiveForce && !refreshDue(record, claims, deps.now())) return 'not-due'
     const secret = activationSecret(record)
     if (!secret) {
       deps.log('activation secret unavailable; refresh skipped')
@@ -701,6 +741,8 @@ module.exports = {
   BOOT_EVALUATION_DELAY_MS,
   PERIODIC_EVALUATION_MS,
   TRANSIENT_RETRY_DELAYS_MS,
+  WRITE_RETRY_DELAY_MS,
+  REVOKED_RECHECK_AFTER_MS,
   NO_LICENCE_RECHECK_MS,
   REVOCATION_REASON_BY_ERROR,
 }

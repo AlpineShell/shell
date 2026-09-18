@@ -2,7 +2,9 @@ const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 const EXPIRED_GRACE_MS = 14 * DAY_MS
 const REVOKED_GRACE_MS = 72 * HOUR_MS
+const SECRET_UNREADABLE_GRACE_MS = 72 * HOUR_MS
 const CLOCK_ROLLBACK_ALLOWANCE_MS = 24 * HOUR_MS
+const HIGH_WATER_MARK_MAX_AHEAD_MS = 60 * DAY_MS
 const REVOKED_AT_FUTURE_TOLERANCE_MS = HOUR_MS
 
 const REVOCATION_REASONS = ['refunded', 'disputed', 'moved', 'released', 'conflict', 'account-deleted', 'invalid']
@@ -18,7 +20,9 @@ function toMs(value) {
 
 function computeEffectiveNow({ now, lastServerTime, highWaterMark }) {
   const serverFloor = toMs(lastServerTime) ?? 0
-  const rollbackFloor = (toMs(highWaterMark) ?? 0) - CLOCK_ROLLBACK_ALLOWANCE_MS
+  const mark = toMs(highWaterMark) ?? 0
+  const markTrusted = serverFloor === 0 || mark - serverFloor <= HIGH_WATER_MARK_MAX_AHEAD_MS
+  const rollbackFloor = markTrusted ? mark - CLOCK_ROLLBACK_ALLOWANCE_MS : 0
   return Math.max(now, serverFloor, rollbackFloor)
 }
 
@@ -39,9 +43,14 @@ function decideFromRevocation(file, effectiveNow) {
   return decision('lapsed')
 }
 
-function decideFromToken(claims, deviceId, effectiveNow) {
+function decideFromToken(claims, deviceId, effectiveNow, secretStatus, secretUnreadableSince) {
   const expiresAt = claims.exp * 1000
   const graceUntil = expiresAt + EXPIRED_GRACE_MS
+  if (secretStatus === 'unreadable') {
+    const anchor = toMs(secretUnreadableSince) ?? effectiveNow
+    const until = anchor + SECRET_UNREADABLE_GRACE_MS
+    return effectiveNow < until ? decision('grace', 'secret-unreadable', until) : decision('lapsed')
+  }
   if (deviceId === null) {
     return effectiveNow < graceUntil ? decision('grace', 'device-unreadable', graceUntil) : decision('lapsed')
   }
@@ -53,14 +62,14 @@ function decideFromToken(claims, deviceId, effectiveNow) {
 
 function decideWithoutToken(install, config, effectiveNow) {
   const upgradeGraceUntil = toMs(config.upgradeGraceUntil)
-  if (install.setupComplete && upgradeGraceUntil !== null && effectiveNow < upgradeGraceUntil) {
+  if (install.setupComplete && upgradeGraceUntil !== null && effectiveNow < upgradeGraceUntil && install.shellRegisteredToAlpine()) {
     return decision('grace', 'upgrade', upgradeGraceUntil)
   }
   if (!install.setupComplete && !install.shellRegisteredToAlpine()) return decision('unlicensed')
   return decision('lapsed')
 }
 
-function evaluateLicenceState({ claims, deviceId, file, now, config, install }) {
+function evaluateLicenceState({ claims, deviceId, file, now, config, install, secretStatus = 'ok', secretUnreadableSince = null }) {
   const effectiveNow = computeEffectiveNow({
     now,
     lastServerTime: file ? file.lastServerTime : null,
@@ -70,7 +79,7 @@ function evaluateLicenceState({ claims, deviceId, file, now, config, install }) 
   const outcome = !enforced
     ? decision('development')
     : (file && decideFromRevocation(file, effectiveNow))
-      || (claims && decideFromToken(claims, deviceId, effectiveNow))
+      || (claims && decideFromToken(claims, deviceId, effectiveNow, secretStatus, secretUnreadableSince))
       || decideWithoutToken(install, config, effectiveNow)
   return {
     ...outcome,
@@ -84,7 +93,9 @@ module.exports = {
   DAY_MS,
   EXPIRED_GRACE_MS,
   REVOKED_GRACE_MS,
+  SECRET_UNREADABLE_GRACE_MS,
   CLOCK_ROLLBACK_ALLOWANCE_MS,
+  HIGH_WATER_MARK_MAX_AHEAD_MS,
   REVOKED_AT_FUTURE_TOLERANCE_MS,
   REVOCATION_REASONS,
   toMs,

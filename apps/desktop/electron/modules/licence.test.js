@@ -7,6 +7,8 @@ const {
   BOOT_EVALUATION_DELAY_MS,
   PERIODIC_EVALUATION_MS,
   TRANSIENT_RETRY_DELAYS_MS,
+  WRITE_RETRY_DELAY_MS,
+  REVOKED_RECHECK_AFTER_MS,
   NO_LICENCE_RECHECK_MS,
 } = await import('./licence.js')
 
@@ -76,6 +78,11 @@ function memoryFileSystem(initialFiles = {}) {
       files.set(file, String(data))
     },
     mkdirSync: () => undefined,
+    renameSync: (from, to) => {
+      if (!files.has(from)) throw new Error(`ENOENT ${from}`)
+      files.set(to, files.get(from))
+      files.delete(from)
+    },
     unlinkSync: (file) => {
       files.delete(file)
     },
@@ -120,8 +127,7 @@ function routedFetch(routes) {
   return fetch
 }
 
-function makeService({ files = {}, fetch, config = {}, readDeviceId = () => DEVICE_ID } = {}) {
-  const fileSystem = memoryFileSystem(files)
+function makeService({ files = {}, fetch, config = {}, readDeviceId = () => DEVICE_ID, fileSystem = memoryFileSystem(files) } = {}) {
   const broadcasts = []
   const openExternal = vi.fn(async () => undefined)
   const service = createLicenceService({
@@ -405,7 +411,7 @@ describe('the refresh scheduler', () => {
     expect(decrypt(readRecord().activationSecretEncrypted)).toBe('secret-1')
   })
 
-  it('skips the refresh when the secret cannot be decrypted instead of sending plaintext', async () => {
+  it('never sends a plaintext secret and surfaces an undecryptable secret as grace rather than a silent valid', async () => {
     const fetch = routedFetch([{ path: '/licences/refresh', reply: jsonResponse(200, {}) }])
     const record = licenceRecord({ activationSecretEncrypted: Buffer.from('plain-secret').toString('base64') })
     const { service, broadcast } = makeService({ files: { [LICENCE_PATH]: JSON.stringify(record) }, fetch })
@@ -413,7 +419,15 @@ describe('the refresh scheduler', () => {
     service.start(broadcast)
     await advance(BOOT_EVALUATION_DELAY_MS)
     expect(fetch).not.toHaveBeenCalled()
-    expect(service.status().state).toBe('valid')
+    expect(service.status()).toMatchObject({ state: 'grace', reason: 'secret-unreadable' })
+  })
+
+  it('lapses a machine whose secret stays undecryptable past the grace window', async () => {
+    const record = licenceRecord({ activationSecretEncrypted: Buffer.from('plain-secret').toString('base64') })
+    const { service } = makeService({ files: { [LICENCE_PATH]: JSON.stringify(record), [SETUP_COMPLETE_PATH]: 'done' } })
+    expect(service.status()).toMatchObject({ state: 'grace', reason: 'secret-unreadable' })
+    vi.setSystemTime(NOW + 73 * HOUR_MS)
+    expect(service.status().state).toBe('lapsed')
   })
 
   it('runs again every six hours and on an online report', async () => {
@@ -432,6 +446,82 @@ describe('the refresh scheduler', () => {
     await service.handlers['licence/online']()
     await settle()
     expect(fetch).toHaveBeenCalledTimes(3)
+  })
+
+  it('retries within the replay window when the refreshed licence cannot be written to disk', async () => {
+    const newToken = mintToken({ jti: 'fresh' })
+    const base = memoryFileSystem({ [LICENCE_PATH]: JSON.stringify(licenceRecord()) })
+    let failedOnce = false
+    const fileSystem = {
+      ...base,
+      writeFileSync: (file, data) => {
+        if (!failedOnce && typeof data === 'string' && data.includes(newToken)) {
+          failedOnce = true
+          throw new Error('ENOSPC')
+        }
+        base.writeFileSync(file, data)
+      },
+    }
+    const fetch = routedFetch([
+      { path: '/licences/refresh', reply: () => jsonResponse(200, { token: newToken, activationSecret: 'secret-2', serverTime: new Date(NOW).toISOString() }) },
+    ])
+    const { service, readRecord, broadcast } = makeService({ fileSystem, fetch })
+    activeService = service
+    service.start(broadcast)
+
+    await advance(BOOT_EVALUATION_DELAY_MS)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(readRecord().token).not.toBe(newToken)
+    expect(decrypt(readRecord().activationSecretEncrypted)).toBe('secret-1')
+
+    await advance(WRITE_RETRY_DELAY_MS)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch.calls.at(-1).headers.Authorization).toBe('Activation act_1.secret-1')
+    expect(readRecord().token).toBe(newToken)
+    expect(decrypt(readRecord().activationSecretEncrypted)).toBe('secret-2')
+  })
+
+  it('re-checks a revoked licence after the recheck interval and recovers when the server restores it', async () => {
+    let restored = false
+    const fetch = routedFetch([
+      {
+        path: '/licences/refresh',
+        reply: () =>
+          restored
+            ? jsonResponse(200, { token: mintToken({ jti: 'restored' }), activationSecret: 'secret-2', serverTime: new Date(Date.now()).toISOString() })
+            : jsonResponse(403, { error: 'licence-disputed' }),
+      },
+    ])
+    const { service, readRecord, broadcast } = makeService({ files: { [LICENCE_PATH]: JSON.stringify(licenceRecord()) }, fetch })
+    activeService = service
+    service.start(broadcast)
+
+    await advance(BOOT_EVALUATION_DELAY_MS)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(readRecord().revokedReason).toBe('disputed')
+
+    await advance(PERIODIC_EVALUATION_MS)
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    restored = true
+    await advance(2 * PERIODIC_EVALUATION_MS)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(service.status().state).toBe('valid')
+    expect(readRecord().revokedAt).toBeNull()
+  })
+
+  it('keeps the first revocation time so repeated refusals cannot push the grace forward', async () => {
+    const fetch = routedFetch([{ path: '/licences/refresh', reply: () => jsonResponse(403, { error: 'licence-revoked' }) }])
+    const { service, readRecord, broadcast } = makeService({ files: { [LICENCE_PATH]: JSON.stringify(licenceRecord()) }, fetch })
+    activeService = service
+    service.start(broadcast)
+    await advance(BOOT_EVALUATION_DELAY_MS)
+    const firstRevokedAt = readRecord().revokedAt
+    expect(firstRevokedAt).toBe(new Date(NOW + BOOT_EVALUATION_DELAY_MS).toISOString())
+
+    await advance(REVOKED_RECHECK_AFTER_MS + PERIODIC_EVALUATION_MS)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(readRecord().revokedAt).toBe(firstRevokedAt)
   })
 
   it('refresh-now forces a refresh and returns the new status', async () => {

@@ -58,6 +58,14 @@ describe('effective time', () => {
   it('ignores unparseable timestamps', () => {
     expect(computeEffectiveNow({ now: NOW, lastServerTime: 'never', highWaterMark: {} })).toBe(NOW)
   })
+
+  it('ignores a high-water mark poisoned far past the last server time so a corrected clock recovers', () => {
+    const serverTime = NOW - 5 * DAY_MS
+    const poisoned = NOW + 90 * DAY_MS
+    expect(computeEffectiveNow({ now: NOW, lastServerTime: serverTime, highWaterMark: poisoned })).toBe(NOW)
+    const stillTrusted = NOW + 10 * DAY_MS
+    expect(computeEffectiveNow({ now: NOW - 2 * DAY_MS, lastServerTime: serverTime, highWaterMark: stillTrusted })).toBe(stillTrusted - CLOCK_ROLLBACK_ALLOWANCE_MS)
+  })
 })
 
 describe('development builds', () => {
@@ -121,6 +129,21 @@ describe('a verified token when the device id cannot be read', () => {
 
   it('is lapsed once that bound passes', () => {
     expect(evaluate({ claims: claimsExpiringAt(NOW - EXPIRED_GRACE_MS - 1), deviceId: null, file: file() }).state).toBe('lapsed')
+  })
+})
+
+describe('a verified token whose activation secret cannot be read', () => {
+  it('is short grace so a copied file cannot run indefinitely without the secret', () => {
+    const result = evaluate({ claims: claimsExpiringAt(NOW + 20 * DAY_MS), file: file(), secretStatus: 'unreadable', secretUnreadableSince: NOW - HOUR_MS })
+    expect(result).toMatchObject({ state: 'grace', reason: 'secret-unreadable', until: NOW - HOUR_MS + REVOKED_GRACE_MS })
+  })
+
+  it('lapses once the secret grace passes even with a token signed valid', () => {
+    expect(evaluate({ claims: claimsExpiringAt(NOW + 20 * DAY_MS), file: file(), secretStatus: 'unreadable', secretUnreadableSince: NOW - 73 * HOUR_MS }).state).toBe('lapsed')
+  })
+
+  it('is unaffected when the secret reads back normally', () => {
+    expect(evaluate({ claims: claimsExpiringAt(NOW + 20 * DAY_MS), file: file(), secretStatus: 'ok' }).state).toBe('valid')
   })
 })
 
@@ -210,6 +233,11 @@ describe('the upgrade window', () => {
 
   it('does nothing for a fresh machine', () => {
     expect(evaluate({ file: null, install: fresh(), config }).state).toBe('unlicensed')
+  })
+
+  it('does not grant grace to a machine that only has the marker file but is not the registered shell', () => {
+    const markerOnly = { setupComplete: true, shellRegisteredToAlpine: () => false }
+    expect(evaluate({ file: null, install: markerOnly, config }).state).toBe('lapsed')
   })
 
   it('closes on the baked date', () => {
