@@ -1,8 +1,8 @@
-const { app, shell: electronShell } = require('electron')
+const electron = () => require('electron')
+const electronApp = () => electron().app
 const path = require('path')
 const { execSync, execFileSync, execFile, spawn } = require('child_process')
 const fs = require('fs')
-const originalFs = require('original-fs')
 const crypto = require('crypto')
 const os = require('os')
 const revertScript = require('./revertScript')
@@ -33,7 +33,7 @@ function getCanonicalInstallDir() {
 }
 
 function getInstallDir() {
-  if (app.isPackaged && !isPortableRun()) return path.dirname(process.execPath)
+  if (electronApp().isPackaged && !isPortableRun()) return path.dirname(process.execPath)
   return getCanonicalInstallDir()
 }
 
@@ -54,15 +54,15 @@ function getUpdaterCacheDirs() {
 }
 
 function getUserDataDirs() {
-  const dirs = [app.getPath('userData')]
+  const dirs = [electronApp().getPath('userData')]
   const legacyDir = path.join(process.env.APPDATA, PRODUCT_NAME)
   if (!dirs.includes(legacyDir)) dirs.push(legacyDir)
   return dirs
 }
 
 function getInstalledExePath() {
-  if (app.isPackaged && !isPortableRun()) return process.execPath
-  const exeName = app.isPackaged ? path.basename(process.execPath) : `${PRODUCT_NAME}.exe`
+  if (electronApp().isPackaged && !isPortableRun()) return process.execPath
+  const exeName = electronApp().isPackaged ? path.basename(process.execPath) : `${PRODUCT_NAME}.exe`
   return path.join(getInstallDir(), exeName)
 }
 
@@ -104,8 +104,42 @@ function isShellRevertedToExplorer() {
   return currentShell !== null && currentShell.toLowerCase().includes('explorer.exe')
 }
 
+function isShellRegisteredToAlpine() {
+  const currentShell = regQuery(WINLOGON_KEY, 'Shell')
+  return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
+}
+
+function explorerExePath() {
+  return path.join(process.env.SystemRoot || path.join('C:', 'Windows'), 'explorer.exe')
+}
+
+function startExplorer() {
+  spawn(explorerExePath(), [], { detached: true, stdio: 'ignore' }).unref()
+}
+
+function explorerNeedsStarting(handedBack) {
+  const hosted = require('./explorerShell').shellHostedByExplorer()
+  if (hosted === false) return true
+  return hosted === null && handedBack
+}
+
+function handBackForLicence() {
+  try {
+    const handedBack = isShellRegisteredToAlpine()
+    if (handedBack) {
+      regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
+      if (!isShellRevertedToExplorer()) return { success: false, error: SHELL_REVERT_FAILED }
+    }
+    try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
+    if (explorerNeedsStarting(handedBack)) startExplorer()
+    return { success: true, error: null }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+}
+
 function userDataFile(name) {
-  return path.join(app.getPath('userData'), name)
+  return path.join(electronApp().getPath('userData'), name)
 }
 
 function writeMarker(markerPath) {
@@ -278,7 +312,7 @@ async function installFiles() {
   const sourceDir = path.dirname(process.execPath)
   const installDir = getInstallDir()
   fs.mkdirSync(installDir, { recursive: true })
-  await originalFs.promises.cp(sourceDir, installDir, { recursive: true, force: true })
+  await require('original-fs').promises.cp(sourceDir, installDir, { recursive: true, force: true })
 }
 
 function createShortcuts() {
@@ -286,7 +320,7 @@ function createShortcuts() {
   const startMenuDir = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs')
   const shortcutPath = path.join(startMenuDir, `${PRODUCT_NAME}.lnk`)
 
-  electronShell.writeShortcutLink(shortcutPath, {
+  electron().shell.writeShortcutLink(shortcutPath, {
     target: exePath,
     description: PRODUCT_NAME,
   })
@@ -298,7 +332,7 @@ function registerUninstaller() {
   const key = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\AlpineShell'
 
   regAdd(key, 'DisplayName', PRODUCT_NAME)
-  regAdd(key, 'DisplayVersion', app.getVersion())
+  regAdd(key, 'DisplayVersion', electronApp().getVersion())
   regAdd(key, 'Publisher', 'Alpine')
   regAdd(key, 'DisplayIcon', exePath)
   regAdd(key, 'UninstallString', `"${exePath}" --uninstall`)
@@ -333,12 +367,12 @@ function restoreDefaultCursors() {
   try { execSync(`reg add "${cursorKey}" /ve /d "" /f`, { windowsHide: true }) } catch {}
   try { execSync('rundll32.exe user32.dll,UpdatePerUserSystemParameters 1, True', { windowsHide: true }) } catch {}
 
-  const cursorDir = path.join(app.getPath('userData'), 'cursors')
+  const cursorDir = path.join(electronApp().getPath('userData'), 'cursors')
   if (fs.existsSync(cursorDir)) fs.rmSync(cursorDir, { recursive: true, force: true })
 }
 
 function clearSetupFlag() {
-  const flagPath = path.join(app.getPath('userData'), '.setup-complete')
+  const flagPath = path.join(electronApp().getPath('userData'), '.setup-complete')
   if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath)
 }
 
@@ -392,17 +426,17 @@ function relaunchFromInstalled() {
   delete env.PORTABLE_EXECUTABLE_APP_FILENAME
 
   spawn(getInstalledExePath(), [], { detached: true, stdio: 'ignore', env }).unref()
-  app.exit()
+  electronApp().exit()
 }
 
 const UPDATER_CSC_PATH = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'
 
 function getUpdaterDir() {
-  return path.join(app.getPath('userData'), 'updater')
+  return path.join(electronApp().getPath('userData'), 'updater')
 }
 
 function getUpdaterSourcePath() {
-  if (app.isPackaged) return path.join(process.resourcesPath, 'scripts', 'updaterScreen.cs')
+  if (electronApp().isPackaged) return path.join(process.resourcesPath, 'scripts', 'updaterScreen.cs')
   return path.join(__dirname, '..', 'scripts', 'updaterScreen.cs')
 }
 
@@ -492,7 +526,7 @@ function ensureUpdaterExeAsync() {
 }
 
 function startBrandedUpdate(installerPath, version) {
-  if (!app.isPackaged) return false
+  if (!electronApp().isPackaged) return false
   if (!installerPath || !fs.existsSync(installerPath)) return false
   const updaterExe = ensureUpdaterExe()
   if (!updaterExe) return false
@@ -536,6 +570,7 @@ module.exports = {
   revertShell,
   revertShellTemporarily,
   revertShellPermanently,
+  handBackForLicence,
   isShellOptedOut,
   setShellOptOut,
   hasShellHandoff,
