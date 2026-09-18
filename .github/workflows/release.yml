@@ -92,6 +92,26 @@ jobs:
           grep -F "url: $FEED" release/win-unpacked/resources/app-update.yml || { echo "::error::app-update.yml does not point at $FEED"; cat release/win-unpacked/resources/app-update.yml; exit 1; }
           echo "update feed: $FEED"
 
+      - name: Verify Electron fuses
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          FUSE_REPORT="$(bunx electron-fuses read --app "release/win-unpacked/Alpine Shell.exe" | sed -e $'s/\x1b\\[[0-9;]*m//g')"
+          echo "$FUSE_REPORT"
+          assertFuse() {
+            if ! grep -qE "^[[:space:]]*$1 is $2$" <<< "$FUSE_REPORT"; then
+              echo "::error::Expected fuse $1 to be $2 in the packaged executable."
+              echo "::error::The packaged build is not hardened; check build.electronFuses in apps/desktop/package.json."
+              exit 1
+            fi
+          }
+          assertFuse RunAsNode Disabled
+          assertFuse EnableCookieEncryption Enabled
+          assertFuse EnableNodeOptionsEnvironmentVariable Disabled
+          assertFuse EnableNodeCliInspectArguments Disabled
+          assertFuse EnableEmbeddedAsarIntegrityValidation Enabled
+          assertFuse OnlyLoadAppFromAsar Enabled
+
       - name: Publish installer + latest.yml to Railway
         working-directory: apps/desktop
         env:
