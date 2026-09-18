@@ -171,9 +171,9 @@ Every contribution carries an optional `since: apiVersion`. The host mounts a co
 
 The permission enum, id pattern, `satisfiesRange`, and `PLUGIN_API_VERSION` are a **security allowlist**. Hand-duplicating them in a TS SDK and a CJS validator (as the raw facet designs did) is the single worst convention break — silent drift means a token in the union but not the Set is *rejected at runtime*, and a token dropped from the union but left in the Set is *accepted with no enforcement*. **Resolution:**
 
-> `packages/plugin-sdk` is a **dual-built** workspace (tsup → ESM + **CJS** + `.d.ts`), diverging from the raw-TS `packages/license` scaffold. The CommonJS main process `require('@alpine/plugin-sdk')` and gets the **exact same** `PLUGIN_PERMISSIONS`, `PLUGIN_ID_PATTERN`, `satisfiesRange`, `SUPPORTED_API_VERSIONS` that the Vite renderer and third-party authors import. `apps/desktop/electron/pluginManifest.js` is a thin *validator* over those imported constants — it never re-declares them. A CI parity test asserts the JSON-Schema permission list equals the exported union.
+> `packages/plugin-sdk` is a **dual-built** workspace (tsup → ESM + **CJS** + `.d.ts`), so the main process and the renderer share one build. The CommonJS main process `require('@alpine/plugin-sdk')` and gets the **exact same** `PLUGIN_PERMISSIONS`, `PLUGIN_ID_PATTERN`, `satisfiesRange`, `SUPPORTED_API_VERSIONS` that the Vite renderer and third-party authors import. `apps/desktop/electron/pluginManifest.js` is a thin *validator* over those imported constants — it never re-declares them. A CI parity test asserts the JSON-Schema permission list equals the exported union.
 
-`window.alpine` / `window.alpinePlugin` / `window.shell.plugins` augmentations live in `src/types/shell.d.ts` (per CLAUDE.md) and *reference* SDK types. The shared data contract lives in the SDK (justified exception, mirroring how `apps/web` consumes `@alpine/license`).
+`window.alpine` / `window.alpinePlugin` / `window.shell.plugins` augmentations live in `src/types/shell.d.ts` (per CLAUDE.md) and *reference* SDK types. The shared data contract lives in the SDK, which is the one place both processes and third-party authors import it from.
 
 ### 3.7 Complete example — Weather (renderer-only, no backend)
 
