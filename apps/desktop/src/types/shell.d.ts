@@ -361,6 +361,17 @@ declare global {
     leftBehind: string[]
   }
 
+  interface SetupGateResult {
+    error: string | null
+  }
+
+  interface SetupShellResult {
+    success: boolean
+    error: string | null
+  }
+
+  type SetupPage = 'signIn' | 'waiting' | 'noLicence' | 'seatsInUse' | 'welcome' | 'options' | 'installing' | 'complete' | 'error'
+
   interface SetupStatus {
     isShell: boolean
     hasStartup: boolean
@@ -1615,13 +1626,13 @@ declare global {
     setup: {
       status: () => Promise<SetupStatus>
       install: (options: SetupOptions) => Promise<SetupResult>
-      skip: () => Promise<void>
-      testOut: () => Promise<void>
+      skip: () => Promise<SetupGateResult>
+      testOut: () => Promise<SetupGateResult>
       relaunch: () => Promise<void>
       restartWindows: () => Promise<void>
       revertTemporary: () => Promise<RevertResult>
       revertPermanent: () => Promise<RevertResult>
-      setShell: () => Promise<{ success: boolean }>
+      setShell: () => Promise<SetupShellResult>
       uninstall: () => Promise<RevertResult>
       fitWindowHeight: (height: number) => void
       onProgress: (callback: (step: string) => void) => void

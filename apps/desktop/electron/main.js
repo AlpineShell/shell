@@ -75,6 +75,9 @@ const installer = require('./modules/installer')
 const updater = require('./modules/updater')
 const windowsUpdate = require('./modules/windowsUpdate')
 const licence = require('./modules/licence')
+const trustedSenders = require('./trustedSenders')
+const { createLicenceNotice } = require('./licenceNotice')
+const { createDiagnosticLog } = require('./diagnosticLog')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -524,9 +527,30 @@ function createScreenshotWindow() {
 
 const SETUP_WINDOW_WIDTH = 480
 const SETUP_WINDOW_INITIAL_HEIGHT = 208
+const LICENCE_DIAGNOSTIC_LOG_FILE = 'licence-diagnostics.json'
+const LICENCE_DIAGNOSTIC_LOG_ENTRIES = 50
+const STARTUP_LICENCE_NOTICE_DELAY_MS = 2500
 
+const licenceDiagnostics = createDiagnosticLog({ fileName: LICENCE_DIAGNOSTIC_LOG_FILE, maxEntries: LICENCE_DIAGNOSTIC_LOG_ENTRIES })
+const licenceNotice = createLicenceNotice({
+  show: (request) => shellNotice.show(request),
+  openLicenceWindow: () => createSetupWindow('signIn'),
+})
+
+let shellModeRunning = false
 let setupWin = null
-function createSetupWindow() {
+
+function setupWindowUrl(page) {
+  const base = getURL('setup')
+  return page ? `${base}&page=${encodeURIComponent(page)}` : base
+}
+
+function createSetupWindow(page) {
+  if (setupWin && !setupWin.isDestroyed()) {
+    if (setupWin.isMinimized()) setupWin.restore()
+    setupWin.focus()
+    return setupWin
+  }
   setupWin = new BrowserWindow({
     width: SETUP_WINDOW_WIDTH,
     height: SETUP_WINDOW_INITIAL_HEIGHT,
@@ -543,13 +567,21 @@ function createSetupWindow() {
     },
   })
 
-  loadAppURL(setupWin, getURL('setup'))
+  loadAppURL(setupWin, setupWindowUrl(page))
 
   setupWin.on('closed', () => {
-    app.quit()
+    setupWin = null
+    if (!shellModeRunning) app.quit()
   })
 
   return setupWin
+}
+
+function closeSetupWindow() {
+  if (!setupWin || setupWin.isDestroyed()) return
+  setupWin.removeAllListeners('closed')
+  setupWin.close()
+  setupWin = null
 }
 
 let settingsWin = null
@@ -803,6 +835,10 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
+  trustedSenders.setTrustedWindowsAccessor(() => [setupWin, settingsWin])
+  licence.setLicenceWindowOpener(() => createSetupWindow('signIn'))
+  licence.onStatusChanged((status) => licenceNotice.observe(status))
+
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, licence)
 
   theme.followTopbarColor(topbarColor)
@@ -818,14 +854,17 @@ app.whenReady().then(async () => {
   if (launcher.setShellLinkOpener) launcher.setShellLinkOpener((link) => handleDeepLink(link))
   if (altTab && altTab.setOverlayDisplayProvider) altTab.setOverlayDisplayProvider(() => launcher.getActiveDisplayId())
 
-  ipcMain.handle('setup/test-out', () => {
-    if (setupWin && !setupWin.isDestroyed()) {
-      setupWin.removeAllListeners('closed')
-      setupWin.close()
-      setupWin = null
+  ipcMain.handle('setup/test-out', trustedSenders.guardHandler(() => {
+    try {
+      licence.requireValid()
+    } catch (e) {
+      if (e && e.code === 'licence-required') return { error: 'licence-required' }
+      throw e
     }
+    closeSetupWindow()
     startShellMode()
-  })
+    return { error: null }
+  }))
 
   ipcMain.on('setup/fit-window-height', (_event, height) => {
     if (!setupWin || setupWin.isDestroyed() || !Number.isFinite(height)) return
@@ -838,11 +877,13 @@ app.whenReady().then(async () => {
   }
 
   if (!isDev && installer.isPortableRun()) {
+    restoreExplorerIfShellIsLapsed()
     createSetupWindow()
     return
   }
 
   if (!isDev && setup.isFirstRun()) {
+    restoreExplorerIfShellIsLapsed()
     createSetupWindow()
     return
   }
@@ -921,7 +962,49 @@ function signalShellReadyForUpdate() {
   writeMarkerWhenSettled()
 }
 
+function restoreExplorerIfShellIsLapsed() {
+  if (licence.status().state !== 'lapsed') return
+  const handBack = installer.handBackForLicence()
+  if (!handBack.success) console.error('[licence] could not restore Explorer before the setup window:', handBack.error)
+}
+
+function handBackForLapsedLicence(decision) {
+  const handBack = installer.handBackForLicence()
+  if (handBack.success) {
+    console.log('[licence] licence lapsed; Explorer is the shell again and the licence window is open')
+    createSetupWindow('signIn')
+    return { proceed: false, notice: null }
+  }
+  console.error('[licence] licence lapsed but the hand-back failed; starting the shell so the desktop is not lost:', handBack.error)
+  licenceDiagnostics.record('hand-back-failed', { error: handBack.error, reason: decision.reason, graceUntil: decision.graceUntil })
+  setTimeout(() => createSetupWindow('signIn'), STARTUP_LICENCE_NOTICE_DELAY_MS)
+  return { proceed: true, notice: { ...decision, state: 'grace', reason: decision.reason || 'invalid' } }
+}
+
+function decideStartupLicence() {
+  const decision = licence.evaluateAtStartup()
+  if (decision.state === 'development' || decision.state === 'valid') return { proceed: true, notice: null }
+  if (decision.state === 'grace') return { proceed: true, notice: decision }
+  if (decision.state === 'unlicensed') {
+    createSetupWindow('signIn')
+    return { proceed: false, notice: null }
+  }
+  return handBackForLapsedLicence(decision)
+}
+
 function startShellMode() {
+  if (shellModeRunning) return
+  const startupLicence = decideStartupLicence()
+  if (!startupLicence.proceed) {
+    if (isUpdateRestart()) {
+      installer.clearUpdateHandoff()
+      signalShellReadyForUpdate()
+    }
+    return
+  }
+  shellModeRunning = true
+  if (startupLicence.notice) setTimeout(() => licenceNotice.observe(startupLicence.notice), STARTUP_LICENCE_NOTICE_DELAY_MS)
+
   if (isUpdateRestart()) installer.clearUpdateHandoff()
 
   const takeover = setup.takeOverFromExplorer()

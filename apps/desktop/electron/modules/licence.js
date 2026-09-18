@@ -5,6 +5,7 @@ const { verifyLicenceToken, tokenExpiryMs, tokenIssuedAtMs } = require('../licen
 const { evaluateLicenceState, toMs } = require('../licenceState')
 const deviceIdentity = require('../deviceIdentity')
 const { regQuery } = require('../registryRead')
+const { guardHandlers } = require('../trustedSenders')
 
 const LICENCE_FILE_NAME = 'licence.json'
 const SETUP_COMPLETE_FILE_NAME = '.setup-complete'
@@ -29,6 +30,7 @@ const NO_LICENCE_RECHECK_WINDOW_MS = 20 * MINUTE_MS
 const REQUEST_TIMEOUT_MS = 15 * 1000
 const RELEASE_TIMEOUT_MS = 3 * 1000
 const STATES_THAT_MAY_RUN = new Set(['development', 'valid', 'grace'])
+const CHANNELS_ANY_WINDOW_MAY_INVOKE = ['licence/online']
 
 const REVOCATION_REASON_BY_ERROR = {
   'licence-revoked': 'refunded',
@@ -116,6 +118,7 @@ function createLicenceService(overrides = {}) {
   let broadcast = null
   let cachedDeviceId = null
   let licenceWindowOpener = null
+  const statusListeners = new Set()
   let signInFlow = null
   let progress = idleProgress()
   let lastReportedKey = null
@@ -261,6 +264,19 @@ function createLicenceService(overrides = {}) {
     if (!force && key === lastReportedKey) return
     lastReportedKey = key
     if (broadcast) broadcast('licence/changed', status)
+    for (const listener of statusListeners) {
+      try {
+        listener(status)
+      } catch (error) {
+        deps.log(`status listener failed: ${error.message}`)
+      }
+    }
+  }
+
+  function onStatusChanged(listener) {
+    if (typeof listener !== 'function') return () => undefined
+    statusListeners.add(listener)
+    return () => statusListeners.delete(listener)
   }
 
   function setProgress(patch) {
@@ -627,7 +643,8 @@ function createLicenceService(overrides = {}) {
     if (evaluationInFlight) return evaluationInFlight
     evaluationInFlight = (async () => {
       try {
-        reportStatus(evaluateFromDisk().status, false)
+        const status = evaluateFromDisk().status
+        reportStatus(status, status.state === 'grace')
         await refreshIfDue()
       } catch (error) {
         deps.log(`evaluation failed: ${error.message}`)
@@ -728,15 +745,22 @@ function createLicenceService(overrides = {}) {
     runEvaluation,
     setLicenceWindowOpener,
     openLicenceWindow,
+    onStatusChanged,
     config,
   }
+}
+
+function guardedHandlers(handlers) {
+  return guardHandlers(handlers, { except: CHANNELS_ANY_WINDOW_MAY_INVOKE })
 }
 
 const defaultService = createLicenceService()
 
 module.exports = {
   ...defaultService,
+  handlers: guardedHandlers(defaultService.handlers),
   createLicenceService,
+  guardedHandlers,
   LICENCE_FILE_NAME,
   BOOT_EVALUATION_DELAY_MS,
   PERIODIC_EVALUATION_MS,
