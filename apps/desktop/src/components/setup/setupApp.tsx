@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, AlertTriangle, FlaskConical, Settings, Link } from 'lucide-react'
-import { Badge, Button, Card, IconButton, PageTitle, Row, Spinner, Toggle } from '@alpine/ui'
+import { Badge, Button, Card, IconButton, PageTitle, Row, Spinner, TextField, Toggle } from '@alpine/ui'
 import { useTheme } from '../../hooks/useTheme'
 import { useFitSetupWindow } from '../../hooks/useFitSetupWindow'
 
@@ -13,7 +13,9 @@ interface SignInProblem {
 }
 
 const LICENCE_REQUIRED = 'licence-required'
-const LICENSED_STATES: ReadonlySet<LicenceState> = new Set(['development', 'valid', 'grace'])
+const LICENSED_STATES: ReadonlySet<LicenceState> = new Set(['development', 'valid'])
+const DEVICE_NAME_MAX_LENGTH = 64
+const DEVICE_NAME_PLACEHOLDER = 'My PC'
 const SIGN_IN_PROMPT = 'Sign in with your Alpine Shell account to install'
 const WELCOME_PROMPT = 'Welcome to a faster, cleaner Windows experience'
 const UNREACHABLE_MESSAGE = 'Could not reach alpineshell.com.'
@@ -48,10 +50,10 @@ function formatDate(iso: string | null) {
   return new Date(parsed).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function formatLastSeen(iso: string | null) {
-  const parsed = iso ? Date.parse(iso) : NaN
-  if (!Number.isFinite(parsed)) return 'Never seen'
-  return `Last seen ${new Date(parsed).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+function seatDetail(seat: LicenceSeatActivation) {
+  const parsed = seat.activatedAt ? Date.parse(seat.activatedAt) : NaN
+  if (!Number.isFinite(parsed)) return 'Using this licence'
+  return `Activated ${new Date(parsed).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
 }
 
 function problemForPhase(progress: LicenceSignInProgress): SignInProblem | null {
@@ -154,6 +156,7 @@ export default function SetupApp() {
   const [installCursor, setInstallCursor] = useState(true)
   const [status, setStatus] = useState<SetupStatus | null>(null)
   const [licence, setLicence] = useState<LicenceStatus | null>(null)
+  const [deviceName, setDeviceName] = useState('')
   const [progress, setProgress] = useState<LicenceSignInProgress>(idleProgress)
   const [seats, setSeats] = useState<LicenceSeatActivation[]>([])
   const [problem, setProblem] = useState<SignInProblem | null>(null)
@@ -180,6 +183,7 @@ export default function SetupApp() {
     window.setup.status().then(setStatus)
     window.setup.onProgress(setCurrentStep)
     window.licence.status().then(applyLicence)
+    window.licence.defaultDeviceName().then((name) => setDeviceName((current) => current || name))
     window.licence.signInState().then(applyProgress)
     const stopChanged = window.licence.onChanged(applyLicence)
     const stopProgress = window.licence.onSignInProgress(applyProgress)
@@ -200,21 +204,21 @@ export default function SetupApp() {
 
   function startSignIn() {
     setProblem(null)
-    window.licence.signIn()
+    window.licence.signIn({ deviceName })
   }
 
   function retrySignIn() {
     const retry = problem?.retry ?? 'signIn'
     setProblem(null)
     if (retry === 'activate') window.licence.activate()
-    else window.licence.signIn()
+    else window.licence.signIn({ deviceName })
   }
 
   async function useAnotherAccount() {
     await window.licence.cancelSignIn()
     setProblem(null)
     setSeatMessage(null)
-    window.licence.signIn()
+    window.licence.signIn({ deviceName })
   }
 
   async function cancelSignIn() {
@@ -280,6 +284,19 @@ export default function SetupApp() {
             <div className="flex flex-col gap-5">
               <Wordmark />
               <p className={`text-base ${problem ? 'text-warning' : 'text-ink-secondary'}`}>{problem ? problem.message : SIGN_IN_PROMPT}</p>
+              <Card variant="borderless" className="px-4 py-3.5">
+                <Row label="Name this PC" description="Shown on your account page so you can tell your PCs apart" stacked>
+                  <TextField
+                    label="PC name"
+                    value={deviceName}
+                    onChange={(value) => setDeviceName(value.slice(0, DEVICE_NAME_MAX_LENGTH))}
+                    placeholder={DEVICE_NAME_PLACEHOLDER}
+                    maxLength={DEVICE_NAME_MAX_LENGTH}
+                    disabled={startingSignIn || activating}
+                    onSubmit={problem ? retrySignIn : startSignIn}
+                  />
+                </Row>
+              </Card>
             </div>
             <Button className="w-full" busy={startingSignIn || activating} onClick={problem ? retrySignIn : startSignIn}>
               {problem ? problem.buttonLabel : 'Continue with Google'}
@@ -352,7 +369,7 @@ export default function SetupApp() {
               )}
               <Card variant="borderless" className="flex flex-col gap-3 px-4 py-3.5">
                 {seats.map((seat) => (
-                  <Row key={seat.id} label={seat.deviceName || 'Unnamed PC'} description={formatLastSeen(seat.lastSeenAt)}>
+                  <Row key={seat.id} label={seat.deviceName || 'Unnamed PC'} description={seatDetail(seat)}>
                     <Button size="sm" variant="outline" busy={activating} onClick={() => window.licence.activate({ replaceActivationId: seat.id })}>
                       Use it here instead
                     </Button>

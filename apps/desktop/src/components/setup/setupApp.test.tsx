@@ -16,14 +16,11 @@ function licenceStatus(overrides: Partial<LicenceStatus> = {}): LicenceStatus {
   return {
     state: 'unlicensed',
     reason: null,
-    graceUntil: null,
     email: null,
     licenceId: null,
     activationId: null,
     deviceName: null,
-    expiresAt: null,
-    lastRefreshAt: null,
-    movedTo: null,
+    activatedAt: null,
     deviceReadable: true,
     releaseBuild: true,
     ...overrides,
@@ -84,6 +81,7 @@ function installBridge({ licence = licenceStatus(), setup = setupStatus() }: { l
   }
   ;(window as unknown as { licence: unknown }).licence = {
     status: async () => bridge.licence,
+    defaultDeviceName: async () => 'DESKTOP-ABC123',
     signInState: async () => idleProgress,
     onChanged: (listener: (status: LicenceStatus) => void) => {
       bridge.changedListeners.push(listener)
@@ -132,15 +130,26 @@ describe('SetupApp', () => {
     expect(screen.queryByRole('button', { name: /Test out/ })).toBeNull()
   })
 
+  it('prefills the PC name with the Windows computer name and sends the name the person typed', async () => {
+    const bridge = await renderSetup()
+    const field = screen.getByRole('textbox', { name: 'PC name' }) as HTMLInputElement
+    expect(field.value).toBe('DESKTOP-ABC123')
+    fireEvent.change(field, { target: { value: 'Study PC' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }))
+    expect(bridge.signIn).toHaveBeenCalledWith({ deviceName: 'Study PC' })
+  })
+
+  it('caps the PC name at 64 characters', async () => {
+    await renderSetup()
+    const field = screen.getByRole('textbox', { name: 'PC name' }) as HTMLInputElement
+    fireEvent.change(field, { target: { value: 'x'.repeat(80) } })
+    expect(field.value).toHaveLength(64)
+  })
+
   it('opens on welcome with the licensed email when the licence is valid', async () => {
     await renderSetup({ licence: licenceStatus({ state: 'valid', email: 'someone@example.com' }) })
     expect(screen.getByText('someone@example.com')).toBeTruthy()
     expect(screen.getByText('Licensed')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Install' })).toBeTruthy()
-  })
-
-  it('opens on welcome during grace, because installing is still allowed', async () => {
-    await renderSetup({ licence: licenceStatus({ state: 'grace', reason: 'expired', email: 'someone@example.com' }) })
     expect(screen.getByRole('button', { name: 'Install' })).toBeTruthy()
   })
 
@@ -177,7 +186,7 @@ describe('SetupApp', () => {
     emitProgress(bridge, {
       ...idleProgress,
       phase: 'done',
-      outcome: { kind: 'seats-in-use', activations: [{ id: 'act_old', licenceId: 'lic_1', deviceName: 'DESK-1', lastSeenAt: null }] },
+      outcome: { kind: 'seats-in-use', activations: [{ id: 'act_old', licenceId: 'lic_1', deviceName: 'DESK-1', activatedAt: null }] },
     })
     expect(screen.getByText('All your licences are in use.')).toBeTruthy()
     expect(screen.getByText('DESK-1')).toBeTruthy()
