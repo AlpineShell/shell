@@ -1,4 +1,4 @@
-const { app } = require('electron')
+const electronApp = () => require('electron').app
 const path = require('path')
 const { execSync, execFileSync } = require('child_process')
 const fs = require('fs')
@@ -6,8 +6,11 @@ const installer = require('./installer')
 const updater = require('./updater')
 const explorerShell = require('./explorerShell')
 const shellExclusivity = require('./shellExclusivity')
+const licence = require('./licence')
 const { regQuery } = require('../registryRead')
+const { guardHandlers } = require('../trustedSenders')
 
+const LICENCE_REQUIRED = 'licence-required'
 const CURSOR_VARIANT = 'Bibata-Modern-Ice'
 const REVERT_QUIT_DELAY_MS = 1200
 const REVERT_BLOCKED_MESSAGES = {
@@ -37,14 +40,14 @@ const CURSOR_REGISTRY_MAP = {
 }
 
 function getCursorSourceDir() {
-  if (app.isPackaged) {
+  if (electronApp().isPackaged) {
     return path.join(process.resourcesPath, 'cursor', CURSOR_VARIANT)
   }
   return path.join(__dirname, '..', '..', 'public', 'cursor', CURSOR_VARIANT)
 }
 
 function getCursorInstallDir() {
-  return path.join(app.getPath('userData'), 'cursors')
+  return path.join(electronApp().getPath('userData'), 'cursors')
 }
 
 function regAdd(keyPath, valueName, value, type = 'REG_SZ') {
@@ -78,7 +81,7 @@ function installCursors() {
 }
 
 function getShellExePath() {
-  if (app.isPackaged) {
+  if (electronApp().isPackaged) {
     return installer.getInstalledExePath()
   }
   const electronExe = path.join(__dirname, '..', '..', 'node_modules', 'electron', 'dist', 'electron.exe')
@@ -86,6 +89,7 @@ function getShellExePath() {
 }
 
 function setAsShell() {
+  licence.requireValid()
   installer.setShellOptOut(false)
   installer.clearShellHandoff()
   const shellValue = getShellExePath()
@@ -108,7 +112,8 @@ function setAsShell() {
 }
 
 function setStartup() {
-  if (app.isPackaged) {
+  licence.requireValid()
+  if (electronApp().isPackaged) {
     const exePath = installer.getInstalledExePath()
     regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', `"${exePath}"`)
   } else {
@@ -118,7 +123,7 @@ function setStartup() {
 }
 
 function ensureShellRegistration(gpoBlocked) {
-  if (!app.isPackaged) return
+  if (!electronApp().isPackaged) return
   if (installer.isShellOptedOut()) return
   if (gpoBlocked) return
 
@@ -178,7 +183,7 @@ function isShellHandoffInEffect() {
 
 function shellActivationContext() {
   return lazyContext({
-    packaged: () => app.isPackaged,
+    packaged: () => electronApp().isPackaged,
     forceTakeover: () => process.env.ALPINE_PREVIEW_SHELL === '1',
     firstRun: isFirstRun,
     optedOut: () => installer.isShellOptedOut(),
@@ -219,20 +224,20 @@ function getSetupStatus() {
     gpoBlocked: hasGpoShellOverride(),
     isInstalled: installer.isInstalled(),
     installedVersion: installer.getInstalledVersion(),
-    currentVersion: app.getVersion(),
+    currentVersion: electronApp().getVersion(),
     isFirstRun: isFirstRun(),
   }
 }
 
 function isFirstRun() {
-  const flagPath = path.join(app.getPath('userData'), '.setup-complete')
+  const flagPath = path.join(electronApp().getPath('userData'), '.setup-complete')
   return !fs.existsSync(flagPath)
 }
 
 function markSetupComplete() {
-  const dir = path.dirname(path.join(app.getPath('userData'), '.setup-complete'))
+  const dir = path.dirname(path.join(electronApp().getPath('userData'), '.setup-complete'))
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(app.getPath('userData'), '.setup-complete'), new Date().toISOString())
+  fs.writeFileSync(path.join(electronApp().getPath('userData'), '.setup-complete'), new Date().toISOString())
 }
 
 let broadcast = null
@@ -245,7 +250,7 @@ function setShellShutdown(shutdown) {
 
 function exitShell() {
   if (shellShutdown) shellShutdown()
-  else app.exit(0)
+  else electronApp().exit(0)
 }
 
 function progress(step) {
@@ -262,9 +267,27 @@ function exitShellAfterReply() {
   setTimeout(exitShell, 0)
 }
 
+function licenceGateError() {
+  try {
+    licence.requireValid()
+    return null
+  } catch (e) {
+    if (e && e.code === LICENCE_REQUIRED) return LICENCE_REQUIRED
+    throw e
+  }
+}
+
+async function releaseLicenceSeatBestEffort() {
+  try {
+    await licence.releaseSelf()
+  } catch (e) {
+    console.error('[setup] Could not release the licence seat before uninstalling:', e.message)
+  }
+}
+
 async function runRevert(action) {
   const blockedReason = shellExclusivity.revertBlockedReason({
-    packaged: app.isPackaged,
+    packaged: electronApp().isPackaged,
     updatePending: updater.isUpdatePending() || installer.isUpdateHandoffActive(),
   })
   if (blockedReason) return { success: false, gpoBlocked: false, error: REVERT_BLOCKED_MESSAGES[blockedReason], leftBehind: [] }
@@ -288,10 +311,11 @@ async function runRevert(action) {
 }
 
 module.exports = {
-  handlers: {
+  handlers: guardHandlers({
     'setup/status': () => getSetupStatus(),
     'setup/install': async (_event, options) => {
-      const results = { shell: false, startup: false, cursor: false, gpoBlocked: false, error: null }
+      const results = { shell: false, startup: false, cursor: false, gpoBlocked: false, error: licenceGateError() }
+      if (results.error) return results
 
       if (installer.isPortableRun()) {
         try {
@@ -348,6 +372,8 @@ module.exports = {
       return results
     },
     'setup/skip': async () => {
+      const error = licenceGateError()
+      if (error) return { error }
       if (installer.isPortableRun()) {
         try {
           progress('Copying files...')
@@ -360,28 +386,34 @@ module.exports = {
         }
       }
       markSetupComplete()
+      return { error: null }
     },
     'setup/relaunch': () => {
       if (installer.isPortableRun()) {
         installer.relaunchFromInstalled()
       } else {
-        app.relaunch()
-        app.exit()
+        electronApp().relaunch()
+        electronApp().exit()
       }
     },
     'setup/restart-windows': () => {
       execSync('shutdown /r /t 5 /c "Restarting to apply Alpine Shell"', { windowsHide: true })
-      app.exit()
+      electronApp().exit()
     },
     'setup/revert-temporary': () => runRevert(() => installer.revertShellTemporarily()),
     'setup/revert-permanent': () => runRevert(() => installer.revertShellPermanently()),
-    'setup/uninstall': () => runRevert(() => installer.uninstall()),
+    'setup/uninstall': async () => {
+      await releaseLicenceSeatBestEffort()
+      return runRevert(() => installer.uninstall())
+    },
     'setup/set-shell': () => {
+      const error = licenceGateError()
+      if (error) return { success: false, error }
       setAsShell()
       setStartup()
-      return { success: isShellRegisteredToAlpine() }
+      return { success: isShellRegisteredToAlpine(), error: null }
     },
-  },
+  }),
 
   isFirstRun,
   takeOverFromExplorer,
