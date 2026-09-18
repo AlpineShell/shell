@@ -196,7 +196,7 @@ function createLicenceService(overrides = {}) {
     writeRecord({ ...record, highWaterMark: isoOrNull(now) })
   }
 
-  function buildStatus(record, claims, decision) {
+  function buildStatus(record, claims, decision, currentDeviceId) {
     return {
       state: decision.state,
       reason: decision.reason,
@@ -208,7 +208,7 @@ function createLicenceService(overrides = {}) {
       expiresAt: isoOrNull(decision.expiresAt),
       lastRefreshAt: record && typeof record.lastRefreshAt === 'string' ? record.lastRefreshAt : null,
       movedTo: record && typeof record.movedTo === 'string' ? record.movedTo : null,
-      deviceReadable: deviceId() !== null,
+      deviceReadable: currentDeviceId !== null,
       releaseBuild: config.isReleaseBuild === true,
     }
   }
@@ -216,17 +216,18 @@ function createLicenceService(overrides = {}) {
   function evaluateFromDisk() {
     const record = readRecord()
     const now = deps.now()
+    const currentDeviceId = deviceId()
     const claims = record ? verifiedClaims(record.token) : null
     const decision = evaluateLicenceState({
       claims,
-      deviceId: deviceId(),
+      deviceId: currentDeviceId,
       file: record ? fileFacts(record) : null,
       now,
       config,
       install: { setupComplete: isSetupComplete(), shellRegisteredToAlpine: () => deps.isShellRegisteredToAlpine() },
     })
     raiseHighWaterMark(record, now)
-    return { record, claims, decision, status: buildStatus(record, claims, decision) }
+    return { record, claims, decision, status: buildStatus(record, claims, decision, currentDeviceId) }
   }
 
   function statusKey(status) {

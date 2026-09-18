@@ -224,6 +224,19 @@ describe('status from disk', () => {
     const { service } = makeService({ files: { [LICENCE_PATH]: JSON.stringify(licenceRecord()) }, readDeviceId: () => null })
     expect(service.status()).toMatchObject({ state: 'grace', reason: 'device-unreadable', deviceReadable: false })
   })
+
+  it('reads the device id once per evaluation so the state and deviceReadable never disagree', () => {
+    let reads = 0
+    const readDeviceId = () => {
+      reads += 1
+      return reads === 1 ? null : DEVICE_ID
+    }
+    const { service } = makeService({ files: { [LICENCE_PATH]: JSON.stringify(licenceRecord()) }, readDeviceId })
+    expect(service.status()).toMatchObject({ state: 'grace', reason: 'device-unreadable', deviceReadable: false })
+    expect(reads).toBe(1)
+    expect(service.status()).toMatchObject({ state: 'valid', deviceReadable: true })
+    expect(reads).toBe(2)
+  })
 })
 
 describe('the refresh scheduler', () => {

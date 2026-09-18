@@ -85,17 +85,12 @@
       {
         "from": "src/assets/fonts",
         "to": "licenses/fonts",
-        "filter": [
-          "OFL-*.txt"
-        ]
+        "filter": ["OFL-*.txt"]
       },
       {
         "from": "public/cursor",
         "to": "cursor",
-        "filter": [
-          "**/*",
-          "!Bibata-Original-Ice/**"
-        ]
+        "filter": ["**/*", "!Bibata-Original-Ice/**"]
       },
       {
         "from": "electron/scripts",
