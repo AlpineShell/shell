@@ -72,6 +72,7 @@ jobs:
         run: |
           test -f electron/licenceConfig.generated.js || { echo "::error::electron/licenceConfig.generated.js was not written"; exit 1; }
           node -e "const c=require('./electron/licenceConfig.generated.js');const kids=(c.publicKeys||[]).map(k=>k&&k.kid).filter(Boolean);if(c.isReleaseBuild!==true||kids.length===0){console.error('::error::licence config must be a release build with at least one kid');process.exit(1)}console.log('licence kids: '+kids.join(', '))"
+          node -e "const c=require('./electron/licenceConfig.generated.js');const g=c.upgradeGraceUntil;if(g===null){console.log('upgrade grace: none (existing installs get no grace window)');process.exit(0)}const t=Date.parse(g);if(!Number.isFinite(t)){console.error('::error::upgradeGraceUntil is not a valid date');process.exit(1)}if(t<=Date.now()){console.error('::error::upgradeGraceUntil '+g+' is already in the past; existing installs would lapse on first launch');process.exit(1)}console.log('upgrade grace until: '+g)"
           test -f electron/marketplacePublicKey.generated.js || { echo "::error::electron/marketplacePublicKey.generated.js was not written"; exit 1; }
           node -e "const k=require('./electron/marketplacePublicKey.generated.js');if(typeof k.publicKeyPem!=='string'){console.log('::warning::no marketplace public key baked; set the ALPINE_MARKETPLACE_PUBKEY secret so this build can verify plugin signatures');process.exit(0)}console.log('marketplace public key baked')"
 

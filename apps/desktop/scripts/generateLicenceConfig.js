@@ -32,6 +32,16 @@ function isEd25519PublicKey(spkiPem) {
   }
 }
 
+function resolveReleaseGraceUntil(raw) {
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  if (value.toLowerCase() === 'none') return null
+  const parsed = parseGraceUntil(value)
+  if (parsed === null) {
+    throw new Error("ALPINE_RELEASE_BUILD=1 needs ALPINE_UPGRADE_GRACE_UNTIL set to a parseable date or the literal 'none'")
+  }
+  return parsed
+}
+
 function buildLicenceConfig(settings) {
   const isReleaseBuild = settings.ALPINE_RELEASE_BUILD === '1'
   const publicKeys = parsePublicKeys(settings.ALPINE_LICENCE_PUBLIC_KEYS)
@@ -43,7 +53,9 @@ function buildLicenceConfig(settings) {
     authBase: normaliseBase(settings.ALPINE_AUTH_BASE, DEFAULT_AUTH_BASE),
     websiteBase: normaliseBase(settings.ALPINE_WEBSITE_BASE, DEFAULT_WEBSITE_BASE),
     publicKeys,
-    upgradeGraceUntil: parseGraceUntil(settings.ALPINE_UPGRADE_GRACE_UNTIL),
+    upgradeGraceUntil: isReleaseBuild
+      ? resolveReleaseGraceUntil(settings.ALPINE_UPGRADE_GRACE_UNTIL)
+      : parseGraceUntil(settings.ALPINE_UPGRADE_GRACE_UNTIL),
   }
 }
 
