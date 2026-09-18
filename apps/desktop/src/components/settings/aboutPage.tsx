@@ -3,6 +3,7 @@ import { Bluetooth, Image as ImageIcon, PanelTop, Wifi } from 'lucide-react'
 import { NavRow } from '@alpine/ui'
 import { useWallpaper } from '../../hooks/useWallpaper'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
+import LicenceRow from './licenceRow'
 
 const CACHE_KEY = 'alpine.systemInfo.v2'
 
@@ -117,6 +118,8 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
           </div>
         </div>
       </div>
+
+      <LicenceRow />
 
       <div className="flex flex-col gap-2">
         {HOME_ROWS.map((row) => (

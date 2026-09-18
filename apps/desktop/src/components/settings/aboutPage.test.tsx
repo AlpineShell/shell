@@ -12,6 +12,18 @@ describe('AboutPage', () => {
       system: { info: () => new Promise(() => {}) },
       windows: { wallpaper: () => new Promise(() => {}), onWallpaperChanged: () => () => {} },
     }
+    ;(window as unknown as { licence: unknown }).licence = {
+      status: () => new Promise(() => {}),
+      signInState: () => new Promise(() => {}),
+      onChanged: () => () => {},
+      onSignInProgress: () => () => {},
+    }
+  })
+
+  it('shows the licence row above its navigation rows', () => {
+    render(<AboutPage onNavigate={() => {}} />)
+    expect(screen.getByText('Licence')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Manage licences' })).toBeTruthy()
   })
 
   it('ends its rows with Ridge, named the way the breadcrumb and the search result name that page', () => {
