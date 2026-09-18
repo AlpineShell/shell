@@ -61,4 +61,15 @@ describe('trusted senders', () => {
     expect(guarded['setup/install'](eventFrom(settingsWin), { shell: true })).toBe('done')
     expect(run).toHaveBeenCalledWith(expect.anything(), { shell: true })
   })
+
+  it('leaves the excepted channels open to any window while guarding the rest', () => {
+    const desktopWin = fakeWindow(4)
+    setTrustedWindowsAccessor(() => [fakeWindow(1)])
+    const online = vi.fn(() => 'evaluated')
+    const status = vi.fn(() => 'status')
+    const guarded = guardHandlers({ 'licence/online': online, 'licence/status': status }, { except: ['licence/online'] })
+    expect(guarded['licence/online'](eventFrom(desktopWin))).toBe('evaluated')
+    expect(() => guarded['licence/status'](eventFrom(desktopWin))).toThrow(UNTRUSTED_SENDER)
+    expect(status).not.toHaveBeenCalled()
+  })
 })

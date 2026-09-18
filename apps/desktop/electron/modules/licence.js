@@ -30,6 +30,7 @@ const NO_LICENCE_RECHECK_WINDOW_MS = 20 * MINUTE_MS
 const REQUEST_TIMEOUT_MS = 15 * 1000
 const RELEASE_TIMEOUT_MS = 3 * 1000
 const STATES_THAT_MAY_RUN = new Set(['development', 'valid', 'grace'])
+const CHANNELS_ANY_WINDOW_MAY_INVOKE = ['licence/online']
 
 const REVOCATION_REASON_BY_ERROR = {
   'licence-revoked': 'refunded',
@@ -748,12 +749,17 @@ function createLicenceService(overrides = {}) {
   }
 }
 
+function guardedHandlers(handlers) {
+  return guardHandlers(handlers, { except: CHANNELS_ANY_WINDOW_MAY_INVOKE })
+}
+
 const defaultService = createLicenceService()
 
 module.exports = {
   ...defaultService,
-  handlers: guardHandlers(defaultService.handlers),
+  handlers: guardedHandlers(defaultService.handlers),
   createLicenceService,
+  guardedHandlers,
   LICENCE_FILE_NAME,
   BOOT_EVALUATION_DELAY_MS,
   PERIODIC_EVALUATION_MS,

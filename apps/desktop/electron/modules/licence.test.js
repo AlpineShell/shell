@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import crypto from 'crypto'
 import path from 'path'
+import { createRequire } from 'module'
+
+const nodeRequire = createRequire(import.meta.url)
 
 const {
   createLicenceService,
+  guardedHandlers,
   BOOT_EVALUATION_DELAY_MS,
   PERIODIC_EVALUATION_MS,
   TRANSIENT_RETRY_DELAYS_MS,
@@ -11,6 +15,7 @@ const {
   REVOKED_RECHECK_AFTER_MS,
   NO_LICENCE_RECHECK_MS,
 } = await import('./licence.js')
+const { setTrustedWindowsAccessor, UNTRUSTED_SENDER } = nodeRequire('../trustedSenders.js')
 
 const NOW = Date.UTC(2026, 8, 18, 12, 0, 0)
 const MINUTE_MS = 60 * 1000
@@ -786,5 +791,26 @@ describe('release and links', () => {
     service.setLicenceWindowOpener(opener)
     expect(service.openLicenceWindow()).toBe(true)
     expect(opener).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the sender guard on the exported handlers', () => {
+  afterEach(() => {
+    setTrustedWindowsAccessor(null)
+  })
+
+  it('lets the desktop window report an online transition but refuses it every other channel', () => {
+    const desktopWindow = { webContents: { id: 7 }, isDestroyed: () => false }
+    const settingsWindow = { webContents: { id: 8 }, isDestroyed: () => false }
+    setTrustedWindowsAccessor(() => [settingsWindow])
+    const online = vi.fn(() => 'evaluated')
+    const status = vi.fn(() => 'status')
+    const guarded = guardedHandlers({ 'licence/online': online, 'licence/status': status })
+    const fromDesktop = { sender: desktopWindow.webContents }
+    const fromSettings = { sender: settingsWindow.webContents }
+    expect(guarded['licence/online'](fromDesktop)).toBe('evaluated')
+    expect(() => guarded['licence/status'](fromDesktop)).toThrow(UNTRUSTED_SENDER)
+    expect(guarded['licence/status'](fromSettings)).toBe('status')
+    expect(status).toHaveBeenCalledTimes(1)
   })
 })
