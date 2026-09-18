@@ -17,7 +17,7 @@ bun start   # Windows desktop shell (Vite + Electron)
 
 ## Updates
 
-An installed copy checks `https://auth.alpineshell.com/releases/` with its licence token; a copy whose licence has lapsed is not offered updates until it signs in again. If a packaged build ever refuses to start with an integrity error such as "app failed integrity check", its `app.asar` no longer matches the hash baked into the executable (usually because an update stopped halfway): reinstall from the latest installer, which replaces the files and keeps your settings and licence.
+An installed copy checks `https://auth.alpineshell.com/releases/` with its licence token about every six hours; the service records nothing from that call. A copy whose licence was refunded, released or revoked keeps running the version it has and is simply not offered updates. If a packaged build ever refuses to start with an integrity error such as "app failed integrity check", its `app.asar` no longer matches the hash baked into the executable (usually because an update stopped halfway): reinstall from the latest installer, which replaces the files and keeps your settings and licence.
 
 ## Code Standards
 
