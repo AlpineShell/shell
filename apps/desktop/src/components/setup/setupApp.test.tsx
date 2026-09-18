@@ -21,6 +21,7 @@ function licenceStatus(overrides: Partial<LicenceStatus> = {}): LicenceStatus {
     activationId: null,
     deviceName: null,
     activatedAt: null,
+    bindTier: null,
     deviceReadable: true,
     releaseBuild: true,
     ...overrides,
@@ -52,6 +53,7 @@ interface Bridge {
   setShell: ReturnType<typeof vi.fn>
   testOut: ReturnType<typeof vi.fn>
   openCheckout: ReturnType<typeof vi.fn>
+  openAccount: ReturnType<typeof vi.fn>
 }
 
 function installBridge({ licence = licenceStatus(), setup = setupStatus() }: { licence?: LicenceStatus; setup?: SetupStatus } = {}): Bridge {
@@ -66,6 +68,7 @@ function installBridge({ licence = licenceStatus(), setup = setupStatus() }: { l
     setShell: vi.fn(async () => ({ success: true, error: null })),
     testOut: vi.fn(async () => ({ error: null })),
     openCheckout: vi.fn(async () => undefined),
+    openAccount: vi.fn(async () => undefined),
   }
   ;(window as unknown as { shell: unknown }).shell = {
     theme: { initial: THEME, get: async () => THEME, onChanged: () => () => {} },
@@ -95,7 +98,7 @@ function installBridge({ licence = licenceStatus(), setup = setupStatus() }: { l
     activate: bridge.activate,
     cancelSignIn: async () => idleProgress,
     openCheckout: bridge.openCheckout,
-    openAccount: async () => undefined,
+    openAccount: bridge.openAccount,
   }
   return bridge
 }
@@ -128,6 +131,24 @@ describe('SetupApp', () => {
     expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
     expect(screen.queryByRole('button', { name: /Test out/ })).toBeNull()
+  })
+
+  it('says in plain words when this PC no longer matches its licence, how to put it back, and offers the account page', async () => {
+    const bridge = await renderSetup({ licence: licenceStatus({ reason: 'binding-mismatch', email: 'someone@example.com', bindTier: 'tpm' }) })
+    expect(screen.getByText(/This PC no longer matches the licence it was activated with/)).toBeTruthy()
+    expect(screen.getByText(/cleared TPM, a new motherboard, a rebuilt Windows profile or a Windows reinstall/)).toBeTruthy()
+    expect(screen.getByText(/does not take another seat/)).toBeTruthy()
+    expect(screen.getByText(/release the old entry for this PC on your account page/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open my account page' }))
+    expect(bridge.openAccount).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
+  })
+
+  it('says the licence on this PC belongs to another PC when the device id does not match', async () => {
+    await renderSetup({ licence: licenceStatus({ reason: 'device-mismatch' }) })
+    expect(screen.getByText('The licence on this PC was issued to another PC. Sign in to activate this one.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Open my account page' })).toBeNull()
   })
 
   it('prefills the PC name with the Windows computer name and sends the name the person typed', async () => {

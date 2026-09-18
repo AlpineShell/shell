@@ -17,6 +17,8 @@ const LICENSED_STATES: ReadonlySet<LicenceState> = new Set(['development', 'vali
 const DEVICE_NAME_MAX_LENGTH = 64
 const DEVICE_NAME_PLACEHOLDER = 'My PC'
 const SIGN_IN_PROMPT = 'Sign in with your Alpine Shell account to install'
+const BINDING_LOST_PROMPT = 'This PC no longer matches the licence it was activated with. That happens after a cleared TPM, a new motherboard, a rebuilt Windows profile or a Windows reinstall. Sign in to put it back; the same PC does not take another seat. If every seat is in use, release the old entry for this PC on your account page, then sign in.'
+const OTHER_PC_PROMPT = 'The licence on this PC was issued to another PC. Sign in to activate this one.'
 const WELCOME_PROMPT = 'Welcome to a faster, cleaner Windows experience'
 const UNREACHABLE_MESSAGE = 'Could not reach alpineshell.com.'
 
@@ -42,6 +44,16 @@ function requestedPage(): SetupPage | null {
 
 function isLicensed(licence: LicenceStatus) {
   return LICENSED_STATES.has(licence.state)
+}
+
+function bindingLost(licence: LicenceStatus | null) {
+  return licence?.state === 'unlicensed' && licence.reason === 'binding-mismatch'
+}
+
+function signInPrompt(licence: LicenceStatus | null) {
+  if (bindingLost(licence)) return BINDING_LOST_PROMPT
+  if (licence?.state === 'unlicensed' && licence.reason === 'device-mismatch') return OTHER_PC_PROMPT
+  return SIGN_IN_PROMPT
 }
 
 function formatDate(iso: string | null) {
@@ -260,6 +272,8 @@ export default function SetupApp() {
   }
 
   const licenceRequired = result?.error === LICENCE_REQUIRED
+  const prompt = problem ? problem.message : signInPrompt(licence)
+  const promptExplains = !problem && prompt !== SIGN_IN_PROMPT
 
   return (
     <div ref={frame} className="settings-scope flex w-screen flex-col bg-surface-0 text-ink-primary">
@@ -283,7 +297,7 @@ export default function SetupApp() {
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-5">
               <Wordmark />
-              <p className={`text-base ${problem ? 'text-warning' : 'text-ink-secondary'}`}>{problem ? problem.message : SIGN_IN_PROMPT}</p>
+              <p className={`${promptExplains ? 'text-sm' : 'text-base'} ${problem ? 'text-warning' : 'text-ink-secondary'}`}>{prompt}</p>
               <Card variant="borderless" className="px-4 py-3.5">
                 <Row label="Name this PC" description="Shown on your account page so you can tell your PCs apart" stacked>
                   <TextField
@@ -298,9 +312,16 @@ export default function SetupApp() {
                 </Row>
               </Card>
             </div>
-            <Button className="w-full" busy={startingSignIn || activating} onClick={problem ? retrySignIn : startSignIn}>
-              {problem ? problem.buttonLabel : 'Continue with Google'}
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button className="w-full" busy={startingSignIn || activating} onClick={problem ? retrySignIn : startSignIn}>
+                {problem ? problem.buttonLabel : 'Continue with Google'}
+              </Button>
+              {bindingLost(licence) && (
+                <Button className="w-full" variant="ghost" onClick={() => window.licence.openAccount()}>
+                  Open my account page
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
