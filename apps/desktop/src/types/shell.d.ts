@@ -153,6 +153,10 @@ declare global {
     message: string
   }
 
+  interface UpdatePreferences {
+    checkForUpdates: boolean
+  }
+
   type WindowsUpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'installing' | 'restart-required' | 'installed' | 'error'
 
   type WindowsUpdateTier = 'quality' | 'enablement' | 'feature'
@@ -1871,8 +1875,11 @@ declare global {
         check: () => Promise<UpdateState>
         download: () => Promise<void>
         install: () => Promise<void>
+        preferences: () => Promise<UpdatePreferences>
+        setPreferences: (partial: Partial<UpdatePreferences>) => Promise<UpdatePreferences>
         onStateChanged: (callback: (state: UpdateState) => void) => void
         onLogChanged: (callback: (entries: UpdateLogEntry[]) => void) => void
+        onPreferencesChanged: (callback: (preferences: UpdatePreferences) => void) => () => void
       }
       windowsUpdate: {
         getState: () => Promise<WindowsUpdateState>

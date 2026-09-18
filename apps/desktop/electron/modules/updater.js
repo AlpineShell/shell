@@ -13,7 +13,9 @@ const RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 5 * 60 * 1000]
 const DOWNLOAD_STALL_TIMEOUT_MS = 60 * 1000
 const SIGN_IN_FOR_UPDATES_MESSAGE = 'Sign in to get updates'
 const UPDATES_REFUSED_FOR_LICENCE_MESSAGE = 'Updates are not available for this licence. Alpine Shell keeps working as it is.'
+const UPDATE_CHECKS_OFF_MESSAGE = 'Update checks are off. Alpine Shell will not contact alpineshell.com.'
 const FEED_STATUS_CODES_REFUSING_LICENCE = new Set([401, 403])
+const PREFERENCES_FILE = 'update-prefs.json'
 
 const state = {
   status: 'idle',
@@ -35,9 +37,31 @@ let downloadCancellation = null
 let downloadStallTimer = null
 let boundAutoUpdater = null
 let feedCredentialsPresent = false
+let checkForUpdates = true
 
 function electronApp() {
   return require('electron').app
+}
+
+function preferencesFilePath() {
+  return path.join(electronApp().getPath('userData'), PREFERENCES_FILE)
+}
+
+function loadPreferences() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(preferencesFilePath(), 'utf8'))
+    if (typeof parsed.checkForUpdates === 'boolean') checkForUpdates = parsed.checkForUpdates
+  } catch {}
+}
+
+function savePreferences() {
+  try {
+    fs.writeFileSync(preferencesFilePath(), JSON.stringify({ checkForUpdates }, null, 2))
+  } catch {}
+}
+
+function preferences() {
+  return { checkForUpdates }
 }
 
 function updaterLibrary() {
@@ -126,6 +150,14 @@ function reportCheckSkippedForLicence(announce) {
   setState({ status: 'error', error: SIGN_IN_FOR_UPDATES_MESSAGE })
 }
 
+function reportChecksOff(announce) {
+  if (announce) {
+    pushLog('info', 'Checking for updates…')
+    pushLog('info', UPDATE_CHECKS_OFF_MESSAGE)
+  }
+  setState({ status: 'not-available' })
+}
+
 function runCheck(announce, allowRetry = false) {
   if (state.status === 'downloading' || state.status === 'downloaded') return
   if (!electronApp().isPackaged) {
@@ -134,6 +166,10 @@ function runCheck(announce, allowRetry = false) {
       pushLog('info', 'Update checks run only in the installed app.')
     }
     setState({ status: 'not-available' })
+    return
+  }
+  if (!checkForUpdates) {
+    reportChecksOff(announce)
     return
   }
   if (!applyFeedCredentials()) {
@@ -176,8 +212,37 @@ function abandonStalledDownload() {
   scheduleRetry()
 }
 
+function abandonDownloadForPreference() {
+  const cancellation = downloadCancellation
+  clearDownloadWatch()
+  if (cancellation) cancellation.cancel()
+}
+
+function setPreferences(partial) {
+  const requested = partial && typeof partial.checkForUpdates === 'boolean' ? partial.checkForUpdates : checkForUpdates
+  const changed = requested !== checkForUpdates
+  checkForUpdates = requested
+  savePreferences()
+  if (broadcastChanged) broadcastChanged('updates/preferences-changed', preferences())
+  if (!changed) return preferences()
+  clearRetry()
+  if (checkForUpdates) {
+    runCheck(false, true)
+    return preferences()
+  }
+  abandonDownloadForPreference()
+  pushLog('info', UPDATE_CHECKS_OFF_MESSAGE)
+  if (state.status !== 'downloaded') setState({ status: 'not-available', availableVersion: null, progressPercent: 0, error: null })
+  return preferences()
+}
+
 function startDownload() {
   clearDownloadWatch()
+  if (!checkForUpdates) {
+    pushLog('error', `Update error: ${UPDATE_CHECKS_OFF_MESSAGE}`)
+    setState({ status: 'error', error: UPDATE_CHECKS_OFF_MESSAGE })
+    return
+  }
   if (!applyFeedCredentials()) {
     pushLog('error', `Update error: ${SIGN_IN_FOR_UPDATES_MESSAGE}`)
     setState({ status: 'error', error: SIGN_IN_FOR_UPDATES_MESSAGE })
@@ -261,11 +326,17 @@ module.exports = {
   CHECK_INTERVAL_MS,
   SIGN_IN_FOR_UPDATES_MESSAGE,
   UPDATES_REFUSED_FOR_LICENCE_MESSAGE,
+  UPDATE_CHECKS_OFF_MESSAGE,
+  PREFERENCES_FILE,
 
   handlers: {
     'updates/get-state': () => state,
 
     'updates/get-log': () => log,
+
+    'updates/get-preferences': () => preferences(),
+
+    'updates/set-preferences': (_event, partial) => setPreferences(partial),
 
     'updates/check': () => {
       runCheck(true, false)
@@ -302,6 +373,7 @@ module.exports = {
     broadcastChanged = broadcast
     state.currentVersion = electronApp().getVersion()
     loadStore()
+    loadPreferences()
     reportPendingVersionOutcome()
 
     if (!electronApp().isPackaged) return

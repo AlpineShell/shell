@@ -158,3 +158,59 @@ describe('a feed that refuses the licence', () => {
     expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'error', error: '503 refused' })
   })
 })
+
+describe('the update-check switch', () => {
+  const preferencesFile = path.join(userDataDir, updater.PREFERENCES_FILE)
+
+  afterEach(() => {
+    updater.handlers['updates/set-preferences'](null, { checkForUpdates: true })
+  })
+
+  it('is on by default', () => {
+    expect(updater.handlers['updates/get-preferences']()).toEqual({ checkForUpdates: true })
+    expect(fs.existsSync(preferencesFile)).toBe(false)
+  })
+
+  it('persists the choice in update-prefs.json and broadcasts it', () => {
+    broadcasts.length = 0
+    expect(updater.handlers['updates/set-preferences'](null, { checkForUpdates: false })).toEqual({ checkForUpdates: false })
+    expect(JSON.parse(fs.readFileSync(preferencesFile, 'utf8'))).toEqual({ checkForUpdates: false })
+    expect(broadcasts.find((b) => b.channel === 'updates/preferences-changed')?.data).toEqual({ checkForUpdates: false })
+    expect(updater.handlers['updates/set-preferences'](null, { checkForUpdates: 'yes' })).toEqual({ checkForUpdates: false })
+    expect(updater.handlers['updates/set-preferences'](null, {})).toEqual({ checkForUpdates: false })
+  })
+
+  it('makes no request at all while off: not on the schedule, not by hand, not when the licence changes, not for a download', () => {
+    setLicence('token-8')
+    updater.handlers['updates/set-preferences'](null, { checkForUpdates: false })
+    const checksBefore = checkCalls.length
+    vi.advanceTimersByTime(3 * updater.CHECK_INTERVAL_MS)
+    expect(updater.handlers['updates/check']()).toMatchObject({ status: 'not-available' })
+    setLicence(null)
+    setLicence('token-8b')
+    updater.handlers['updates/download']()
+    expect(checkCalls).toHaveLength(checksBefore)
+    expect(downloadCalls).toHaveLength(0)
+    expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'error', error: updater.UPDATE_CHECKS_OFF_MESSAGE })
+  })
+
+  it('says in the log what off means when someone checks by hand', () => {
+    updater.handlers['updates/set-preferences'](null, { checkForUpdates: false })
+    updater.handlers['updates/check']()
+    const messages = updater.handlers['updates/get-log']().map((entry) => entry.message)
+    expect(messages.at(-1)).toBe(updater.UPDATE_CHECKS_OFF_MESSAGE)
+    expect(messages.at(-2)).toBe('Checking for updates…')
+  })
+
+  it('forgets an offered update when turned off and checks straight away when turned back on', () => {
+    setLicence('token-9')
+    updaterListeners.get('update-available')({ version: '9.9.9' })
+    expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'available', availableVersion: '9.9.9' })
+    updater.handlers['updates/set-preferences'](null, { checkForUpdates: false })
+    expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'not-available', availableVersion: null })
+    const checksBefore = checkCalls.length
+    updater.handlers['updates/set-preferences'](null, { checkForUpdates: true })
+    expect(checkCalls).toHaveLength(checksBefore + 1)
+    expect(checkCalls.at(-1)).toEqual({ Authorization: 'Bearer token-9' })
+  })
+})

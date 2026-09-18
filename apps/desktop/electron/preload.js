@@ -614,11 +614,18 @@ contextBridge.exposeInMainWorld('shell', {
     check: () => ipcRenderer.invoke('updates/check'),
     download: () => ipcRenderer.invoke('updates/download'),
     install: () => ipcRenderer.invoke('updates/install'),
+    preferences: () => ipcRenderer.invoke('updates/get-preferences'),
+    setPreferences: (partial) => ipcRenderer.invoke('updates/set-preferences', partial),
     onStateChanged: (callback) => {
       ipcRenderer.on('updates/state-changed', (_, data) => callback(data))
     },
     onLogChanged: (callback) => {
       ipcRenderer.on('updates/log-changed', (_, data) => callback(data))
+    },
+    onPreferencesChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('updates/preferences-changed', handler)
+      return () => ipcRenderer.removeListener('updates/preferences-changed', handler)
     },
   },
   windowsUpdate: {
