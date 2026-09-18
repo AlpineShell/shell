@@ -5,6 +5,7 @@ const { verifyLicenceToken, tokenExpiryMs, tokenIssuedAtMs } = require('../licen
 const { evaluateLicenceState, toMs } = require('../licenceState')
 const deviceIdentity = require('../deviceIdentity')
 const { regQuery } = require('../registryRead')
+const { guardHandlers } = require('../trustedSenders')
 
 const LICENCE_FILE_NAME = 'licence.json'
 const SETUP_COMPLETE_FILE_NAME = '.setup-complete'
@@ -116,6 +117,7 @@ function createLicenceService(overrides = {}) {
   let broadcast = null
   let cachedDeviceId = null
   let licenceWindowOpener = null
+  const statusListeners = new Set()
   let signInFlow = null
   let progress = idleProgress()
   let lastReportedKey = null
@@ -261,6 +263,19 @@ function createLicenceService(overrides = {}) {
     if (!force && key === lastReportedKey) return
     lastReportedKey = key
     if (broadcast) broadcast('licence/changed', status)
+    for (const listener of statusListeners) {
+      try {
+        listener(status)
+      } catch (error) {
+        deps.log(`status listener failed: ${error.message}`)
+      }
+    }
+  }
+
+  function onStatusChanged(listener) {
+    if (typeof listener !== 'function') return () => undefined
+    statusListeners.add(listener)
+    return () => statusListeners.delete(listener)
   }
 
   function setProgress(patch) {
@@ -728,6 +743,7 @@ function createLicenceService(overrides = {}) {
     runEvaluation,
     setLicenceWindowOpener,
     openLicenceWindow,
+    onStatusChanged,
     config,
   }
 }
@@ -736,6 +752,7 @@ const defaultService = createLicenceService()
 
 module.exports = {
   ...defaultService,
+  handlers: guardHandlers(defaultService.handlers),
   createLicenceService,
   LICENCE_FILE_NAME,
   BOOT_EVALUATION_DELAY_MS,
