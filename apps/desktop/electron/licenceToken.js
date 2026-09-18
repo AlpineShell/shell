@@ -111,10 +111,6 @@ function verifyLicenceToken(token, options = {}) {
   return { ok: true, reason: null, claims: payload }
 }
 
-function tokenExpiryMs(claims) {
-  return claims && Number.isFinite(claims.exp) ? claims.exp * 1000 : null
-}
-
 module.exports = {
   LICENCE_TOKEN_TYPE,
   LICENCE_TOKEN_ALGORITHM,
@@ -122,5 +118,4 @@ module.exports = {
   decodeLicenceToken,
   findPublicKeyPem,
   verifyLicenceToken,
-  tokenExpiryMs,
 }

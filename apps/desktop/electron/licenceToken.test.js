@@ -4,7 +4,6 @@ import crypto from 'crypto'
 const {
   verifyLicenceToken,
   decodeLicenceToken,
-  tokenExpiryMs,
   LICENCE_TOKEN_TYPE,
   LICENCE_TOKEN_AUDIENCE,
 } = await import('./licenceToken.js')
@@ -157,14 +156,5 @@ describe('verifyLicenceToken', () => {
 
   it('never trusts an empty key list', () => {
     expect(verifyLicenceToken(mintToken(signingKey), { ...fullOptions, publicKeys: [] })).toMatchObject({ ok: false, reason: 'unknown-kid' })
-  })
-})
-
-describe('claim timestamps', () => {
-  it('converts exp from seconds to milliseconds and reports none for a perpetual token', () => {
-    const { claims } = verifyLicenceToken(mintToken(signingKey), fullOptions)
-    expect(tokenExpiryMs(claims)).toBe(claims.exp * 1000)
-    expect(tokenExpiryMs(verifyLicenceToken(mintToken(signingKey, { exp: undefined }), fullOptions).claims)).toBeNull()
-    expect(tokenExpiryMs(null)).toBeNull()
   })
 })
