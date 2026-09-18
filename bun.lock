@@ -46,14 +46,6 @@
         "wait-on": "^9.0.4",
       },
     },
-    "packages/license": {
-      "name": "@alpine/license",
-      "version": "0.0.0",
-      "devDependencies": {
-        "typescript": "~5.9.3",
-        "vitest": "^3.0.0",
-      },
-    },
     "packages/plugin-sdk": {
       "name": "@alpine/plugin-sdk",
       "version": "0.1.0",
@@ -81,8 +73,6 @@
     "electron",
   ],
   "packages": {
-    "@alpine/license": ["@alpine/license@workspace:packages/license"],
-
     "@alpine/plugin-sdk": ["@alpine/plugin-sdk@workspace:packages/plugin-sdk"],
 
     "@alpine/ui": ["@alpine/ui@vendor/alpine-ui-0.8.0.tgz", { "dependencies": { "lucide-react": "^0.575.0" }, "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" } }, "sha512-fJa3jZioOZp3WEmGQ0HvzgiQ0Uub3+RMsfagGVTrsJaTss7OUrnGtJAHWkPcR8LgYGgNCnS05DQuTvzDysdBcA=="],

@@ -6,6 +6,7 @@ const installer = require('./installer')
 const updater = require('./updater')
 const explorerShell = require('./explorerShell')
 const shellExclusivity = require('./shellExclusivity')
+const { regQuery } = require('../registryRead')
 
 const CURSOR_VARIANT = 'Bibata-Modern-Ice'
 const REVERT_QUIT_DELAY_MS = 1200
@@ -48,16 +49,6 @@ function getCursorInstallDir() {
 
 function regAdd(keyPath, valueName, value, type = 'REG_SZ') {
   execFileSync('reg', ['add', keyPath, '/v', valueName, '/t', type, '/d', value, '/f'], { windowsHide: true })
-}
-
-function regQuery(keyPath, valueName) {
-  try {
-    const result = execSync(`reg query "${keyPath}" /v "${valueName}"`, { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-    const match = result.match(/REG_\w+\s+(.+)/)
-    return match ? match[1].trim() : null
-  } catch {
-    return null
-  }
 }
 
 function installCursors() {

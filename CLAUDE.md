@@ -11,7 +11,7 @@ Alpine Shell is a Windows desktop shell replacement built with Electron, React, 
 This is a Bun-workspaces monorepo. Run all commands from the repo root.
 
 - `apps/desktop/` — the Electron desktop shell (the original app; package name `alpine-shell`). Its build/release config (electron-builder, Railway/MinIO publish) lives in `apps/desktop/package.json`.
-- `packages/license/` — `@alpine/license`, the shared license/activation contract (types + key validation) imported by the desktop app.
+- `packages/plugin-sdk/` — `@alpine/plugin-sdk`, the contract plugins build against. Licensing has no shared package: the desktop verifies server-signed licence tokens in `apps/desktop/electron/licenceToken.js` against the keys baked into `electron/licenceConfig.generated.js`, and the account service ([AlpineShell/auth](https://github.com/AlpineShell/auth)) owns purchases, licences and activations.
 - `apps/desktop/vendor/` — the vendored release tarball of `@alpine/ui` ([AlpineShell/ui](https://github.com/AlpineShell/ui)), the shared React primitives (Button, Row, Toggle, …) and design tokens that settings and setup render with. Import primitives by name from `@alpine/ui`. A missing prop or look goes into the library and ships as a release, never into a local copy; `bun run propagate` in the ui repo opens the bump PR here.
 
 The website (marketing, docs, plugin marketplace pages) lives in its own repo: [AlpineShell/website](https://github.com/AlpineShell/website).
@@ -37,7 +37,10 @@ React hooks in `src/hooks/` follow a consistent pattern:
 - Hooks with setters (useVolume, useMonitors) add optimistic local state updates
 
 ### IPC Bridge
-`electron/preload.js` exposes `window.shell` and `window.topbar` APIs via Electron's context bridge. Types are defined globally in `src/types/shell.d.ts`.
+`electron/preload.js` exposes `window.shell` and `window.topbar` APIs via Electron's context bridge. Types are defined globally in `src/types/shell.d.ts`. `window.setup` and `window.licence` exist only on pages whose mode is `setup` or `settings`, so plugin widgets and plugin windows never see them.
+
+### Licence Module
+`electron/modules/licence.js` owns the desktop side of licensing: it reads `<userData>/licence.json`, verifies the Ed25519 licence token offline against the public keys baked into `electron/licenceConfig.generated.js` (written by `scripts/generateLicenceConfig.js`; a release build reads only that file and ignores every environment variable), computes the state (`development`, `valid`, `grace`, `unlicensed`, `lapsed`) with the pure state machine in `electron/licenceState.js`, runs the device-flow sign-in against the auth service and refreshes the token in the background. The trust root is the baked key list only: never add a key cache under userData or an environment override that a release build honours. Every handler that changes the machine (registering the shell, the Run entry, test-out, startup into shell mode) must call `licence.requireValid()` in the main process before acting; the renderer is never the gate.
 
 ## Commands
 

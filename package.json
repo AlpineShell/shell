@@ -13,8 +13,8 @@
     "start": "bun scripts/start.js",
     "build": "bun --filter @alpine/plugin-sdk build && bun --filter alpine-shell build",
     "release": "bun --filter @alpine/plugin-sdk build && bun --filter alpine-shell release",
-    "test": "bun --filter @alpine/plugin-sdk --filter alpine-shell --filter @alpine/license test",
-    "typecheck": "bun --filter @alpine/plugin-sdk --filter alpine-shell --filter @alpine/license typecheck",
+    "test": "bun --filter @alpine/plugin-sdk --filter alpine-shell test",
+    "typecheck": "bun --filter @alpine/plugin-sdk --filter alpine-shell typecheck",
     "lint": "bun --filter alpine-shell lint"
   }
 }

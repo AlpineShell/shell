@@ -7,6 +7,7 @@ const crypto = require('crypto')
 const os = require('os')
 const revertScript = require('./revertScript')
 const shellExclusivity = require('./shellExclusivity')
+const { regQuery } = require('../registryRead')
 
 const PRODUCT_NAME = 'Alpine Shell'
 const INSTALL_DIR_NAME = 'alpine-shell'
@@ -75,16 +76,6 @@ function isInstalled() {
 
 function regAdd(keyPath, valueName, value, type = 'REG_SZ') {
   execFileSync('reg', ['add', keyPath, '/v', valueName, '/t', type, '/d', value, '/f'], { windowsHide: true })
-}
-
-function regQuery(keyPath, valueName) {
-  try {
-    const result = execSync(`reg query "${keyPath}" /v "${valueName}"`, { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-    const match = result.match(/REG_\w+\s+(.+)/)
-    return match ? match[1].trim() : null
-  } catch {
-    return null
-  }
 }
 
 function regDelete(keyPath, valueName) {
