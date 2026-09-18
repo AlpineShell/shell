@@ -1,16 +1,35 @@
 const crypto = require('crypto')
+const { loadLicenceConfig } = require('./licenceConfig')
 
-let bakedPublicKeyPem = null
-try {
-  const baked = require('./marketplacePublicKey.generated')
-  if (baked && typeof baked.publicKeyPem === 'string' && baked.publicKeyPem.trim()) {
-    bakedPublicKeyPem = baked.publicKeyPem
+const GENERATED_KEY_FILE = 'marketplacePublicKey.generated.js'
+
+function readBakedPublicKeyPem() {
+  try {
+    const baked = require(`./${GENERATED_KEY_FILE}`)
+    if (baked && typeof baked.publicKeyPem === 'string' && baked.publicKeyPem.trim()) return baked.publicKeyPem
+  } catch {
+    void 0
   }
-} catch {
-  void 0
+  return null
 }
 
-const MARKETPLACE_PUBLIC_KEY = process.env.ALPINE_MARKETPLACE_PUBKEY || bakedPublicKeyPem || null
+function resolveMarketplacePublicKey({ baked, env, isReleaseBuild }) {
+  if (isReleaseBuild) return baked || null
+  const override = env && typeof env.ALPINE_MARKETPLACE_PUBKEY === 'string' ? env.ALPINE_MARKETPLACE_PUBKEY : ''
+  return override.trim() ? override : baked || null
+}
+
+let resolvedPublicKey
+function getMarketplacePublicKey() {
+  if (resolvedPublicKey === undefined) {
+    resolvedPublicKey = resolveMarketplacePublicKey({
+      baked: readBakedPublicKeyPem(),
+      env: process.env,
+      isReleaseBuild: loadLicenceConfig().isReleaseBuild === true,
+    })
+  }
+  return resolvedPublicKey
+}
 
 function toPublicKeyObject(key) {
   if (!key) return null
@@ -77,10 +96,6 @@ function generateKeyPair() {
   }
 }
 
-function getMarketplacePublicKey() {
-  return MARKETPLACE_PUBLIC_KEY
-}
-
 function verifyPackage(packageSha256Hex, signatureBase64) {
   if (typeof packageSha256Hex !== 'string' || !/^[0-9a-fA-F]{64}$/.test(packageSha256Hex)) {
     return { verified: false, reason: 'invalid-digest' }
@@ -101,7 +116,8 @@ function verifyPackage(packageSha256Hex, signatureBase64) {
 }
 
 module.exports = {
-  MARKETPLACE_PUBLIC_KEY,
+  GENERATED_KEY_FILE,
+  resolveMarketplacePublicKey,
   verifySignature,
   signBuffer,
   generateKeyPair,
