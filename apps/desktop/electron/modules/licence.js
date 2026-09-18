@@ -282,7 +282,7 @@ function createLicenceService(overrides = {}) {
     if (!id) return { kind: 'device-unreadable' }
     if (flow.bind === undefined) flow.bind = binding.produce()
     const payload = { deviceId: id, deviceName: flow.deviceName, appVersion: deps.appVersion() }
-    if (flow.bind) payload.bind = { tier: flow.bind.tier, hash: flow.bind.hash }
+    if (flow.bind) payload.binding = { tier: flow.bind.tier, hash: flow.bind.hash }
     if (typeof options.replaceActivationId === 'string' && options.replaceActivationId) payload.replaceActivationId = options.replaceActivationId
     const response = await postJson(`${config.authBase}/licences/activate`, payload, { authorization: `Bearer ${flow.sessionToken}` })
     if (flow.cancelled) return { kind: 'error', message: 'cancelled' }

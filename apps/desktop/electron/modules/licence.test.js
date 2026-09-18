@@ -359,7 +359,7 @@ describe('the device flow sign-in', () => {
 
     const activateCall = fetch.calls.find((call) => call.url.endsWith('/licences/activate'))
     expect(activateCall.headers.Authorization).toBe('Bearer sess_1')
-    expect(activateCall.body).toEqual({ deviceId: DEVICE_ID, deviceName: 'Study PC', appVersion: '1.2.3', bind: { tier: 'tpm', hash: BIND_HASH } })
+    expect(activateCall.body).toEqual({ deviceId: DEVICE_ID, deviceName: 'Study PC', appVersion: '1.2.3', binding: { tier: 'tpm', hash: BIND_HASH } })
 
     const signOut = fetch.calls.find((call) => call.url.endsWith('/api/auth/sign-out'))
     expect(signOut.headers.Authorization).toBe('Bearer sess_1')
@@ -440,7 +440,8 @@ describe('the device flow sign-in', () => {
     await settle()
     await advance(5000)
     const sent = fetch.calls.find((call) => call.url.endsWith('/licences/activate')).body
-    expect(sent.bind).toEqual({ tier: 'dpapi', hash: BIND_HASH })
+    expect(sent.binding).toEqual({ tier: 'dpapi', hash: BIND_HASH })
+    expect(sent).not.toHaveProperty('bind')
     expect(JSON.stringify(fetch.calls)).not.toContain('never-sent')
     expect(readRecord()).toMatchObject({ bindTier: 'dpapi' })
     expect(binding.forget).toHaveBeenCalledTimes(1)
@@ -463,7 +464,7 @@ describe('the device flow sign-in', () => {
     await advance(2 * NO_LICENCE_RECHECK_MS)
     expect(activations).toBe(3)
     expect(binding.produce).toHaveBeenCalledTimes(1)
-    expect(fetch.calls.filter((call) => call.url.endsWith('/licences/activate')).every((call) => call.body.bind.hash === BIND_HASH)).toBe(true)
+    expect(fetch.calls.filter((call) => call.url.endsWith('/licences/activate')).every((call) => call.body.binding.hash === BIND_HASH)).toBe(true)
   })
 
   it('activates without a binding when no tier is usable, and the token then carries none', async () => {
@@ -479,7 +480,7 @@ describe('the device flow sign-in', () => {
     await settle()
     await advance(5000)
     const sent = fetch.calls.find((call) => call.url.endsWith('/licences/activate')).body
-    expect(sent).not.toHaveProperty('bind')
+    expect(sent).not.toHaveProperty('binding')
     expect(readRecord()).toMatchObject({ bindTier: null })
     expect(service.status().state).toBe('valid')
   })
