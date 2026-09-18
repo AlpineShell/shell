@@ -35,7 +35,9 @@ marketplace read from:
   read base (owned by the marketplace subsystem). Catalog `url`/`iconUrl` values are **relative keys**
   resolved against this base, so no catalog data needs rewriting.
 - `apps/desktop/package.json → build.publish.url`: the installer auto-update channel baked into each
-  build. It points at the Railway `alpine-shell` URL, so builds check Railway for updates.
+  build. It points at the auth service's `/releases/` feed, which answers `latest.yml` and the
+  installer files only to a valid licence token (sent by the updater as a bearer header) and redirects
+  to a short-lived presigned URL on the Railway bucket. The bucket itself is where `publish.js` writes.
 
 ## What the USER must provision on Railway (NOT code)
 
@@ -83,4 +85,8 @@ these GitHub **secrets** and **variables** so you never hardcode the URL:
 | Secret | `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY` | Railway credentials. |
 | Secret | `STORAGE_BUCKET` | Bucket name (installer keys and `plugins/*` can share one bucket). |
 | Secret | `STORAGE_FORCE_PATH_STYLE` | `true` for MinIO. |
-| Variable | `UPDATE_PUBLIC_URL` | Optional override for the installer auto-update read base (trailing slash), baked into new builds via `-c.publish.url`. `package.json` already defaults `build.publish.url` to the Railway `alpine-shell` URL, so leave this unset to use that default; set it only to point new builds at a different base. |
+| Secret | `ALPINE_MARKETPLACE_PUBKEY` | Ed25519 SPKI public key (PEM, escaped one-line PEM or base64 PEM) matching `ALPINE_PLUGIN_SIGNING_KEY`, baked into `electron/marketplacePublicKey.generated.js` so a release build can verify plugin signatures. A release build ignores the run-time environment variable of the same name. |
+
+The update feed URL is not a variable: `package.json` `build.publish.url` is the only source, the
+workflow asserts that the packaged `resources/app-update.yml` carries it, and the old
+`UPDATE_PUBLIC_URL` variable is no longer read.

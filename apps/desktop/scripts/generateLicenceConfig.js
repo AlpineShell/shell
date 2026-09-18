@@ -10,9 +10,19 @@ const {
   parsePublicKeys,
   parseGraceUntil,
 } = require('../electron/licenceConfig')
+const { GENERATED_KEY_FILE } = require('../electron/pluginSignature')
 
 const ENV_PATH = path.join(__dirname, '..', '.env')
 const OUTPUT_PATH = path.join(__dirname, '..', 'electron', GENERATED_CONFIG_FILE)
+const MARKETPLACE_KEY_OUTPUT_PATH = path.join(__dirname, '..', 'electron', GENERATED_KEY_FILE)
+const SETTING_NAMES = [
+  'ALPINE_RELEASE_BUILD',
+  'ALPINE_LICENCE_PUBLIC_KEYS',
+  'ALPINE_AUTH_BASE',
+  'ALPINE_WEBSITE_BASE',
+  'ALPINE_UPGRADE_GRACE_UNTIL',
+  'ALPINE_MARKETPLACE_PUBKEY',
+]
 
 function isEd25519PublicKey(spkiPem) {
   try {
@@ -20,6 +30,16 @@ function isEd25519PublicKey(spkiPem) {
   } catch {
     return false
   }
+}
+
+function resolveReleaseGraceUntil(raw) {
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  if (value.toLowerCase() === 'none') return null
+  const parsed = parseGraceUntil(value)
+  if (parsed === null) {
+    throw new Error("ALPINE_RELEASE_BUILD=1 needs ALPINE_UPGRADE_GRACE_UNTIL set to a parseable date or the literal 'none'")
+  }
+  return parsed
 }
 
 function buildLicenceConfig(settings) {
@@ -33,18 +53,41 @@ function buildLicenceConfig(settings) {
     authBase: normaliseBase(settings.ALPINE_AUTH_BASE, DEFAULT_AUTH_BASE),
     websiteBase: normaliseBase(settings.ALPINE_WEBSITE_BASE, DEFAULT_WEBSITE_BASE),
     publicKeys,
-    upgradeGraceUntil: parseGraceUntil(settings.ALPINE_UPGRADE_GRACE_UNTIL),
+    upgradeGraceUntil: isReleaseBuild
+      ? resolveReleaseGraceUntil(settings.ALPINE_UPGRADE_GRACE_UNTIL)
+      : parseGraceUntil(settings.ALPINE_UPGRADE_GRACE_UNTIL),
   }
+}
+
+function decodeBase64Pem(value) {
+  try {
+    const decoded = Buffer.from(value, 'base64').toString('utf8')
+    return decoded.includes('BEGIN PUBLIC KEY') ? decoded : null
+  } catch {
+    return null
+  }
+}
+
+function normaliseMarketplacePublicKey(raw) {
+  const trimmed = typeof raw === 'string' ? raw.trim() : ''
+  if (!trimmed) return null
+  const unescaped = trimmed.replace(/\\n/g, '\n')
+  const pem = unescaped.includes('BEGIN PUBLIC KEY') ? unescaped : decodeBase64Pem(unescaped)
+  if (!pem || !isEd25519PublicKey(pem)) throw new Error('ALPINE_MARKETPLACE_PUBKEY is not an Ed25519 SPKI PEM public key')
+  return `${pem.trim()}\n`
 }
 
 function renderModule(config) {
   return `module.exports = ${JSON.stringify(config, null, 2)}\n`
 }
 
+function renderMarketplaceKeyModule(publicKeyPem) {
+  return `module.exports = {\n  publicKeyPem: ${JSON.stringify(publicKeyPem)},\n}\n`
+}
+
 function mergeSettings(env, dotEnv) {
-  const names = ['ALPINE_RELEASE_BUILD', 'ALPINE_LICENCE_PUBLIC_KEYS', 'ALPINE_AUTH_BASE', 'ALPINE_WEBSITE_BASE', 'ALPINE_UPGRADE_GRACE_UNTIL']
   const settings = {}
-  for (const name of names) {
+  for (const name of SETTING_NAMES) {
     const fromEnv = typeof env[name] === 'string' ? env[name] : ''
     const fromDotEnv = typeof dotEnv[name] === 'string' ? dotEnv[name] : ''
     settings[name] = fromEnv || fromDotEnv
@@ -53,10 +96,20 @@ function mergeSettings(env, dotEnv) {
 }
 
 function run() {
-  const config = buildLicenceConfig(mergeSettings(process.env, readDotEnv(ENV_PATH)))
+  const settings = mergeSettings(process.env, readDotEnv(ENV_PATH))
+  const config = buildLicenceConfig(settings)
+  const marketplacePublicKey = normaliseMarketplacePublicKey(settings.ALPINE_MARKETPLACE_PUBKEY)
   fs.writeFileSync(OUTPUT_PATH, renderModule(config), 'utf8')
+  fs.writeFileSync(MARKETPLACE_KEY_OUTPUT_PATH, renderMarketplaceKeyModule(marketplacePublicKey), 'utf8')
   const kids = config.publicKeys.map((key) => key.kid).join(', ') || 'none'
   console.log(`[licence] Baked ${config.isReleaseBuild ? 'release' : 'development'} config: auth ${config.authBase}, keys ${kids}, upgrade grace until ${config.upgradeGraceUntil || 'none'}`)
+  if (marketplacePublicKey) {
+    console.log('[licence] Baked the marketplace public key')
+  } else if (config.isReleaseBuild) {
+    console.warn('[licence] ALPINE_MARKETPLACE_PUBKEY is unset: this release build cannot verify marketplace plugin signatures')
+  } else {
+    console.log('[licence] No marketplace public key; the app falls back to ALPINE_MARKETPLACE_PUBKEY at run time')
+  }
 }
 
 if (require.main === module) {
@@ -68,4 +121,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { buildLicenceConfig, renderModule, mergeSettings, run }
+module.exports = { buildLicenceConfig, normaliseMarketplacePublicKey, renderModule, renderMarketplaceKeyModule, mergeSettings, run }

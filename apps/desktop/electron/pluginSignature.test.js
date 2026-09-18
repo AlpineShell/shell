@@ -5,6 +5,7 @@ import {
   signBuffer,
   generateKeyPair,
   getMarketplacePublicKey,
+  resolveMarketplacePublicKey,
   verifyPackage,
 } from './pluginSignature.js'
 
@@ -97,5 +98,21 @@ describe('verifyPackage', () => {
     } else {
       expect(r.reason).toBe('no-marketplace-key')
     }
+  })
+})
+
+describe('resolveMarketplacePublicKey', () => {
+  const baked = generateKeyPair().publicKeyPem
+  const override = generateKeyPair().publicKeyPem
+
+  it('ignores the environment key in a release build', () => {
+    expect(resolveMarketplacePublicKey({ baked, env: { ALPINE_MARKETPLACE_PUBKEY: override }, isReleaseBuild: true })).toBe(baked)
+    expect(resolveMarketplacePublicKey({ baked: null, env: { ALPINE_MARKETPLACE_PUBKEY: override }, isReleaseBuild: true })).toBeNull()
+  })
+
+  it('lets the environment override the baked key in a development build', () => {
+    expect(resolveMarketplacePublicKey({ baked, env: { ALPINE_MARKETPLACE_PUBKEY: override }, isReleaseBuild: false })).toBe(override)
+    expect(resolveMarketplacePublicKey({ baked, env: { ALPINE_MARKETPLACE_PUBKEY: '  ' }, isReleaseBuild: false })).toBe(baked)
+    expect(resolveMarketplacePublicKey({ baked: null, env: {}, isReleaseBuild: false })).toBeNull()
   })
 })

@@ -1,10 +1,9 @@
-const { app } = require('electron')
-const { autoUpdater, CancellationToken } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
 const installer = require('./installer')
 const frecency = require('./frecency')
 const appIcons = require('./appIcons')
+const licence = require('./licence')
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const INITIAL_CHECK_DELAY_MS = 10000
@@ -12,10 +11,12 @@ const UPDATER_PRECOMPILE_DELAY_MS = 60000
 const MAX_LOG_ENTRIES = 50
 const RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 5 * 60 * 1000]
 const DOWNLOAD_STALL_TIMEOUT_MS = 60 * 1000
+const LICENCE_STATES_WITH_UPDATES = new Set(['valid', 'grace'])
+const SIGN_IN_FOR_UPDATES_MESSAGE = 'Sign in to get updates'
 
 const state = {
   status: 'idle',
-  currentVersion: app.getVersion(),
+  currentVersion: null,
   availableVersion: null,
   progressPercent: 0,
   error: null,
@@ -31,6 +32,21 @@ let retryAttempt = 0
 let allowRetryForCurrentCheck = false
 let downloadCancellation = null
 let downloadStallTimer = null
+let boundAutoUpdater = null
+let feedCredentialsPresent = false
+
+function electronApp() {
+  return require('electron').app
+}
+
+function updaterLibrary() {
+  return require('electron-updater')
+}
+
+function autoUpdater() {
+  if (!boundAutoUpdater) boundAutoUpdater = bindAutoUpdater(updaterLibrary().autoUpdater)
+  return boundAutoUpdater
+}
 
 function setState(partial) {
   Object.assign(state, partial)
@@ -38,7 +54,7 @@ function setState(partial) {
 }
 
 function logFilePath() {
-  return path.join(app.getPath('userData'), 'update-log.json')
+  return path.join(electronApp().getPath('userData'), 'update-log.json')
 }
 
 function persistStore() {
@@ -86,9 +102,29 @@ function scheduleRetry() {
   }, delay)
 }
 
+function feedAuthorization() {
+  if (!LICENCE_STATES_WITH_UPDATES.has(licence.status().state)) return null
+  const token = licence.currentToken()
+  return token ? `Bearer ${token}` : null
+}
+
+function applyFeedCredentials() {
+  const authorization = feedAuthorization()
+  autoUpdater().requestHeaders = authorization ? { Authorization: authorization } : null
+  feedCredentialsPresent = authorization !== null
+  return feedCredentialsPresent
+}
+
+function reportCheckSkippedForLicence(announce) {
+  if (!announce) return
+  pushLog('info', 'Checking for updates…')
+  pushLog('info', SIGN_IN_FOR_UPDATES_MESSAGE)
+  setState({ status: 'error', error: SIGN_IN_FOR_UPDATES_MESSAGE })
+}
+
 function runCheck(announce, allowRetry = false) {
   if (state.status === 'downloading' || state.status === 'downloaded') return
-  if (!app.isPackaged) {
+  if (!electronApp().isPackaged) {
     if (announce) {
       pushLog('info', 'Checking for updates…')
       pushLog('info', 'Update checks run only in the installed app.')
@@ -96,9 +132,22 @@ function runCheck(announce, allowRetry = false) {
     setState({ status: 'not-available' })
     return
   }
+  if (!applyFeedCredentials()) {
+    reportCheckSkippedForLicence(announce)
+    return
+  }
   announceResult = announce
   allowRetryForCurrentCheck = allowRetry
-  autoUpdater.checkForUpdates().catch(() => {})
+  autoUpdater().checkForUpdates().catch(() => {})
+}
+
+function onLicenceChanged() {
+  const hadCredentials = feedCredentialsPresent
+  const hasCredentials = applyFeedCredentials()
+  if (hasCredentials && !hadCredentials) {
+    clearRetry()
+    runCheck(false, true)
+  }
 }
 
 function clearDownloadWatch() {
@@ -125,59 +174,82 @@ function abandonStalledDownload() {
 
 function startDownload() {
   clearDownloadWatch()
-  downloadCancellation = new CancellationToken()
+  if (!applyFeedCredentials()) {
+    pushLog('error', `Update error: ${SIGN_IN_FOR_UPDATES_MESSAGE}`)
+    setState({ status: 'error', error: SIGN_IN_FOR_UPDATES_MESSAGE })
+    return
+  }
+  downloadCancellation = new (updaterLibrary().CancellationToken)()
   armDownloadStallTimer()
-  autoUpdater.downloadUpdate(downloadCancellation).catch(() => {})
+  autoUpdater().downloadUpdate(downloadCancellation).catch(() => {})
 }
 
-autoUpdater.autoDownload = false
-autoUpdater.autoInstallOnAppQuit = false
+function bindAutoUpdater(updater) {
+  updater.autoDownload = false
+  updater.autoInstallOnAppQuit = false
 
-autoUpdater.on('checking-for-update', () => {
-  if (announceResult) pushLog('info', 'Checking for updates…')
-  setState({ status: 'checking', error: null })
-})
+  updater.on('checking-for-update', () => {
+    if (announceResult) pushLog('info', 'Checking for updates…')
+    setState({ status: 'checking', error: null })
+  })
 
-autoUpdater.on('update-available', (info) => {
-  clearRetry()
-  pushLog('info', `Update available — version ${info.version}`)
-  announceResult = false
-  setState({ status: 'available', availableVersion: info.version })
-})
+  updater.on('update-available', (info) => {
+    clearRetry()
+    pushLog('info', `Update available — version ${info.version}`)
+    announceResult = false
+    setState({ status: 'available', availableVersion: info.version })
+  })
 
-autoUpdater.on('update-not-available', () => {
-  clearRetry()
-  if (announceResult) pushLog('info', `Up to date — version ${state.currentVersion}`)
-  announceResult = false
-  setState({ status: 'not-available' })
-})
+  updater.on('update-not-available', () => {
+    clearRetry()
+    if (announceResult) pushLog('info', `Up to date — version ${state.currentVersion}`)
+    announceResult = false
+    setState({ status: 'not-available' })
+  })
 
-autoUpdater.on('download-progress', (progress) => {
-  if (downloadCancellation) armDownloadStallTimer()
-  setState({ status: 'downloading', progressPercent: Math.round(progress.percent) })
-})
+  updater.on('download-progress', (progress) => {
+    if (downloadCancellation) armDownloadStallTimer()
+    setState({ status: 'downloading', progressPercent: Math.round(progress.percent) })
+  })
 
-autoUpdater.on('update-downloaded', (info) => {
-  clearDownloadWatch()
-  downloadedFile = info.downloadedFile ?? null
-  pushLog('info', `Downloaded version ${info.version} — ready to install`)
-  setState({ status: 'downloaded', availableVersion: info.version, progressPercent: 100 })
-})
+  updater.on('update-downloaded', (info) => {
+    clearDownloadWatch()
+    downloadedFile = info.downloadedFile ?? null
+    pushLog('info', `Downloaded version ${info.version} — ready to install`)
+    setState({ status: 'downloaded', availableVersion: info.version, progressPercent: 100 })
+  })
 
-autoUpdater.on('error', (err) => {
-  clearDownloadWatch()
-  pushLog('error', `Update error: ${toMessage(err)}`)
-  announceResult = false
-  setState({ status: 'error', error: toMessage(err) })
-  if (allowRetryForCurrentCheck) scheduleRetry()
-})
+  updater.on('error', (err) => {
+    clearDownloadWatch()
+    pushLog('error', `Update error: ${toMessage(err)}`)
+    announceResult = false
+    setState({ status: 'error', error: toMessage(err) })
+    if (allowRetryForCurrentCheck) scheduleRetry()
+  })
+
+  return updater
+}
 
 function isUpdatePending() {
   return state.status === 'downloading' || state.status === 'downloaded'
 }
 
+function reportPendingVersionOutcome() {
+  if (!pendingVersion) return
+  const target = pendingVersion
+  pendingVersion = null
+  if (target === state.currentVersion) {
+    pushLog('info', `Updated to version ${state.currentVersion}`)
+  } else {
+    pushLog('info', `Update to version ${target} didn't finish — still on version ${state.currentVersion}`)
+  }
+}
+
 module.exports = {
   isUpdatePending,
+  INITIAL_CHECK_DELAY_MS,
+  CHECK_INTERVAL_MS,
+  SIGN_IN_FOR_UPDATES_MESSAGE,
 
   handlers: {
     'updates/get-state': () => state,
@@ -190,7 +262,7 @@ module.exports = {
     },
 
     'updates/download': () => {
-      if (app.isPackaged) {
+      if (electronApp().isPackaged) {
         pushLog('info', `Downloading version ${state.availableVersion ?? ''}…`)
         setState({ status: 'downloading', progressPercent: 0 })
         startDownload()
@@ -199,6 +271,7 @@ module.exports = {
     },
 
     'updates/install': () => {
+      const app = electronApp()
       if (app.isPackaged) {
         pendingVersion = state.availableVersion
         pushLog('info', `Installing version ${state.availableVersion ?? ''} — Alpine Shell will restart…`)
@@ -207,7 +280,7 @@ module.exports = {
           try { appIcons.flushDiskCache() } catch {}
           app.exit(0)
         } else {
-          autoUpdater.quitAndInstall(true, true)
+          autoUpdater().quitAndInstall(true, true)
         }
       }
       return undefined
@@ -216,19 +289,13 @@ module.exports = {
 
   start(broadcast) {
     broadcastChanged = broadcast
+    state.currentVersion = electronApp().getVersion()
     loadStore()
+    reportPendingVersionOutcome()
 
-    if (pendingVersion) {
-      const target = pendingVersion
-      pendingVersion = null
-      if (target === state.currentVersion) {
-        pushLog('info', `Updated to version ${state.currentVersion}`)
-      } else {
-        pushLog('info', `Update to version ${target} didn't finish — still on version ${state.currentVersion}`)
-      }
-    }
+    if (!electronApp().isPackaged) return
 
-    if (!app.isPackaged) return
+    licence.onStatusChanged(onLicenceChanged)
 
     setTimeout(() => {
       clearRetry()
