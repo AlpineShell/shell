@@ -5,7 +5,6 @@ const {
   verifyLicenceToken,
   decodeLicenceToken,
   tokenExpiryMs,
-  tokenIssuedAtMs,
   LICENCE_TOKEN_TYPE,
   LICENCE_TOKEN_AUDIENCE,
 } = await import('./licenceToken.js')
@@ -95,10 +94,18 @@ describe('verifyLicenceToken', () => {
     expect(verifyLicenceToken(mintToken(signingKey), { ...fullOptions, issuer: `${ISSUER}/` }).ok).toBe(true)
   })
 
-  it('rejects an expired token but still hands back its claims', () => {
+  it('accepts a token with no exp at any time, because a licence never lapses', () => {
+    const perpetual = mintToken(signingKey, { exp: undefined })
+    expect(verifyLicenceToken(perpetual, fullOptions).ok).toBe(true)
+    expect(verifyLicenceToken(perpetual, { ...fullOptions, now: NOW_MS + 50 * 365 * 24 * 3600 * 1000 }).ok).toBe(true)
+    expect(verifyLicenceToken(perpetual, fullOptions).claims.exp).toBeUndefined()
+  })
+
+  it('still honours exp when a token carries one', () => {
     const result = verifyLicenceToken(mintToken(signingKey, { exp: NOW_SECONDS - 1 }), fullOptions)
     expect(result).toMatchObject({ ok: false, reason: 'expired' })
     expect(result.claims.exp).toBe(NOW_SECONDS - 1)
+    expect(verifyLicenceToken(mintToken(signingKey, { exp: NOW_SECONDS + 1 }), fullOptions).ok).toBe(true)
   })
 
   it('rejects a token that is not yet valid', () => {
@@ -118,7 +125,12 @@ describe('verifyLicenceToken', () => {
 
   it('rejects a token missing a required claim', () => {
     expect(verifyLicenceToken(mintToken(signingKey, { act: undefined }), fullOptions)).toMatchObject({ ok: false, reason: 'missing-claims' })
-    expect(verifyLicenceToken(mintToken(signingKey, { exp: 'soon' }), fullOptions)).toMatchObject({ ok: false, reason: 'missing-claims' })
+    expect(verifyLicenceToken(mintToken(signingKey, { iat: undefined }), fullOptions)).toMatchObject({ ok: false, reason: 'missing-claims' })
+  })
+
+  it('rejects an exp or nbf that is present but not a number', () => {
+    expect(verifyLicenceToken(mintToken(signingKey, { exp: 'soon' }), fullOptions)).toMatchObject({ ok: false, reason: 'malformed-claims' })
+    expect(verifyLicenceToken(mintToken(signingKey, { nbf: 'later' }), fullOptions)).toMatchObject({ ok: false, reason: 'malformed-claims' })
   })
 
   it('rejects tampered claims', () => {
@@ -149,11 +161,10 @@ describe('verifyLicenceToken', () => {
 })
 
 describe('claim timestamps', () => {
-  it('converts exp and iat from seconds to milliseconds', () => {
+  it('converts exp from seconds to milliseconds and reports none for a perpetual token', () => {
     const { claims } = verifyLicenceToken(mintToken(signingKey), fullOptions)
     expect(tokenExpiryMs(claims)).toBe(claims.exp * 1000)
-    expect(tokenIssuedAtMs(claims)).toBe(claims.iat * 1000)
+    expect(tokenExpiryMs(verifyLicenceToken(mintToken(signingKey, { exp: undefined }), fullOptions).claims)).toBeNull()
     expect(tokenExpiryMs(null)).toBeNull()
-    expect(tokenIssuedAtMs({})).toBeNull()
   })
 })

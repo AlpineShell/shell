@@ -8,7 +8,6 @@ const {
   readDotEnv,
   normaliseBase,
   parsePublicKeys,
-  parseGraceUntil,
 } = require('../electron/licenceConfig')
 const { GENERATED_KEY_FILE } = require('../electron/pluginSignature')
 
@@ -20,7 +19,6 @@ const SETTING_NAMES = [
   'ALPINE_LICENCE_PUBLIC_KEYS',
   'ALPINE_AUTH_BASE',
   'ALPINE_WEBSITE_BASE',
-  'ALPINE_UPGRADE_GRACE_UNTIL',
   'ALPINE_MARKETPLACE_PUBKEY',
 ]
 
@@ -30,16 +28,6 @@ function isEd25519PublicKey(spkiPem) {
   } catch {
     return false
   }
-}
-
-function resolveReleaseGraceUntil(raw) {
-  const value = typeof raw === 'string' ? raw.trim() : ''
-  if (value.toLowerCase() === 'none') return null
-  const parsed = parseGraceUntil(value)
-  if (parsed === null) {
-    throw new Error("ALPINE_RELEASE_BUILD=1 needs ALPINE_UPGRADE_GRACE_UNTIL set to a parseable date or the literal 'none'")
-  }
-  return parsed
 }
 
 function buildLicenceConfig(settings) {
@@ -53,9 +41,6 @@ function buildLicenceConfig(settings) {
     authBase: normaliseBase(settings.ALPINE_AUTH_BASE, DEFAULT_AUTH_BASE),
     websiteBase: normaliseBase(settings.ALPINE_WEBSITE_BASE, DEFAULT_WEBSITE_BASE),
     publicKeys,
-    upgradeGraceUntil: isReleaseBuild
-      ? resolveReleaseGraceUntil(settings.ALPINE_UPGRADE_GRACE_UNTIL)
-      : parseGraceUntil(settings.ALPINE_UPGRADE_GRACE_UNTIL),
   }
 }
 
@@ -102,7 +87,7 @@ function run() {
   fs.writeFileSync(OUTPUT_PATH, renderModule(config), 'utf8')
   fs.writeFileSync(MARKETPLACE_KEY_OUTPUT_PATH, renderMarketplaceKeyModule(marketplacePublicKey), 'utf8')
   const kids = config.publicKeys.map((key) => key.kid).join(', ') || 'none'
-  console.log(`[licence] Baked ${config.isReleaseBuild ? 'release' : 'development'} config: auth ${config.authBase}, keys ${kids}, upgrade grace until ${config.upgradeGraceUntil || 'none'}`)
+  console.log(`[licence] Baked ${config.isReleaseBuild ? 'release' : 'development'} config: auth ${config.authBase}, keys ${kids}`)
   if (marketplacePublicKey) {
     console.log('[licence] Baked the marketplace public key')
   } else if (config.isReleaseBuild) {
