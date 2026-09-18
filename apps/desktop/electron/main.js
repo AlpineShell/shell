@@ -877,11 +877,13 @@ app.whenReady().then(async () => {
   }
 
   if (!isDev && installer.isPortableRun()) {
+    restoreExplorerIfShellIsLapsed()
     createSetupWindow()
     return
   }
 
   if (!isDev && setup.isFirstRun()) {
+    restoreExplorerIfShellIsLapsed()
     createSetupWindow()
     return
   }
@@ -960,6 +962,12 @@ function signalShellReadyForUpdate() {
   writeMarkerWhenSettled()
 }
 
+function restoreExplorerIfShellIsLapsed() {
+  if (licence.status().state !== 'lapsed') return
+  const handBack = installer.handBackForLicence()
+  if (!handBack.success) console.error('[licence] could not restore Explorer before the setup window:', handBack.error)
+}
+
 function handBackForLapsedLicence(decision) {
   const handBack = installer.handBackForLicence()
   if (handBack.success) {
@@ -969,6 +977,7 @@ function handBackForLapsedLicence(decision) {
   }
   console.error('[licence] licence lapsed but the hand-back failed; starting the shell so the desktop is not lost:', handBack.error)
   licenceDiagnostics.record('hand-back-failed', { error: handBack.error, reason: decision.reason, graceUntil: decision.graceUntil })
+  setTimeout(() => createSetupWindow('signIn'), STARTUP_LICENCE_NOTICE_DELAY_MS)
   return { proceed: true, notice: { ...decision, state: 'grace', reason: decision.reason || 'invalid' } }
 }
 
@@ -986,7 +995,13 @@ function decideStartupLicence() {
 function startShellMode() {
   if (shellModeRunning) return
   const startupLicence = decideStartupLicence()
-  if (!startupLicence.proceed) return
+  if (!startupLicence.proceed) {
+    if (isUpdateRestart()) {
+      installer.clearUpdateHandoff()
+      signalShellReadyForUpdate()
+    }
+    return
+  }
   shellModeRunning = true
   if (startupLicence.notice) setTimeout(() => licenceNotice.observe(startupLicence.notice), STARTUP_LICENCE_NOTICE_DELAY_MS)
 

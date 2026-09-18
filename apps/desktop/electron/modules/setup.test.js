@@ -161,6 +161,21 @@ describe('setup handlers behind the licence gate', () => {
     await setup.handlers['setup/uninstall'](fromSetupWindow)
     expect(installerMock.uninstall).toHaveBeenCalledTimes(2)
   })
+
+  it('does not release the licence seat when an update blocks the uninstall', async () => {
+    electronApp.isPackaged = true
+    const wasUpdateHandoffActive = installerMock.isUpdateHandoffActive
+    installerMock.isUpdateHandoffActive = () => true
+    licenceMock.releaseSelf.mockClear()
+    installerMock.uninstall.mockClear()
+
+    const result = await setup.handlers['setup/uninstall'](fromSetupWindow)
+
+    expect(result.success).toBe(false)
+    expect(licenceMock.releaseSelf).not.toHaveBeenCalled()
+    expect(installerMock.uninstall).not.toHaveBeenCalled()
+    installerMock.isUpdateHandoffActive = wasUpdateHandoffActive
+  })
 })
 
 describe('setup handlers and their callers', () => {

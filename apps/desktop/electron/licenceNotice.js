@@ -1,7 +1,6 @@
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 const NOTICE_REPEAT_MS = DAY_MS
-const HAND_BACK_WARNING_WINDOW_MS = 2 * DAY_MS
 const NOTICE_ID = 'licence'
 const NOTICE_TITLE = 'Licence needs attention'
 
@@ -14,9 +13,11 @@ function formatDate(iso) {
 function reasonMessage(status) {
   switch (status.reason) {
     case 'expired':
-      return `Alpine Shell could not renew its licence; it keeps working until ${formatDate(status.graceUntil)}.`
+      return 'Alpine Shell could not renew its licence.'
     case 'device-unreadable':
-      return `Alpine Shell could not confirm this PC's identity; it keeps working until ${formatDate(status.graceUntil)}.`
+      return "Alpine Shell could not confirm this PC's identity."
+    case 'secret-unreadable':
+      return 'Alpine Shell needs you to sign in again on this PC.'
     case 'moved':
       return `This licence was moved to ${status.movedTo || 'another PC'}.`
     case 'refunded':
@@ -30,22 +31,20 @@ function reasonMessage(status) {
     case 'account-deleted':
       return 'The account that owns this licence was deleted.'
     case 'upgrade':
-      return 'Alpine Shell now needs a licence; sign in to keep using it.'
+      return 'Alpine Shell now needs a licence.'
     default:
-      return 'Alpine Shell could not confirm its licence; sign in to keep using it.'
+      return 'Alpine Shell could not confirm its licence.'
   }
 }
 
-function handBackWarning(status, now) {
+function handBackDeadline(status) {
   const until = status.graceUntil ? Date.parse(status.graceUntil) : NaN
-  if (!Number.isFinite(until) || until - now > HAND_BACK_WARNING_WINDOW_MS) return null
-  return `Windows Explorer comes back on ${formatDate(status.graceUntil)} unless you sign in.`
+  if (!Number.isFinite(until)) return 'Sign in to keep using it.'
+  return `It keeps working until ${formatDate(status.graceUntil)}, when Windows Explorer comes back unless you sign in.`
 }
 
-function graceNoticeMessage(status, now) {
-  const warning = handBackWarning(status, now)
-  const base = reasonMessage(status)
-  return warning ? `${base} ${warning}` : base
+function graceNoticeMessage(status) {
+  return `${reasonMessage(status)} ${handBackDeadline(status)}`
 }
 
 function createLicenceNotice({ show, openLicenceWindow, now = () => Date.now() }) {
@@ -70,7 +69,7 @@ function createLicenceNotice({ show, openLicenceWindow, now = () => Date.now() }
     show({
       id: NOTICE_ID,
       title: NOTICE_TITLE,
-      message: graceNoticeMessage(status, lastShownAt),
+      message: graceNoticeMessage(status),
       timeoutMs: 0,
       confirm: { label: 'Sign in', cancelLabel: 'Not now', run: () => openLicenceWindow() },
     })
@@ -84,7 +83,6 @@ module.exports = {
   NOTICE_ID,
   NOTICE_TITLE,
   NOTICE_REPEAT_MS,
-  HAND_BACK_WARNING_WINDOW_MS,
   graceNoticeMessage,
   createLicenceNotice,
 }

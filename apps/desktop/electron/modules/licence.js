@@ -643,7 +643,8 @@ function createLicenceService(overrides = {}) {
     if (evaluationInFlight) return evaluationInFlight
     evaluationInFlight = (async () => {
       try {
-        reportStatus(evaluateFromDisk().status, false)
+        const status = evaluateFromDisk().status
+        reportStatus(status, status.state === 'grace')
         await refreshIfDue()
       } catch (error) {
         deps.log(`evaluation failed: ${error.message}`)

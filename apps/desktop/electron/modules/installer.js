@@ -129,6 +129,7 @@ function handBackForLicence() {
     if (handedBack) {
       regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
       if (!isShellRevertedToExplorer()) return { success: false, error: SHELL_REVERT_FAILED }
+      try { regAdd('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'AutoRestartShell', '1', 'REG_DWORD') } catch {}
     }
     try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
     if (explorerNeedsStarting(handedBack)) startExplorer()

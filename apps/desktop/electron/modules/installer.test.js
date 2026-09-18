@@ -124,6 +124,25 @@ describe('handBackForLicence', () => {
     expect(spawnCalls).toHaveLength(0)
   })
 
+  it('restores AutoRestartShell so a later Explorer crash still relaunches a shell', () => {
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), ALPINE_SHELL_VALUE)
+
+    installer.handBackForLicence()
+
+    const autoRestartKey = 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+    expect(regCalls.filter((call) => call[1] === 'add' && call[4] === 'AutoRestartShell')).toHaveLength(1)
+    expect(registry.get(registryKey(autoRestartKey, 'AutoRestartShell'))).toBe('1')
+  })
+
+  it('does not touch AutoRestartShell when Explorer already hosts the shell', () => {
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    explorerHosting = true
+
+    installer.handBackForLicence()
+
+    expect(regCalls.filter((call) => call[1] === 'add' && call[4] === 'AutoRestartShell')).toHaveLength(0)
+  })
+
   it('never touches the opt-out marker, the cursors, the Run entry or the hand-back helper', () => {
     registry.set(registryKey(WINLOGON_KEY, 'Shell'), ALPINE_SHELL_VALUE)
     registry.set(registryKey('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell'), `"${ALPINE_SHELL_VALUE}"`)

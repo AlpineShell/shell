@@ -82,7 +82,7 @@ function problemForOutcome(outcome: LicenceActivationOutcome): SignInProblem | n
 }
 
 function seatProblem(outcome: LicenceActivationOutcome): string | null {
-  if (outcome.kind === 'move-limit') return `You can move a licence again on ${formatDate(outcome.retryAt)}.`
+  if (outcome.kind === 'move-limit') return `You have moved this licence to a new PC several times recently. Release it from your account page at alpineshell.com/account, or move it again on ${formatDate(outcome.retryAt)}.`
   if (outcome.kind === 'replacement-not-yours') return 'That PC is not on one of your licences.'
   return null
 }

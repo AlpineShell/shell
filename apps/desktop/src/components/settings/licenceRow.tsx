@@ -50,6 +50,11 @@ export default function LicenceRow() {
           )}
         </div>
       </Row>
+      {status.activationId && (
+        <p className="mt-2 text-xs text-ink-quiet">
+          Signing out hands this PC's desktop back to Windows Explorer at the next sign-in. You can sign in again any time to get it back.
+        </p>
+      )}
     </Card>
   )
 }

@@ -59,13 +59,13 @@ describe('the grace notice', () => {
     expect(show.mock.calls[1][0].message).toContain('moved to LAPTOP-2')
   })
 
-  it('words each reason and names the day Explorer comes back in the last two days', () => {
-    expect(graceNoticeMessage(graceStatus(), NOW)).toMatch(/could not renew its licence; it keeps working until/)
-    expect(graceNoticeMessage(graceStatus(), NOW)).not.toContain('Windows Explorer comes back')
-    expect(graceNoticeMessage(graceStatus({ reason: 'refunded' }), NOW)).toBe('This purchase was refunded.')
-    expect(graceNoticeMessage(graceStatus({ reason: 'upgrade' }), NOW)).toBe('Alpine Shell now needs a licence; sign in to keep using it.')
-    expect(graceNoticeMessage(graceStatus({ reason: 'moved', movedTo: 'DESK-1' }), NOW)).toBe('This licence was moved to DESK-1.')
-    const lastDay = graceStatus({ graceUntil: new Date(NOW + DAY_MS).toISOString() })
-    expect(graceNoticeMessage(lastDay, NOW)).toContain('Windows Explorer comes back on')
+  it('words each reason and names the day Explorer comes back in every grace message', () => {
+    for (const reason of ['expired', 'refunded', 'upgrade', 'moved', 'disputed', 'released', 'conflict', 'secret-unreadable']) {
+      expect(graceNoticeMessage(graceStatus({ reason, movedTo: 'DESK-1' }))).toContain('Windows Explorer comes back unless you sign in')
+    }
+    expect(graceNoticeMessage(graceStatus())).toContain('Alpine Shell could not renew its licence.')
+    expect(graceNoticeMessage(graceStatus({ reason: 'refunded' }))).toContain('This purchase was refunded.')
+    expect(graceNoticeMessage(graceStatus({ reason: 'upgrade' }))).toContain('Alpine Shell now needs a licence.')
+    expect(graceNoticeMessage(graceStatus({ reason: 'moved', movedTo: 'DESK-1' }))).toContain('This licence was moved to DESK-1.')
   })
 })

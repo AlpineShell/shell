@@ -285,13 +285,14 @@ async function releaseLicenceSeatBestEffort() {
   }
 }
 
-async function runRevert(action) {
+async function runRevert(action, beforeAction = null) {
   const blockedReason = shellExclusivity.revertBlockedReason({
     packaged: electronApp().isPackaged,
     updatePending: updater.isUpdatePending() || installer.isUpdateHandoffActive(),
   })
   if (blockedReason) return { success: false, gpoBlocked: false, error: REVERT_BLOCKED_MESSAGES[blockedReason], leftBehind: [] }
 
+  if (beforeAction) await beforeAction()
   const started = action()
   const replacementConfirmed = started.success && await confirmHandoffStillRunning(started.handoff)
   const plan = shellExclusivity.planShellRevert({
@@ -402,10 +403,7 @@ module.exports = {
     },
     'setup/revert-temporary': () => runRevert(() => installer.revertShellTemporarily()),
     'setup/revert-permanent': () => runRevert(() => installer.revertShellPermanently()),
-    'setup/uninstall': async () => {
-      await releaseLicenceSeatBestEffort()
-      return runRevert(() => installer.uninstall())
-    },
+    'setup/uninstall': () => runRevert(() => installer.uninstall(), releaseLicenceSeatBestEffort),
     'setup/set-shell': () => {
       const error = licenceGateError()
       if (error) return { success: false, error }
