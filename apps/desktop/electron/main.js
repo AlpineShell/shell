@@ -526,6 +526,7 @@ function createScreenshotWindow() {
 
 const SETUP_WINDOW_WIDTH = 480
 const SETUP_WINDOW_INITIAL_HEIGHT = 208
+const SETUP_WINDOW_BACKGROUND = '#f9fafb'
 const STARTUP_SIGN_IN_DELAY_MS = 2500
 
 let shellModeRunning = false
@@ -549,7 +550,7 @@ function createSetupWindow(page) {
     resizable: false,
     center: true,
     transparent: false,
-    backgroundColor: theme.getWindowBackground(),
+    backgroundColor: SETUP_WINDOW_BACKGROUND,
     skipTaskbar: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

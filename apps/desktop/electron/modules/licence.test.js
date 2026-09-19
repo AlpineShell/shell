@@ -308,7 +308,6 @@ describe('after activation the desktop never calls the account service', () => {
     expect(Object.keys(service.handlers).sort()).toEqual([
       'licence/activate',
       'licence/cancel-sign-in',
-      'licence/default-device-name',
       'licence/open-account',
       'licence/open-checkout',
       'licence/release',
@@ -665,9 +664,6 @@ describe('the device flow sign-in', () => {
     expect(fetch.calls.some((call) => call.url.endsWith('/licences/activate'))).toBe(false)
   })
 
-  it('hands the installer the Windows computer name to prefill', () => {
-    expect(makeService().service.handlers['licence/default-device-name']()).toBe('DESKTOP-ABC123')
-  })
 })
 
 describe('release and links', () => {

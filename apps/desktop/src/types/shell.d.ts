@@ -1637,7 +1637,6 @@ declare global {
     }
     licence: {
       status: () => Promise<LicenceStatus>
-      defaultDeviceName: () => Promise<string>
       signIn: (options?: LicenceSignInOptions) => Promise<LicenceSignInProgress>
       signInState: () => Promise<LicenceSignInProgress>
       cancelSignIn: () => Promise<LicenceSignInProgress>
