@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, AlertTriangle, FlaskConical, Settings, Link } from 'lucide-react'
-import { Badge, Button, Card, IconButton, PageTitle, Row, Spinner, TextField, Toggle } from '@alpine/ui'
-import { useTheme } from '../../hooks/useTheme'
+import { Button, Card, IconButton, PageTitle, Row, Spinner, Ticket, Toggle } from '@alpine/ui'
+import { usePaperPalette } from '../../hooks/usePaperPalette'
 import { useFitSetupWindow } from '../../hooks/useFitSetupWindow'
+import GoogleMark from './googleMark'
 
 type SignInRetry = 'signIn' | 'activate'
 
@@ -14,8 +15,6 @@ interface SignInProblem {
 
 const LICENCE_REQUIRED = 'licence-required'
 const LICENSED_STATES: ReadonlySet<LicenceState> = new Set(['development', 'valid'])
-const DEVICE_NAME_MAX_LENGTH = 64
-const DEVICE_NAME_PLACEHOLDER = 'My PC'
 const SIGN_IN_PROMPT = 'Sign in with your Alpine Shell account to install'
 const BINDING_LOST_PROMPT = 'This PC no longer matches the licence it was activated with. That happens after a cleared TPM, a new motherboard, a rebuilt Windows profile or a Windows reinstall. Sign in to put it back; the same PC does not take another seat. If every seat is in use, release the old entry for this PC on your account page, then sign in.'
 const OTHER_PC_PROMPT = 'The licence on this PC was issued to another PC. Sign in to activate this one.'
@@ -96,7 +95,7 @@ function problemForOutcome(outcome: LicenceActivationOutcome): SignInProblem | n
 }
 
 function seatProblem(outcome: LicenceActivationOutcome): string | null {
-  if (outcome.kind === 'move-limit') return `You have moved this licence to a new PC several times recently. Release it from your account page at alpineshell.com/account, or move it again on ${formatDate(outcome.retryAt)}.`
+  if (outcome.kind === 'move-limit') return `This licence already moved to another PC in the last six months. Write to support@alpineshell.com to move it now, or move it yourself on ${formatDate(outcome.retryAt)}.`
   if (outcome.kind === 'replacement-not-yours') return 'That PC is not on one of your licences.'
   return null
 }
@@ -149,17 +148,28 @@ function FailureBadge() {
   )
 }
 
-function LicensedLine({ email }: { email: string }) {
+const SERIAL_LENGTH = 8
+
+function licenceSerial(licenceId: string) {
+  const serial = licenceId.replace(/-/g, '').slice(0, SERIAL_LENGTH).toUpperCase()
+  return `${serial.slice(0, SERIAL_LENGTH / 2)}-${serial.slice(SERIAL_LENGTH / 2)}`
+}
+
+function LicenceTicket({ licence }: { licence: LicenceStatus }) {
   return (
-    <div className="flex items-center gap-2 text-xs text-ink-quiet">
-      <Badge tone="success">Licensed</Badge>
-      <span className="truncate">{email}</span>
-    </div>
+    <Ticket
+      title="Alpine Shell licence"
+      serial={licence.licenceId ? licenceSerial(licence.licenceId) : undefined}
+      serialTitle={licence.licenceId ?? undefined}
+      detail={licence.email ?? undefined}
+      stamps={[{ label: 'Activated', tone: 'success' }]}
+      size="compact"
+    />
   )
 }
 
 export default function SetupApp() {
-  useTheme()
+  usePaperPalette()
 
   const frame = useRef<HTMLDivElement>(null)
   useFitSetupWindow(frame)
@@ -168,7 +178,6 @@ export default function SetupApp() {
   const [installCursor, setInstallCursor] = useState(true)
   const [status, setStatus] = useState<SetupStatus | null>(null)
   const [licence, setLicence] = useState<LicenceStatus | null>(null)
-  const [deviceName, setDeviceName] = useState('')
   const [progress, setProgress] = useState<LicenceSignInProgress>(idleProgress)
   const [seats, setSeats] = useState<LicenceSeatActivation[]>([])
   const [problem, setProblem] = useState<SignInProblem | null>(null)
@@ -195,7 +204,6 @@ export default function SetupApp() {
     window.setup.status().then(setStatus)
     window.setup.onProgress(setCurrentStep)
     window.licence.status().then(applyLicence)
-    window.licence.defaultDeviceName().then((name) => setDeviceName((current) => current || name))
     window.licence.signInState().then(applyProgress)
     const stopChanged = window.licence.onChanged(applyLicence)
     const stopProgress = window.licence.onSignInProgress(applyProgress)
@@ -216,21 +224,21 @@ export default function SetupApp() {
 
   function startSignIn() {
     setProblem(null)
-    window.licence.signIn({ deviceName })
+    window.licence.signIn()
   }
 
   function retrySignIn() {
     const retry = problem?.retry ?? 'signIn'
     setProblem(null)
     if (retry === 'activate') window.licence.activate()
-    else window.licence.signIn({ deviceName })
+    else window.licence.signIn()
   }
 
   async function useAnotherAccount() {
     await window.licence.cancelSignIn()
     setProblem(null)
     setSeatMessage(null)
-    window.licence.signIn({ deviceName })
+    window.licence.signIn()
   }
 
   async function cancelSignIn() {
@@ -298,22 +306,14 @@ export default function SetupApp() {
             <div className="flex flex-col gap-5">
               <Wordmark />
               <p className={`${promptExplains ? 'text-sm' : 'text-base'} ${problem ? 'text-warning' : 'text-ink-secondary'}`}>{prompt}</p>
-              <Card variant="borderless" className="px-4 py-3.5">
-                <Row label="Name this PC" description="Shown on your account page so you can tell your PCs apart" stacked>
-                  <TextField
-                    label="PC name"
-                    value={deviceName}
-                    onChange={(value) => setDeviceName(value.slice(0, DEVICE_NAME_MAX_LENGTH))}
-                    placeholder={DEVICE_NAME_PLACEHOLDER}
-                    maxLength={DEVICE_NAME_MAX_LENGTH}
-                    disabled={startingSignIn || activating}
-                    onSubmit={problem ? retrySignIn : startSignIn}
-                  />
-                </Row>
-              </Card>
             </div>
             <div className="flex flex-col gap-2">
-              <Button className="w-full" busy={startingSignIn || activating} onClick={problem ? retrySignIn : startSignIn}>
+              <Button
+                className="w-full"
+                icon={problem ? undefined : <GoogleMark />}
+                busy={startingSignIn || activating}
+                onClick={problem ? retrySignIn : startSignIn}
+              >
                 {problem ? problem.buttonLabel : 'Continue with Google'}
               </Button>
               {bindingLost(licence) && (
@@ -329,7 +329,7 @@ export default function SetupApp() {
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-5">
               <PageTitle title="Approve this PC in your browser" subtitle="Check that the page shows this code, then approve." />
-              <Card variant="borderless" className="flex items-center justify-center px-4 py-4">
+              <Card className="flex items-center justify-center px-4 py-4">
                 {activating ? (
                   <div className="flex items-center gap-3 text-sm text-ink-secondary">
                     <Spinner size={14} label="Activating" />
@@ -357,10 +357,6 @@ export default function SetupApp() {
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-5">
               <PageTitle title={`No licence on ${accountEmail ?? email ?? 'this account'} yet.`} subtitle="Buy one in your browser; this installer continues by itself." />
-              <div className="flex items-center gap-2 text-xs text-ink-quiet">
-                <Spinner size={12} label="Checking" />
-                Checking again every 10 seconds
-              </div>
             </div>
             <div className="flex flex-col gap-2">
               <Button className="w-full" onClick={() => window.licence.openCheckout()}>
@@ -388,7 +384,7 @@ export default function SetupApp() {
                   {seatMessage}
                 </div>
               )}
-              <Card variant="borderless" className="flex flex-col gap-3 px-4 py-3.5">
+              <Card className="flex flex-col gap-3 px-4 py-3.5">
                 {seats.map((seat) => (
                   <Row key={seat.id} label={seat.deviceName || 'Unnamed PC'} description={seatDetail(seat)}>
                     <Button size="sm" variant="outline" busy={activating} onClick={() => window.licence.activate({ replaceActivationId: seat.id })}>
@@ -416,7 +412,7 @@ export default function SetupApp() {
               <p className="text-base text-ink-secondary">
                 {installing && currentStep ? currentStep : WELCOME_PROMPT}
               </p>
-              {email && <LicensedLine email={email} />}
+              {licence && email && <LicenceTicket licence={licence} />}
             </div>
             {restoreShell ? (
               <Button className="w-full" busy={installing} onClick={handleRestoreShell}>
@@ -464,7 +460,7 @@ export default function SetupApp() {
                 </div>
               )}
 
-              <Card variant="borderless" className="px-4 py-3.5">
+              <Card className="px-4 py-3.5">
                 <Row label="Custom cursor" description="Install the Bibata cursor pack">
                   <Toggle label="Custom cursor" checked={installCursor} onChange={setInstallCursor} />
                 </Row>

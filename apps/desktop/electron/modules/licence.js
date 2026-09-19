@@ -436,7 +436,6 @@ function createLicenceService(overrides = {}) {
 
   const handlers = {
     'licence/status': () => status(),
-    'licence/default-device-name': () => deps.readDeviceName(),
     'licence/sign-in': (_event, options) => {
       startSignIn(options).catch((error) => deps.log(`sign-in failed: ${error.message}`))
       return progress

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@alpine/ui/index.css";
+@import "@alpine/ui/palettes/paper.css";
 @source not "../vendor";
 
 @font-face {

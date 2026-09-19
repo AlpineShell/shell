@@ -330,7 +330,6 @@ if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
 
   contextBridge.exposeInMainWorld('licence', {
     status: () => ipcRenderer.invoke('licence/status'),
-    defaultDeviceName: () => ipcRenderer.invoke('licence/default-device-name'),
     signIn: (options) => ipcRenderer.invoke('licence/sign-in', options),
     signInState: () => ipcRenderer.invoke('licence/sign-in-state'),
     cancelSignIn: () => ipcRenderer.invoke('licence/cancel-sign-in'),

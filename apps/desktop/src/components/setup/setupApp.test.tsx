@@ -84,7 +84,6 @@ function installBridge({ licence = licenceStatus(), setup = setupStatus() }: { l
   }
   ;(window as unknown as { licence: unknown }).licence = {
     status: async () => bridge.licence,
-    defaultDeviceName: async () => 'DESKTOP-ABC123',
     signInState: async () => idleProgress,
     onChanged: (listener: (status: LicenceStatus) => void) => {
       bridge.changedListeners.push(listener)
@@ -151,26 +150,20 @@ describe('SetupApp', () => {
     expect(screen.queryByRole('button', { name: 'Open my account page' })).toBeNull()
   })
 
-  it('prefills the PC name with the Windows computer name and sends the name the person typed', async () => {
+  it('signs in without asking for a PC name, so the Windows computer name is used', async () => {
     const bridge = await renderSetup()
-    const field = screen.getByRole('textbox', { name: 'PC name' }) as HTMLInputElement
-    expect(field.value).toBe('DESKTOP-ABC123')
-    fireEvent.change(field, { target: { value: 'Study PC' } })
+    expect(screen.queryByRole('textbox')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }))
-    expect(bridge.signIn).toHaveBeenCalledWith({ deviceName: 'Study PC' })
+    expect(bridge.signIn).toHaveBeenCalledWith()
   })
 
-  it('caps the PC name at 64 characters', async () => {
-    await renderSetup()
-    const field = screen.getByRole('textbox', { name: 'PC name' }) as HTMLInputElement
-    fireEvent.change(field, { target: { value: 'x'.repeat(80) } })
-    expect(field.value).toHaveLength(64)
-  })
-
-  it('opens on welcome with the licensed email when the licence is valid', async () => {
-    await renderSetup({ licence: licenceStatus({ state: 'valid', email: 'someone@example.com' }) })
+  it('opens on welcome with the licence as an activated ticket when the licence is valid', async () => {
+    await renderSetup({
+      licence: licenceStatus({ state: 'valid', email: 'someone@example.com', licenceId: 'b49de9ee-5a1c-4f0e-9d1a-2c3b4d5e6f70' }),
+    })
     expect(screen.getByText('someone@example.com')).toBeTruthy()
-    expect(screen.getByText('Licensed')).toBeTruthy()
+    expect(screen.getByText('B49D-E9EE').getAttribute('title')).toBe('b49de9ee-5a1c-4f0e-9d1a-2c3b4d5e6f70')
+    expect(screen.getByText('Activated')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Install' })).toBeTruthy()
   })
 
