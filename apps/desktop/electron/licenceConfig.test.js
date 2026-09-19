@@ -4,7 +4,6 @@ import crypto from 'crypto'
 const {
   resolveLicenceConfig,
   parsePublicKeys,
-  parseGraceUntil,
   parseEnvText,
   normaliseBase,
   DEFAULT_AUTH_BASE,
@@ -24,7 +23,6 @@ describe('a release build', () => {
     authBase: 'https://auth.alpineshell.com/',
     websiteBase: 'https://alpineshell.com',
     publicKeys: [bakedKey],
-    upgradeGraceUntil: '2026-10-09',
   }
 
   it('reads only the baked file', () => {
@@ -32,7 +30,6 @@ describe('a release build', () => {
       ALPINE_AUTH_BASE: 'http://localhost:3001',
       ALPINE_WEBSITE_BASE: 'http://localhost:3000',
       ALPINE_LICENCE_PUBLIC_KEYS: JSON.stringify([overrideKey]),
-      ALPINE_UPGRADE_GRACE_UNTIL: '2099-01-01',
       ALPINE_ENFORCE_LICENCE: '1',
     }
     const config = resolveLicenceConfig({ baked, env, dotEnv: { ...env } })
@@ -41,7 +38,6 @@ describe('a release build', () => {
       authBase: 'https://auth.alpineshell.com',
       websiteBase: 'https://alpineshell.com',
       publicKeys: [bakedKey],
-      upgradeGraceUntil: new Date('2026-10-09').toISOString(),
       enforceInDevelopment: false,
     })
   })
@@ -64,13 +60,12 @@ describe('a development build', () => {
       authBase: DEFAULT_AUTH_BASE,
       websiteBase: DEFAULT_WEBSITE_BASE,
       publicKeys: [],
-      upgradeGraceUntil: null,
       enforceInDevelopment: false,
     })
   })
 
   it('lets the environment override a baked development file', () => {
-    const baked = { isReleaseBuild: false, authBase: 'https://auth.alpineshell.com', publicKeys: [bakedKey], upgradeGraceUntil: null }
+    const baked = { isReleaseBuild: false, authBase: 'https://auth.alpineshell.com', publicKeys: [bakedKey] }
     const env = { ALPINE_AUTH_BASE: 'http://localhost:3001/', ALPINE_LICENCE_PUBLIC_KEYS: JSON.stringify([overrideKey]), ALPINE_ENFORCE_LICENCE: '1' }
     const config = resolveLicenceConfig({ baked, env, dotEnv: {} })
     expect(config.authBase).toBe('http://localhost:3001')
@@ -79,7 +74,7 @@ describe('a development build', () => {
   })
 
   it('prefers the process environment over .env and .env over the baked file', () => {
-    const baked = { isReleaseBuild: false, authBase: 'https://baked.example', publicKeys: [], upgradeGraceUntil: null }
+    const baked = { isReleaseBuild: false, authBase: 'https://baked.example', publicKeys: [] }
     const dotEnv = { ALPINE_AUTH_BASE: 'https://dotenv.example', ALPINE_WEBSITE_BASE: 'https://dotenv-site.example' }
     const env = { ALPINE_AUTH_BASE: 'https://env.example' }
     const config = resolveLicenceConfig({ baked, env, dotEnv })
@@ -115,16 +110,6 @@ describe('parsePublicKeys', () => {
     expect(parsePublicKeys(undefined)).toEqual([])
     expect(parsePublicKeys('{}')).toEqual([])
     expect(parsePublicKeys(42)).toEqual([])
-  })
-})
-
-describe('parseGraceUntil', () => {
-  it('normalises a date to ISO and rejects junk', () => {
-    expect(parseGraceUntil('2026-10-09T00:00:00Z')).toBe('2026-10-09T00:00:00.000Z')
-    expect(parseGraceUntil(' 2026-10-09 ')).toBe(new Date('2026-10-09').toISOString())
-    expect(parseGraceUntil('someday')).toBeNull()
-    expect(parseGraceUntil('')).toBeNull()
-    expect(parseGraceUntil(null)).toBeNull()
   })
 })
 

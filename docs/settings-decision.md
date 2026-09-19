@@ -27,6 +27,7 @@ everything below.
 | Battery | force battery saver, automatic, threshold %, dim displays, dim by %, dim external monitors, reduce background polling, throttle processes | `electron/modules/batterySaver.js` + `batterySaverPolicy.js` → `battery-saver-prefs.json` |
 | Wallpaper | wallpaper source and selection | `electron/modules/wallpaper.js` → `wallpaper.json` |
 | Input and language | default input method | Windows, `HKCU\Control Panel\International\User Profile`, through `electron/modules/keyboardLayout.js` |
+| Updates | check for updates | `electron/modules/updater.js` → `update-prefs.json` |
 | — (Search only) | volume, mute, emoji, power | live system state, not a prefs file |
 
 ### B. Device and app managers — lists with actions
@@ -492,6 +493,7 @@ test failure too.
 | `plugins` | instant | Was `restart`, and that was wrong: `plugins/set-enabled` calls `triggerReload()`, which broadcasts `plugins/reload` and re-reads contributions live. Installing and enabling take effect without restarting anything. |
 | `plugin-uninstall` | confirm | Irreversible — it deletes the plugin's directory — and it was firing on one click of a trash icon. Now a two-step confirm naming the plugin. |
 | `updates` | restart | An update installs and then needs a restart to run. `updatesPage.tsx` already surfaces that and offers the restart. |
+| `update-checks` | instant | One switch each way with nothing in flight to undo. Off means the updater sends no request at all, scheduled, by hand or after a sign-in, until it is turned back on; on means the next check runs straight away. |
 | `revert` | confirm | The shell replaces itself with Explorer, and one of the three actions deletes Alpine entirely. Two-step confirm, already correct, now on the shared confirm affordance so it looks like every other confirmation. |
 | `system` | instant | A page-level entry for a page that only reports what this PC is; it writes nothing. |
 | `volume` | instant | A slider whose result you hear while dragging, and can drag back. |

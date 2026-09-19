@@ -4,8 +4,6 @@ import crypto from 'crypto'
 const {
   verifyLicenceToken,
   decodeLicenceToken,
-  tokenExpiryMs,
-  tokenIssuedAtMs,
   LICENCE_TOKEN_TYPE,
   LICENCE_TOKEN_AUDIENCE,
 } = await import('./licenceToken.js')
@@ -95,10 +93,18 @@ describe('verifyLicenceToken', () => {
     expect(verifyLicenceToken(mintToken(signingKey), { ...fullOptions, issuer: `${ISSUER}/` }).ok).toBe(true)
   })
 
-  it('rejects an expired token but still hands back its claims', () => {
+  it('accepts a token with no exp at any time, because a licence never lapses', () => {
+    const perpetual = mintToken(signingKey, { exp: undefined })
+    expect(verifyLicenceToken(perpetual, fullOptions).ok).toBe(true)
+    expect(verifyLicenceToken(perpetual, { ...fullOptions, now: NOW_MS + 50 * 365 * 24 * 3600 * 1000 }).ok).toBe(true)
+    expect(verifyLicenceToken(perpetual, fullOptions).claims.exp).toBeUndefined()
+  })
+
+  it('still honours exp when a token carries one', () => {
     const result = verifyLicenceToken(mintToken(signingKey, { exp: NOW_SECONDS - 1 }), fullOptions)
     expect(result).toMatchObject({ ok: false, reason: 'expired' })
     expect(result.claims.exp).toBe(NOW_SECONDS - 1)
+    expect(verifyLicenceToken(mintToken(signingKey, { exp: NOW_SECONDS + 1 }), fullOptions).ok).toBe(true)
   })
 
   it('rejects a token that is not yet valid', () => {
@@ -118,7 +124,12 @@ describe('verifyLicenceToken', () => {
 
   it('rejects a token missing a required claim', () => {
     expect(verifyLicenceToken(mintToken(signingKey, { act: undefined }), fullOptions)).toMatchObject({ ok: false, reason: 'missing-claims' })
-    expect(verifyLicenceToken(mintToken(signingKey, { exp: 'soon' }), fullOptions)).toMatchObject({ ok: false, reason: 'missing-claims' })
+    expect(verifyLicenceToken(mintToken(signingKey, { iat: undefined }), fullOptions)).toMatchObject({ ok: false, reason: 'missing-claims' })
+  })
+
+  it('rejects an exp or nbf that is present but not a number', () => {
+    expect(verifyLicenceToken(mintToken(signingKey, { exp: 'soon' }), fullOptions)).toMatchObject({ ok: false, reason: 'malformed-claims' })
+    expect(verifyLicenceToken(mintToken(signingKey, { nbf: 'later' }), fullOptions)).toMatchObject({ ok: false, reason: 'malformed-claims' })
   })
 
   it('rejects tampered claims', () => {
@@ -146,14 +157,17 @@ describe('verifyLicenceToken', () => {
   it('never trusts an empty key list', () => {
     expect(verifyLicenceToken(mintToken(signingKey), { ...fullOptions, publicKeys: [] })).toMatchObject({ ok: false, reason: 'unknown-kid' })
   })
-})
 
-describe('claim timestamps', () => {
-  it('converts exp and iat from seconds to milliseconds', () => {
-    const { claims } = verifyLicenceToken(mintToken(signingKey), fullOptions)
-    expect(tokenExpiryMs(claims)).toBe(claims.exp * 1000)
-    expect(tokenIssuedAtMs(claims)).toBe(claims.iat * 1000)
-    expect(tokenExpiryMs(null)).toBeNull()
-    expect(tokenIssuedAtMs({})).toBeNull()
+  it('carries a well-formed bind claim through and treats a missing or null one as no binding', () => {
+    const bind = { tier: 'tpm', hash: 'c'.repeat(43) }
+    expect(verifyLicenceToken(mintToken(signingKey, { bind }), fullOptions)).toMatchObject({ ok: true, claims: { bind } })
+    expect(verifyLicenceToken(mintToken(signingKey, { bind: null }), fullOptions).ok).toBe(true)
+    expect(verifyLicenceToken(mintToken(signingKey), fullOptions).claims.bind).toBeUndefined()
+  })
+
+  it('rejects a bind claim with an unknown tier or a hash that is not base64url sha256', () => {
+    for (const bind of [{ tier: 'cpu', hash: 'c'.repeat(43) }, { tier: 'tpm', hash: 'c'.repeat(64) }, { tier: 'tpm' }, 'tpm', [], 7]) {
+      expect(verifyLicenceToken(mintToken(signingKey, { bind }), fullOptions)).toMatchObject({ ok: false, reason: 'malformed-claims' })
+    }
   })
 })

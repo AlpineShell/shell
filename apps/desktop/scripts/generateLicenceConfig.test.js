@@ -16,28 +16,18 @@ describe('buildLicenceConfig', () => {
       ALPINE_LICENCE_PUBLIC_KEYS: JSON.stringify([key]),
       ALPINE_AUTH_BASE: 'https://auth.alpineshell.com/',
       ALPINE_WEBSITE_BASE: '',
-      ALPINE_UPGRADE_GRACE_UNTIL: '2026-10-09',
     })
     expect(config).toEqual({
       isReleaseBuild: true,
       authBase: 'https://auth.alpineshell.com',
       websiteBase: 'https://alpineshell.com',
       publicKeys: [key],
-      upgradeGraceUntil: new Date('2026-10-09').toISOString(),
     })
   })
 
   it('refuses a release build without keys', () => {
     expect(() => buildLicenceConfig({ ALPINE_RELEASE_BUILD: '1', ALPINE_LICENCE_PUBLIC_KEYS: '' })).toThrow(/at least one key/)
     expect(() => buildLicenceConfig({ ALPINE_RELEASE_BUILD: '1', ALPINE_LICENCE_PUBLIC_KEYS: '[]' })).toThrow(/at least one key/)
-  })
-
-  it('refuses a release build whose upgrade grace is unset or unparseable, but accepts none', () => {
-    const withKeys = { ALPINE_RELEASE_BUILD: '1', ALPINE_LICENCE_PUBLIC_KEYS: JSON.stringify([key]) }
-    expect(() => buildLicenceConfig(withKeys)).toThrow(/ALPINE_UPGRADE_GRACE_UNTIL/)
-    expect(() => buildLicenceConfig({ ...withKeys, ALPINE_UPGRADE_GRACE_UNTIL: '21 days' })).toThrow(/ALPINE_UPGRADE_GRACE_UNTIL/)
-    expect(buildLicenceConfig({ ...withKeys, ALPINE_UPGRADE_GRACE_UNTIL: 'none' }).upgradeGraceUntil).toBeNull()
-    expect(buildLicenceConfig({ ...withKeys, ALPINE_UPGRADE_GRACE_UNTIL: '2026-10-09' }).upgradeGraceUntil).toBe(new Date('2026-10-09').toISOString())
   })
 
   it('refuses a key that is not Ed25519', () => {
@@ -51,7 +41,6 @@ describe('buildLicenceConfig', () => {
       authBase: 'https://auth.alpineshell.com',
       websiteBase: 'https://alpineshell.com',
       publicKeys: [],
-      upgradeGraceUntil: null,
     })
   })
 
@@ -63,7 +52,7 @@ describe('buildLicenceConfig', () => {
 
 describe('renderModule', () => {
   it('writes a CommonJS module that evaluates back to the config', () => {
-    const config = buildLicenceConfig({ ALPINE_RELEASE_BUILD: '1', ALPINE_LICENCE_PUBLIC_KEYS: JSON.stringify([key]), ALPINE_UPGRADE_GRACE_UNTIL: 'none' })
+    const config = buildLicenceConfig({ ALPINE_RELEASE_BUILD: '1', ALPINE_LICENCE_PUBLIC_KEYS: JSON.stringify([key]) })
     const source = renderModule(config)
     expect(source.startsWith('module.exports = {')).toBe(true)
     const module = { exports: {} }

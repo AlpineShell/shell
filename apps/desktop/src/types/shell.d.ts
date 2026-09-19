@@ -153,6 +153,10 @@ declare global {
     message: string
   }
 
+  interface UpdatePreferences {
+    checkForUpdates: boolean
+  }
+
   type WindowsUpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'installing' | 'restart-required' | 'installed' | 'error'
 
   type WindowsUpdateTier = 'quality' | 'enablement' | 'feature'
@@ -383,31 +387,21 @@ declare global {
     isFirstRun: boolean
   }
 
-  type LicenceState = 'development' | 'valid' | 'grace' | 'unlicensed' | 'lapsed'
+  type LicenceState = 'development' | 'valid' | 'unlicensed'
 
-  type LicenceGraceReason =
-    | 'expired'
-    | 'device-unreadable'
-    | 'upgrade'
-    | 'refunded'
-    | 'disputed'
-    | 'moved'
-    | 'released'
-    | 'conflict'
-    | 'account-deleted'
-    | 'invalid'
+  type LicenceUnlicensedReason = 'missing' | 'unreadable' | 'unverifiable' | 'device-mismatch' | 'binding-mismatch'
+
+  type LicenceBindingTier = 'tpm' | 'dpapi' | 'machine'
 
   interface LicenceStatus {
     state: LicenceState
-    reason: LicenceGraceReason | null
-    graceUntil: string | null
+    reason: LicenceUnlicensedReason | null
     email: string | null
     licenceId: string | null
     activationId: string | null
     deviceName: string | null
-    expiresAt: string | null
-    lastRefreshAt: string | null
-    movedTo: string | null
+    activatedAt: string | null
+    bindTier: LicenceBindingTier | null
     deviceReadable: boolean
     releaseBuild: boolean
   }
@@ -416,7 +410,7 @@ declare global {
     id: string
     licenceId: string
     deviceName: string
-    lastSeenAt: string | null
+    activatedAt: string | null
   }
 
   type LicenceActivationOutcome =
@@ -439,6 +433,10 @@ declare global {
     verificationUri: string | null
     outcome: LicenceActivationOutcome | null
     error: string | null
+  }
+
+  interface LicenceSignInOptions {
+    deviceName?: string
   }
 
   interface LicenceActivateOptions {
@@ -1639,14 +1637,14 @@ declare global {
     }
     licence: {
       status: () => Promise<LicenceStatus>
-      signIn: () => Promise<LicenceSignInProgress>
+      defaultDeviceName: () => Promise<string>
+      signIn: (options?: LicenceSignInOptions) => Promise<LicenceSignInProgress>
       signInState: () => Promise<LicenceSignInProgress>
       cancelSignIn: () => Promise<LicenceSignInProgress>
       activate: (options?: LicenceActivateOptions) => Promise<LicenceActivationOutcome>
       openCheckout: () => Promise<void>
       openAccount: () => Promise<void>
       release: () => Promise<LicenceStatus>
-      refreshNow: () => Promise<LicenceStatus>
       onSignInProgress: (callback: (progress: LicenceSignInProgress) => void) => () => void
       onChanged: (callback: (status: LicenceStatus) => void) => () => void
     }
@@ -1877,8 +1875,11 @@ declare global {
         check: () => Promise<UpdateState>
         download: () => Promise<void>
         install: () => Promise<void>
+        preferences: () => Promise<UpdatePreferences>
+        setPreferences: (partial: Partial<UpdatePreferences>) => Promise<UpdatePreferences>
         onStateChanged: (callback: (state: UpdateState) => void) => void
         onLogChanged: (callback: (entries: UpdateLogEntry[]) => void) => void
+        onPreferencesChanged: (callback: (preferences: UpdatePreferences) => void) => () => void
       }
       windowsUpdate: {
         getState: () => Promise<WindowsUpdateState>

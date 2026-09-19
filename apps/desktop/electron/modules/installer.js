@@ -104,41 +104,6 @@ function isShellRevertedToExplorer() {
   return currentShell !== null && currentShell.toLowerCase().includes('explorer.exe')
 }
 
-function isShellRegisteredToAlpine() {
-  const currentShell = regQuery(WINLOGON_KEY, 'Shell')
-  return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
-}
-
-function explorerExePath() {
-  return path.join(process.env.SystemRoot || path.join('C:', 'Windows'), 'explorer.exe')
-}
-
-function startExplorer() {
-  spawn(explorerExePath(), [], { detached: true, stdio: 'ignore' }).unref()
-}
-
-function explorerNeedsStarting(handedBack) {
-  const hosted = require('./explorerShell').shellHostedByExplorer()
-  if (hosted === false) return true
-  return hosted === null && handedBack
-}
-
-function handBackForLicence() {
-  try {
-    const handedBack = isShellRegisteredToAlpine()
-    if (handedBack) {
-      regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
-      if (!isShellRevertedToExplorer()) return { success: false, error: SHELL_REVERT_FAILED }
-      try { regAdd('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'AutoRestartShell', '1', 'REG_DWORD') } catch {}
-    }
-    try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
-    if (explorerNeedsStarting(handedBack)) startExplorer()
-    return { success: true, error: null }
-  } catch (e) {
-    return { success: false, error: e.message }
-  }
-}
-
 function userDataFile(name) {
   return path.join(electronApp().getPath('userData'), name)
 }
@@ -571,7 +536,6 @@ module.exports = {
   revertShell,
   revertShellTemporarily,
   revertShellPermanently,
-  handBackForLicence,
   isShellOptedOut,
   setShellOptOut,
   hasShellHandoff,

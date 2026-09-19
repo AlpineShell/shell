@@ -57,19 +57,12 @@ function parsePublicKeys(value) {
   return list.filter(isPublicKeyEntry).map((entry) => ({ kid: entry.kid.trim(), spkiPem: entry.spkiPem.replace(/\\n/g, '\n') }))
 }
 
-function parseGraceUntil(value) {
-  if (typeof value !== 'string' || !value.trim()) return null
-  const parsed = Date.parse(value.trim())
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null
-}
-
 function releaseConfig(baked) {
   return {
     isReleaseBuild: true,
     authBase: normaliseBase(baked.authBase, DEFAULT_AUTH_BASE),
     websiteBase: normaliseBase(baked.websiteBase, DEFAULT_WEBSITE_BASE),
     publicKeys: parsePublicKeys(baked.publicKeys),
-    upgradeGraceUntil: parseGraceUntil(baked.upgradeGraceUntil),
     enforceInDevelopment: false,
   }
 }
@@ -86,7 +79,6 @@ function developmentConfig(baked, env, dotEnv) {
     authBase: normaliseBase(setting('ALPINE_AUTH_BASE') || (baked && baked.authBase), DEFAULT_AUTH_BASE),
     websiteBase: normaliseBase(setting('ALPINE_WEBSITE_BASE') || (baked && baked.websiteBase), DEFAULT_WEBSITE_BASE),
     publicKeys: overrideKeys.length > 0 ? overrideKeys : parsePublicKeys(baked && baked.publicKeys),
-    upgradeGraceUntil: parseGraceUntil(setting('ALPINE_UPGRADE_GRACE_UNTIL') || (baked && baked.upgradeGraceUntil)),
     enforceInDevelopment: setting('ALPINE_ENFORCE_LICENCE') === '1',
   }
 }
@@ -119,7 +111,6 @@ module.exports = {
   readDotEnv,
   normaliseBase,
   parsePublicKeys,
-  parseGraceUntil,
   resolveLicenceConfig,
   loadLicenceConfig,
 }

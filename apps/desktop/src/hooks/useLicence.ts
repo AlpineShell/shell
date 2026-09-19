@@ -3,14 +3,12 @@ import { useShellState } from './useShellState'
 const initialStatus: LicenceStatus = {
   state: 'unlicensed',
   reason: null,
-  graceUntil: null,
   email: null,
   licenceId: null,
   activationId: null,
   deviceName: null,
-  expiresAt: null,
-  lastRefreshAt: null,
-  movedTo: null,
+  activatedAt: null,
+  bindTier: null,
   deviceReadable: true,
   releaseBuild: false,
 }
@@ -36,6 +34,5 @@ export function useLicence() {
     openCheckout: window.licence.openCheckout,
     openAccount: window.licence.openAccount,
     release: window.licence.release,
-    refreshNow: window.licence.refreshNow,
   }
 }

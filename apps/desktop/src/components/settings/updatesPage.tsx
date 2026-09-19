@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react'
-import { Button, EmptyState, IconButton, ListRow, PageHeader } from '@alpine/ui'
+import { AlertTriangle, AppWindow, BellOff, CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react'
+import { Button, Card, EmptyState, IconButton, ListRow, PageHeader } from '@alpine/ui'
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
+import { useSettingsValue } from '../../hooks/useSettingsValue'
+import { useHighlightedSetting } from '../../hooks/useHighlightedSetting'
+import { settingsValueEntry } from '../../settings/registry'
+import { ValueRow } from './registryRow'
 import PageSpinner from './pageSpinner'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
+
+const UPDATE_CHECKS = settingsValueEntry('update-checks')
+const CHECKS_ON_DETAIL = 'Alpine Shell asks alpineshell.com for a newer version about every six hours, sending only its licence token.'
+const CHECKS_OFF_DETAIL = 'No update checks: Alpine Shell makes no update requests and never contacts alpineshell.com on its own for anything. Get a newer version by hand from alpineshell.com when you want one.'
+const CHECKS_OFF_TITLE = 'Update checks are off'
 
 function formatBytes(bytes: number): string {
   if (bytes >= GB) return `${(bytes / GB).toFixed(1)} GB`
@@ -30,6 +39,7 @@ function restart() {
 export default function UpdatesPage() {
   const alpine = useUpdate()
   const windows = useWindowsUpdate()
+  const checksOn = useSettingsValue(UPDATE_CHECKS).value !== false
   const didCheck = useRef(false)
 
   useEffect(() => {
@@ -153,13 +163,37 @@ export default function UpdatesPage() {
       {showEmptyState && !checking && (
         <EmptyState
           variant="plain"
-          icon={<CheckCircle2 size={14} className="text-success" />}
-          title="You're up to date"
+          icon={checksOn ? <CheckCircle2 size={14} className="text-success" /> : <BellOff size={14} className="text-ink-quiet" />}
+          title={checksOn ? "You're up to date" : CHECKS_OFF_TITLE}
           detail={`Alpine Shell ${alpine.state.currentVersion}${
             windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''
           }`}
         />
       )}
+
+      <UpdateChecksCard checksOn={checksOn} />
+    </div>
+  )
+}
+
+function UpdateChecksCard({ checksOn }: { checksOn: boolean }) {
+  const highlighted = useHighlightedSetting(UPDATE_CHECKS.id)
+  const anchor = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (highlighted) anchor.current?.scrollIntoView({ block: 'center' })
+  }, [highlighted])
+
+  return (
+    <div
+      ref={anchor}
+      className={`-mx-2 rounded-field px-2 py-1.5 transition-colors duration-300 ${
+        highlighted ? 'bg-fill-ghost ring-1 ring-line-strong' : ''
+      }`}
+    >
+      <Card variant="borderless" className="px-4 py-3.5">
+        <ValueRow entry={UPDATE_CHECKS} description={checksOn ? CHECKS_ON_DETAIL : CHECKS_OFF_DETAIL} />
+      </Card>
     </div>
   )
 }

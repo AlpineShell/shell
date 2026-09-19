@@ -95,7 +95,7 @@ afterEach(() => {
 })
 
 describe('setup handlers behind the licence gate', () => {
-  it('refuses to install when the licence has lapsed and changes nothing on the machine', async () => {
+  it('refuses to install without a licence and changes nothing on the machine', async () => {
     licenceMock.requireValid.mockImplementation(() => { throw licenceRequiredError() })
 
     const result = await setup.handlers['setup/install'](fromSetupWindow, { shell: true, cursor: false })
@@ -113,13 +113,6 @@ describe('setup handlers behind the licence gate', () => {
     expect(shellValue().toLowerCase()).not.toContain('explorer.exe')
     expect(runValue()).not.toBeNull()
     expect(fs.existsSync(setupCompletePath())).toBe(true)
-  })
-
-  it('installs during grace too', async () => {
-    licenceMock.requireValid.mockImplementation(() => ({ state: 'grace', reason: 'expired' }))
-    const result = await setup.handlers['setup/install'](fromSetupWindow, { shell: true, cursor: false })
-    expect(result.error).toBeNull()
-    expect(result.shell).toBe(true)
   })
 
   it('refuses set-shell without a licence and registers with one', async () => {

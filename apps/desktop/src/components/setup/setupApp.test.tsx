@@ -16,14 +16,12 @@ function licenceStatus(overrides: Partial<LicenceStatus> = {}): LicenceStatus {
   return {
     state: 'unlicensed',
     reason: null,
-    graceUntil: null,
     email: null,
     licenceId: null,
     activationId: null,
     deviceName: null,
-    expiresAt: null,
-    lastRefreshAt: null,
-    movedTo: null,
+    activatedAt: null,
+    bindTier: null,
     deviceReadable: true,
     releaseBuild: true,
     ...overrides,
@@ -55,6 +53,7 @@ interface Bridge {
   setShell: ReturnType<typeof vi.fn>
   testOut: ReturnType<typeof vi.fn>
   openCheckout: ReturnType<typeof vi.fn>
+  openAccount: ReturnType<typeof vi.fn>
 }
 
 function installBridge({ licence = licenceStatus(), setup = setupStatus() }: { licence?: LicenceStatus; setup?: SetupStatus } = {}): Bridge {
@@ -69,6 +68,7 @@ function installBridge({ licence = licenceStatus(), setup = setupStatus() }: { l
     setShell: vi.fn(async () => ({ success: true, error: null })),
     testOut: vi.fn(async () => ({ error: null })),
     openCheckout: vi.fn(async () => undefined),
+    openAccount: vi.fn(async () => undefined),
   }
   ;(window as unknown as { shell: unknown }).shell = {
     theme: { initial: THEME, get: async () => THEME, onChanged: () => () => {} },
@@ -84,6 +84,7 @@ function installBridge({ licence = licenceStatus(), setup = setupStatus() }: { l
   }
   ;(window as unknown as { licence: unknown }).licence = {
     status: async () => bridge.licence,
+    defaultDeviceName: async () => 'DESKTOP-ABC123',
     signInState: async () => idleProgress,
     onChanged: (listener: (status: LicenceStatus) => void) => {
       bridge.changedListeners.push(listener)
@@ -97,7 +98,7 @@ function installBridge({ licence = licenceStatus(), setup = setupStatus() }: { l
     activate: bridge.activate,
     cancelSignIn: async () => idleProgress,
     openCheckout: bridge.openCheckout,
-    openAccount: async () => undefined,
+    openAccount: bridge.openAccount,
   }
   return bridge
 }
@@ -132,15 +133,44 @@ describe('SetupApp', () => {
     expect(screen.queryByRole('button', { name: /Test out/ })).toBeNull()
   })
 
+  it('says in plain words when this PC no longer matches its licence, how to put it back, and offers the account page', async () => {
+    const bridge = await renderSetup({ licence: licenceStatus({ reason: 'binding-mismatch', email: 'someone@example.com', bindTier: 'tpm' }) })
+    expect(screen.getByText(/This PC no longer matches the licence it was activated with/)).toBeTruthy()
+    expect(screen.getByText(/cleared TPM, a new motherboard, a rebuilt Windows profile or a Windows reinstall/)).toBeTruthy()
+    expect(screen.getByText(/does not take another seat/)).toBeTruthy()
+    expect(screen.getByText(/release the old entry for this PC on your account page/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open my account page' }))
+    expect(bridge.openAccount).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
+  })
+
+  it('says the licence on this PC belongs to another PC when the device id does not match', async () => {
+    await renderSetup({ licence: licenceStatus({ reason: 'device-mismatch' }) })
+    expect(screen.getByText('The licence on this PC was issued to another PC. Sign in to activate this one.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Open my account page' })).toBeNull()
+  })
+
+  it('prefills the PC name with the Windows computer name and sends the name the person typed', async () => {
+    const bridge = await renderSetup()
+    const field = screen.getByRole('textbox', { name: 'PC name' }) as HTMLInputElement
+    expect(field.value).toBe('DESKTOP-ABC123')
+    fireEvent.change(field, { target: { value: 'Study PC' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }))
+    expect(bridge.signIn).toHaveBeenCalledWith({ deviceName: 'Study PC' })
+  })
+
+  it('caps the PC name at 64 characters', async () => {
+    await renderSetup()
+    const field = screen.getByRole('textbox', { name: 'PC name' }) as HTMLInputElement
+    fireEvent.change(field, { target: { value: 'x'.repeat(80) } })
+    expect(field.value).toHaveLength(64)
+  })
+
   it('opens on welcome with the licensed email when the licence is valid', async () => {
     await renderSetup({ licence: licenceStatus({ state: 'valid', email: 'someone@example.com' }) })
     expect(screen.getByText('someone@example.com')).toBeTruthy()
     expect(screen.getByText('Licensed')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Install' })).toBeTruthy()
-  })
-
-  it('opens on welcome during grace, because installing is still allowed', async () => {
-    await renderSetup({ licence: licenceStatus({ state: 'grace', reason: 'expired', email: 'someone@example.com' }) })
     expect(screen.getByRole('button', { name: 'Install' })).toBeTruthy()
   })
 
@@ -177,7 +207,7 @@ describe('SetupApp', () => {
     emitProgress(bridge, {
       ...idleProgress,
       phase: 'done',
-      outcome: { kind: 'seats-in-use', activations: [{ id: 'act_old', licenceId: 'lic_1', deviceName: 'DESK-1', lastSeenAt: null }] },
+      outcome: { kind: 'seats-in-use', activations: [{ id: 'act_old', licenceId: 'lic_1', deviceName: 'DESK-1', activatedAt: null }] },
     })
     expect(screen.getByText('All your licences are in use.')).toBeTruthy()
     expect(screen.getByText('DESK-1')).toBeTruthy()
