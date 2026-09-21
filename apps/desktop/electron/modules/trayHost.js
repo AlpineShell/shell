@@ -1,9 +1,9 @@
-const { app, nativeImage } = require('electron')
+const { app } = require('electron')
 const koffi = require('koffi')
 const winFocus = require('./winFocus')
+const { iconHandleToDataUrl } = require('./iconHandle')
 
 const user32 = koffi.load('user32.dll')
-const gdi32 = koffi.load('gdi32.dll')
 const kernel32 = koffi.load('kernel32.dll')
 
 const WNDPROC = koffi.proto('__stdcall', 'TrayHostWndProc', 'intptr_t', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t'])
@@ -34,7 +34,6 @@ const SendMessageTimeoutW = user32.func('__stdcall', 'SendMessageTimeoutW', 'int
 const PostMessageW = user32.func('__stdcall', 'PostMessageW', 'int', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t'])
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProcessId', 'uint32', ['uintptr_t', 'void *'])
-const DrawIconEx = user32.func('__stdcall', 'DrawIconEx', 'int', ['uintptr_t', 'int', 'int', 'uintptr_t', 'int', 'int', 'uint32', 'uintptr_t', 'uint32'])
 const GetSystemMetrics = user32.func('__stdcall', 'GetSystemMetrics', 'int', ['int'])
 
 const GetModuleHandleW = kernel32.func('__stdcall', 'GetModuleHandleW', 'uintptr_t', ['str16'])
@@ -43,12 +42,6 @@ const OpenProcess = kernel32.func('__stdcall', 'OpenProcess', 'uintptr_t', ['uin
 const QueryFullProcessImageNameW = kernel32.func('__stdcall', 'QueryFullProcessImageNameW', 'int', ['uintptr_t', 'uint32', 'void *', 'void *'])
 const CloseHandle = kernel32.func('__stdcall', 'CloseHandle', 'int', ['uintptr_t'])
 
-const CreateCompatibleDC = gdi32.func('__stdcall', 'CreateCompatibleDC', 'uintptr_t', ['uintptr_t'])
-const CreateDIBSection = gdi32.func('__stdcall', 'CreateDIBSection', 'uintptr_t', ['uintptr_t', 'void *', 'uint32', 'void *', 'uintptr_t', 'uint32'])
-const SelectObject = gdi32.func('__stdcall', 'SelectObject', 'uintptr_t', ['uintptr_t', 'uintptr_t'])
-const DeleteObject = gdi32.func('__stdcall', 'DeleteObject', 'int', ['uintptr_t'])
-const DeleteDC = gdi32.func('__stdcall', 'DeleteDC', 'int', ['uintptr_t'])
-const GdiFlush = gdi32.func('__stdcall', 'GdiFlush', 'int', [])
 
 const WM_COPYDATA = 0x004a
 const WM_LBUTTONDOWN = 0x0201
@@ -150,41 +143,6 @@ function isZeroBytes(buf, off, len) {
   return true
 }
 
-function iconToDataURL(hIconRaw) {
-  if (!hIconRaw) return ''
-  const size = iconSize
-  const bmi = Buffer.alloc(40)
-  bmi.writeUInt32LE(40, 0)
-  bmi.writeInt32LE(size, 4)
-  bmi.writeInt32LE(-size, 8)
-  bmi.writeUInt16LE(1, 12)
-  bmi.writeUInt16LE(32, 14)
-  const ppvBits = Buffer.alloc(8)
-  const hbm = CreateDIBSection(0, bmi, 0, ppvBits, 0, 0)
-  if (!hbm) return ''
-  const bitsAddr = ppvBits.readBigUInt64LE(0)
-  const memDC = CreateCompatibleDC(0)
-  const old = SelectObject(memDC, hbm)
-  try {
-    DrawIconEx(memDC, 0, 0, hIconRaw, size, size, 0, 0, 0x3)
-    GdiFlush()
-    const px = Buffer.alloc(size * size * 4)
-    RtlMoveMemory(px, bitsAddr, BigInt(px.length))
-    let hasPixels = false
-    for (let i = 3; i < px.length; i += 4) {
-      if (px[i] !== 0) { hasPixels = true; break }
-    }
-    if (!hasPixels) return ''
-    return nativeImage.createFromBitmap(px, { width: size, height: size }).toDataURL()
-  } catch (e) {
-    return ''
-  } finally {
-    SelectObject(memDC, old)
-    DeleteObject(hbm)
-    DeleteDC(memDC)
-  }
-}
-
 function scheduleBroadcast() {
   if (broadcastScheduled || !broadcastRef) return
   broadcastScheduled = true
@@ -260,7 +218,7 @@ function handleTrayData(buf, cbData) {
   if (uFlags & NIF_TIP) record.tooltip = readWideString(buf, base + O.szTip, 128)
   if (uFlags & NIF_ICON) {
     const hIconRaw = O === OFF64 ? buf.readBigUInt64LE(base + O.hIcon) : BigInt(buf.readUInt32LE(base + O.hIcon))
-    record.iconUrl = iconToDataURL(hIconRaw)
+    record.iconUrl = iconHandleToDataUrl(hIconRaw, iconSize)
   }
   scheduleBroadcast()
 }

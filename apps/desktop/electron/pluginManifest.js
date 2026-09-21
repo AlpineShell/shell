@@ -17,7 +17,10 @@ const CONTRIBUTION_KEYS = [
   'backendModules',
   'fileHandlers',
   'launcherFolders',
+  'windowRules',
 ]
+const WINDOW_BORDERS = ['default', 'none']
+const MAX_CONTENT_INSET = 64
 const EXTENSION_PATTERN = /^\.[a-z0-9][a-z0-9+._-]*$/
 
 function arr(value) {
@@ -84,6 +87,31 @@ function validateSettings(raw, apiVersion, push) {
   return settings
 }
 
+function isPlainFolderName(value) {
+  return Boolean(value) && !/[\\/:*?"<>|]/.test(value) && value !== '.' && value !== '..'
+}
+
+function windowRuleProblem(c) {
+  if (typeof c.process !== 'string' || !/^[^\\/:*?"<>|]+\.exe$/i.test(c.process.trim())) return "'process' must be an executable file name like 'app.exe'"
+  if (typeof c.className !== 'string' || !c.className) return "'className' must be a non-empty string"
+  if (c.titleSuffix != null && (typeof c.titleSuffix !== 'string' || !c.titleSuffix)) return "'titleSuffix' must be a non-empty string"
+  if (c.startMenuFolder != null && !isPlainFolderName(typeof c.startMenuFolder === 'string' ? c.startMenuFolder.trim() : '')) return "'startMenuFolder' must be a plain folder name"
+  if (c.border != null && !WINDOW_BORDERS.includes(c.border)) return `'border' must be one of ${WINDOW_BORDERS.join(', ')}`
+  if (c.contentInset != null && !(Number.isInteger(c.contentInset) && c.contentInset >= 0 && c.contentInset <= MAX_CONTENT_INSET)) return `'contentInset' must be a whole number of pixels from 0 to ${MAX_CONTENT_INSET}`
+  return null
+}
+
+function windowRule(c) {
+  return {
+    process: c.process.trim().toLowerCase(),
+    className: c.className,
+    titleSuffix: c.titleSuffix || null,
+    startMenuFolder: c.startMenuFolder ? c.startMenuFolder.trim() : null,
+    border: c.border || 'default',
+    contentInset: c.contentInset || 0,
+  }
+}
+
 function validateContributions(raw, apiVersion, realBase, push) {
   const out = {}
   if (!raw || typeof raw !== 'object') return out
@@ -137,7 +165,7 @@ function validateContributions(raw, apiVersion, realBase, push) {
       }
       if (key === 'launcherFolders') {
         const folder = typeof c.startMenuFolder === 'string' ? c.startMenuFolder.trim() : ''
-        if (!folder || /[\\/:*?"<>|]/.test(folder) || folder === '.' || folder === '..') {
+        if (!isPlainFolderName(folder)) {
           push("contributes.launcherFolders: 'startMenuFolder' must be a plain folder name")
           continue
         }
@@ -165,6 +193,12 @@ function validateContributions(raw, apiVersion, realBase, push) {
           openCommand: c.openCommand || null,
           export: c.export || 'default',
         })
+        continue
+      }
+      if (key === 'windowRules') {
+        const problem = windowRuleProblem(c)
+        if (problem) push(`contributes.windowRules: ${problem}`)
+        else kept.push(windowRule(c))
         continue
       }
       kept.push({ ...c, export: c.export || 'default' })
