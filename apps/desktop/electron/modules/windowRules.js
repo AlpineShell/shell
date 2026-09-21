@@ -20,6 +20,7 @@ const GCLP_HICON = -14
 const SMTO_ABORTIFHUNG = 0x0002
 const ICON_QUERY_TIMEOUT_MS = 100
 const WINDOW_ICON_SIZE = 32
+const BASE_DPI = 96
 const MAX_REMEMBERED_WINDOWS = 512
 
 let cachedRules = null
@@ -39,6 +40,7 @@ function loadNativeBindings() {
     DwmSetWindowAttribute: dwmapi.func('__stdcall', 'DwmSetWindowAttribute', 'int32', ['uintptr_t', 'uint32', 'void *', 'uint32']),
     SendMessageTimeoutW: user32.func('__stdcall', 'SendMessageTimeoutW', 'intptr_t', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t', 'uint32', 'uint32', 'void *']),
     GetClassLongPtrW: user32.func('__stdcall', 'GetClassLongPtrW', 'uintptr_t', ['uintptr_t', 'int']),
+    GetDpiForWindow: user32.func('__stdcall', 'GetDpiForWindow', 'uint32', ['uintptr_t']),
   }
   return nativeBindings
 }
@@ -182,9 +184,18 @@ function identifyWindow(hwnd, title) {
   }
 }
 
+function wholeDisplayScale(hwnd) {
+  try {
+    return Math.max(1, Math.floor(loadNativeBindings().GetDpiForWindow(hwnd) / BASE_DPI))
+  } catch {
+    return 1
+  }
+}
+
 function contentInset(hwnd) {
   const rule = ruleForWindow(hwnd)
-  return rule ? rule.contentInset : 0
+  if (!rule || !rule.contentInset) return 0
+  return rule.contentInset * wholeDisplayScale(hwnd)
 }
 
 module.exports = { identifyWindow, iconForIdentity, contentInset }
