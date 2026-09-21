@@ -89,7 +89,7 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
   'apps/installed': { registryRows: false, renderedByThePage: ['app-uninstall'] },
   'apps/running': { registryRows: false, renderedByThePage: ['app-force-close'] },
   'plugins': { registryRows: false, renderedByThePage: ['plugin-uninstall'] },
-  'updates': { registryRows: false, renderedByThePage: ['update-checks'] },
+  'updates': { registryRows: false, renderedByThePage: [] },
 }
 
 export function settingsRouteView(path: string): SettingsRouteView | null {
