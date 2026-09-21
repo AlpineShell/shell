@@ -2,6 +2,7 @@ const { app } = require('electron')
 const koffi = require('koffi')
 const appIcons = require('./appIcons')
 const windowEnum = require('./windowEnum')
+const windowRules = require('./windowRules')
 const { friendlyAppName } = require('../appNames')
 
 let lastSnapshot = null
@@ -96,11 +97,27 @@ function trackWindows(apps) {
   for (const openApp of apps) trackedWindowHandles.add(openApp.hwnd)
 }
 
+async function describeRuledWindow(taskbarWindow) {
+  const identity = windowRules.identifyWindow(taskbarWindow.hwnd, taskbarWindow.title)
+  if (!identity) return null
+  const icon = await windowRules.iconForIdentity(taskbarWindow.hwnd, identity)
+  return {
+    id: taskbarWindow.id,
+    hwnd: taskbarWindow.hwnd,
+    name: identity.name,
+    title: identity.title,
+    path: identity.shortcutPath || taskbarWindow.path,
+    icon,
+  }
+}
+
 async function listOpenApps() {
   const taskbarWindows = listTaskbarWindows()
   const generic = await appIcons.ensureGenericIcon()
   return Promise.all(
     taskbarWindows.map(async (taskbarWindow) => {
+      const ruled = await describeRuledWindow(taskbarWindow)
+      if (ruled) return { ...ruled, icon: ruled.icon || generic }
       const [icon, description] = await Promise.all([
         appIcons.iconForFile(taskbarWindow.path),
         windowEnum.resolveFileDescription(taskbarWindow.path),

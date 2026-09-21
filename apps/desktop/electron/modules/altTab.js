@@ -333,6 +333,7 @@ const SHELL_PROCESS_NAMES = new Set(['electron', 'alpine-shell', 'alpine shell']
 
 const { SETTINGS_ICON_DATA_URL } = require('../settingsIcon')
 const pluginWindows = require('../pluginWindows')
+const windowRules = require('./windowRules')
 
 const pluginIconCache = new Map()
 
@@ -361,6 +362,12 @@ async function buildWindowList() {
     const pid = pidBuf.readUInt32LE(0)
     const exePath = getProcessPath(pid)
     const rawProcessName = exePath ? exePath.split('\\').pop().replace(/\.exe$/i, '') : 'Unknown'
+    const identity = windowRules.identifyWindow(hwnd, title)
+    if (identity) {
+      const icon = await windowRules.iconForIdentity(hwnd, identity)
+      results.push({ hwnd, title: identity.title, processName: identity.name, icon: icon || '', thumbnail: captureWindowThumbnail(hwnd) || '' })
+      continue
+    }
     const isAlpineShell = SHELL_PROCESS_NAMES.has(rawProcessName.toLowerCase())
     const processName = isAlpineShell ? title : friendlyAppName({ path: exePath, processName: rawProcessName })
     const pluginIconPath = pluginWindows.iconForHandle(hwnd)

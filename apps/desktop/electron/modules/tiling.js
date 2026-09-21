@@ -5,6 +5,7 @@ const koffi = require('koffi')
 const winEvents = require('./winEvents')
 const { isExposedOwnWindow } = require('./exposedOwnWindows')
 const { isCrossDisplayMove, allowsWindow, snapHotkeyConfigured, acceptsSnapHotkey } = require('./tilingPolicy')
+const windowRules = require('./windowRules')
 
 const user32 = koffi.load('user32.dll')
 let dwmapi = null
@@ -247,12 +248,13 @@ function readExtendedFrame(hwnd) {
 function frameInsets(hwnd) {
   const win = readRect(hwnd)
   const ext = readExtendedFrame(hwnd)
-  if (!win || !ext) return { left: 0, top: 0, right: 0, bottom: 0 }
+  const content = windowRules.contentInset(hwnd)
+  if (!win || !ext) return { left: content, top: content, right: content, bottom: content }
   return {
-    left: ext.left - win.left,
-    top: ext.top - win.top,
-    right: win.right - ext.right,
-    bottom: win.bottom - ext.bottom,
+    left: ext.left - win.left + content,
+    top: ext.top - win.top + content,
+    right: win.right - ext.right + content,
+    bottom: win.bottom - ext.bottom + content,
   }
 }
 

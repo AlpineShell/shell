@@ -107,6 +107,56 @@ describe('contributes.launcherFolders', () => {
   })
 })
 
+describe('contributes.windowRules', () => {
+  const WSLG_RULE = { process: 'MSRDC.exe', className: 'RAIL_WINDOW', titleSuffix: ' (Ubuntu)', startMenuFolder: ' Ubuntu ', border: 'none', contentInset: 12 }
+
+  it('keeps a rule and normalises the process and folder', () => {
+    const record = write(baseManifest({ windowRules: [WSLG_RULE] }))
+    expect(record.errors).toEqual([])
+    expect(record.contributes.windowRules).toEqual([
+      { process: 'msrdc.exe', className: 'RAIL_WINDOW', titleSuffix: ' (Ubuntu)', startMenuFolder: 'Ubuntu', border: 'none', contentInset: 12 },
+    ])
+  })
+
+  it('fills in defaults for the optional fields', () => {
+    const record = write(baseManifest({ windowRules: [{ process: 'msrdc.exe', className: 'RAIL_WINDOW' }] }))
+    expect(record.contributes.windowRules[0]).toEqual({
+      process: 'msrdc.exe',
+      className: 'RAIL_WINDOW',
+      titleSuffix: null,
+      startMenuFolder: null,
+      border: 'default',
+      contentInset: 0,
+    })
+  })
+
+  it('rejects a process given as a path', () => {
+    const record = write(baseManifest({ windowRules: [{ ...WSLG_RULE, process: 'system32\\msrdc.exe' }] }))
+    expect(record.valid).toBe(false)
+    expect(record.contributes.windowRules).toBeUndefined()
+  })
+
+  it('rejects a rule without a window class', () => {
+    const record = write(baseManifest({ windowRules: [{ ...WSLG_RULE, className: '' }] }))
+    expect(record.valid).toBe(false)
+  })
+
+  it('rejects an unknown border', () => {
+    const record = write(baseManifest({ windowRules: [{ ...WSLG_RULE, border: 'thick' }] }))
+    expect(record.valid).toBe(false)
+  })
+
+  it('rejects an inset that is not a small whole number', () => {
+    expect(write(baseManifest({ windowRules: [{ ...WSLG_RULE, contentInset: 2.5 }] })).valid).toBe(false)
+    expect(write(baseManifest({ windowRules: [{ ...WSLG_RULE, contentInset: 500 }] })).valid).toBe(false)
+  })
+
+  it('rejects a start menu folder that is a path', () => {
+    const record = write(baseManifest({ windowRules: [{ ...WSLG_RULE, startMenuFolder: '..\\Startup' }] }))
+    expect(record.valid).toBe(false)
+  })
+})
+
 describe('contributes.launcherFolders openCommand', () => {
   it('defaults to null', () => {
     const record = write(baseManifest({ launcherFolders: [{ startMenuFolder: 'Android apps' }] }))
