@@ -5,6 +5,7 @@ import { useBluetooth } from "../../hooks/useBluetooth"
 import { useBluetoothRescan } from "../../hooks/useBluetoothRescan"
 import { canToggleRadio, deviceActionLabel, deviceStatusLabel, displayedRadioOn, isRadioOff, nextDeviceAction, radioEmptyStateTitle } from "../../lib/bluetoothPresentation"
 import { moveSelection, resolveSelection } from "../../lib/listSelection"
+import { brightnessNeedsSubmenu, monitorBrightnessLabel } from "../../lib/brightnessPresentation"
 import { useDarkText } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
@@ -291,7 +292,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const [recentEmoji, setRecentEmoji] = useState<string[]>([])
   const currentWallpaper = useWallpaper()
   const { monitors, setBrightness } = useMonitors()
-  const brightnessIsSubmenu = monitors.length > 1
+  const brightnessIsSubmenu = brightnessNeedsSubmenu(monitors)
   const originalPath = useRef<string | null>(null)
   const committed = useRef(false)
   const queryBeforeCommand = useRef("")
@@ -1964,7 +1965,7 @@ function LauncherBrightness({ darkText, onBack, monitors, setBrightness }: { dar
   const items: LauncherMenuItem[] = monitors.map((m): LauncherMenuItem => ({
     id: m.id,
     kind: "slider",
-    label: m.brightnessWritable ? m.name : `${m.name} (not responding)`,
+    label: monitorBrightnessLabel(m),
     icon: Monitor,
     value: m.brightness,
     min: 0,

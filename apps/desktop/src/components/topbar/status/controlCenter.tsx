@@ -2,8 +2,11 @@ import { useRef, useState, useEffect } from "react";
 import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Settings, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
 import { useDarkText } from "../../themeContext";
 import { connectedSummary, displayedRadioOn } from "../../../lib/bluetoothPresentation";
+import { brightnessNeedsSubmenu } from "../../../lib/brightnessPresentation";
 import WifiMenu from "./wifiMenu";
 import BluetoothMenu from "./bluetoothMenu";
+import BrightnessMenu from "./brightnessMenu";
+import ControlSlider from "./controlSlider";
 
 interface ControlCenterProps {
     battery: BatteryStatus;
@@ -36,7 +39,7 @@ function batteryIcon(percent: number | null, charging: boolean): React.FC<{ colo
     return BatteryWarning;
 }
 
-type View = 'main' | 'wifi' | 'bluetooth';
+type View = 'main' | 'wifi' | 'bluetooth' | 'brightness';
 
 export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness, wifiNetworks, wifiScanning, scanWifi, wifiRadio, onToggleWifiRadio }: ControlCenterProps) {
     const darkText = useDarkText();
@@ -47,6 +50,7 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
         : undefined;
 
     const btLabel = connectedSummary(bluetooth);
+    const brightnessIsSubmenu = brightnessNeedsSubmenu(monitors);
 
     const mainRef = useRef<HTMLDivElement>(null);
     const subRef = useRef<HTMLDivElement>(null);
@@ -72,13 +76,15 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                     <div className="gap-3 mb-1 flex flex-col">
                         <ControlItem label="Wi-Fi" sublabel={wifiLabel} active={wifiRadio} Icon={Wifi} darkText={darkText} onClick={() => setView('wifi')} />
                         <ControlItem label="Bluetooth" sublabel={btLabel} active={displayedRadioOn(bluetooth)} Icon={Bluetooth} darkText={darkText} onClick={() => setView('bluetooth')} />
+                        {brightnessIsSubmenu && <ControlItem label="Brightness" active Icon={Sun} darkText={darkText} onClick={() => setView('brightness')} />}
                     </div>
                     <div className="flex flex-col gap-2">
-                        <Slider Icon={muted ? VolumeX : Volume2} value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
-                        {monitors.map((m) => (
-                            <Slider
+                        <ControlSlider Icon={muted ? VolumeX : Volume2} ariaLabel="Volume" value={volume} onChange={setVolume} onIconClick={toggleMute} muted={muted} darkText={darkText} />
+                        {!brightnessIsSubmenu && monitors.map((m) => (
+                            <ControlSlider
                                 key={m.id}
                                 Icon={Sun}
+                                ariaLabel="Brightness"
                                 value={m.brightness}
                                 onChange={(v) => setMonitorBrightness(m.id, v)}
                                 darkText={darkText}
@@ -108,6 +114,7 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                 <div ref={subRef} className="w-65 shrink-0 self-start">
                     {view === 'wifi' && <WifiMenu networks={wifiNetworks} scanning={wifiScanning} enabled={wifiRadio} onToggleRadio={onToggleWifiRadio} onScan={scanWifi} onBack={() => setView('main')} darkText={darkText} />}
                     {view === 'bluetooth' && <BluetoothMenu onBack={() => setView('main')} darkText={darkText} />}
+                    {view === 'brightness' && <BrightnessMenu monitors={monitors} setMonitorBrightness={setMonitorBrightness} onBack={() => setView('main')} darkText={darkText} />}
                 </div>
             </div>
         </div>
@@ -128,38 +135,6 @@ function ControlItem({ label, sublabel, active, Icon, darkText, onClick }: { lab
                 </div>
             </div>
             <ChevronRight color={isActive ? color : dimColor} size={15} />
-        </div>
-    )
-}
-
-function Slider({ Icon, iconSrc, value, onChange, label, onIconClick, muted, darkText }: { Icon?: React.FC<{ color: string; size: number }>; iconSrc?: string; value: number; onChange: (value: number) => void; label?: string; onIconClick?: () => void; muted?: boolean; darkText: boolean }) {
-    const [dragging, setDragging] = useState(false);
-    const color = darkText ? "black" : "white";
-    const mutedColor = darkText ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.4)";
-    return (
-        <div className="flex flex-col gap-1">
-            {label && <span className={`text-[11px] ${darkText ? "text-black/50" : "text-white/50"} ml-1`}>{label}</span>}
-            <div className={`flex ${darkText ? "bg-black/5" : "bg-[#3F3F3F]/20"} p-3 rounded-md ${darkText ? "text-black" : "text-white"} items-center gap-3`}>
-            <div className={`shrink-0 ${onIconClick ? 'cursor-pointer' : ''}`} onClick={onIconClick}>
-                {iconSrc ? (
-                    <img src={iconSrc} alt="" className="w-3.75 h-3.75" style={{ filter: darkText ? 'brightness(0)' : 'brightness(0) invert(1)' }} draggable={false} />
-                ) : Icon ? (
-                    <Icon color={muted ? mutedColor : color} size={15} />
-                ) : null}
-            </div>
-            <input
-                type="range"
-                min={0}
-                max={100}
-                value={value}
-                onPointerDown={() => setDragging(true)}
-                onPointerUp={() => setDragging(false)}
-                onLostPointerCapture={() => setDragging(false)}
-                onChange={(e) => onChange(Number(e.target.value))}
-                className={`cc-slider w-full ${dragging ? 'dragging' : 'animate'} ${darkText ? 'cc-slider-light' : ''}`}
-                style={{ '--slider-progress': `${value}%` } as React.CSSProperties}
-            />
-            </div>
         </div>
     )
 }
