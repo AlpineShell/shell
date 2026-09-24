@@ -44,6 +44,23 @@ function revertBlockedReason({ packaged, updatePending }) {
   return null
 }
 
+function planAutostartLaunch(context) {
+  const explorerKeepsTheShell = context.packaged
+    && context.launchedByAutostart
+    && context.handedOffThisLogon === true
+    && context.explorerHostsShell === true
+  return { steps: explorerKeepsTheShell ? [EXIT_ALPINE] : [] }
+}
+
+function shouldProcessAutostart({ development, updateRestart, actingAsShell, launchedByAutostart }) {
+  return !development && !updateRestart && Boolean(actingAsShell) && !launchedByAutostart
+}
+
+function matchHandoffLogon({ recordedLogonId, currentLogonId }) {
+  if (!recordedLogonId || !currentLogonId) return null
+  return recordedLogonId === currentLogonId
+}
+
 function planShellRevert({ shellHandedToExplorer, replacementConfirmed }) {
   return { steps: shellHandedToExplorer && replacementConfirmed ? [EXIT_ALPINE] : [] }
 }
@@ -69,6 +86,9 @@ module.exports = {
   requiresShellRegistration,
   isRegistrationSatisfied,
   revertBlockedReason,
+  planAutostartLaunch,
+  shouldProcessAutostart,
+  matchHandoffLogon,
   planShellRevert,
   settleShellRevert,
   planMarkerAge,

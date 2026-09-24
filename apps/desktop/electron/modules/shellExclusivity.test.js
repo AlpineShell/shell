@@ -10,6 +10,9 @@ const {
   requiresShellRegistration,
   isRegistrationSatisfied,
   revertBlockedReason,
+  planAutostartLaunch,
+  shouldProcessAutostart,
+  matchHandoffLogon,
   planShellRevert,
   settleShellRevert,
   planMarkerAge,
@@ -185,6 +188,122 @@ describe('revertBlockedReason', () => {
 
   it('blocks a revert while an update owns the shell registration', () => {
     expect(revertBlockedReason({ packaged: true, updatePending: true })).toBe(REVERT_BLOCKED_BY_UPDATE)
+  })
+})
+
+describe('planAutostartLaunch', () => {
+  function autostartLaunch(overrides = {}) {
+    return planAutostartLaunch({
+      packaged: true,
+      launchedByAutostart: true,
+      handedOffThisLogon: true,
+      explorerHostsShell: true,
+      ...overrides,
+    })
+  }
+
+  const EVERY_AUTOSTART_CONTEXT = [true, false].flatMap(packaged =>
+    [true, false].flatMap(launchedByAutostart =>
+      [true, false, null].flatMap(handedOffThisLogon =>
+        [true, false, null].map(explorerHostsShell => ({ packaged, launchedByAutostart, handedOffThisLogon, explorerHostsShell })))))
+
+  const exits = context => planAutostartLaunch(context).steps.includes(EXIT_ALPINE)
+
+  it('exits the launch that Explorer starts from the Run entry in the sign-in the user reverted', () => {
+    expect(autostartLaunch().steps).toEqual([EXIT_ALPINE])
+  })
+
+  it('keeps a launch the user started, even while Explorer holds the shell', () => {
+    expect(autostartLaunch({ launchedByAutostart: false }).steps).toEqual([])
+  })
+
+  it('keeps the autostart launch at a later sign-in', () => {
+    expect(autostartLaunch({ handedOffThisLogon: false }).steps).toEqual([])
+  })
+
+  it('keeps the autostart launch when the sign-in the hand-off belongs to is unknown', () => {
+    expect(autostartLaunch({ handedOffThisLogon: null }).steps).toEqual([])
+  })
+
+  it('keeps the autostart launch unless Explorer is confirmed to host the shell', () => {
+    expect(autostartLaunch({ explorerHostsShell: false }).steps).toEqual([])
+    expect(autostartLaunch({ explorerHostsShell: null }).steps).toEqual([])
+  })
+
+  it('never exits in development', () => {
+    expect(autostartLaunch({ packaged: false }).steps).toEqual([])
+  })
+
+  it('never exits a launch that did not come from the Run entry', () => {
+    expect(EVERY_AUTOSTART_CONTEXT.filter(context => !context.launchedByAutostart).some(exits)).toBe(false)
+  })
+
+  it('never exits without positive confirmation of both the sign-in and Explorer', () => {
+    const unconfirmed = EVERY_AUTOSTART_CONTEXT.filter(context => context.handedOffThisLogon !== true || context.explorerHostsShell !== true)
+    expect(unconfirmed.some(exits)).toBe(false)
+  })
+
+  it('exits in exactly one context', () => {
+    expect(EVERY_AUTOSTART_CONTEXT.filter(exits)).toHaveLength(1)
+  })
+
+  it('probes for Explorer only once a hand-off from this sign-in is confirmed', () => {
+    const read = []
+    const context = {}
+    for (const key of ['packaged', 'launchedByAutostart', 'handedOffThisLogon', 'explorerHostsShell']) {
+      Object.defineProperty(context, key, {
+        get() {
+          read.push(key)
+          return key === 'handedOffThisLogon' ? null : true
+        },
+      })
+    }
+    planAutostartLaunch(context)
+    expect(read).toEqual(['packaged', 'launchedByAutostart', 'handedOffThisLogon'])
+  })
+})
+
+describe('shouldProcessAutostart', () => {
+  function startupApps(overrides = {}) {
+    return shouldProcessAutostart({
+      development: false,
+      updateRestart: false,
+      actingAsShell: true,
+      launchedByAutostart: false,
+      ...overrides,
+    })
+  }
+
+  it('starts the startup apps when Alpine is the shell', () => {
+    expect(startupApps()).toBe(true)
+  })
+
+  it('leaves them to Explorer when Alpine is not acting as the shell', () => {
+    expect(startupApps({ actingAsShell: false })).toBe(false)
+  })
+
+  it('leaves them to Explorer when its log-on pass started Alpine', () => {
+    expect(startupApps({ launchedByAutostart: true })).toBe(false)
+  })
+
+  it('skips them in development and after an update restart', () => {
+    expect(startupApps({ development: true })).toBe(false)
+    expect(startupApps({ updateRestart: true })).toBe(false)
+  })
+})
+
+describe('matchHandoffLogon', () => {
+  it('matches a hand-off recorded in this sign-in', () => {
+    expect(matchHandoffLogon({ recordedLogonId: 'S-1-5-5-0-43222286', currentLogonId: 'S-1-5-5-0-43222286' })).toBe(true)
+  })
+
+  it('tells a hand-off from an earlier sign-in apart', () => {
+    expect(matchHandoffLogon({ recordedLogonId: 'S-1-5-5-0-43222286', currentLogonId: 'S-1-5-5-0-51000001' })).toBe(false)
+  })
+
+  it('cannot tell when either sign-in is unknown', () => {
+    expect(matchHandoffLogon({ recordedLogonId: null, currentLogonId: 'S-1-5-5-0-43222286' })).toBe(null)
+    expect(matchHandoffLogon({ recordedLogonId: 'S-1-5-5-0-43222286', currentLogonId: null })).toBe(null)
   })
 })
 
