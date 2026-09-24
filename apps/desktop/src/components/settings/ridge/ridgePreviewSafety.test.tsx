@@ -305,6 +305,7 @@ describe('the Ridge import boundary', () => {
     'components/topbar/launcherTrigger',
     'components/topbar/launcherPanel',
     'components/topbar/altTabPanel',
+    'components/topbar/displayModePanel',
     'components/topbar/noticeStrip',
     'components/topbar/pluginSlot',
     'components/topbar/shared/popupMenu',

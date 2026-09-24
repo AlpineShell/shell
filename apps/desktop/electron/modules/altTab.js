@@ -1,5 +1,6 @@
 const { app, screen, nativeImage } = require('electron')
 const koffi = require('koffi')
+const displayModePolicy = require('./displayModePolicy')
 const appIcons = require('./appIcons')
 const { friendlyAppName } = require('../appNames')
 const exposedOwnWindows = require('./exposedOwnWindows')
@@ -76,6 +77,7 @@ const VK_SHIFT = 0x10
 const VK_S = 0x53
 const VK_E = 0x45
 const VK_I = 0x49
+const VK_P = 0x50
 const VK_LWIN = 0x5B
 const VK_RWIN = 0x5C
 const VK_LEFT = 0x25
@@ -131,6 +133,7 @@ let tilingKeyCallback = null
 let explorerKeyCallback = null
 let settingsKeyCallback = null
 let emojiKeyCallback = null
+let displayModeKeyCallback = null
 let launcherCloser = null
 let overlayDisplayProvider = null
 
@@ -139,6 +142,10 @@ let emojiCaptureKeyCallback = null
 let emojiCaptureCloseCallback = null
 let emojiCaptureForeground = 0
 const emojiConsumedKeys = new Set()
+
+let displayModeCaptureActive = false
+let displayModeCaptureKeyCallback = null
+const displayModeConsumedKeys = new Set()
 
 const iconCache = new Map()
 const thumbnailCache = new Map()
@@ -714,6 +721,19 @@ function handleEmojiCaptureKey(vkCode, scanCode, isKeyDown, isKeyUp) {
   return true
 }
 
+function handleDisplayModeCaptureKey(vkCode) {
+  if (displayModeConsumedKeys.has(vkCode)) return true
+  const { action, swallow } = displayModePolicy.displayModeKeyAction(vkCode, shiftKeyHeld())
+  if (action !== 'ignore') {
+    setImmediate(() => {
+      try { if (displayModeCaptureKeyCallback) displayModeCaptureKeyCallback(action) } catch (e) { console.error('[altTab] display mode key error:', e.message) }
+    })
+  }
+  if (!swallow) return false
+  displayModeConsumedKeys.add(vkCode)
+  return true
+}
+
 const LLKHF_INJECTED = 0x10
 const KEYEVENTF_KEYUP = 0x0002
 
@@ -745,6 +765,13 @@ function hookCallback(nCode, wParam, lParam) {
 
     if (emojiCaptureActive) {
       if (handleEmojiCaptureKey(vkCode, readScanCode(lParam), isKeyDown, isKeyUp)) return 1
+    }
+
+    if (isKeyUp && displayModeConsumedKeys.delete(vkCode)) return 1
+
+    if (isKeyDown && displayModeCaptureActive && handleDisplayModeCaptureKey(vkCode)) {
+      winTapped = false
+      return 1
     }
 
     if (isKeyDown && tilingKeyCallback && (vkCode === VK_LEFT || vkCode === VK_RIGHT || vkCode === VK_UP || vkCode === VK_DOWN)) {
@@ -789,6 +816,16 @@ function hookCallback(nCode, wParam, lParam) {
           keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
           keybd_event(VK_RWIN, 0, KEYEVENTF_KEYUP, 0)
           try { emojiKeyCallback() } catch (e) { console.error('[altTab] emoji key error:', e.message) }
+        })
+        return 1
+      }
+    }
+
+    if (isKeyDown && vkCode === VK_P && displayModeKeyCallback && !displayModeCaptureActive) {
+      if (winKeyHeld()) {
+        winTapped = false
+        setImmediate(() => {
+          try { displayModeKeyCallback() } catch (e) { console.error('[altTab] display mode key error:', e.message) }
         })
         return 1
       }
@@ -956,6 +993,21 @@ module.exports = {
   onEmojiCaptureKey(callback) {
     emojiCaptureKeyCallback = callback
   },
+
+  onDisplayModeKey(callback) {
+    displayModeKeyCallback = callback
+  },
+
+  setDisplayModeCapture(active) {
+    displayModeCaptureActive = !!active
+    if (displayModeCaptureActive) displayModeConsumedKeys.clear()
+  },
+
+  onDisplayModeCaptureKey(callback) {
+    displayModeCaptureKeyCallback = callback
+  },
+
+  activeDisplay: getActiveDisplay,
 
   onEmojiCaptureClose(callback) {
     emojiCaptureCloseCallback = callback

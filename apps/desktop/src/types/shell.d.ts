@@ -255,6 +255,19 @@ declare global {
     selectedIndex: number
   }
 
+  type DisplayMode = 'internal' | 'clone' | 'extend' | 'external'
+
+  interface DisplayModeOption {
+    mode: DisplayMode
+    available: boolean
+  }
+
+  interface DisplayModePickerPayload {
+    options: DisplayModeOption[]
+    currentMode: DisplayMode | null
+    selectedMode: DisplayMode
+  }
+
   interface ScreenshotShowPayload {
     image: string
   }
@@ -1697,6 +1710,13 @@ declare global {
       onHide: (callback: () => void) => void
       onSelectionChanged: (callback: (index: number) => void) => void
       activate: (hwnd: number) => Promise<void>
+    }
+    displayMode: {
+      onShow: (callback: (data: DisplayModePickerPayload) => void) => () => void
+      onHide: (callback: () => void) => () => void
+      onSelectionChanged: (callback: (mode: DisplayMode) => void) => () => void
+      choose: (mode: DisplayMode) => Promise<void>
+      dismiss: () => Promise<void>
     }
     topbar: {
       setActiveRegion: (region: TopbarActiveRegion | null) => void

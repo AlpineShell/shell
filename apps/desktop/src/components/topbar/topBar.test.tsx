@@ -4,6 +4,7 @@ import { render, waitFor } from '@testing-library/react'
 vi.mock('./chrome/ChromeCanvas', () => ({ default: () => null }))
 vi.mock('./launcherPanel', () => ({ default: () => null }))
 vi.mock('./altTabPanel', () => ({ default: () => null }))
+vi.mock('./displayModePanel', () => ({ default: () => null }))
 vi.mock('./noticeStrip', () => ({ default: () => null }))
 vi.mock('./systemMenu', () => ({ default: () => <i data-el="system-menu" /> }))
 vi.mock('./noticeStatus', () => ({ default: () => <i data-el="notice" /> }))

@@ -222,6 +222,26 @@ contextBridge.exposeInMainWorld('alttab', {
   activate: (hwnd) => ipcRenderer.invoke('alttab/activate', hwnd),
 })
 
+contextBridge.exposeInMainWorld('displayMode', {
+  onShow: (callback) => {
+    const handler = (_event, payload) => callback(payload)
+    ipcRenderer.on('displaymode/show', handler)
+    return () => ipcRenderer.removeListener('displaymode/show', handler)
+  },
+  onHide: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('displaymode/hide', handler)
+    return () => ipcRenderer.removeListener('displaymode/hide', handler)
+  },
+  onSelectionChanged: (callback) => {
+    const handler = (_event, mode) => callback(mode)
+    ipcRenderer.on('displaymode/selection-changed', handler)
+    return () => ipcRenderer.removeListener('displaymode/selection-changed', handler)
+  },
+  choose: (mode) => ipcRenderer.invoke('displaymode/choose', mode),
+  dismiss: () => ipcRenderer.invoke('displaymode/dismiss'),
+})
+
 contextBridge.exposeInMainWorld('launcher', {
   index: () => ipcRenderer.invoke('launcher/index'),
   show: () => ipcRenderer.invoke('launcher/show'),

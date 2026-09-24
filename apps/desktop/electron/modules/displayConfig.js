@@ -1,11 +1,15 @@
 const { app, screen } = require('electron')
 const koffi = require('koffi')
+const displayModePolicy = require('./displayModePolicy')
 
 const user32 = koffi.load('user32.dll')
 
 const EnumDisplayDevicesW = user32.func('__stdcall', 'EnumDisplayDevicesW', 'int', ['str16', 'uint32', 'void *', 'uint32'])
 const EnumDisplaySettingsExW = user32.func('__stdcall', 'EnumDisplaySettingsExW', 'int', ['str16', 'uint32', 'void *', 'uint32'])
 const ChangeDisplaySettingsExW = user32.func('__stdcall', 'ChangeDisplaySettingsExW', 'long', ['str16', 'void *', 'uintptr_t', 'uint32', 'void *'])
+const GetDisplayConfigBufferSizes = user32.func('__stdcall', 'GetDisplayConfigBufferSizes', 'long', ['uint32', 'void *', 'void *'])
+const QueryDisplayConfig = user32.func('__stdcall', 'QueryDisplayConfig', 'long', ['uint32', 'void *', 'void *', 'void *', 'void *', 'void *'])
+const SetDisplayConfig = user32.func('__stdcall', 'SetDisplayConfig', 'long', ['uint32', 'void *', 'uint32', 'void *', 'uint32'])
 
 const DISPLAY_DEVICE_SIZE = 840
 const DD_DEVICENAME_OFFSET = 4
@@ -38,6 +42,14 @@ const CDS_SET_PRIMARY = 0x00000010
 const CDS_NORESET = 0x10000000
 
 const DISP_CHANGE_SUCCESSFUL = 0
+
+const QDC_ALL_PATHS = 0x1
+const QDC_DATABASE_CURRENT = 0x4
+const SDC_APPLY = 0x80
+const ERROR_SUCCESS = 0
+const ERROR_INSUFFICIENT_BUFFER = 122
+const DISPLAY_CONFIG_QUERY_ATTEMPTS = 3
+const MODE_INFO_SIZE = 64
 
 const AUTO_REVERT_MS = 20000
 const HOTPLUG_DEBOUNCE_MS = 400
@@ -201,6 +213,58 @@ function rollback() {
   rollbackSnapshot = null
 }
 
+function callOffMainThread(api, ...args) {
+  return new Promise((resolve, reject) => {
+    api.async(...args, (error, result) => (error ? reject(error) : resolve(toNum(result))))
+  })
+}
+
+async function queryDisplayPaths(flags, withTopology) {
+  for (let attempt = 0; attempt < DISPLAY_CONFIG_QUERY_ATTEMPTS; attempt++) {
+    const pathCount = Buffer.alloc(4)
+    const modeCount = Buffer.alloc(4)
+    if (await callOffMainThread(GetDisplayConfigBufferSizes, flags, pathCount, modeCount) !== ERROR_SUCCESS) return null
+    const paths = Buffer.alloc(Math.max(1, pathCount.readUInt32LE(0)) * displayModePolicy.PATH_INFO_SIZE)
+    const modes = Buffer.alloc(Math.max(1, modeCount.readUInt32LE(0)) * MODE_INFO_SIZE)
+    const topology = withTopology ? Buffer.alloc(4) : null
+    const result = await callOffMainThread(QueryDisplayConfig, flags, pathCount, paths, modeCount, modes, topology)
+    if (result === ERROR_INSUFFICIENT_BUFFER) continue
+    if (result !== ERROR_SUCCESS) return null
+    return { paths, pathCount: pathCount.readUInt32LE(0), topologyId: topology ? topology.readUInt32LE(0) : null }
+  }
+  return null
+}
+
+async function readDisplayMode() {
+  try {
+    const all = await queryDisplayPaths(QDC_ALL_PATHS, false)
+    if (!all) return null
+    const current = await queryDisplayPaths(QDC_DATABASE_CURRENT, true)
+    return {
+      currentMode: current ? displayModePolicy.modeForTopologyId(current.topologyId) : null,
+      connectedTargets: displayModePolicy.countConnectedTargets(all.paths, all.pathCount),
+    }
+  } catch (e) {
+    console.error('[displayConfig] could not read the display mode:', e.message)
+    return null
+  }
+}
+
+async function applyDisplayMode(mode) {
+  const topologyFlag = displayModePolicy.topologyFlagForMode(mode)
+  if (!topologyFlag) return { ok: false, code: null }
+  clearRevertTimer()
+  rollbackSnapshot = null
+  try {
+    const code = await callOffMainThread(SetDisplayConfig, 0, null, 0, null, SDC_APPLY | topologyFlag)
+    if (code !== ERROR_SUCCESS) console.error(`[displayConfig] SetDisplayConfig(${mode}) failed with ${code}`)
+    return { ok: code === ERROR_SUCCESS, code }
+  } catch (e) {
+    console.error('[displayConfig] could not switch the display mode:', e.message)
+    return { ok: false, code: null }
+  }
+}
+
 function scheduleHotplugBroadcast() {
   if (hotplugTimer) clearTimeout(hotplugTimer)
   hotplugTimer = setTimeout(() => {
@@ -239,6 +303,8 @@ module.exports = {
       return displays
     },
   },
+  readDisplayMode,
+  applyDisplayMode,
   start(broadcast) {
     broadcastRef = broadcast
     screen.on('display-added', scheduleHotplugBroadcast)
