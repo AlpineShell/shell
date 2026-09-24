@@ -50,6 +50,7 @@ const shellNotice = require('./modules/shellNotice')
 const OPEN_APP_TIMEOUT_MS = 300000
 const fileHandlers = require('./modules/fileHandlers')
 const displayConfig = require('./modules/displayConfig')
+const displayModePicker = require('./modules/displayModePicker')
 const clockPrefs = require('./modules/clockPrefs')
 const topbarLayout = require('./modules/topbarLayout')
 const theme = require('./modules/theme')
@@ -207,10 +208,14 @@ function scheduleMenuClose(win, state) {
   }, MENU_CLOSE_GRACE_MS)
 }
 
+function hookSurfaceOwnsTopBar(win) {
+  return Boolean(altTab && altTab.isAltTabActive(win)) || displayModePicker.isActive(win)
+}
+
 function evaluateTopBarInteraction(win, state) {
   if (win.isDestroyed()) return
   if (launcher.isLauncherActive(win)) return
-  if (altTab && altTab.isAltTabActive(win)) return
+  if (hookSurfaceOwnsTopBar(win)) return
   const bounds = state.bounds
   const cursor = screen.getCursorScreenPoint()
 
@@ -360,7 +365,7 @@ function createTopBarWindow(display) {
   win.restorePassiveTopBar = () => {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
-    if (altTab && altTab.isAltTabActive(win)) return
+    if (hookSurfaceOwnsTopBar(win)) return
     clearCloseGrace(state)
     state.activeRegion = null
     win.watchInputWhileRegionArmed(false)
@@ -378,7 +383,7 @@ function createTopBarWindow(display) {
     if (input.type !== 'mouseDown') return
     if (!state.activeRegion) return
     if (launcher.isLauncherActive(win)) return
-    if (altTab && altTab.isAltTabActive(win)) return
+    if (hookSurfaceOwnsTopBar(win)) return
     const click = { x: state.bounds.x + input.x, y: state.bounds.y + input.y }
     if (!shouldClickCloseMenu(click, state.bounds, state.activeRegion)) return
     closeActiveMenu(win, state)
@@ -393,7 +398,7 @@ function createTopBarWindow(display) {
   const onSetActiveRegion = (event, region) => {
     if (win.isDestroyed()) return
     if (launcher.isLauncherActive(win)) return
-    if (altTab && altTab.isAltTabActive(win)) return
+    if (hookSurfaceOwnsTopBar(win)) return
     if (event.sender !== win.webContents) return
     if (region) {
       state.activeRegion = region
@@ -829,7 +834,7 @@ app.whenReady().then(async () => {
 
   trustedSenders.setTrustedWindowsAccessor(() => [setupWin, settingsWin])
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, licence)
 
   theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
@@ -840,7 +845,10 @@ app.whenReady().then(async () => {
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
 
   if (altTab && altTab.setLauncherCloser) altTab.setLauncherCloser(() => launcher.hideForOverlay())
-  if (launcher.setSwitcherCloser) launcher.setSwitcherCloser(() => { if (altTab && altTab.hideForLauncher) altTab.hideForLauncher() })
+  if (launcher.setSwitcherCloser) launcher.setSwitcherCloser(() => {
+    if (altTab && altTab.hideForLauncher) altTab.hideForLauncher()
+    displayModePicker.hide()
+  })
   if (launcher.setShellLinkOpener) launcher.setShellLinkOpener((link) => handleDeepLink(link))
   if (altTab && altTab.setOverlayDisplayProvider) altTab.setOverlayDisplayProvider(() => launcher.getActiveDisplayId())
 
@@ -983,6 +991,17 @@ function startShellMode() {
   }
   if (altTab && altTab.onEmojiKey) {
     altTab.onEmojiKey(() => launcher.showEmoji())
+  }
+  displayModePicker.setShells(shells)
+  displayModePicker.setOtherSurfacesCloser(() => {
+    launcher.hideForOverlay()
+    if (altTab && altTab.hideForLauncher) altTab.hideForLauncher()
+  })
+  if (altTab && altTab.onDisplayModeKey) {
+    displayModePicker.setDisplayProvider(() => altTab.activeDisplay())
+    displayModePicker.setKeyCaptureControl((active) => altTab.setDisplayModeCapture(active))
+    altTab.onDisplayModeCaptureKey((action) => displayModePicker.handleKeyAction(action))
+    altTab.onDisplayModeKey(() => displayModePicker.open())
   }
   if (altTab && altTab.setEmojiCapture) {
     launcher.setEmojiCaptureControl((active, hwnd) => altTab.setEmojiCapture(active, hwnd))

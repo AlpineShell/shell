@@ -9,6 +9,7 @@ import SystemTray from "./systemTray";
 import LauncherTrigger from "./launcherTrigger";
 import LauncherPanel from "./launcherPanel";
 import AltTabPanel from "./altTabPanel";
+import DisplayModePanel from "./displayModePanel";
 import { warmRenderableEmojis } from "../../lib/emojiRenderable";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
@@ -92,6 +93,7 @@ export default function TopBar() {
             {launcherOpen && <LauncherPanel mode={launcherMode} />}
             <NoticeStrip />
             <AltTabPanel />
+            <DisplayModePanel />
         </ThemeProvider>
     );
 }
