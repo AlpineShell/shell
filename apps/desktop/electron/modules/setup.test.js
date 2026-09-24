@@ -34,11 +34,16 @@ const installerMock = {
   isPortableRun: () => false,
   isShellOptedOut: () => false,
   hasShellHandoff: () => false,
+  shellHandoffFromThisLogon: vi.fn(() => false),
   isUpdateHandoffActive: () => false,
   isInstalled: () => true,
   getInstalledVersion: () => '1.0.0',
   isRevertHelperRunning: () => false,
   uninstall: vi.fn(() => ({ success: false, error: 'uninstall stubbed', leftBehind: [] })),
+}
+
+const explorerShellMock = {
+  shellHostedByExplorer: vi.fn(() => true),
 }
 
 function registryKey(keyPath, valueName) {
@@ -52,7 +57,7 @@ function inject(moduleId, exports) {
 inject(nodeRequire.resolve('electron'), { app: electronApp })
 inject(nodeRequire.resolve('./installer.js'), installerMock)
 inject(nodeRequire.resolve('./updater.js'), { isUpdatePending: () => false })
-inject(nodeRequire.resolve('./explorerShell.js'), { shellHostedByExplorer: () => true })
+inject(nodeRequire.resolve('./explorerShell.js'), explorerShellMock)
 inject(nodeRequire.resolve('./licence.js'), licenceMock)
 inject(nodeRequire.resolve('../registryRead.js'), { regQuery: (keyPath, valueName) => registry.get(registryKey(keyPath, valueName)) ?? null })
 
@@ -84,6 +89,11 @@ beforeEach(() => {
   licenceMock.releaseSelf.mockReset()
   licenceMock.releaseSelf.mockImplementation(async () => true)
   installerMock.uninstall.mockClear()
+  installerMock.clearShellHandoff.mockClear()
+  installerMock.shellHandoffFromThisLogon.mockReset()
+  installerMock.shellHandoffFromThisLogon.mockImplementation(() => false)
+  explorerShellMock.shellHostedByExplorer.mockReset()
+  explorerShellMock.shellHostedByExplorer.mockImplementation(() => true)
   electronApp.isPackaged = false
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-setup-'))
   setTrustedWindowsAccessor(() => [trustedWindow])
@@ -182,5 +192,84 @@ describe('setup handlers and their callers', () => {
 
   it('answers the setup window', () => {
     expect(setup.handlers['setup/status'](fromSetupWindow)).toMatchObject({ isShell: false, hasStartup: false, isFirstRun: true })
+  })
+})
+
+describe('the Run entry while Explorer holds the shell', () => {
+  const START_MENU_LAUNCH = [INSTALLED_EXE]
+  const AUTOSTART_LAUNCH = [INSTALLED_EXE, '--autostart']
+
+  function commandLineArgs(command) {
+    return [...command.matchAll(/"([^"]*)"|(\S+)/g)].map(match => match[1] ?? match[2])
+  }
+
+  function markSetupComplete() {
+    fs.writeFileSync(setupCompletePath(), 'done')
+  }
+
+  function handToExplorer() {
+    electronApp.isPackaged = true
+    installerMock.shellHandoffFromThisLogon.mockImplementation(() => true)
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => true)
+  }
+
+  it('registers the Run entry with the autostart flag', () => {
+    electronApp.isPackaged = true
+    setup.handlers['setup/set-shell'](fromSetupWindow)
+    expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
+  })
+
+  it('rewrites a Run entry from an older version when Alpine claims the shell', () => {
+    electronApp.isPackaged = true
+    markSetupComplete()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), INSTALLED_EXE)
+    registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${INSTALLED_EXE}"`)
+
+    expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: true })
+    expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
+  })
+
+  it('exits the launch that its own Run entry starts while Explorer holds the shell', () => {
+    electronApp.isPackaged = true
+    setup.handlers['setup/set-shell'](fromSetupWindow)
+    handToExplorer()
+    expect(setup.shouldLeaveShellToExplorer(commandLineArgs(runValue()))).toBe(true)
+  })
+
+  it('keeps a launch from the Start menu', () => {
+    handToExplorer()
+    expect(setup.isAutostartLaunch(START_MENU_LAUNCH)).toBe(false)
+    expect(setup.shouldLeaveShellToExplorer(START_MENU_LAUNCH)).toBe(false)
+  })
+
+  it('keeps the autostart launch at a later sign-in', () => {
+    handToExplorer()
+    installerMock.shellHandoffFromThisLogon.mockImplementation(() => false)
+    expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(false)
+  })
+
+  it('keeps the autostart launch when the sign-in of the hand-off cannot be read', () => {
+    handToExplorer()
+    installerMock.shellHandoffFromThisLogon.mockImplementation(() => null)
+    expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(false)
+  })
+
+  it('keeps the autostart launch when Explorer cannot be confirmed as the shell', () => {
+    handToExplorer()
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => null)
+    expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(false)
+  })
+
+  it('keeps the autostart launch without probing for Explorer when nothing was handed over', () => {
+    electronApp.isPackaged = true
+    expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(false)
+    expect(explorerShellMock.shellHostedByExplorer).not.toHaveBeenCalled()
+  })
+
+  it('leaves the registry and the hand-off alone when it exits', () => {
+    handToExplorer()
+    expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(true)
+    expect(regCalls).toHaveLength(0)
+    expect(installerMock.clearShellHandoff).not.toHaveBeenCalled()
   })
 })

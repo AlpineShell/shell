@@ -7,6 +7,7 @@ const crypto = require('crypto')
 const os = require('os')
 const revertScript = require('./revertScript')
 const shellExclusivity = require('./shellExclusivity')
+const logonSession = require('../logonSession')
 const { regQuery } = require('../registryRead')
 
 const PRODUCT_NAME = 'Alpine Shell'
@@ -108,13 +109,30 @@ function userDataFile(name) {
   return path.join(electronApp().getPath('userData'), name)
 }
 
-function writeMarker(markerPath) {
+function writeMarker(markerPath, content = new Date().toISOString()) {
   try {
-    fs.writeFileSync(markerPath, new Date().toISOString())
+    fs.writeFileSync(markerPath, content)
     return true
   } catch (e) {
     console.error('[installer] Could not write marker:', e.message)
     return false
+  }
+}
+
+function readMarker(markerPath) {
+  try {
+    return fs.readFileSync(markerPath, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+function restampMarker(markerPath) {
+  try {
+    const now = new Date()
+    fs.utimesSync(markerPath, now, now)
+  } catch (e) {
+    console.error('[installer] Could not restamp marker:', e.message)
   }
 }
 
@@ -132,7 +150,7 @@ function markerAgeMs(markerPath) {
 
 function isMarkerActive(markerPath, maxAgeMs, systemUptimeMs = null) {
   const plan = shellExclusivity.planMarkerAge({ ageMs: markerAgeMs(markerPath), maxAgeMs, systemUptimeMs })
-  if (plan.restamp) writeMarker(markerPath)
+  if (plan.restamp) restampMarker(markerPath)
   return plan.active
 }
 
@@ -145,12 +163,21 @@ function setShellOptOut(optedOut) {
   else clearMarker(userDataFile(SHELL_OPT_OUT_FILE))
 }
 
+function shellHandoffFromThisLogon() {
+  const markerPath = userDataFile(SHELL_HANDOFF_FILE)
+  if (!isMarkerActive(markerPath, SHELL_HANDOFF_MAX_AGE_MS, os.uptime() * 1000)) return false
+  return shellExclusivity.matchHandoffLogon({
+    recordedLogonId: logonSession.parseLogonId(readMarker(markerPath)),
+    currentLogonId: logonSession.currentLogonId(),
+  })
+}
+
 function hasShellHandoff() {
-  return isMarkerActive(userDataFile(SHELL_HANDOFF_FILE), SHELL_HANDOFF_MAX_AGE_MS)
+  return shellHandoffFromThisLogon() !== false
 }
 
 function beginShellHandoff() {
-  return writeMarker(userDataFile(SHELL_HANDOFF_FILE))
+  return writeMarker(userDataFile(SHELL_HANDOFF_FILE), logonSession.currentLogonId() ?? '')
 }
 
 function clearShellHandoff() {
@@ -539,6 +566,7 @@ module.exports = {
   isShellOptedOut,
   setShellOptOut,
   hasShellHandoff,
+  shellHandoffFromThisLogon,
   clearShellHandoff,
   isUpdateHandoffActive,
   clearUpdateHandoff,

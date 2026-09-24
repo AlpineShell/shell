@@ -18,6 +18,9 @@ const REVERT_BLOCKED_MESSAGES = {
   [shellExclusivity.REVERT_BLOCKED_BY_UPDATE]: 'An update is in progress. Try again once it has finished.',
 }
 const XAML_START_MENU_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced'
+const RUN_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'
+const RUN_VALUE_NAME = 'AlpineShell'
+const AUTOSTART_LAUNCH_ARG = '--autostart'
 
 const CURSOR_REGISTRY_MAP = {
   'Arrow': 'Pointer.cur',
@@ -111,15 +114,16 @@ function setAsShell() {
   }
 }
 
+function autostartCommand() {
+  if (electronApp().isPackaged) {
+    return `"${installer.getInstalledExePath()}" ${AUTOSTART_LAUNCH_ARG}`
+  }
+  return `"${process.execPath}" "${path.join(__dirname, '..', '..')}" ${AUTOSTART_LAUNCH_ARG}`
+}
+
 function setStartup() {
   licence.requireValid()
-  if (electronApp().isPackaged) {
-    const exePath = installer.getInstalledExePath()
-    regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', `"${exePath}"`)
-  } else {
-    const exePath = process.execPath
-    regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', `"${exePath}" "${path.join(__dirname, '..', '..')}"`)
-  }
+  regAdd(RUN_KEY, RUN_VALUE_NAME, autostartCommand())
 }
 
 function ensureShellRegistration(gpoBlocked) {
@@ -132,10 +136,10 @@ function ensureShellRegistration(gpoBlocked) {
     regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', desiredShell)
   }
 
-  const desiredRun = `"${installer.getInstalledExePath()}"`
-  const currentRun = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell')
+  const desiredRun = autostartCommand()
+  const currentRun = regQuery(RUN_KEY, RUN_VALUE_NAME)
   if (currentRun !== desiredRun) {
-    try { regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell', desiredRun) } catch {}
+    try { regAdd(RUN_KEY, RUN_VALUE_NAME, desiredRun) } catch {}
   }
 
   if (regQuery(XAML_START_MENU_KEY, 'EnableXamlStartMenu') === null) {
@@ -212,9 +216,27 @@ function takeOverFromExplorer() {
   return { actingAsShell: plan.actingAsShell && shellExclusivity.isRegistrationSatisfied(plan, registrationVerified) }
 }
 
+function isAutostartLaunch(argv) {
+  return argv.includes(AUTOSTART_LAUNCH_ARG)
+}
+
+function autostartLaunchContext(argv) {
+  return lazyContext({
+    packaged: () => electronApp().isPackaged,
+    launchedByAutostart: () => isAutostartLaunch(argv),
+    handedOffThisLogon: () => installer.shellHandoffFromThisLogon(),
+    explorerHostsShell: () => explorerShell.shellHostedByExplorer(),
+  })
+}
+
+function shouldLeaveShellToExplorer(argv) {
+  const plan = shellExclusivity.planAutostartLaunch(autostartLaunchContext(argv))
+  return plan.steps.includes(shellExclusivity.EXIT_ALPINE)
+}
+
 function getSetupStatus() {
   const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
-  const startupEntry = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell')
+  const startupEntry = regQuery(RUN_KEY, RUN_VALUE_NAME)
   const currentCursor = regQuery('HKCU\\Control Panel\\Cursors', '')
 
   return {
@@ -414,6 +436,8 @@ module.exports = {
   }),
 
   isFirstRun,
+  isAutostartLaunch,
+  shouldLeaveShellToExplorer,
   takeOverFromExplorer,
   setShellShutdown,
 

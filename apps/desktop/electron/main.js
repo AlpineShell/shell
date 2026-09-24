@@ -20,6 +20,7 @@ const volume = require('./modules/volume')
 const brightness = require('./modules/brightness')
 const power = require('./modules/power')
 const setup = require('./modules/setup')
+const shellExclusivity = require('./modules/shellExclusivity')
 const mediaSession = require('./modules/mediaSession')
 const microphone = require('./modules/microphone')
 const battery = require('./modules/battery')
@@ -790,6 +791,12 @@ app.whenReady().then(async () => {
 
   if (!gotSingleInstanceLock) return
 
+  if (setup.shouldLeaveShellToExplorer(process.argv)) {
+    console.log('[main] Explorer holds the shell until the next sign-in, so this autostart launch exits')
+    app.exit(0)
+    return
+  }
+
   const wallpaperExts = new Set(['.jpg', '.jpeg', '.png', '.bmp', '.webp'])
   protocol.handle('alpine-wallpaper', async (request) => {
     const url = new URL(request.url)
@@ -1032,7 +1039,13 @@ function startShellMode() {
     }
   }
 
-  if (!isDev && !isUpdateRestart()) setTimeout(() => { processAutostart().catch((e) => console.error('[autostart] processAutostart error:', e)) }, 1500)
+  const runsStartupApps = shellExclusivity.shouldProcessAutostart({
+    development: isDev,
+    updateRestart: isUpdateRestart(),
+    actingAsShell: takeover.actingAsShell,
+    launchedByAutostart: setup.isAutostartLaunch(process.argv),
+  })
+  if (runsStartupApps) setTimeout(() => { processAutostart().catch((e) => console.error('[autostart] processAutostart error:', e)) }, 1500)
 
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)
