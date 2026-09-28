@@ -59,6 +59,7 @@ const theme = require('./modules/theme')
 const keyboardLayout = require('./modules/keyboardLayout')
 const bookmarks = require('./modules/bookmarks')
 const browserTabs = require('./modules/browserTabs')
+const sqliteWorker = require('./modules/sqliteWorker')
 let googleCalendar = null
 try { googleCalendar = require('./modules/googleCalendar') } catch (e) { console.error('[main] googleCalendar load error:', e.message) }
 const appActivator = require('./appActivator')
@@ -841,6 +842,8 @@ app.whenReady().then(async () => {
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
   trustedSenders.setTrustedWindowsAccessor(() => [setupWin, settingsWin])
+
+  sqliteWorker.removeLeftoverSnapshots()
 
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, licence)
 
