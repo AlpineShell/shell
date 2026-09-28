@@ -327,10 +327,17 @@ function pageMode() {
   }
 }
 
-const MACHINE_CHANGING_PAGE_MODES = new Set(['setup', 'settings'])
 const currentPageMode = pageMode()
 
-if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
+if (currentPageMode === 'settings') {
+  contextBridge.exposeInMainWorld('setup', {
+    revertTemporary: () => ipcRenderer.invoke('setup/revert-temporary'),
+    revertPermanent: () => ipcRenderer.invoke('setup/revert-permanent'),
+    uninstall: () => ipcRenderer.invoke('setup/uninstall'),
+  })
+}
+
+if (currentPageMode === 'setup') {
   contextBridge.exposeInMainWorld('setup', {
     status: () => ipcRenderer.invoke('setup/status'),
     install: (options) => ipcRenderer.invoke('setup/install', options),
@@ -338,10 +345,7 @@ if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
     testOut: () => ipcRenderer.invoke('setup/test-out'),
     relaunch: () => ipcRenderer.invoke('setup/relaunch'),
     restartWindows: () => ipcRenderer.invoke('setup/restart-windows'),
-    revertTemporary: () => ipcRenderer.invoke('setup/revert-temporary'),
-    revertPermanent: () => ipcRenderer.invoke('setup/revert-permanent'),
     setShell: () => ipcRenderer.invoke('setup/set-shell'),
-    uninstall: () => ipcRenderer.invoke('setup/uninstall'),
     fitWindowHeight: (height) => ipcRenderer.send('setup/fit-window-height', height),
     onProgress: (callback) => {
       ipcRenderer.on('setup/progress', (_, step) => callback(step))

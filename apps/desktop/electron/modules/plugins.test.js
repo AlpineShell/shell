@@ -20,17 +20,24 @@ nodeRequire.cache[electronModuleId] = {
 }
 
 const plugins = nodeRequire('./plugins.js')
+const { setTrustedWindowsAccessor, SETTINGS_WINDOW, UNTRUSTED_SENDER } = nodeRequire('../trustedSenders.js')
 
 const PLUGIN_ID = 'com.example.weather'
 const pluginDir = () => path.join(userDataDir, 'plugins', PLUGIN_ID)
+const settingsWindow = { webContents: { id: 4 }, isDestroyed: () => false }
+const topbarWindow = { webContents: { id: 5 }, isDestroyed: () => false }
+const fromSettings = { sender: settingsWindow.webContents }
+const fromTopbar = { sender: topbarWindow.webContents }
 
 beforeEach(() => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-plugins-'))
   fs.mkdirSync(pluginDir(), { recursive: true })
   fs.writeFileSync(path.join(pluginDir(), 'plugin.json'), JSON.stringify({ id: PLUGIN_ID, name: 'Weather', version: '1.0.0' }))
+  setTrustedWindowsAccessor(() => ({ [SETTINGS_WINDOW]: settingsWindow }))
 })
 
 afterEach(() => {
+  setTrustedWindowsAccessor(null)
   plugins.setPluginStopper((_id, work) => work())
   fs.rmSync(userDataDir, { recursive: true, force: true })
 })
@@ -43,7 +50,7 @@ describe('uninstalling through the plugins handlers', () => {
       return work()
     })
     plugins.setPluginStopper(stopper)
-    const result = await plugins.handlers['plugins/marketplace-uninstall'](null, PLUGIN_ID)
+    const result = await plugins.handlers['plugins/marketplace-uninstall'](fromSettings, PLUGIN_ID)
     expect(result).toEqual({ ok: true, id: PLUGIN_ID })
     expect(stopper).toHaveBeenCalledWith(PLUGIN_ID, expect.any(Function))
     expect(folderPresent).toEqual([true])
@@ -51,3 +58,12 @@ describe('uninstalling through the plugins handlers', () => {
   })
 })
 
+describe('who may install, remove or switch plugins', () => {
+  it('answers only the settings window', () => {
+    for (const channel of ['plugins/set-enabled', 'plugins/marketplace-install', 'plugins/marketplace-uninstall']) {
+      expect(() => plugins.handlers[channel](fromTopbar, PLUGIN_ID)).toThrow(UNTRUSTED_SENDER)
+    }
+    expect(fs.existsSync(pluginDir())).toBe(true)
+    expect(plugins.handlers['plugins/set-enabled'](fromSettings, { id: PLUGIN_ID, enabled: true })).toBe(true)
+  })
+})

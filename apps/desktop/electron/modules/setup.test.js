@@ -69,12 +69,14 @@ childProcess.execFileSync = (file, args) => {
 }
 childProcess.execSync = () => ''
 
-const { setTrustedWindowsAccessor } = nodeRequire('../trustedSenders.js')
+const { setTrustedWindowsAccessor, SETUP_WINDOW, SETTINGS_WINDOW } = nodeRequire('../trustedSenders.js')
 const { default: setup } = await import('./setup.js')
 
 const trustedWindow = { webContents: { id: 7 }, isDestroyed: () => false }
+const settingsWindow = { webContents: { id: 9 }, isDestroyed: () => false }
 const strangerWindow = { webContents: { id: 8 }, isDestroyed: () => false }
 const fromSetupWindow = { sender: trustedWindow.webContents }
+const fromSettingsWindow = { sender: settingsWindow.webContents }
 const fromStranger = { sender: strangerWindow.webContents }
 
 const setupCompletePath = () => path.join(userDataDir, '.setup-complete')
@@ -96,7 +98,7 @@ beforeEach(() => {
   explorerShellMock.shellHostedByExplorer.mockImplementation(() => true)
   electronApp.isPackaged = false
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-setup-'))
-  setTrustedWindowsAccessor(() => [trustedWindow])
+  setTrustedWindowsAccessor(() => ({ [SETUP_WINDOW]: trustedWindow, [SETTINGS_WINDOW]: settingsWindow }))
 })
 
 afterEach(() => {
@@ -157,11 +159,11 @@ describe('setup handlers behind the licence gate', () => {
     licenceMock.releaseSelf.mockImplementation(async () => { order.push('release'); return true })
     installerMock.uninstall.mockImplementation(() => { order.push('uninstall'); return { success: false, error: 'stubbed', leftBehind: [] } })
 
-    await setup.handlers['setup/uninstall'](fromSetupWindow)
+    await setup.handlers['setup/uninstall'](fromSettingsWindow)
     expect(order).toEqual(['release', 'uninstall'])
 
     licenceMock.releaseSelf.mockImplementation(async () => { throw new Error('offline') })
-    await setup.handlers['setup/uninstall'](fromSetupWindow)
+    await setup.handlers['setup/uninstall'](fromSettingsWindow)
     expect(installerMock.uninstall).toHaveBeenCalledTimes(2)
   })
 
@@ -172,7 +174,7 @@ describe('setup handlers behind the licence gate', () => {
     licenceMock.releaseSelf.mockClear()
     installerMock.uninstall.mockClear()
 
-    const result = await setup.handlers['setup/uninstall'](fromSetupWindow)
+    const result = await setup.handlers['setup/uninstall'](fromSettingsWindow)
 
     expect(result.success).toBe(false)
     expect(licenceMock.releaseSelf).not.toHaveBeenCalled()
@@ -192,6 +194,23 @@ describe('setup handlers and their callers', () => {
 
   it('answers the setup window', () => {
     expect(setup.handlers['setup/status'](fromSetupWindow)).toMatchObject({ isShell: false, hasStartup: false, isFirstRun: true })
+  })
+
+  it('keeps the install and restart channels away from the settings window', async () => {
+    for (const channel of ['setup/status', 'setup/set-shell', 'setup/relaunch', 'setup/restart-windows']) {
+      expect(() => setup.handlers[channel](fromSettingsWindow)).toThrow('untrusted-sender')
+    }
+    await expect(async () => setup.handlers['setup/install'](fromSettingsWindow, { shell: true, cursor: false })).rejects.toThrow('untrusted-sender')
+    await expect(async () => setup.handlers['setup/skip'](fromSettingsWindow)).rejects.toThrow('untrusted-sender')
+    expect(regCalls).toHaveLength(0)
+  })
+
+  it('answers the revert channels only from the settings window', async () => {
+    for (const channel of ['setup/revert-temporary', 'setup/revert-permanent', 'setup/uninstall']) {
+      await expect(async () => setup.handlers[channel](fromSetupWindow)).rejects.toThrow('untrusted-sender')
+      await expect(async () => setup.handlers[channel](fromStranger)).rejects.toThrow('untrusted-sender')
+    }
+    expect(installerMock.uninstall).not.toHaveBeenCalled()
   })
 })
 

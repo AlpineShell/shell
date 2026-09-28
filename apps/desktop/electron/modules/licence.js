@@ -6,7 +6,7 @@ const { evaluateLicenceState } = require('../licenceState')
 const { isBindClaim, isBindingTier } = require('../licenceBinding')
 const { createLicenceBindingLadder } = require('../licenceBindingProviders')
 const deviceIdentity = require('../deviceIdentity')
-const { guardHandlers } = require('../trustedSenders')
+const { guardHandlers, SETUP_WINDOW } = require('../trustedSenders')
 
 const LICENCE_FILE_NAME = 'licence.json'
 const MINUTE_MS = 60 * 1000
@@ -468,7 +468,7 @@ const defaultService = createLicenceService()
 
 module.exports = {
   ...defaultService,
-  handlers: guardHandlers(defaultService.handlers),
+  handlers: guardHandlers(defaultService.handlers, [SETUP_WINDOW]),
   createLicenceService,
   LICENCE_FILE_NAME,
   NO_LICENCE_RECHECK_MS,

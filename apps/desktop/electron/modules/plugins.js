@@ -4,6 +4,7 @@ const fs = require('fs')
 const { parseManifest } = require('../pluginManifest')
 const marketplace = require('../pluginMarketplace')
 const { loadLicenceConfig } = require('../licenceConfig')
+const { guardHandlers, SETTINGS_WINDOW } = require('../trustedSenders')
 
 const PLUGINS_DIR_NAME = 'plugins'
 const STATE_FILE_NAME = 'pluginState.json'
@@ -214,24 +215,11 @@ module.exports = {
       triggerReload()
       return true
     },
-    'plugins/set-enabled': (_event, payload) => setEnabled(payload && payload.id, !!(payload && payload.enabled)),
     'plugins/manifest': (_event, id) => listPlugins().find((p) => p.id === id) || null,
     'plugins/readme': (_event, id) => readPluginReadme(id),
     'plugins/marketplace-base': () => marketplace.getBase(),
     'plugins/marketplace-list': () => marketplace.list(),
     'plugins/marketplace-detail': (_event, id) => marketplace.detail(id),
-    'plugins/marketplace-install': (_event, payload) =>
-      marketplace.install(payload, {
-        pluginsDir: getPluginsDir(),
-        onChange: () => triggerReload(),
-        withPluginStopped: (id, work) => pluginStopper(id, work),
-      }),
-    'plugins/marketplace-uninstall': (_event, id) =>
-      marketplace.uninstall(id, {
-        pluginsDir: getPluginsDir(),
-        onChange: () => triggerReload(),
-        withPluginStopped: (pluginId, work) => pluginStopper(pluginId, work),
-      }),
     'plugins/marketplace-open-web': (_event, id) => {
       if (typeof id !== 'string' || !SAFE_ID.test(id)) return false
       return shell.openExternal(`${MARKETPLACE_SITE_BASE}/plugins/${encodeURIComponent(id)}`)
@@ -240,6 +228,21 @@ module.exports = {
       const getter = capabilities.get(channel)
       return getter ? getter() : null
     },
+    ...guardHandlers({
+      'plugins/set-enabled': (_event, payload) => setEnabled(payload && payload.id, !!(payload && payload.enabled)),
+      'plugins/marketplace-install': (_event, payload) =>
+        marketplace.install(payload, {
+          pluginsDir: getPluginsDir(),
+          onChange: () => triggerReload(),
+          withPluginStopped: (id, work) => pluginStopper(id, work),
+        }),
+      'plugins/marketplace-uninstall': (_event, id) =>
+        marketplace.uninstall(id, {
+          pluginsDir: getPluginsDir(),
+          onChange: () => triggerReload(),
+          withPluginStopped: (pluginId, work) => pluginStopper(pluginId, work),
+        }),
+    }, [SETTINGS_WINDOW]),
   },
 
   start(b) {

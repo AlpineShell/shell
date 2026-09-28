@@ -840,7 +840,10 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
-  trustedSenders.setTrustedWindowsAccessor(() => [setupWin, settingsWin])
+  trustedSenders.setTrustedWindowsAccessor(() => ({
+    [trustedSenders.SETUP_WINDOW]: setupWin,
+    [trustedSenders.SETTINGS_WINDOW]: settingsWin,
+  }))
 
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, licence)
 
@@ -871,7 +874,7 @@ app.whenReady().then(async () => {
     closeSetupWindow()
     startShellMode()
     return { error: null }
-  }))
+  }, [trustedSenders.SETUP_WINDOW]))
 
   ipcMain.on('setup/fit-window-height', (_event, height) => {
     if (!setupWin || setupWin.isDestroyed() || !Number.isFinite(height)) return
