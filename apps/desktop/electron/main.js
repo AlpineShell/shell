@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, protocol, net, powerMonitor } = require('electron')
+const { app, BrowserWindow, screen, ipcMain, protocol, net, powerMonitor, session, shell: electronShell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
@@ -80,6 +80,7 @@ const windowsUpdate = require('./modules/windowsUpdate')
 const licence = require('./modules/licence')
 const { planStartupForLicence } = require('./licenceStartup')
 const trustedSenders = require('./trustedSenders')
+const pageUrls = require('./pageUrls')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -90,6 +91,9 @@ const {
 
 const isDev = !app.isPackaged
 const BASE_URL = isDev ? 'http://127.0.0.1:5173' : null
+const APP_INDEX_PATH = path.join(__dirname, '..', 'dist', 'index.html')
+const APP_LOCATION = { indexPath: isDev ? null : APP_INDEX_PATH, devServerUrl: BASE_URL }
+const GRANTED_PERMISSIONS = new Set(['clipboard-sanitized-write'])
 
 const UPDATE_READY_TIMEOUT_MS = 10000
 const settledTopBars = new Set()
@@ -156,7 +160,32 @@ app.commandLine.appendSwitch('force_high_performance_gpu')
 function getURL(mode, displayId) {
   const params = displayId != null ? `mode=${mode}&displayId=${displayId}` : `mode=${mode}`
   if (isDev) return `${BASE_URL}?${params}`
-  return `file://${path.join(__dirname, '..', 'dist', 'index.html')}?${params}`
+  return `file://${APP_INDEX_PATH}?${params}`
+}
+
+function openInBrowser(url) {
+  if (!pageUrls.isBrowserLink(url)) return
+  electronShell.openExternal(url).catch((e) => console.error('[main] could not open link:', e && e.message))
+}
+
+function keepToShellPages(contents) {
+  contents.setWindowOpenHandler(({ url }) => {
+    openInBrowser(url)
+    return { action: 'deny' }
+  })
+  contents.on('will-navigate', (event) => {
+    if (!pageUrls.mayNavigate(contents.getURL(), event.url, APP_LOCATION)) event.preventDefault()
+  })
+  contents.on('will-redirect', (event) => {
+    if (event.isMainFrame && !pageUrls.isShellPageUrl(event.url, APP_LOCATION)) event.preventDefault()
+  })
+}
+
+app.on('web-contents-created', (_event, contents) => keepToShellPages(contents))
+
+function grantOnlyShellPermissions() {
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(GRANTED_PERMISSIONS.has(permission)))
+  session.defaultSession.setPermissionCheckHandler((_contents, permission) => GRANTED_PERMISSIONS.has(permission))
 }
 
 function loadAppURL(win, url) {
@@ -783,6 +812,8 @@ openApps.setShellAppsProvider(() => {
 })
 
 app.whenReady().then(async () => {
+  grantOnlyShellPermissions()
+
   if (process.argv.includes('--uninstall-cleanup')) {
     installer.revertSystemChanges()
     app.exit(0)

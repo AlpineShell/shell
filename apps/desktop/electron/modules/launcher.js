@@ -9,6 +9,7 @@ const appxPackages = require('./appxPackages')
 const appActivator = require('../appActivator')
 const { shellExecute } = require('../shellExecute')
 const { shellLinkInShortcut } = require('../launcherDeepLink')
+const { openStreetMapUrl } = require('../mapLink')
 const plugins = require('./plugins')
 const pluginBackendHost = require('../pluginBackendHost')
 const notice = require('./shellNotice')
@@ -659,6 +660,13 @@ async function uninstallItem(item) {
   return result
 }
 
+function openMap(place) {
+  const url = openStreetMapUrl(place)
+  if (!url) return { success: false }
+  electronShell.openExternal(url).catch((e) => console.error('[launcher] map open failed:', e.message))
+  return { success: true }
+}
+
 function openItemLocation(item) {
   if (!item || !item.lnkPath) return { success: false }
   electronShell.showItemInFolder(item.lnkPath)
@@ -710,6 +718,7 @@ module.exports = {
       return { success: true }
     },
     'launcher/open-location': (_event, id) => openItemLocation(findItem(id)),
+    'launcher/open-map': (_event, place) => openMap(place),
     'launcher/insert-text': async (_event, text) => {
       const hwnd = lastUserForeground
       hideForOverlay()

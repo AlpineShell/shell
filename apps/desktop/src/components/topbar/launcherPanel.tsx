@@ -908,7 +908,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
         navigator.clipboard.writeText(mathResult)
         window.launcher.hide()
       } else if (selectedEntry.type === "map") {
-        window.open(`https://www.openstreetmap.org/?mlat=${selectedEntry.result.lat}&mlon=${selectedEntry.result.lon}#map=16/${selectedEntry.result.lat}/${selectedEntry.result.lon}`)
+        window.launcher.openMap(selectedEntry.result)
         window.launcher.hide()
       } else if (selectedEntry.type === "result") {
         activateResult(selectedEntry.result)
@@ -1230,7 +1230,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                       {mapResult && (
                         <button
                           onMouseMove={() => setSelected(mathOffset)}
-                          onClick={() => { window.open(`https://www.openstreetmap.org/?mlat=${mapResult.lat}&mlon=${mapResult.lon}#map=16/${mapResult.lat}/${mapResult.lon}`); window.launcher.hide() }}
+                          onClick={() => { window.launcher.openMap(mapResult); window.launcher.hide() }}
                           className={`flex items-center gap-3 px-2.5 rounded-md text-left cursor-pointer transition-colors overflow-hidden ${
                             selected === mathOffset ? selectedBg : hoverBg
                           }`}
