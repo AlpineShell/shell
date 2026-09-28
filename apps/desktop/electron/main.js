@@ -859,6 +859,7 @@ app.whenReady().then(async () => {
   })
   if (launcher.setShellLinkOpener) launcher.setShellLinkOpener((link) => handleDeepLink(link))
   if (altTab && altTab.setOverlayDisplayProvider) altTab.setOverlayDisplayProvider(() => launcher.getActiveDisplayId())
+  if (altTab && altTab.activeDisplay) launcher.setDisplayProvider(() => altTab.activeDisplay())
 
   ipcMain.handle('setup/test-out', trustedSenders.guardHandler(() => {
     try {

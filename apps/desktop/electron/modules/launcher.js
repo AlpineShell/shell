@@ -39,6 +39,7 @@ let lastUserForeground = 0
 let switcherCloser = null
 let emojiCaptureControl = null
 let shellLinkOpener = null
+let displayProvider = null
 const lastPanelBottom = new Map()
 
 function applyPanelBounds(topBar, displayId) {
@@ -517,15 +518,29 @@ function showLauncher(displayId, mode) {
   activeTopBar = topBar
 }
 
+function setDisplayProvider(fn) {
+  displayProvider = typeof fn === 'function' ? fn : null
+}
+
+function pickDisplay() {
+  if (displayProvider) {
+    try {
+      const display = displayProvider()
+      if (display) return display
+    } catch (e) {
+      console.error('[launcher] display provider error:', e.message)
+    }
+  }
+  const { screen } = require('electron')
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+}
+
 function showFromHotkey() {
   if (activeTopBar) {
     animatedHide()
     return
   }
-  const { screen } = require('electron')
-  const cursor = screen.getCursorScreenPoint()
-  const display = screen.getDisplayNearestPoint(cursor)
-  showLauncher(display.id)
+  showLauncher(pickDisplay().id)
 }
 
 function showEmoji() {
@@ -534,9 +549,7 @@ function showEmoji() {
     return
   }
   if (!shells) return
-  const { screen } = require('electron')
-  const cursor = screen.getCursorScreenPoint()
-  const display = screen.getDisplayNearestPoint(cursor)
+  const display = pickDisplay()
   const shell = shells.get(display.id)
   if (!shell || shell.topBar.isDestroyed()) return
   const topBar = shell.topBar
@@ -725,6 +738,7 @@ module.exports = {
   forwardEmojiKey,
   setEmojiCaptureControl,
   setShellLinkOpener,
+  setDisplayProvider,
   closeEmoji: animatedHide,
   hideForOverlay,
   setSwitcherCloser,

@@ -534,7 +534,7 @@ function getActiveDisplay() {
   const fgRaw = GetForegroundWindow()
   const fgHwnd = typeof fgRaw === 'bigint' ? Number(fgRaw) : fgRaw
 
-  if (fgHwnd && !isOwnWindow(fgHwnd)) {
+  if (fgHwnd && !isOwnWindow(fgHwnd) && !IsIconic(fgHwnd)) {
     const rectBuf = Buffer.alloc(16)
     if (GetWindowRect(fgHwnd, rectBuf)) {
       const left = rectBuf.readInt32LE(0)
