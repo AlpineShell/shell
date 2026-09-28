@@ -53,8 +53,9 @@ function decodeBase64Pem(value) {
   }
 }
 
-function normaliseMarketplacePublicKey(raw) {
+function normaliseMarketplacePublicKey(raw, isReleaseBuild = false) {
   const trimmed = typeof raw === 'string' ? raw.trim() : ''
+  if (!trimmed && isReleaseBuild) throw new Error('ALPINE_RELEASE_BUILD=1 needs ALPINE_MARKETPLACE_PUBKEY: a release build refuses every plugin it cannot verify')
   if (!trimmed) return null
   const unescaped = trimmed.replace(/\\n/g, '\n')
   const pem = unescaped.includes('BEGIN PUBLIC KEY') ? unescaped : decodeBase64Pem(unescaped)
@@ -83,15 +84,13 @@ function mergeSettings(env, dotEnv) {
 function run() {
   const settings = mergeSettings(process.env, readDotEnv(ENV_PATH))
   const config = buildLicenceConfig(settings)
-  const marketplacePublicKey = normaliseMarketplacePublicKey(settings.ALPINE_MARKETPLACE_PUBKEY)
+  const marketplacePublicKey = normaliseMarketplacePublicKey(settings.ALPINE_MARKETPLACE_PUBKEY, config.isReleaseBuild)
   fs.writeFileSync(OUTPUT_PATH, renderModule(config), 'utf8')
   fs.writeFileSync(MARKETPLACE_KEY_OUTPUT_PATH, renderMarketplaceKeyModule(marketplacePublicKey), 'utf8')
   const kids = config.publicKeys.map((key) => key.kid).join(', ') || 'none'
   console.log(`[licence] Baked ${config.isReleaseBuild ? 'release' : 'development'} config: auth ${config.authBase}, keys ${kids}`)
   if (marketplacePublicKey) {
     console.log('[licence] Baked the marketplace public key')
-  } else if (config.isReleaseBuild) {
-    console.warn('[licence] ALPINE_MARKETPLACE_PUBKEY is unset: this release build cannot verify marketplace plugin signatures')
   } else {
     console.log('[licence] No marketplace public key; the app falls back to ALPINE_MARKETPLACE_PUBKEY at run time')
   }

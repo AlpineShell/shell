@@ -82,6 +82,12 @@ describe('normaliseMarketplacePublicKey', () => {
     expect(normaliseMarketplacePublicKey(Buffer.from(key.spkiPem).toString('base64'))).toBe(key.spkiPem)
   })
 
+  it('refuses a release build without a marketplace key', () => {
+    expect(() => normaliseMarketplacePublicKey('', true)).toThrow(/ALPINE_MARKETPLACE_PUBKEY/)
+    expect(() => normaliseMarketplacePublicKey(undefined, true)).toThrow(/ALPINE_MARKETPLACE_PUBKEY/)
+    expect(normaliseMarketplacePublicKey(key.spkiPem, true)).toBe(key.spkiPem)
+  })
+
   it('returns null when unset and refuses anything that is not an Ed25519 key', () => {
     expect(normaliseMarketplacePublicKey('')).toBeNull()
     expect(normaliseMarketplacePublicKey(undefined)).toBeNull()

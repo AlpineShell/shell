@@ -3,13 +3,14 @@ const path = require('path')
 const fs = require('fs')
 const { parseManifest } = require('../pluginManifest')
 const marketplace = require('../pluginMarketplace')
+const { loadLicenceConfig } = require('../licenceConfig')
 
 const PLUGINS_DIR_NAME = 'plugins'
 const STATE_FILE_NAME = 'pluginState.json'
 const MANIFEST_FILE = 'plugin.json'
 const DEFAULT_ENTRY = 'index.js'
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/
-const MARKETPLACE_SITE_BASE = (process.env.ALPINE_SITE_BASE || 'https://alpineshell.com').replace(/\/+$/, '')
+const MARKETPLACE_SITE_BASE = loadLicenceConfig().websiteBase
 
 const MIME_BY_EXTENSION = {
   '.js': 'text/javascript',
@@ -28,6 +29,7 @@ const MIME_BY_EXTENSION = {
 let pluginsDir = null
 let broadcast = null
 let disabledIds = null
+let pluginStopper = (_id, work) => work()
 
 const capabilities = new Map()
 const changeListeners = new Set()
@@ -38,6 +40,10 @@ function registerPluginCapability(channel, getter) {
 
 function unregisterPluginCapability(channel) {
   capabilities.delete(channel)
+}
+
+function setPluginStopper(stopper) {
+  if (typeof stopper === 'function') pluginStopper = stopper
 }
 
 function onPluginsChanged(listener) {
@@ -218,11 +224,13 @@ module.exports = {
       marketplace.install(payload, {
         pluginsDir: getPluginsDir(),
         onChange: () => triggerReload(),
+        withPluginStopped: (id, work) => pluginStopper(id, work),
       }),
     'plugins/marketplace-uninstall': (_event, id) =>
       marketplace.uninstall(id, {
         pluginsDir: getPluginsDir(),
         onChange: () => triggerReload(),
+        withPluginStopped: (pluginId, work) => pluginStopper(pluginId, work),
       }),
     'plugins/marketplace-open-web': (_event, id) => {
       if (typeof id !== 'string' || !SAFE_ID.test(id)) return false
@@ -245,6 +253,7 @@ module.exports = {
   registerPluginCapability,
   unregisterPluginCapability,
   onPluginsChanged,
+  setPluginStopper,
   listPlugins,
   mimeFor,
 }

@@ -72,7 +72,7 @@ jobs:
           test -f electron/licenceConfig.generated.js || { echo "::error::electron/licenceConfig.generated.js was not written"; exit 1; }
           node -e "const c=require('./electron/licenceConfig.generated.js');const kids=(c.publicKeys||[]).map(k=>k&&k.kid).filter(Boolean);if(c.isReleaseBuild!==true||kids.length===0){console.error('::error::licence config must be a release build with at least one kid');process.exit(1)}console.log('licence kids: '+kids.join(', '))"
           test -f electron/marketplacePublicKey.generated.js || { echo "::error::electron/marketplacePublicKey.generated.js was not written"; exit 1; }
-          node -e "const k=require('./electron/marketplacePublicKey.generated.js');if(typeof k.publicKeyPem!=='string'){console.log('::warning::no marketplace public key baked; set the ALPINE_MARKETPLACE_PUBKEY secret so this build can verify plugin signatures');process.exit(0)}console.log('marketplace public key baked')"
+          node -e "const k=require('./electron/marketplacePublicKey.generated.js');if(typeof k.publicKeyPem!=='string'||!k.publicKeyPem.includes('BEGIN PUBLIC KEY')){console.error('::error::no marketplace public key baked; set the ALPINE_MARKETPLACE_PUBKEY secret, a release build refuses every plugin it cannot verify');process.exit(1)}console.log('marketplace public key baked')"
 
       - name: Build installer
         working-directory: apps/desktop

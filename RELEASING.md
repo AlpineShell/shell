@@ -70,6 +70,8 @@ GitHub Release:
 
 Add these repository secrets first (GitHub repo -> Settings -> Secrets and variables -> Actions):
 
+- `ALPINE_MARKETPLACE_PUBKEY`: the public half of the plugin signing key (see Publishing a Plugin).
+  The workflow fails without it, because a release build refuses every plugin it cannot verify.
 - `STORAGE_ENDPOINT`
 - `STORAGE_ACCESS_KEY_ID`
 - `STORAGE_SECRET_ACCESS_KEY`
@@ -156,13 +158,18 @@ computes its SHA-256, signs the digest with Ed25519, uploads the immutable bundl
 Generate the key pair once:
 
 ```sh
-node -e "const c=require('crypto');const{publicKey,privateKey}=c.generateKeyPairSync('ed25519');console.log('PUB',publicKey.export({type:'spki',format:'der'}).subarray(-32).toString('base64'));console.log('PRIV_B64',Buffer.from(privateKey.export({type:'pkcs8',format:'pem'})).toString('base64'))"
+node -e "const c=require('crypto');const{publicKey,privateKey}=c.generateKeyPairSync('ed25519');console.log('ALPINE_MARKETPLACE_PUBKEY='+Buffer.from(publicKey.export({type:'spki',format:'pem'})).toString('base64'));console.log('ALPINE_PLUGIN_SIGNING_KEY='+Buffer.from(privateKey.export({type:'pkcs8',format:'pem'})).toString('base64'))"
 ```
 
-Paste `PUB` into `MARKETPLACE_PUBLIC_KEY` in `electron/pluginMarketplaceContract.js` (the client
-verifies against it), and store `PRIV_B64` as the `ALPINE_PLUGIN_SIGNING_KEY` GitHub secret / local
-env. The public key baked into the app and the private key used to sign must always match, or every
-install will fail signature verification.
+Store `ALPINE_MARKETPLACE_PUBKEY` as a secret of this repository: the release workflow bakes it into
+`electron/marketplacePublicKey.generated.js` through `scripts/generateLicenceConfig.js`, and a release
+build refuses to install any bundle whose signature does not verify against it. Keep
+`ALPINE_PLUGIN_SIGNING_KEY` wherever plugins are published, and apart from the `STORAGE_*`
+credentials where you can. The public key baked into the app and the private key used to sign must
+always match, or every install from the store fails with "its signature could not be verified".
+
+The order matters when the key is new: re-publish every plugin in the catalog signed, check that each
+`plugins/<id>/latest.json` carries a `signature`, and only then release a build with the key baked.
 
 ## Storage: Railway/MinIO
 

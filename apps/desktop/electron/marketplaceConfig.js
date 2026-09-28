@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const { loadLicenceConfig } = require('./licenceConfig')
 
 // Public base URL for the plugin marketplace (catalog + bundles + assets).
 // Resolution order (first non-empty wins):
@@ -51,13 +52,29 @@ function fromDotEnv() {
   return parsed.ALPINE_PLUGINS_BASE || parsed.STORAGE_PUBLIC_URL || ''
 }
 
+function isHttpsBase(value) {
+  return /^https:\/\/[^\s/]+/i.test(value)
+}
+
+function resolvePluginsBase({ isReleaseBuild, env, baked, dotEnv }) {
+  const raw = isReleaseBuild
+    ? (isHttpsBase(baked) ? baked : DEFAULT_BASE)
+    : env || baked || dotEnv || DEFAULT_BASE
+  return String(raw).replace(/\/+$/, '')
+}
+
 let cached = null
 function getPluginsBase() {
   if (cached === null) {
-    const raw = fromEnv() || fromBaked() || fromDotEnv() || DEFAULT_BASE
-    cached = String(raw).replace(/\/+$/, '')
+    const isReleaseBuild = loadLicenceConfig().isReleaseBuild === true
+    cached = resolvePluginsBase({
+      isReleaseBuild,
+      env: isReleaseBuild ? '' : fromEnv(),
+      baked: fromBaked(),
+      dotEnv: isReleaseBuild ? '' : fromDotEnv(),
+    })
   }
   return cached
 }
 
-module.exports = { getPluginsBase, DEFAULT_BASE }
+module.exports = { getPluginsBase, resolvePluginsBase, DEFAULT_BASE }
