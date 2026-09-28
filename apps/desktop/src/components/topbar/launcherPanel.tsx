@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom"
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { AppWindow, Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, MapPin, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
+import { AppWindow, Search, ChevronLeft, ChevronRight, ShieldCheck, FolderOpen, Trash2, Equal, Copy, X, SkullIcon, Minimize2, Maximize2, Loader2, Terminal, Globe, Star, FileText, Play, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, Lock, Bluetooth, BluetoothConnected, LayoutDashboard, LayoutGrid, Monitor, ChevronUp, RotateCcw, Power, LogOut, type LucideIcon } from "lucide-react"
 import { useBluetooth } from "../../hooks/useBluetooth"
 import { useBluetoothRescan } from "../../hooks/useBluetoothRescan"
 import { canToggleRadio, deviceActionLabel, deviceStatusLabel, displayedRadioOn, isRadioOff, nextDeviceAction, radioEmptyStateTitle } from "../../lib/bluetoothPresentation"
@@ -71,42 +71,6 @@ function tryMath(expr: string): string | null {
   }
 }
 
-interface MapResult {
-  lat: number
-  lon: number
-  display: string
-}
-
-function useAddressLookup(query: string): MapResult | null {
-  const [result, setResult] = useState<MapResult | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-
-  useEffect(() => {
-    setResult(null)
-    if (timerRef.current) clearTimeout(timerRef.current)
-    const q = query.trim()
-    if (q.length < 5 || /^[\d\s+\-*/%^(),.*]+$/.test(q)) return
-    if (!/\d/.test(q) || !/[a-zA-ZäöüÄÖÜß]/.test(q)) return
-
-    timerRef.current = setTimeout(() => {
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {
-        headers: { "User-Agent": "AlpineShell/1.0" },
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data?.[0]) {
-            setResult({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name })
-          }
-        })
-        .catch(() => {})
-    }, 400)
-
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
-  }, [query])
-
-  return result
-}
-
 function useRunCommand(query: string): RunResult | null {
   const [result, setResult] = useState<RunResult | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -141,14 +105,6 @@ const BROWSER_TAB_LABELS: Record<string, string> = {
 
 function browserTabLabel(browser: string): string {
   return BROWSER_TAB_LABELS[browser] ?? browser
-}
-
-function staticMapUrl(lat: number, lon: number): string {
-  const zoom = 15
-  const x = Math.floor(((lon + 180) / 360) * Math.pow(2, zoom))
-  const latRad = (lat * Math.PI) / 180
-  const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zoom))
-  return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`
 }
 
 type WindowAction = "minimize" | "maximize" | "close"
@@ -574,7 +530,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   }, [notice, mode])
 
   const mathResult = useMemo(() => tryMath(query.trim()), [query])
-  const mapResult = useAddressLookup(query)
   const runResult = useRunCommand(activeCommand ? "" : query)
 
   const openAppCandidates = useMemo((): LauncherResult[] => {
@@ -661,23 +616,21 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   }, [query, items, memory, showRecentApps, openAppCandidates, tabCandidates, settingCandidates, windowCommandCandidates, appCandidates])
 
   const display = useMemo(() => {
-    const budget = Math.max(1, maxResults) - (mathResult ? 1 : 0) - (mapResult ? 1 : 0)
+    const budget = Math.max(1, maxResults) - (mathResult ? 1 : 0)
     const results = rankedResults.slice(0, Math.max(0, budget))
     return { results, showRun: !!runResult && budget - results.length > 0 }
-  }, [maxResults, mathResult, mapResult, runResult, rankedResults])
+  }, [maxResults, mathResult, runResult, rankedResults])
 
-  const mathOffset = mathResult ? 1 : 0
-  const resultsOffset = mathOffset + (mapResult ? 1 : 0)
+  const resultsOffset = mathResult ? 1 : 0
   const runOffset = resultsOffset + display.results.length
   const totalCount = runOffset + (display.showRun ? 1 : 0)
 
   const selectedEntry = useMemo(() => {
     if (mathResult && selected === 0) return { type: "math" as const }
-    if (mapResult && selected === mathOffset) return { type: "map" as const, result: mapResult }
     if (selected >= resultsOffset && selected < runOffset) return { type: "result" as const, result: display.results[selected - resultsOffset] }
     if (display.showRun && runResult && selected === runOffset) return { type: "run" as const, run: runResult }
     return null
-  }, [selected, mathResult, mapResult, runResult, display, mathOffset, resultsOffset, runOffset])
+  }, [selected, mathResult, runResult, display, resultsOffset, runOffset])
 
   const selectedSetting = selectedEntry?.type === "result" && selectedEntry.result.kind === "setting" ? selectedEntry.result.setting : null
 
@@ -906,9 +859,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       if (!selectedEntry) return
       if (selectedEntry.type === "math" && mathResult) {
         navigator.clipboard.writeText(mathResult)
-        window.launcher.hide()
-      } else if (selectedEntry.type === "map") {
-        window.open(`https://www.openstreetmap.org/?mlat=${selectedEntry.result.lat}&mlon=${selectedEntry.result.lon}#map=16/${selectedEntry.result.lat}/${selectedEntry.result.lon}`)
         window.launcher.hide()
       } else if (selectedEntry.type === "result") {
         activateResult(selectedEntry.result)
@@ -1225,31 +1175,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                           <Equal size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
                           <span className={`flex-1 text-[15px] font-medium ${textColor}`}>{mathResult}</span>
                           <Copy size={13} className={`shrink-0 ${darkText ? "text-black/25" : "text-white/25"}`} />
-                        </button>
-                      )}
-                      {mapResult && (
-                        <button
-                          onMouseMove={() => setSelected(mathOffset)}
-                          onClick={() => { window.open(`https://www.openstreetmap.org/?mlat=${mapResult.lat}&mlon=${mapResult.lon}#map=16/${mapResult.lat}/${mapResult.lon}`); window.launcher.hide() }}
-                          className={`flex items-center gap-3 px-2.5 rounded-md text-left cursor-pointer transition-colors overflow-hidden ${
-                            selected === mathOffset ? selectedBg : hoverBg
-                          }`}
-                          style={{ height: 140 }}
-                        >
-                          <div className="w-full h-full flex flex-col gap-1.5 py-2">
-                            <div className="flex items-center gap-2">
-                              <MapPin size={14} className={`shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
-                              <span className={`text-[13px] truncate ${textColor}`}>{mapResult.display.split(",").slice(0, 3).join(",")}</span>
-                            </div>
-                            <div className="flex-1 rounded-md overflow-hidden relative">
-                              <img
-                                src={staticMapUrl(mapResult.lat, mapResult.lon)}
-                                alt=""
-                                className="w-full h-full object-cover"
-                                draggable={false}
-                              />
-                            </div>
-                          </div>
                         </button>
                       )}
                       {display.results.map((result, i) => renderResult(result, resultsOffset + i))}
