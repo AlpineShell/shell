@@ -1,7 +1,9 @@
 const { app } = require('electron')
 const koffi = require('koffi')
 const winFocus = require('./winFocus')
+const notice = require('./shellNotice')
 const { iconHandleToDataUrl } = require('./iconHandle')
+const { OFF64, OFF32, readWideString, readBalloon, balloonNoticeId, balloonNotice } = require('./trayNotifyData')
 
 const user32 = koffi.load('user32.dll')
 const kernel32 = koffi.load('kernel32.dll')
@@ -50,6 +52,7 @@ const WM_RBUTTONDOWN = 0x0204
 const WM_RBUTTONUP = 0x0205
 const WM_CONTEXTMENU = 0x007b
 const NIN_SELECT = 0x0400
+const NIN_BALLOONUSERCLICK = 0x0405
 const HWND_BROADCAST = 0xffff
 const SMTO_ABORTIFHUNG = 0x0002
 const SM_CXSMICON = 49
@@ -58,6 +61,7 @@ const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 const NIF_MESSAGE = 0x01
 const NIF_ICON = 0x02
 const NIF_TIP = 0x04
+const NIF_INFO = 0x10
 const NIF_GUID = 0x20
 
 const NIM_ADD = 0
@@ -67,9 +71,6 @@ const NIM_SETVERSION = 4
 
 const TRAY_CLASS = 'Shell_TrayWnd'
 const NOTIFY_CLASS = 'TrayNotifyWnd'
-
-const OFF64 = { hWnd: 8, uID: 16, uFlags: 20, uCallback: 24, hIcon: 32, szTip: 40, uVersion: 816, guid: 952 }
-const OFF32 = { hWnd: 4, uID: 8, uFlags: 12, uCallback: 16, hIcon: 20, szTip: 24, uVersion: 800, guid: 936 }
 
 const icons = new Map()
 const processPathCache = new Map()
@@ -84,16 +85,6 @@ let iconSize = 32
 
 function toNum(v) {
   return typeof v === 'bigint' ? Number(v) : v
-}
-
-function readWideString(buf, off, maxChars) {
-  let s = ''
-  for (let i = 0; i < maxChars; i++) {
-    const c = buf.readUInt16LE(off + i * 2)
-    if (c === 0) break
-    s += String.fromCharCode(c)
-  }
-  return s
 }
 
 function getOwnerExeName(hWndRaw) {
@@ -196,6 +187,7 @@ function handleTrayData(buf, cbData) {
   if (dwMessage === NIM_DELETE) {
     icons.delete(id)
     scheduleBroadcast()
+    setImmediate(() => notice.dismiss(balloonNoticeId(id)))
     return
   }
 
@@ -220,7 +212,19 @@ function handleTrayData(buf, cbData) {
     const hIconRaw = O === OFF64 ? buf.readBigUInt64LE(base + O.hIcon) : BigInt(buf.readUInt32LE(base + O.hIcon))
     record.iconUrl = iconHandleToDataUrl(hIconRaw, iconSize)
   }
+  if (uFlags & NIF_INFO) announceBalloon(record, readBalloon(buf, base, O))
   scheduleBroadcast()
+}
+
+function announceBalloon(record, balloon) {
+  if (!balloon) return
+  const iconId = record.id
+  const open = record.callbackMsg ? () => forwardBalloonClick(iconId) : null
+  const request = balloon.message ? balloonNotice(iconId, balloon, record.tooltip, open) : null
+  setImmediate(() => {
+    if (request) notice.show(request)
+    else notice.dismiss(balloonNoticeId(iconId))
+  })
 }
 
 function trayWndProc(hwnd, msg, wParam, lParam) {
@@ -244,6 +248,22 @@ function trayWndProc(hwnd, msg, wParam, lParam) {
   return DefWindowProcW(hwnd, msg, wParam, lParam)
 }
 
+function postIconMessage(r, message, x, y) {
+  if (r.version >= 4) {
+    const wParam = (x & 0xffff) | ((y & 0xffff) << 16)
+    const lParam = (message & 0xffff) | ((r.uID & 0xffff) << 16)
+    PostMessageW(r.hWndRaw, r.callbackMsg, wParam, lParam)
+  } else {
+    PostMessageW(r.hWndRaw, r.callbackMsg, r.uID, message)
+  }
+}
+
+function forwardBalloonClick(id) {
+  const r = icons.get(id)
+  if (!r || !r.callbackMsg || !IsWindow(r.hWndRaw)) return
+  postIconMessage(r, NIN_BALLOONUSERCLICK, 0, 0)
+}
+
 function forwardClick(id, button, x, y) {
   const r = icons.get(id)
   if (!r || !r.callbackMsg) return
@@ -252,22 +272,10 @@ function forwardClick(id, button, x, y) {
     scheduleBroadcast()
     return
   }
-  const hwnd = r.hWndRaw
-  const cb = r.callbackMsg
-  const ax = x & 0xffff
-  const ay = y & 0xffff
   if (button === 'right') {
-    try { winFocus.forceForeground(toNum(hwnd)) } catch {}
+    try { winFocus.forceForeground(toNum(r.hWndRaw)) } catch {}
   }
-  const send = (mouseMsg) => {
-    if (r.version >= 4) {
-      const wParam = ax | (ay << 16)
-      const lParam = (mouseMsg & 0xffff) | ((r.uID & 0xffff) << 16)
-      PostMessageW(hwnd, cb, wParam, lParam)
-    } else {
-      PostMessageW(hwnd, cb, r.uID, mouseMsg)
-    }
-  }
+  const send = (mouseMsg) => postIconMessage(r, mouseMsg, x, y)
   if (button === 'right') {
     if (r.version >= 4) {
       send(WM_CONTEXTMENU)

@@ -1,5 +1,8 @@
 const HKEY_CURRENT_USER = 0x80000001
+const HKEY_LOCAL_MACHINE = 0x80000002
 const KEY_READ = 0x20019
+const KEY_WOW64_64KEY = 0x0100
+const ERROR_ACCESS_DENIED = 5
 const REG_NOTIFY_CHANGE_NAME = 0x00000001
 const REG_NOTIFY_CHANGE_LAST_SET = 0x00000004
 const REG_NOTIFY_THREAD_AGNOSTIC = 0x10000000
@@ -77,6 +80,15 @@ function armChangeNotification(api, keyHandle, eventHandle, changeFilter, watchS
     eventHandle,
     NOTIFY_ASYNCHRONOUSLY
   ) === ERROR_SUCCESS
+}
+
+function localMachineKeyExists(subKey) {
+  const api = loadRegistryApi()
+  if (!api) return false
+  const keyHandle = [0]
+  const status = api.RegOpenKeyExW(HKEY_LOCAL_MACHINE, subKey, 0, KEY_READ | KEY_WOW64_64KEY, keyHandle)
+  if (status === ERROR_SUCCESS) api.RegCloseKey(keyHandle[0])
+  return status === ERROR_SUCCESS || status === ERROR_ACCESS_DENIED
 }
 
 function readCurrentUserStringValue(subKey, valueName) {
@@ -166,6 +178,7 @@ module.exports = {
   REG_NOTIFY_CHANGE_NAME,
   REG_NOTIFY_CHANGE_LAST_SET,
   decodeRegistryString,
+  localMachineKeyExists,
   readCurrentUserStringValue,
   watchCurrentUserKeyChanges,
   watchCurrentUserStringValue,

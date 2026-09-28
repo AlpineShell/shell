@@ -73,6 +73,8 @@ function announceResume(broadcast) {
 }
 
 module.exports = {
+  powerAction,
+
   handlers: {
     'system/power-action': (_event, action) => powerAction(action),
     'system/power-confirm-get': () => confirmActions,
