@@ -741,7 +741,7 @@ function openPluginApp(pluginId, app) {
     .catch((e) => console.error('[deeplink] open-app failed:', e && e.message))
 }
 
-ipcMain.handle('windows/open-settings', (_event, page) => {
+function openSettingsPage(page) {
   const target = typeof page === 'string' && page ? page : null
   const wasOpen = settingsWin && !settingsWin.isDestroyed()
   pendingSettingsPage = target
@@ -756,7 +756,9 @@ ipcMain.handle('windows/open-settings', (_event, page) => {
       wc.send('windows/settings-navigate', target)
     }
   }
-})
+}
+
+ipcMain.handle('windows/open-settings', (_event, page) => openSettingsPage(page))
 
 ipcMain.handle('windows/close-settings', () => {
   if (settingsWin && !settingsWin.isDestroyed()) {
@@ -839,6 +841,7 @@ app.whenReady().then(async () => {
   })
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
+  updater.setUpdatesPageOpener(() => openSettingsPage('updates'))
 
   trustedSenders.setTrustedWindowsAccessor(() => [setupWin, settingsWin])
 

@@ -12,6 +12,8 @@ const licenceListeners = new Set()
 const checkCalls = []
 const downloadCalls = []
 const updaterListeners = new Map()
+const shownNotices = []
+const dismissedNotices = []
 
 const fakeAutoUpdater = {
   requestHeaders: undefined,
@@ -56,6 +58,10 @@ inject(nodeRequire.resolve('./installer.js'), {
 })
 inject(nodeRequire.resolve('./frecency.js'), { flush: () => undefined })
 inject(nodeRequire.resolve('./appIcons.js'), { flushDiskCache: () => undefined })
+inject(nodeRequire.resolve('./shellNotice.js'), {
+  show: (request) => shownNotices.push(request),
+  dismiss: (id) => dismissedNotices.push(id),
+})
 
 const { default: updater } = await import('./updater.js')
 
@@ -77,6 +83,8 @@ beforeEach(() => {
   broadcasts.length = 0
   checkCalls.length = 0
   downloadCalls.length = 0
+  shownNotices.length = 0
+  dismissedNotices.length = 0
   licenceToken = 'token-1'
 })
 
@@ -212,5 +220,54 @@ describe('the update-check switch', () => {
     updater.handlers['updates/set-preferences'](null, { checkForUpdates: true })
     expect(checkCalls).toHaveLength(checksBefore + 1)
     expect(checkCalls.at(-1)).toEqual({ Authorization: 'Bearer token-9' })
+  })
+})
+
+describe('the update notice', () => {
+  function checkInTheBackground(token) {
+    setLicence(null)
+    setLicence(token)
+  }
+
+  it('tells someone who never opens Settings, once per version, with a way to the Updates page', () => {
+    const openUpdatesPage = vi.fn()
+    updater.setUpdatesPageOpener(openUpdatesPage)
+    checkInTheBackground('token-10')
+    updaterListeners.get('update-available')({ version: '10.0.0' })
+    expect(shownNotices).toHaveLength(1)
+    expect(shownNotices[0]).toMatchObject({
+      id: updater.UPDATE_NOTICE_ID,
+      title: 'Update available',
+      message: 'Alpine Shell 10.0.0 is ready to install.',
+      action: { label: 'Open updates' },
+      timeoutMs: 0,
+      waitForTurn: true,
+    })
+    shownNotices[0].action.run()
+    expect(openUpdatesPage).toHaveBeenCalledTimes(1)
+    checkInTheBackground('token-10b')
+    updaterListeners.get('update-available')({ version: '10.0.0' })
+    expect(shownNotices).toHaveLength(1)
+    checkInTheBackground('token-10c')
+    updaterListeners.get('update-available')({ version: '10.1.0' })
+    expect(shownNotices.map((request) => request.message)).toEqual([
+      'Alpine Shell 10.0.0 is ready to install.',
+      'Alpine Shell 10.1.0 is ready to install.',
+    ])
+  })
+
+  it('stays quiet about a version first found by a check started on the Updates page', () => {
+    updater.handlers['updates/check']()
+    updaterListeners.get('update-available')({ version: '11.0.0' })
+    expect(shownNotices).toHaveLength(0)
+    checkInTheBackground('token-11')
+    updaterListeners.get('update-available')({ version: '11.0.0' })
+    expect(shownNotices).toHaveLength(0)
+    expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'available', availableVersion: '11.0.0' })
+  })
+
+  it('goes away once the download starts', () => {
+    updater.handlers['updates/download']()
+    expect(dismissedNotices).toEqual([updater.UPDATE_NOTICE_ID])
   })
 })

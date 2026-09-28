@@ -4,6 +4,7 @@ const installer = require('./installer')
 const frecency = require('./frecency')
 const appIcons = require('./appIcons')
 const licence = require('./licence')
+const notice = require('./shellNotice')
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const INITIAL_CHECK_DELAY_MS = 10000
@@ -16,6 +17,7 @@ const UPDATES_REFUSED_FOR_LICENCE_MESSAGE = 'Updates are not available for this 
 const UPDATE_CHECKS_OFF_MESSAGE = 'Update checks are off. Alpine Shell will not contact alpineshell.com.'
 const FEED_STATUS_CODES_REFUSING_LICENCE = new Set([401, 403])
 const PREFERENCES_FILE = 'update-prefs.json'
+const UPDATE_NOTICE_ID = 'alpine-update'
 
 const state = {
   status: 'idle',
@@ -38,6 +40,27 @@ let downloadStallTimer = null
 let boundAutoUpdater = null
 let feedCredentialsPresent = false
 let checkForUpdates = true
+let checkStartedByHand = false
+let announcedVersion = null
+let openUpdatesPage = null
+
+function setUpdatesPageOpener(fn) {
+  openUpdatesPage = typeof fn === 'function' ? fn : null
+}
+
+function announceAvailableUpdate(version) {
+  if (!version || version === announcedVersion) return
+  announcedVersion = version
+  if (checkStartedByHand) return
+  notice.show({
+    id: UPDATE_NOTICE_ID,
+    title: 'Update available',
+    message: `Alpine Shell ${version} is ready to install.`,
+    action: openUpdatesPage ? { label: 'Open updates', run: () => openUpdatesPage() } : null,
+    timeoutMs: 0,
+    waitForTurn: true,
+  })
+}
 
 function electronApp() {
   return require('electron').app
@@ -76,6 +99,7 @@ function autoUpdater() {
 function setState(partial) {
   Object.assign(state, partial)
   if (broadcastChanged) broadcastChanged('updates/state-changed', state)
+  if (partial.status === 'available') announceAvailableUpdate(state.availableVersion)
 }
 
 function logFilePath() {
@@ -158,7 +182,7 @@ function reportChecksOff(announce) {
   setState({ status: 'not-available' })
 }
 
-function runCheck(announce, allowRetry = false) {
+function runCheck(announce, allowRetry = false, byHand = false) {
   if (state.status === 'downloading' || state.status === 'downloaded') return
   if (!electronApp().isPackaged) {
     if (announce) {
@@ -178,6 +202,7 @@ function runCheck(announce, allowRetry = false) {
   }
   announceResult = announce
   allowRetryForCurrentCheck = allowRetry
+  checkStartedByHand = byHand
   autoUpdater().checkForUpdates().catch(() => {})
 }
 
@@ -322,6 +347,8 @@ function reportPendingVersionOutcome() {
 
 module.exports = {
   isUpdatePending,
+  setUpdatesPageOpener,
+  UPDATE_NOTICE_ID,
   INITIAL_CHECK_DELAY_MS,
   CHECK_INTERVAL_MS,
   SIGN_IN_FOR_UPDATES_MESSAGE,
@@ -339,11 +366,12 @@ module.exports = {
     'updates/set-preferences': (_event, partial) => setPreferences(partial),
 
     'updates/check': () => {
-      runCheck(true, false)
+      runCheck(true, false, true)
       return state
     },
 
     'updates/download': () => {
+      notice.dismiss(UPDATE_NOTICE_ID)
       if (electronApp().isPackaged) {
         pushLog('info', `Downloading version ${state.availableVersion ?? ''}…`)
         setState({ status: 'downloading', progressPercent: 0 })

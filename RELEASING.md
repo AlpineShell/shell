@@ -1,6 +1,6 @@
 # Releasing Alpine Shell
 
-Alpine Shell ships an NSIS installer and auto-updates clients using electron-updater with a
+Alpine Shell ships an NSIS installer and updates clients using electron-updater with a
 generic provider backed by Railway/MinIO (any S3-compatible store). This document covers the
 one-time setup, the environment variables required to publish, and the per-release steps.
 
@@ -49,7 +49,8 @@ See `docs/STORAGE.md` for how to obtain these.
    - builds the NSIS installer with electron-builder (which also generates `latest.yml`),
    - runs `scripts/publish.js`, which uploads the installer and `latest.yml` to the store.
 3. Once the new `latest.yml` and installer are in the bucket, existing installs detect the new
-   version on their next update check and auto-update.
+   version on their next update check (about every six hours) and show an "Update available"
+   notice. Nothing is downloaded or installed until the user does it in Settings > Updates.
 
 You can re-run only the upload step with `bun run publish` if the build artifacts already exist.
 
@@ -66,7 +67,8 @@ GitHub Release:
    sets the `package.json` version from it (a leading `v` is stripped).
 2. The workflow installs dependencies, runs `bun run release` (Vite build + NSIS installer +
    `latest.yml` + upload to the store with pruning), and attaches the installer to the GitHub Release.
-3. Installed clients auto-update from the store on their next check.
+3. Installed clients find the update on their next check and offer it; the user installs it from
+   Settings > Updates.
 
 Add these repository secrets first (GitHub repo -> Settings -> Secrets and variables -> Actions):
 
