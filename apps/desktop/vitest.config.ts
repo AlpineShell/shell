@@ -5,6 +5,9 @@ export default defineConfig({
     jsx: 'automatic',
   },
   test: {
+    env: {
+      ELECTRON_OVERRIDE_DIST_PATH: 'electron-binary-is-never-downloaded-by-tests',
+    },
     projects: [
       {
         extends: true,
