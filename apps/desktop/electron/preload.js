@@ -521,6 +521,10 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('battery-saver/state-changed', handler)
     },
   },
+  gpu: {
+    preferences: () => ipcRenderer.invoke('gpu/preferences-get'),
+    setPreferences: (partial) => ipcRenderer.invoke('gpu/preferences-set', partial),
+  },
   media: {
     session: () => ipcRenderer.invoke('media/session'),
     onSessionChanged: (callback) => {

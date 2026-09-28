@@ -499,6 +499,7 @@ test failure too.
 | `mute` | instant | One click each way, and you hear which way it went. |
 | `emoji` | instant | Inserts a character into whatever has focus. Nothing is stored. |
 | `power` | confirm | Shut down, restart, sign out and lock all end the session and can lose unsaved work in every app. The launcher's power submenu already asks a second time before running one. |
+| `high-performance-gpu` | restart | Chromium picks its graphics adapter once, when the process starts: the `force_high_performance_gpu` switch and the Windows `UserGpuPreferences` value for the exe are both read then, so a change only takes effect after a restart. Off by default, because Ridge and the desktop always hold a window open, which keeps the discrete GPU of a hybrid-graphics laptop powered all day. Turning it on is for anyone whose animations stutter on the integrated chip, and turning it off again removes the Windows value. |
 
 ### What is not covered
 
@@ -514,6 +515,6 @@ Every entry in the table writes through an IPC handler whose module owns one JSO
 `app.getPath('userData')` and writes it inside the same handler that applies the effect:
 `topbar-color.json`, `topbar-layout.json`, `clock-prefs.json`, `launcher-prefs.json`,
 `launcher-hotkey.json`, `tray-layout.json`, `tiling.json`, `battery-saver-prefs.json`,
-`wallpaper.json`, `foreground-color.json`, `power-prefs.json`. That is what makes the guarantee in point 2
+`wallpaper.json`, `foreground-color.json`, `power-prefs.json`, `gpu-prefs.json`. That is what makes the guarantee in point 2
 above hold: there is no separate save step that could be skipped, so a value that reached the
 store is a value that survives a restart.

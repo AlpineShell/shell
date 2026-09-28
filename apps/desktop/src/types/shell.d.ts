@@ -292,6 +292,10 @@ declare global {
     throttleProcesses: boolean
   }
 
+  interface GpuPreferences {
+    highPerformance: boolean
+  }
+
   interface BatterySaverState {
     active: boolean
     reason: BatterySaverReason
@@ -1866,6 +1870,10 @@ declare global {
         state: () => Promise<BatterySaverState>
         setOverride: (override: BatterySaverOverride) => Promise<BatterySaverState>
         onStateChanged: (callback: (state: BatterySaverState) => void) => () => void
+      }
+      gpu: {
+        preferences: () => Promise<GpuPreferences>
+        setPreferences: (partial: Partial<GpuPreferences>) => Promise<GpuPreferences>
       }
       media: {
         session: () => Promise<MediaPlayback>

@@ -9,6 +9,7 @@ const childProcess = nodeRequire('child_process')
 const { parseLogonId } = nodeRequire('../logonSession.js')
 
 const WINLOGON_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+const GPU_PREFERENCES_KEY = 'HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences'
 const THIS_SIGN_IN = 'S-1-5-5-0-43222286'
 const EARLIER_SIGN_IN = 'S-1-5-5-0-41000007'
 const HOUR_MS = 60 * 60 * 1000
@@ -38,6 +39,7 @@ childProcess.execFileSync = (file, args) => {
   if (file === 'reg' && args[0] === 'delete') registry.delete(registryKey(args[1], args[3]))
   return ''
 }
+childProcess.execSync = () => ''
 childProcess.spawn = () => ({ pid: 4242, on: () => {}, unref: () => {} })
 
 const { default: installer } = await import('./installer.js')
@@ -142,5 +144,24 @@ describe('shellHandoffFromThisLogon', () => {
   it('does not look up the sign-in when nothing was handed over', () => {
     expect(installer.shellHandoffFromThisLogon()).toBe(false)
     expect(logonSessionMock.currentLogonId).not.toHaveBeenCalled()
+  })
+})
+
+describe('revertSystemChanges', () => {
+  it('drops the high-performance GPU preference for the installed exe', () => {
+    const previousLocalAppData = process.env.LOCALAPPDATA
+    process.env.LOCALAPPDATA = tempDir
+    const exePath = path.join(tempDir, 'Programs', 'alpine-shell', 'Alpine Shell.exe')
+    registry.set(registryKey(GPU_PREFERENCES_KEY, exePath), 'GpuPreference=2;')
+
+    try {
+      installer.revertSystemChanges()
+    } finally {
+      if (previousLocalAppData === undefined) delete process.env.LOCALAPPDATA
+      else process.env.LOCALAPPDATA = previousLocalAppData
+    }
+
+    expect(registry.has(registryKey(GPU_PREFERENCES_KEY, exePath))).toBe(false)
+    expect(registry.get(registryKey(WINLOGON_KEY, 'Shell'))).toBe('explorer.exe')
   })
 })
