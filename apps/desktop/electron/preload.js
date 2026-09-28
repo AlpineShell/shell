@@ -219,6 +219,9 @@ contextBridge.exposeInMainWorld('alttab', {
   onSelectionChanged: (callback) => {
     ipcRenderer.on('alttab/selection-changed', (_, index) => callback(index))
   },
+  onThumbnail: (callback) => {
+    ipcRenderer.on('alttab/thumbnail', (_, data) => callback(data))
+  },
   activate: (hwnd) => ipcRenderer.invoke('alttab/activate', hwnd),
 })
 

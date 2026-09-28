@@ -86,6 +86,9 @@ export default function AltTabPanel() {
       }, CLOSE_MS)
     })
     window.alttab.onSelectionChanged(setSelectedIndex)
+    window.alttab.onThumbnail(({ hwnd, thumbnail }) => {
+      setWindows((current) => current.map((entry) => (entry.hwnd === hwnd ? { ...entry, thumbnail } : entry)))
+    })
   }, [])
 
   function measureShape(): Shape | null {
