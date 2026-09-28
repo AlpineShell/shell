@@ -2,13 +2,11 @@ const { app, BrowserWindow, screen, ipcMain, protocol, net, powerMonitor } = req
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
+const { PRIVILEGED_SCHEMES } = require('./privilegedSchemes')
 
 try { require('node:module').enableCompileCache(path.join(app.getPath('userData'), 'v8-cache')) } catch {}
 
-protocol.registerSchemesAsPrivileged([
-  { scheme: 'alpine-wallpaper', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } },
-  { scheme: 'alpine-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-])
+protocol.registerSchemesAsPrivileged(PRIVILEGED_SCHEMES)
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
 const network = require('./modules/network')
