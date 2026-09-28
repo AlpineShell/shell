@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 
 const { default: notice } = await import('./modules/shellNotice.js')
 
@@ -75,5 +75,106 @@ describe('shellNotice confirmations', () => {
     vi.advanceTimersByTime(50)
     expect(sent.at(-1).channel).toBe('notice/hide')
     vi.useRealTimers()
+  })
+})
+
+describe('shellNotice notices that wait for their turn', () => {
+  const shownMessages = () => sent.filter((e) => e.channel === 'notice/show').map((e) => e.payload.message)
+
+  afterEach(() => {
+    for (const id of ['first', 'second', 'third']) notice.dismiss(id)
+  })
+
+  it('shows straight away when nothing else is on screen', () => {
+    notice.show({ id: 'first', message: 'Restart required', waitForTurn: true, timeoutMs: 0 })
+    expect(shownMessages()).toEqual(['Restart required'])
+  })
+
+  it('waits behind the notice on screen and follows it once that one is dismissed', () => {
+    notice.show({ id: 'first', message: 'Reading report.pdf', busy: true, timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'Update available', waitForTurn: true, timeoutMs: 0 })
+    expect(shownMessages()).toEqual(['Reading report.pdf'])
+    notice.handlers['notice/dismiss']()
+    expect(shownMessages()).toEqual(['Reading report.pdf', 'Update available'])
+    expect(lastShown()).toMatchObject({ id: 'second', message: 'Update available' })
+  })
+
+  it('follows a notice that timed out', () => {
+    vi.useFakeTimers()
+    notice.show({ id: 'first', message: 'Saved', timeoutMs: 10 })
+    notice.show({ id: 'second', message: 'Battery low', waitForTurn: true, timeoutMs: 0 })
+    vi.advanceTimersByTime(50)
+    expect(lastShown()).toMatchObject({ id: 'second', message: 'Battery low' })
+    vi.useRealTimers()
+  })
+
+  it('never interrupts a question and follows it once it is answered', () => {
+    const run = vi.fn()
+    notice.show({ id: 'first', message: 'Update Instagram?', confirm: { label: 'Update', run } })
+    notice.show({ id: 'second', message: 'Update available', waitForTurn: true, timeoutMs: 0 })
+    expect(lastShown().message).toBe('Update Instagram?')
+    notice.handlers['notice/confirm']()
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(lastShown().message).toBe('Update available')
+  })
+
+  it('keeps waiting while the answer to a question puts up its own notice', () => {
+    const run = () => notice.show({ id: 'first', message: 'Installing…', busy: true, pill: true, timeoutMs: 0 })
+    notice.show({ id: 'first', message: 'Update Instagram?', confirm: { label: 'Update', run } })
+    notice.show({ id: 'second', message: 'Update available', waitForTurn: true, timeoutMs: 0 })
+    notice.handlers['notice/confirm']()
+    expect(shownMessages()).toEqual(['Update Instagram?', 'Installing…'])
+    notice.handlers['notice/dismiss']()
+    expect(lastShown().message).toBe('Update available')
+  })
+
+  it('keeps waiting while a button opens a notice of its own', () => {
+    const run = () => notice.show({ id: 'first', message: 'Opening…', busy: true, timeoutMs: 0 })
+    notice.show({ id: 'first', message: 'Plugin is off', action: { label: 'Open plugins', run }, timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'Update available', waitForTurn: true, timeoutMs: 0 })
+    expect(notice.handlers['notice/action']()).toEqual({ ok: true })
+    expect(shownMessages()).toEqual(['Plugin is off', 'Opening…'])
+    notice.handlers['notice/dismiss']()
+    expect(lastShown().message).toBe('Update available')
+  })
+
+  it('takes its turn in the order it asked', () => {
+    notice.show({ id: 'first', message: 'one', timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'two', waitForTurn: true, timeoutMs: 0 })
+    notice.show({ id: 'third', message: 'three', waitForTurn: true, timeoutMs: 0 })
+    notice.handlers['notice/dismiss']()
+    notice.handlers['notice/dismiss']()
+    expect(shownMessages()).toEqual(['one', 'two', 'three'])
+  })
+
+  it('keeps only the latest request for the same notice while it waits', () => {
+    notice.show({ id: 'first', message: 'one', timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'old', waitForTurn: true, timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'new', waitForTurn: true, timeoutMs: 0 })
+    notice.handlers['notice/dismiss']()
+    notice.handlers['notice/dismiss']()
+    expect(shownMessages()).toEqual(['one', 'new'])
+  })
+
+  it('updates itself in place when it is the notice on screen', () => {
+    notice.show({ id: 'first', message: 'old', waitForTurn: true, timeoutMs: 0 })
+    notice.show({ id: 'first', message: 'new', waitForTurn: true, timeoutMs: 0 })
+    expect(shownMessages()).toEqual(['old', 'new'])
+  })
+
+  it('is dropped when dismissed by id before its turn comes', () => {
+    notice.show({ id: 'first', message: 'one', timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'two', waitForTurn: true, timeoutMs: 0 })
+    notice.dismiss('second')
+    expect(lastShown().message).toBe('one')
+    notice.handlers['notice/dismiss']()
+    expect(shownMessages()).toEqual(['one'])
+    expect(sent.at(-1).channel).toBe('notice/hide')
+  })
+
+  it('does not hold back a notice that did not ask to wait', () => {
+    notice.show({ id: 'first', message: 'one', waitForTurn: true, timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'two', timeoutMs: 0 })
+    expect(lastShown().message).toBe('two')
   })
 })

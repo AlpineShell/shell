@@ -14,6 +14,7 @@ let pendingCancel = null
 let dismissTimer = null
 let escapeHeld = false
 let topbarsRaised = false
+let waiting = []
 
 function start(_broadcast, broadcastToTopbars) {
   toTopbars = typeof broadcastToTopbars === 'function' ? broadcastToTopbars : null
@@ -102,7 +103,7 @@ function runCallback(label, fn) {
   return { ok: true }
 }
 
-function hide() {
+function clearCurrent() {
   clearDismissTimer()
   holdEscape(false)
   raiseTopbars(false)
@@ -115,9 +116,34 @@ function hide() {
   if (abandoned) runCallback('cancel', abandoned)
 }
 
+function hide() {
+  clearCurrent()
+  showNextWaiting()
+}
+
+function forgetWaiting(id) {
+  waiting = waiting.filter((request) => request.id !== id)
+}
+
+function waitForTurn(id, request) {
+  forgetWaiting(id)
+  waiting.push({ ...request, id })
+}
+
+function showNextWaiting() {
+  if (current) return
+  const next = waiting.shift()
+  if (next) show(next)
+}
+
 function show(request) {
   if (!request || typeof request.message !== 'string') return null
   const id = typeof request.id === 'string' && request.id ? request.id : `notice-${Date.now()}`
+  if (request.waitForTurn && current && current.id !== id) {
+    waitForTurn(id, request)
+    return id
+  }
+  forgetWaiting(id)
   const action = request.action && typeof request.action.run === 'function' ? request.action : null
   const confirm = request.confirm && typeof request.confirm.run === 'function' ? request.confirm : null
   const displayId = current && current.id === id ? current.displayId : cursorDisplayId()
@@ -150,24 +176,27 @@ function show(request) {
 }
 
 function dismiss(id) {
+  if (id) forgetWaiting(id)
   if (id && (!current || current.id !== id)) return
   hide()
 }
 
 function runCurrentAction() {
   const action = pendingAction
-  hide()
-  if (!action) return { ok: false }
-  return runCallback('action', action.run)
+  clearCurrent()
+  const result = action ? runCallback('action', action.run) : { ok: false }
+  showNextWaiting()
+  return result
 }
 
 function runCurrentConfirm() {
   const confirm = pendingConfirm
   pendingConfirm = null
   pendingCancel = null
-  hide()
-  if (!confirm) return { ok: false }
-  return runCallback('confirm', confirm.run)
+  clearCurrent()
+  const result = confirm ? runCallback('confirm', confirm.run) : { ok: false }
+  showNextWaiting()
+  return result
 }
 
 module.exports = {
