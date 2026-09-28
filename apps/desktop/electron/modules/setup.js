@@ -126,10 +126,15 @@ function setStartup() {
   regAdd(RUN_KEY, RUN_VALUE_NAME, autostartCommand())
 }
 
+function mayRegisterShell() {
+  return licenceGateError() === null || isShellRegisteredToAlpine()
+}
+
 function ensureShellRegistration(gpoBlocked) {
   if (!electronApp().isPackaged) return
   if (installer.isShellOptedOut()) return
   if (gpoBlocked) return
+  if (!mayRegisterShell()) return
 
   const desiredShell = getShellExePath()
   if (regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell') !== desiredShell) {
@@ -436,6 +441,7 @@ module.exports = {
   }),
 
   isFirstRun,
+  isShellRegisteredToAlpine,
   isAutostartLaunch,
   shouldLeaveShellToExplorer,
   takeOverFromExplorer,
