@@ -385,15 +385,26 @@ class AlpineUpdater {
         }
     }
 
-    static void KillByName(string name) {
-        foreach (Process p in Process.GetProcessesByName(name)) {
-            try { p.Kill(); } catch { }
-        }
+    static int CurrentSessionId() {
+        using (Process self = Process.GetCurrentProcess()) return self.SessionId;
     }
 
-    static void WaitGone(string name, int timeoutMs) {
+    static void KillInThisSession(string name) {
+        try {
+            int sessionId = CurrentSessionId();
+            foreach (Process p in Process.GetProcessesByName(name)) {
+                using (p) {
+                    try {
+                        if (p.SessionId == sessionId) p.Kill();
+                    } catch { }
+                }
+            }
+        } catch { }
+    }
+
+    static void WaitGoneFromThisSession(string name, int timeoutMs) {
         int waited = 0;
-        while (Process.GetProcessesByName(name).Length > 0 && waited < timeoutMs) {
+        while (IsRunningInThisSession(name) && waited < timeoutMs) {
             Thread.Sleep(250);
             waited += 250;
         }
@@ -407,8 +418,7 @@ class AlpineUpdater {
 
     static bool IsRunningInThisSession(string processName) {
         try {
-            int sessionId;
-            using (Process self = Process.GetCurrentProcess()) sessionId = self.SessionId;
+            int sessionId = CurrentSessionId();
             bool running = false;
             foreach (Process p in Process.GetProcessesByName(processName)) {
                 using (p) {
@@ -443,8 +453,8 @@ class AlpineUpdater {
         try {
             try { readyMarkerPath = Path.Combine(Path.GetTempPath(), "alpine-shell-update-ready.flag"); } catch { readyMarkerPath = ""; }
 
-            WaitGone(AlpineProcessName, 15000);
-            KillByName(AlpineProcessName);
+            WaitGoneFromThisSession(AlpineProcessName, 15000);
+            KillInThisSession(AlpineProcessName);
             Thread.Sleep(500);
 
             RunInstaller();
@@ -481,7 +491,7 @@ class AlpineUpdater {
             SetShell(BuildShellValue());
         }
         if (!LaunchAlpine()) return false;
-        if (handShellBackToAlpine) KillByName(ExplorerProcessName);
+        if (handShellBackToAlpine) KillInThisSession(ExplorerProcessName);
         if (!WaitForMarker(ReadyTimeoutMs)) return false;
         if (handShellBackToAlpine) {
             try { SetShell(alpineExe); } catch { }
@@ -493,8 +503,9 @@ class AlpineUpdater {
 
     static void FallBackToExplorer() {
         suppressTaskbar = false;
+        KillInThisSession(AlpineProcessName);
         try { SetShell("explorer.exe"); } catch { }
-        KillByName(AlpineProcessName);
+        KillInThisSession(AlpineProcessName);
         Thread.Sleep(ExplorerRestartSettleMs);
         if (!IsRunningInThisSession(ExplorerProcessName)) StartExplorer();
         RestoreTaskbar();
