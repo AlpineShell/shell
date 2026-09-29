@@ -156,6 +156,10 @@ to the plugin through `usePluginSetting(pluginId, key)` in the renderer and `ctx
 page at `plugins/<id>` in the settings window; `settingsPages[0]` names it, `export` renders a
 component from the renderer module below the rows, and `topLevel: true` adds it to the sidebar.
 
+A backend's `ctx.pluginDir` is the installed plugin folder, and an update replaces it whole. State
+the plugin keeps goes in `ctx.dataDir` (`<userData>/plugin-data/<id>`): the host creates it before the
+backend starts, an update leaves it alone, and an uninstall removes it once the plugin has stopped.
+
 Every contribution carries an optional `since: apiVersion`. The host mounts a contribution only when `since ≤ PLUGIN_API_VERSION`, so **additive SDK growth never strands old plugins** and a plugin using only stable surfaces keeps loading on a newer host.
 
 ### 3.5 Two compatibility gates (neither is hard-equality)
