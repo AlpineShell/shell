@@ -1,7 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
 import trayNotifyData from './trayNotifyData.js'
 
-const { OFF64, OFF32, readWideString, readBalloon, balloonNoticeId, balloonNotice } = trayNotifyData
+const {
+  OFF64,
+  OFF32,
+  NIN_BALLOONSHOW,
+  NIN_BALLOONHIDE,
+  NIN_BALLOONTIMEOUT,
+  NIN_BALLOONUSERCLICK,
+  readWideString,
+  readBalloon,
+  balloonNoticeId,
+  balloonClosedMessage,
+  balloonNotice,
+} = trayNotifyData
 
 const TRAY_HEADER_BYTES = 8
 const NIIF_INFO = 0x01
@@ -114,41 +126,92 @@ describe('readWideString', () => {
 
 describe('balloonNotice', () => {
   const balloon = { title: 'Sync paused', message: 'Reconnect to resume.', isError: false }
+  const dropbox = { tooltip: 'Dropbox', exeName: 'dropbox.exe' }
 
-  it('carries the balloon as a notice that waits for its turn', () => {
-    expect(balloonNotice('app:dropbox.exe:1', balloon, 'Dropbox', null)).toEqual({
+  it('carries the balloon as a notice that names the app and waits for its turn', () => {
+    expect(balloonNotice('app:dropbox.exe:1', balloon, dropbox, null)).toEqual({
       id: balloonNoticeId('app:dropbox.exe:1'),
-      title: 'Sync paused',
-      message: 'Reconnect to resume.',
+      title: 'Dropbox',
+      message: 'Sync paused: Reconnect to resume.',
       tone: 'info',
       action: null,
+      onShown: null,
+      onClose: null,
       waitForTurn: true,
     })
   })
 
-  it('names the app from its tooltip when the balloon has no title', () => {
-    const request = balloonNotice('guid:1', { ...balloon, title: '' }, 'Backup Agent\r\nLast run: today', null)
+  it('never lets a balloon title stand in for the name of the app that sent it', () => {
+    const request = balloonNotice('guid:1', { ...balloon, title: 'Restart required' }, { tooltip: 'Backup Agent', exeName: 'agent.exe' }, null)
+    expect(request.title).toBe('Backup Agent')
+    expect(request.message).toBe('Restart required: Reconnect to resume.')
+  })
+
+  it('names the app from the first line of its tooltip', () => {
+    const request = balloonNotice('guid:1', balloon, { tooltip: 'Backup Agent\r\nLast run: today', exeName: 'agent.exe' }, null)
     expect(request.title).toBe('Backup Agent')
   })
 
-  it('has no title when neither the balloon nor the tooltip gives one', () => {
-    expect(balloonNotice('guid:1', { ...balloon, title: '' }, '', null).title).toBeNull()
+  it('names the app from its program file when it has no tooltip', () => {
+    expect(balloonNotice('guid:1', balloon, { tooltip: '', exeName: 'agent.exe' }, null).title).toBe('agent.exe')
+  })
+
+  it('has no title when nothing names the app', () => {
+    expect(balloonNotice('guid:1', balloon, { tooltip: '', exeName: null }, null).title).toBeNull()
+  })
+
+  it('does not repeat a balloon title that is only the name of the app', () => {
+    expect(balloonNotice('guid:1', { ...balloon, title: 'dropbox' }, dropbox, null).message).toBe('Reconnect to resume.')
+  })
+
+  it('keeps the punctuation a balloon title already ends with', () => {
+    expect(balloonNotice('guid:1', { ...balloon, title: 'Warning!' }, dropbox, null).message).toBe('Warning! Reconnect to resume.')
+  })
+
+  it('shows the text alone when the balloon has no title', () => {
+    expect(balloonNotice('guid:1', { ...balloon, title: '' }, dropbox, null).message).toBe('Reconnect to resume.')
   })
 
   it('shows an error balloon as an error', () => {
-    expect(balloonNotice('guid:1', { ...balloon, isError: true }, '', null).tone).toBe('error')
+    expect(balloonNotice('guid:1', { ...balloon, isError: true }, dropbox, null).tone).toBe('error')
   })
 
-  it('offers Open only when the app can be told the balloon was clicked', () => {
-    const open = vi.fn()
-    const request = balloonNotice('guid:1', balloon, '', open)
+  it('tells the app its balloon was clicked when Open is chosen', () => {
+    const postToApp = vi.fn()
+    const request = balloonNotice('guid:1', balloon, dropbox, postToApp)
     expect(request.action.label).toBe('Open')
     request.action.run()
-    expect(open).toHaveBeenCalledTimes(1)
+    expect(postToApp).toHaveBeenCalledWith(NIN_BALLOONUSERCLICK)
+  })
+
+  it('tells the app when its balloon shows and when it goes', () => {
+    const postToApp = vi.fn()
+    const request = balloonNotice('guid:1', balloon, dropbox, postToApp)
+    request.onShown()
+    request.onClose('timeout')
+    request.onClose('withdrawn')
+    request.onClose('action')
+    expect(postToApp.mock.calls).toEqual([[NIN_BALLOONSHOW], [NIN_BALLOONTIMEOUT], [NIN_BALLOONHIDE]])
   })
 
   it('keeps one notice id per tray icon', () => {
     expect(balloonNoticeId('guid:1')).toBe(balloonNoticeId('guid:1'))
     expect(balloonNoticeId('guid:1')).not.toBe(balloonNoticeId('guid:2'))
+  })
+})
+
+describe('balloonClosedMessage', () => {
+  it('reports a balloon that timed out or was closed by the user as timed out, as Windows does', () => {
+    expect(balloonClosedMessage('timeout')).toBe(NIN_BALLOONTIMEOUT)
+    expect(balloonClosedMessage('dismissed')).toBe(NIN_BALLOONTIMEOUT)
+  })
+
+  it('reports a balloon the app removed or replaced as hidden', () => {
+    expect(balloonClosedMessage('withdrawn')).toBe(NIN_BALLOONHIDE)
+    expect(balloonClosedMessage('replaced')).toBe(NIN_BALLOONHIDE)
+  })
+
+  it('sends nothing after a click, which the app already heard about', () => {
+    expect(balloonClosedMessage('action')).toBeNull()
   })
 })

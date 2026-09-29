@@ -52,7 +52,6 @@ const WM_RBUTTONDOWN = 0x0204
 const WM_RBUTTONUP = 0x0205
 const WM_CONTEXTMENU = 0x007b
 const NIN_SELECT = 0x0400
-const NIN_BALLOONUSERCLICK = 0x0405
 const HWND_BROADCAST = 0xffff
 const SMTO_ABORTIFHUNG = 0x0002
 const SM_CXSMICON = 49
@@ -216,11 +215,15 @@ function handleTrayData(buf, cbData) {
   scheduleBroadcast()
 }
 
+function balloonSource(record) {
+  return { tooltip: record.tooltip, exeName: getOwnerExeName(record.hWndRaw) }
+}
+
 function announceBalloon(record, balloon) {
   if (!balloon) return
   const iconId = record.id
-  const open = record.callbackMsg ? () => forwardBalloonClick(iconId) : null
-  const request = balloon.message ? balloonNotice(iconId, balloon, record.tooltip, open) : null
+  const postToApp = record.callbackMsg ? (message) => postBalloonMessage(icons.get(iconId) || record, message) : null
+  const request = balloon.message ? balloonNotice(iconId, balloon, balloonSource(record), postToApp) : null
   setImmediate(() => {
     if (request) notice.show(request)
     else notice.dismiss(balloonNoticeId(iconId))
@@ -258,10 +261,9 @@ function postIconMessage(r, message, x, y) {
   }
 }
 
-function forwardBalloonClick(id) {
-  const r = icons.get(id)
-  if (!r || !r.callbackMsg || !IsWindow(r.hWndRaw)) return
-  postIconMessage(r, NIN_BALLOONUSERCLICK, 0, 0)
+function postBalloonMessage(r, message) {
+  if (!r.callbackMsg || !IsWindow(r.hWndRaw)) return
+  postIconMessage(r, message, 0, 0)
 }
 
 function forwardClick(id, button, x, y) {

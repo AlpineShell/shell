@@ -77,7 +77,7 @@ function holdEscape(wanted) {
   if (wanted === escapeHeld) return
   try {
     const { globalShortcut } = require('electron')
-    if (wanted) escapeHeld = globalShortcut.register('Escape', () => hide())
+    if (wanted) escapeHeld = globalShortcut.register('Escape', () => hide('dismissed'))
     else {
       globalShortcut.unregister('Escape')
       escapeHeld = false
@@ -99,7 +99,7 @@ function scheduleDismiss(id, timeoutMs) {
   const delay = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS
   dismissTimer = setTimeout(() => {
     dismissTimer = null
-    if (current && current.id === id) hide()
+    if (current && current.id === id) hide('timeout')
   }, delay)
 }
 
@@ -112,6 +112,17 @@ function runCallback(label, fn) {
     return { ok: false }
   }
   return { ok: true }
+}
+
+function notifyShown(request) {
+  if (request.hasBeenOnScreen) return
+  request.hasBeenOnScreen = true
+  if (typeof request.onShown === 'function') runCallback('shown', request.onShown)
+}
+
+function notifyClosed(request, reason) {
+  if (!request || !request.hasBeenOnScreen || typeof request.onClose !== 'function') return
+  runCallback('close', () => request.onClose(reason))
 }
 
 function takeCurrentOffScreen() {
@@ -130,21 +141,24 @@ function takeCurrentOffScreen() {
   return request
 }
 
-function clearCurrent() {
-  takeCurrentOffScreen()
+function clearCurrent(reason) {
+  notifyClosed(takeCurrentOffScreen(), reason)
 }
 
-function hide() {
-  clearCurrent()
+function hide(reason) {
+  clearCurrent(reason)
   showNextWaiting()
 }
 
-function forgetWaiting(id) {
+function forgetWaiting(id, reason) {
+  const forgotten = waiting.filter((request) => request.id === id)
+  if (!forgotten.length) return
   waiting = waiting.filter((request) => request.id !== id)
+  for (const request of forgotten) notifyClosed(request, reason)
 }
 
 function waitForTurn(id, request) {
-  forgetWaiting(id)
+  forgetWaiting(id, 'replaced')
   waiting.push({ ...request, id })
 }
 
@@ -203,9 +217,13 @@ function mustWaitForTurn(request, id) {
   return fullScreenAppIsInFront() || mustWaitForCurrentNotice(request, id)
 }
 
-function returnDisplacedNoticeToLine(id) {
-  if (!current || current.id === id || !currentNoticeWaitedForTurn()) return
-  waiting.unshift(currentRequest)
+function displaceCurrentNotice(id) {
+  if (!current) return null
+  if (current.id !== id && currentNoticeWaitedForTurn()) {
+    waiting.unshift(currentRequest)
+    return null
+  }
+  return currentRequest
 }
 
 function nextNoticeId() {
@@ -217,14 +235,15 @@ function show(request) {
   if (!request || typeof request.message !== 'string') return null
   const id = typeof request.id === 'string' && request.id ? request.id : nextNoticeId()
   if (mustWaitForTurn(request, id)) {
-    if (current && current.id === id) clearCurrent()
+    if (current && current.id === id) clearCurrent('replaced')
     waitForTurn(id, request)
     watchHeldNotices()
     return id
   }
-  forgetWaiting(id)
-  returnDisplacedNoticeToLine(id)
-  currentRequest = { ...request, id }
+  forgetWaiting(id, 'replaced')
+  const replaced = displaceCurrentNotice(id)
+  const shown = { ...request, id }
+  currentRequest = shown
   const action = request.action && typeof request.action.run === 'function' ? request.action : null
   const confirm = request.confirm && typeof request.confirm.run === 'function' ? request.confirm : null
   const displayId = current && current.id === id ? current.displayId : cursorDisplayId()
@@ -254,13 +273,15 @@ function show(request) {
   holdEscape(Boolean(confirm))
   scheduleDismiss(id, confirm ? 0 : request.timeoutMs)
   watchHeldNotices()
+  notifyClosed(replaced, 'replaced')
+  notifyShown(shown)
   return id
 }
 
 function dismiss(id) {
-  if (id) forgetWaiting(id)
+  if (id) forgetWaiting(id, 'withdrawn')
   if (id && (!current || current.id !== id)) return
-  hide()
+  hide('withdrawn')
 }
 
 function isNoLongerOnScreen(id) {
@@ -268,15 +289,15 @@ function isNoLongerOnScreen(id) {
 }
 
 function dismissOnScreen(id) {
-  if (typeof id === 'string') forgetWaiting(id)
-  if (!isNoLongerOnScreen(id)) hide()
+  if (typeof id === 'string') forgetWaiting(id, 'dismissed')
+  if (!isNoLongerOnScreen(id)) hide('dismissed')
   return { ok: true }
 }
 
 function runCurrentAction(id) {
   if (isNoLongerOnScreen(id)) return { ok: false }
   const action = pendingAction
-  clearCurrent()
+  clearCurrent('action')
   const result = action ? runCallback('action', action.run) : { ok: false }
   showNextWaiting()
   return result
@@ -287,7 +308,7 @@ function runCurrentConfirm(id) {
   const confirm = pendingConfirm
   pendingConfirm = null
   pendingCancel = null
-  clearCurrent()
+  clearCurrent('confirmed')
   const result = confirm ? runCallback('confirm', confirm.run) : { ok: false }
   showNextWaiting()
   return result

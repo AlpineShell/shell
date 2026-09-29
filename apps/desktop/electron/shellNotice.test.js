@@ -360,3 +360,83 @@ describe('shellNotice while a full-screen app is in front', () => {
     expect(probe).not.toHaveBeenCalled()
   })
 })
+
+describe('shellNotice tells whoever raised a notice when it shows and when it goes', () => {
+  afterEach(() => {
+    for (const id of ['balloon', 'other']) notice.dismiss(id)
+    vi.useRealTimers()
+  })
+
+  function balloon(extra = {}) {
+    return { id: 'balloon', message: 'Backup failed', waitForTurn: true, onShown: vi.fn(), onClose: vi.fn(), ...extra }
+  }
+
+  it('reports the notice once it reaches the screen, not while it waits', () => {
+    const request = balloon()
+    notice.show({ id: 'other', message: 'Reading report.pdf', busy: true, timeoutMs: 0 })
+    notice.show(request)
+    expect(request.onShown).not.toHaveBeenCalled()
+    notice.dismiss('other')
+    expect(request.onShown).toHaveBeenCalledTimes(1)
+  })
+
+  it('says it timed out', () => {
+    vi.useFakeTimers()
+    const request = balloon({ timeoutMs: 10 })
+    notice.show(request)
+    vi.advanceTimersByTime(50)
+    expect(request.onClose.mock.calls).toEqual([['timeout']])
+  })
+
+  it('says the user dismissed it', () => {
+    const request = balloon()
+    notice.show(request)
+    notice.handlers['notice/dismiss'](null, 'balloon')
+    expect(request.onClose.mock.calls).toEqual([['dismissed']])
+  })
+
+  it('says it was withdrawn when whoever raised it takes it down', () => {
+    const request = balloon()
+    notice.show(request)
+    notice.dismiss('balloon')
+    expect(request.onClose.mock.calls).toEqual([['withdrawn']])
+  })
+
+  it('says it was replaced when a newer request for the same notice takes its place', () => {
+    const older = balloon()
+    const newer = balloon({ message: 'Backup failed again' })
+    notice.show(older)
+    notice.show(newer)
+    expect(older.onClose.mock.calls).toEqual([['replaced']])
+    expect(newer.onShown).toHaveBeenCalledTimes(1)
+    expect(newer.onClose).not.toHaveBeenCalled()
+  })
+
+  it('says its button was used', () => {
+    const request = balloon({ action: { label: 'Open', run: vi.fn() } })
+    notice.show(request)
+    notice.handlers['notice/action'](null, 'balloon')
+    expect(request.onClose.mock.calls).toEqual([['action']])
+  })
+
+  it('says nothing about a notice that never reached the screen', () => {
+    const request = balloon()
+    notice.show({ id: 'other', message: 'Reading report.pdf', busy: true, timeoutMs: 0 })
+    notice.show(request)
+    notice.dismiss('balloon')
+    expect(request.onShown).not.toHaveBeenCalled()
+    expect(request.onClose).not.toHaveBeenCalled()
+  })
+
+  it('reports a notice that stepped aside and came back only once each way', () => {
+    const request = balloon({ timeoutMs: 0 })
+    notice.show(request)
+    notice.show({ id: 'other', message: 'Battery low', waitForTurn: true, timeoutMs: 0 })
+    expect(request.onClose).not.toHaveBeenCalled()
+    notice.handlers['notice/dismiss'](null, 'other')
+    expect(lastShown().id).toBe('balloon')
+    notice.handlers['notice/dismiss'](null, 'balloon')
+    expect(request.onShown).toHaveBeenCalledTimes(1)
+    expect(request.onClose.mock.calls).toEqual([['dismissed']])
+  })
+})

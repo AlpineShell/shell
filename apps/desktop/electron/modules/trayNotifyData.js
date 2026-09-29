@@ -6,7 +6,12 @@ const INFO_TITLE_CHARS = 64
 const INFO_FLAGS_BYTES = 4
 const NIIF_ERROR = 0x03
 const NIIF_ICON_MASK = 0x0f
+const NIN_BALLOONSHOW = 0x0402
+const NIN_BALLOONHIDE = 0x0403
+const NIN_BALLOONTIMEOUT = 0x0404
+const NIN_BALLOONUSERCLICK = 0x0405
 const BALLOON_NOTICE_PREFIX = 'tray-balloon:'
+const ENDS_WITH_PUNCTUATION = /[.!?:]$/
 
 function readWideString(buf, off, maxChars) {
   const end = Math.min(buf.length, off + maxChars * 2)
@@ -36,13 +41,39 @@ function firstLine(text) {
   return typeof text === 'string' ? text.split(/\r?\n/)[0].trim() : ''
 }
 
-function balloonNotice(iconId, balloon, tooltip, open) {
+function balloonSourceName(source) {
+  if (!source) return null
+  return firstLine(source.tooltip) || source.exeName || null
+}
+
+function balloonText(balloon, sourceName) {
+  const { title, message } = balloon
+  if (!title || (sourceName && title.toLowerCase() === sourceName.toLowerCase())) return message
+  return ENDS_WITH_PUNCTUATION.test(title) ? `${title} ${message}` : `${title}: ${message}`
+}
+
+function balloonClosedMessage(reason) {
+  if (reason === 'timeout' || reason === 'dismissed') return NIN_BALLOONTIMEOUT
+  if (reason === 'withdrawn' || reason === 'replaced') return NIN_BALLOONHIDE
+  return null
+}
+
+function tellAppBalloonClosed(postToApp, reason) {
+  const message = balloonClosedMessage(reason)
+  if (message) postToApp(message)
+}
+
+function balloonNotice(iconId, balloon, source, postToApp) {
+  const canTellApp = typeof postToApp === 'function'
+  const sourceName = balloonSourceName(source)
   return {
     id: balloonNoticeId(iconId),
-    title: balloon.title || firstLine(tooltip) || null,
-    message: balloon.message,
+    title: sourceName,
+    message: balloonText(balloon, sourceName),
     tone: balloon.isError ? 'error' : 'info',
-    action: typeof open === 'function' ? { label: 'Open', run: open } : null,
+    action: canTellApp ? { label: 'Open', run: () => postToApp(NIN_BALLOONUSERCLICK) } : null,
+    onShown: canTellApp ? () => postToApp(NIN_BALLOONSHOW) : null,
+    onClose: canTellApp ? (reason) => tellAppBalloonClosed(postToApp, reason) : null,
     waitForTurn: true,
   }
 }
@@ -50,8 +81,13 @@ function balloonNotice(iconId, balloon, tooltip, open) {
 module.exports = {
   OFF64,
   OFF32,
+  NIN_BALLOONSHOW,
+  NIN_BALLOONHIDE,
+  NIN_BALLOONTIMEOUT,
+  NIN_BALLOONUSERCLICK,
   readWideString,
   readBalloon,
   balloonNoticeId,
+  balloonClosedMessage,
   balloonNotice,
 }
