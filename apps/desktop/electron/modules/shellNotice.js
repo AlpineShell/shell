@@ -8,6 +8,7 @@ const DEFAULT_TIMEOUT_MS = 7000
 
 let toTopbars = null
 let current = null
+let currentRequest = null
 let pendingAction = null
 let pendingConfirm = null
 let pendingCancel = null
@@ -109,6 +110,7 @@ function clearCurrent() {
   raiseTopbars(false)
   const abandoned = pendingConfirm ? pendingCancel : null
   current = null
+  currentRequest = null
   pendingAction = null
   pendingConfirm = null
   pendingCancel = null
@@ -136,14 +138,30 @@ function showNextWaiting() {
   if (next) show(next)
 }
 
+function currentNoticeWaitedForTurn() {
+  return Boolean(currentRequest && currentRequest.waitForTurn)
+}
+
+function mustWaitForCurrentNotice(request, id) {
+  if (!request.waitForTurn || !current || current.id === id) return false
+  return !currentNoticeWaitedForTurn() || Boolean(pendingConfirm)
+}
+
+function returnDisplacedNoticeToLine(id) {
+  if (!current || current.id === id || !currentNoticeWaitedForTurn()) return
+  waiting.unshift(currentRequest)
+}
+
 function show(request) {
   if (!request || typeof request.message !== 'string') return null
   const id = typeof request.id === 'string' && request.id ? request.id : `notice-${Date.now()}`
-  if (request.waitForTurn && current && current.id !== id) {
+  if (mustWaitForCurrentNotice(request, id)) {
     waitForTurn(id, request)
     return id
   }
   forgetWaiting(id)
+  returnDisplacedNoticeToLine(id)
+  currentRequest = { ...request, id }
   const action = request.action && typeof request.action.run === 'function' ? request.action : null
   const confirm = request.confirm && typeof request.confirm.run === 'function' ? request.confirm : null
   const displayId = current && current.id === id ? current.displayId : cursorDisplayId()

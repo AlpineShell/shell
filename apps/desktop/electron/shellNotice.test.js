@@ -177,4 +177,43 @@ describe('shellNotice notices that wait for their turn', () => {
     notice.show({ id: 'second', message: 'two', timeoutMs: 0 })
     expect(lastShown().message).toBe('two')
   })
+
+  it('comes back once a notice that did not ask to wait has taken its place and gone', () => {
+    notice.show({ id: 'first', message: 'Restart required', waitForTurn: true, timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'Opened report.pdf', timeoutMs: 0 })
+    notice.handlers['notice/dismiss']()
+    expect(shownMessages()).toEqual(['Restart required', 'Opened report.pdf', 'Restart required'])
+  })
+
+  it('never keeps a later waiting notice behind one that stays until dismissed', () => {
+    notice.show({ id: 'first', message: 'Restart required', waitForTurn: true, timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'Battery low', waitForTurn: true, timeoutMs: 0 })
+    expect(lastShown().message).toBe('Battery low')
+    notice.handlers['notice/dismiss']()
+    expect(lastShown().message).toBe('Restart required')
+    notice.handlers['notice/dismiss']()
+    expect(sent.at(-1).channel).toBe('notice/hide')
+  })
+
+  it('waits behind a question even when that question waited for its own turn', () => {
+    const run = vi.fn()
+    notice.show({ id: 'first', message: 'Restart now?', waitForTurn: true, confirm: { label: 'Restart', run } })
+    notice.show({ id: 'second', message: 'Battery low', waitForTurn: true, timeoutMs: 0 })
+    expect(lastShown().message).toBe('Restart now?')
+    notice.handlers['notice/confirm']()
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(lastShown().message).toBe('Battery low')
+  })
+
+  it('keeps the answer of a waiting question that a notice the user caused pushed aside', () => {
+    const run = vi.fn()
+    const onCancel = vi.fn()
+    notice.show({ id: 'first', message: 'Restart now?', waitForTurn: true, confirm: { label: 'Restart', run, onCancel } })
+    notice.show({ id: 'second', message: 'Opened report.pdf', timeoutMs: 0 })
+    notice.handlers['notice/dismiss']()
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(lastShown().message).toBe('Restart now?')
+    notice.handlers['notice/confirm']()
+    expect(run).toHaveBeenCalledTimes(1)
+  })
 })
