@@ -257,7 +257,7 @@ function enumTaskWindows() {
   return taskEnumResults.slice()
 }
 
-function captureWindowThumbnail(hwnd) {
+function captureWindowThumbnail(hwnd, { allowScreenCopy = true } = {}) {
   if (IsIconic(hwnd)) return getCachedThumbnail(hwnd)
 
   const rectBuf = Buffer.alloc(16)
@@ -284,6 +284,7 @@ function captureWindowThumbnail(hwnd) {
   try {
     let captured = PrintWindow(hwnd, memDC, PW_RENDERFULLCONTENT)
     if (!captured) captured = PrintWindow(hwnd, memDC, 0)
+    if (!captured && !allowScreenCopy) return getCachedThumbnail(hwnd)
     if (!captured) BitBlt(memDC, 0, 0, srcWidth, srcHeight, screenDC, left, top, SRCCOPY)
 
     SetStretchBltMode(thumbDC, HALFTONE)
@@ -590,7 +591,7 @@ async function refreshSwitcherThumbnails(generation, windows) {
     for (const entry of windows) {
       await nextTurn()
       if (generation !== switcherGeneration) return
-      const thumbnail = captureWindowThumbnail(entry.hwnd)
+      const thumbnail = captureWindowThumbnail(entry.hwnd, { allowScreenCopy: false })
       if (!thumbnail || thumbnail === entry.thumbnail) continue
       if (!activeTopBar || activeTopBar.isDestroyed()) return
       activeTopBar.webContents.send('alttab/thumbnail', { hwnd: entry.hwnd, thumbnail })
@@ -685,6 +686,18 @@ function hideSwitcher() {
 function hideForLauncher() {
   if (!switcherActive && !switcherBuilding && !activeTopBar) return
   hideSwitcher()
+}
+
+function commitSwitcherSelection() {
+  const selected = windowList[selectedIndex]
+  hideSwitcher()
+  if (selected) activateWindow(selected.hwnd)
+}
+
+function closeSwitcherIfAltReleased() {
+  if (!switcherActive || altKeyHeld()) return
+  altIsDown = false
+  commitSwitcherSelection()
 }
 
 function cycleSelection(forward) {
@@ -898,7 +911,7 @@ function hookCallback(nCode, wParam, lParam) {
           winDown = true
           winTapped = true
         } else if (isKeyUp) {
-          const fired = winTapped
+          const fired = winTapped && keyHeld(vkCode)
           winDown = false
           winTapped = false
           if (fired && winLauncherCallback) {
@@ -915,7 +928,13 @@ function hookCallback(nCode, wParam, lParam) {
       }
     }
 
-    if (vkCode === VK_TAB && isKeyDown && altIsDown && !altKeyHeld()) altIsDown = false
+    if (vkCode === VK_TAB && isKeyDown && altIsDown && !altKeyHeld()) {
+      altIsDown = false
+      if (switcherActive) {
+        commitSwitcherSelection()
+        return 1
+      }
+    }
 
     if (vkCode === VK_TAB && isKeyDown && altIsDown) {
       const shiftDown = shiftKeyHeld()
@@ -935,11 +954,7 @@ function hookCallback(nCode, wParam, lParam) {
       }
       if (isKeyUp) {
         altIsDown = false
-        if (switcherActive) {
-          const selected = windowList[selectedIndex]
-          hideSwitcher()
-          if (selected) activateWindow(selected.hwnd)
-        }
+        if (switcherActive) commitSwitcherSelection()
       }
     }
 
@@ -1005,10 +1020,19 @@ function refreshHookIfDue() {
   installHook()
 }
 
+function hookRefresherTick() {
+  try {
+    refreshHookIfDue()
+    closeSwitcherIfAltReleased()
+  } catch (e) {
+    console.error('[altTab] hook refresher error:', e.message)
+  }
+}
+
 function startHookRefresher() {
   hookRefreshTickAt = performance.now()
   hookRefreshedAt = hookRefreshTickAt
-  hookRefreshTimer = setInterval(refreshHookIfDue, keyboardHookPolicy.HOOK_REFRESH_TICK_MS)
+  hookRefreshTimer = setInterval(hookRefresherTick, keyboardHookPolicy.HOOK_REFRESH_TICK_MS)
 }
 
 function stopHookRefresher() {
