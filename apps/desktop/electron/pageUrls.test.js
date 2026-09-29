@@ -131,10 +131,21 @@ describe('acceptsIpcSender', () => {
   })
 
   it('takes plugin window channels from plugin pages only', () => {
-    expect(acceptsIpcSender('plugin-window/command', 'alpine-plugin://com.alpine.android/window/page.html', PACKAGED)).toBe(true)
-    expect(acceptsIpcSender('plugin-window/close', 'alpine-plugin://com.alpine.android/window/page.html', PACKAGED)).toBe(true)
-    expect(acceptsIpcSender('plugin-window/command', `${INDEX_URL}?mode=topbar`, PACKAGED)).toBe(false)
-    expect(acceptsIpcSender('plugin-window/command', 'https://evil.example/', PACKAGED)).toBe(false)
-    expect(acceptsIpcSender('plugin-window/command', '', PACKAGED)).toBe(false)
+    const android = { pluginId: 'com.alpine.android', windowId: 'main' }
+    expect(acceptsIpcSender('plugin-window/command', 'alpine-plugin://com.alpine.android/window/page.html', PACKAGED, android)).toBe(true)
+    expect(acceptsIpcSender('plugin-window/close', 'alpine-plugin://com.alpine.android/window/page.html', PACKAGED, android)).toBe(true)
+    expect(acceptsIpcSender('plugin-window/command', `${INDEX_URL}?mode=topbar`, PACKAGED, android)).toBe(false)
+    expect(acceptsIpcSender('plugin-window/command', 'https://evil.example/', PACKAGED, android)).toBe(false)
+    expect(acceptsIpcSender('plugin-window/command', '', PACKAGED, android)).toBe(false)
+  })
+
+  it('lets a plugin window speak only for its own plugin', () => {
+    const page = 'alpine-plugin://com.alpine.android/window/page.html'
+    expect(acceptsIpcSender('plugin-window/command', page, PACKAGED, { pluginId: 'com.alpine.ubuntu', windowId: 'main' })).toBe(false)
+    expect(acceptsIpcSender('plugin-window/close', page, PACKAGED, { pluginId: 'com.alpine.ubuntu', windowId: 'main' })).toBe(false)
+    expect(acceptsIpcSender('plugin-window/command', page, PACKAGED, { windowId: 'main' })).toBe(false)
+    expect(acceptsIpcSender('plugin-window/command', page, PACKAGED, null)).toBe(false)
+    expect(acceptsIpcSender('plugin-window/command', page, PACKAGED)).toBe(false)
+    expect(acceptsIpcSender('plugin-window/command', page, PACKAGED, { pluginId: 'Com.Alpine.Android', windowId: 'main' })).toBe(true)
   })
 })

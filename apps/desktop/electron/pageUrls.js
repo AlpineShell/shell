@@ -64,8 +64,13 @@ function isPluginWindowChannel(channel) {
   return typeof channel === 'string' && channel.startsWith(PLUGIN_WINDOW_CHANNEL_PREFIX)
 }
 
-function acceptsIpcSender(channel, senderUrl, appLocation) {
-  if (isPluginWindowChannel(channel)) return pluginIdOfPageUrl(senderUrl) !== null
+function isOwnPluginPage(senderUrl, pluginId) {
+  const senderPluginId = pluginIdOfPageUrl(senderUrl)
+  return senderPluginId !== null && typeof pluginId === 'string' && senderPluginId.toLowerCase() === pluginId.toLowerCase()
+}
+
+function acceptsIpcSender(channel, senderUrl, appLocation, request) {
+  if (isPluginWindowChannel(channel)) return isOwnPluginPage(senderUrl, request && request.pluginId)
   return isAppPageUrl(senderUrl, appLocation)
 }
 

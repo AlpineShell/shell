@@ -95,6 +95,8 @@ const APP_INDEX_PATH = path.join(__dirname, '..', 'dist', 'index.html')
 const APP_LOCATION = { indexPath: isDev ? null : APP_INDEX_PATH, devServerUrl: BASE_URL }
 const GRANTED_PERMISSIONS = new Set(['clipboard-sanitized-write'])
 
+trustedSenders.setAppLocation(APP_LOCATION)
+
 const UPDATE_READY_TIMEOUT_MS = 10000
 const settledTopBars = new Set()
 let topBarSettleListener = null
@@ -160,7 +162,7 @@ app.commandLine.appendSwitch('force_high_performance_gpu')
 function getURL(mode, displayId) {
   const params = displayId != null ? `mode=${mode}&displayId=${displayId}` : `mode=${mode}`
   if (isDev) return `${BASE_URL}?${params}`
-  return `file://${APP_INDEX_PATH}?${params}`
+  return `${pathToFileURL(APP_INDEX_PATH).href}?${params}`
 }
 
 function openInBrowser(url) {
@@ -770,7 +772,7 @@ function openPluginApp(pluginId, app) {
     .catch((e) => console.error('[deeplink] open-app failed:', e && e.message))
 }
 
-ipcMain.handle('windows/open-settings', (_event, page) => {
+ipc.handle('windows/open-settings', (_event, page) => {
   const target = typeof page === 'string' && page ? page : null
   const wasOpen = settingsWin && !settingsWin.isDestroyed()
   pendingSettingsPage = target
@@ -787,13 +789,13 @@ ipcMain.handle('windows/open-settings', (_event, page) => {
   }
 })
 
-ipcMain.handle('windows/close-settings', () => {
+ipc.handle('windows/close-settings', () => {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.destroy()
   }
 })
 
-ipcMain.handle('windows/set-settings-page', (_event, name) => {
+ipc.handle('windows/set-settings-page', (_event, name) => {
   currentSettingsPage = typeof name === 'string' && name ? name : null
   openApps.refresh()
 })
@@ -892,7 +894,7 @@ app.whenReady().then(async () => {
   if (altTab && altTab.setOverlayDisplayProvider) altTab.setOverlayDisplayProvider(() => launcher.getActiveDisplayId())
   if (altTab && altTab.activeDisplay) launcher.setDisplayProvider(() => altTab.activeDisplay())
 
-  ipcMain.handle('setup/test-out', trustedSenders.guardHandler(() => {
+  ipc.handle('setup/test-out', trustedSenders.guardHandler(() => {
     try {
       licence.requireValid()
     } catch (e) {
