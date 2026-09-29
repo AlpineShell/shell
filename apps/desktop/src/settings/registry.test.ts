@@ -65,6 +65,7 @@ const EXCEPTIONS: Record<string, SettingsApplies> = {
   'apps-defaults': 'confirm',
   'plugin-uninstall': 'confirm',
   updates: 'restart',
+  'high-performance-gpu': 'restart',
   revert: 'confirm',
   power: 'confirm',
   'ridge-layout-reset': 'confirm',
@@ -218,6 +219,16 @@ describe('the settings folded into Ridge', () => {
 
   it('has no theme setting, because the settings window always follows Ridge', () => {
     expect(settingsEntry('theme')).toBeNull()
+  })
+})
+
+describe('the graphics setting', () => {
+  it('leaves the high-performance GPU off until someone turns it on, and applies it at the next start', () => {
+    const highPerformanceGpu = settingsEntry('high-performance-gpu') as SettingsEntry
+    expect(highPerformanceGpu.control.kind).toBe('toggle')
+    expect(isSettingsValueEntry(highPerformanceGpu)).toBe(true)
+    expect((highPerformanceGpu as SettingsValueEntry).defaultValue).toBe(false)
+    expect(highPerformanceGpu.applies).toBe('restart')
   })
 })
 

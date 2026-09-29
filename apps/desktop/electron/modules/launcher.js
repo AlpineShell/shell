@@ -7,7 +7,7 @@ const appIcons = require('./appIcons')
 const appManager = require('./appManager')
 const appxPackages = require('./appxPackages')
 const appActivator = require('../appActivator')
-const { shellExecute } = require('../shellExecute')
+const { shellExecute, shellExecuteElevated } = require('../shellExecute')
 const { shellLinkInShortcut } = require('../launcherDeepLink')
 const plugins = require('./plugins')
 const pluginBackendHost = require('../pluginBackendHost')
@@ -622,7 +622,7 @@ function launchAdminItem(item) {
   if (!item) return { success: false }
   if (item.shellLink) return launchItem(item)
   if (item.lnkPath) {
-    exec(`powershell -NoProfile -Command "Start-Process '${item.lnkPath.replace(/'/g, "''")}' -Verb RunAs"`, { windowsHide: true })
+    shellExecuteElevated(item.lnkPath).catch(() => {})
   } else if (item.appId) {
     appActivator.activate(item.appId)
   }

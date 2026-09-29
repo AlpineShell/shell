@@ -219,6 +219,9 @@ contextBridge.exposeInMainWorld('alttab', {
   onSelectionChanged: (callback) => {
     ipcRenderer.on('alttab/selection-changed', (_, index) => callback(index))
   },
+  onThumbnail: (callback) => {
+    ipcRenderer.on('alttab/thumbnail', (_, data) => callback(data))
+  },
   activate: (hwnd) => ipcRenderer.invoke('alttab/activate', hwnd),
 })
 
@@ -372,6 +375,7 @@ if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
 
 contextBridge.exposeInMainWorld('shell', {
   settingsIcon: bootSettingsIcon,
+  reportRenderError: (detail) => ipcRenderer.send('shell/render-error', detail),
   theme: {
     initial: bootTheme,
     get: () => ipcRenderer.invoke('theme/get'),
@@ -520,6 +524,10 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('battery-saver/state-changed', handler)
       return () => ipcRenderer.removeListener('battery-saver/state-changed', handler)
     },
+  },
+  gpu: {
+    preferences: () => ipcRenderer.invoke('gpu/preferences-get'),
+    setPreferences: (partial) => ipcRenderer.invoke('gpu/preferences-set', partial),
   },
   media: {
     session: () => ipcRenderer.invoke('media/session'),

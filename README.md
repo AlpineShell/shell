@@ -18,7 +18,7 @@ bun start   # Windows desktop shell (Vite + Electron)
 
 ## Updates
 
-An installed copy checks `https://auth.alpineshell.com/releases/` with its licence token about every six hours; the service records nothing from that call. Update checks can be turned off on the Updates page in settings: the app then makes no update request at all and never contacts alpineshell.com on its own. A copy whose licence was refunded, released or revoked keeps running the version it has and is simply not offered updates.
+An installed copy checks `https://auth.alpineshell.com/releases/` with its licence token about every six hours; the service records nothing from that call. Settings has no switch to turn these checks off. A copy whose licence was refunded, released or revoked keeps running the version it has and is simply not offered updates.
 
 ## Licence and privacy
 
