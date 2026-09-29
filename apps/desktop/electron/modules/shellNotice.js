@@ -5,6 +5,7 @@
 // there is no second always-on-top window and the reserved work area never moves.
 
 const DEFAULT_TIMEOUT_MS = 7000
+const HELD_NOTICE_RECHECK_MS = 2000
 
 let toTopbars = null
 let current = null
@@ -17,9 +18,17 @@ let escapeHeld = false
 let topbarsRaised = false
 let waiting = []
 let noticeSequence = 0
+let fullScreenAppProbe = null
+let heldNoticeTimer = null
 
 function start(_broadcast, broadcastToTopbars) {
   toTopbars = typeof broadcastToTopbars === 'function' ? broadcastToTopbars : null
+}
+
+function setFullScreenAppProbe(probe) {
+  stopWatchingHeldNotices()
+  fullScreenAppProbe = typeof probe === 'function' ? probe : null
+  watchHeldNotices()
 }
 
 function send(channel, payload) {
@@ -105,10 +114,11 @@ function runCallback(label, fn) {
   return { ok: true }
 }
 
-function clearCurrent() {
+function takeCurrentOffScreen() {
   clearDismissTimer()
   holdEscape(false)
   raiseTopbars(false)
+  const request = currentRequest
   const abandoned = pendingConfirm ? pendingCancel : null
   current = null
   currentRequest = null
@@ -117,6 +127,11 @@ function clearCurrent() {
   pendingCancel = null
   send('notice/hide')
   if (abandoned) runCallback('cancel', abandoned)
+  return request
+}
+
+function clearCurrent() {
+  takeCurrentOffScreen()
 }
 
 function hide() {
@@ -133,19 +148,59 @@ function waitForTurn(id, request) {
   waiting.push({ ...request, id })
 }
 
+function fullScreenAppIsInFront() {
+  if (!fullScreenAppProbe) return false
+  try {
+    return Boolean(fullScreenAppProbe())
+  } catch {
+    return false
+  }
+}
+
 function showNextWaiting() {
-  if (current) return
-  const next = waiting.shift()
-  if (next) show(next)
+  if (current || !waiting.length || fullScreenAppIsInFront()) return
+  show(waiting.shift())
 }
 
 function currentNoticeWaitedForTurn() {
   return Boolean(currentRequest && currentRequest.waitForTurn)
 }
 
+function hasBackgroundNotices() {
+  return waiting.length > 0 || currentNoticeWaitedForTurn()
+}
+
+function stopWatchingHeldNotices() {
+  if (!heldNoticeTimer) return
+  clearInterval(heldNoticeTimer)
+  heldNoticeTimer = null
+}
+
+function recheckHeldNotices() {
+  if (!hasBackgroundNotices()) {
+    stopWatchingHeldNotices()
+    return
+  }
+  if (!fullScreenAppIsInFront()) {
+    showNextWaiting()
+    return
+  }
+  if (currentNoticeWaitedForTurn() && !pendingConfirm) waiting.unshift(takeCurrentOffScreen())
+}
+
+function watchHeldNotices() {
+  if (heldNoticeTimer || !fullScreenAppProbe || !hasBackgroundNotices()) return
+  heldNoticeTimer = setInterval(recheckHeldNotices, HELD_NOTICE_RECHECK_MS)
+}
+
 function mustWaitForCurrentNotice(request, id) {
   if (!request.waitForTurn || !current || current.id === id) return false
   return !currentNoticeWaitedForTurn() || Boolean(pendingConfirm)
+}
+
+function mustWaitForTurn(request, id) {
+  if (!request.waitForTurn) return false
+  return fullScreenAppIsInFront() || mustWaitForCurrentNotice(request, id)
 }
 
 function returnDisplacedNoticeToLine(id) {
@@ -161,8 +216,10 @@ function nextNoticeId() {
 function show(request) {
   if (!request || typeof request.message !== 'string') return null
   const id = typeof request.id === 'string' && request.id ? request.id : nextNoticeId()
-  if (mustWaitForCurrentNotice(request, id)) {
+  if (mustWaitForTurn(request, id)) {
+    if (current && current.id === id) clearCurrent()
     waitForTurn(id, request)
+    watchHeldNotices()
     return id
   }
   forgetWaiting(id)
@@ -196,6 +253,7 @@ function show(request) {
   raiseTopbars(true)
   holdEscape(Boolean(confirm))
   scheduleDismiss(id, confirm ? 0 : request.timeoutMs)
+  watchHeldNotices()
   return id
 }
 
@@ -245,4 +303,5 @@ module.exports = {
   start,
   show,
   dismiss,
+  setFullScreenAppProbe,
 }

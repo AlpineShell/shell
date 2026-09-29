@@ -79,6 +79,7 @@ const installer = require('./modules/installer')
 const updater = require('./modules/updater')
 const windowsUpdate = require('./modules/windowsUpdate')
 const pendingRestart = require('./modules/pendingRestart')
+const { foregroundAppIsFullScreen } = require('./modules/fullScreenApp')
 const licence = require('./modules/licence')
 const { planStartupForLicence } = require('./licenceStartup')
 const trustedSenders = require('./trustedSenders')
@@ -844,6 +845,7 @@ app.whenReady().then(async () => {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
   updater.setUpdatesPageOpener(() => openSettingsPage('updates'))
+  shellNotice.setFullScreenAppProbe(foregroundAppIsFullScreen)
 
   trustedSenders.setTrustedWindowsAccessor(() => [setupWin, settingsWin])
 

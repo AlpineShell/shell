@@ -192,4 +192,5 @@ module.exports = {
   unregisterAll,
   scheduleReassert,
   isSettingWorkArea,
+  getMonitorForWindow,
 }

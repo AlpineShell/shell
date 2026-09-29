@@ -289,3 +289,74 @@ describe('shellNotice answers only the notice that was clicked', () => {
     expect(first).not.toBe(second)
   })
 })
+
+describe('shellNotice while a full-screen app is in front', () => {
+  const shownMessages = () => sent.filter((e) => e.channel === 'notice/show').map((e) => e.payload.message)
+  let fullScreen
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    fullScreen = true
+    notice.setFullScreenAppProbe(() => fullScreen)
+  })
+
+  afterEach(() => {
+    notice.setFullScreenAppProbe(null)
+    for (const id of ['first', 'second']) notice.dismiss(id)
+    vi.useRealTimers()
+  })
+
+  it('holds a background notice back until the full-screen app leaves the front', () => {
+    notice.show({ id: 'first', message: 'Restart required', waitForTurn: true, timeoutMs: 0 })
+    vi.advanceTimersByTime(10000)
+    expect(shownMessages()).toEqual([])
+    fullScreen = false
+    vi.advanceTimersByTime(2000)
+    expect(shownMessages()).toEqual(['Restart required'])
+  })
+
+  it('still shows a notice the user caused', () => {
+    notice.show({ id: 'first', message: 'Opened report.pdf', timeoutMs: 0 })
+    expect(shownMessages()).toEqual(['Opened report.pdf'])
+  })
+
+  it('does not bring a held notice forward when the notice the user caused goes', () => {
+    notice.show({ id: 'first', message: 'Opened report.pdf', timeoutMs: 0 })
+    notice.show({ id: 'second', message: 'Battery low', waitForTurn: true, timeoutMs: 0 })
+    notice.handlers['notice/dismiss'](null, 'first')
+    expect(shownMessages()).toEqual(['Opened report.pdf'])
+    fullScreen = false
+    vi.advanceTimersByTime(2000)
+    expect(shownMessages()).toEqual(['Opened report.pdf', 'Battery low'])
+  })
+
+  it('takes a background notice off screen when a full-screen app comes to the front, and puts it back after', () => {
+    fullScreen = false
+    notice.show({ id: 'first', message: 'Battery low', waitForTurn: true, timeoutMs: 0 })
+    fullScreen = true
+    vi.advanceTimersByTime(2000)
+    expect(sent.at(-1).channel).toBe('notice/hide')
+    fullScreen = false
+    vi.advanceTimersByTime(2000)
+    expect(shownMessages()).toEqual(['Battery low', 'Battery low'])
+    expect(sent.at(-1).channel).toBe('notice/show')
+  })
+
+  it('leaves a question on screen', () => {
+    fullScreen = false
+    notice.show({ id: 'first', message: 'Restart now?', waitForTurn: true, confirm: { label: 'Restart', run: vi.fn() } })
+    fullScreen = true
+    vi.advanceTimersByTime(4000)
+    expect(sent.at(-1).channel).toBe('notice/show')
+  })
+
+  it('stops asking once no background notice is left', () => {
+    const probe = vi.fn(() => false)
+    notice.setFullScreenAppProbe(probe)
+    notice.show({ id: 'first', message: 'Battery low', waitForTurn: true, timeoutMs: 0 })
+    notice.dismiss('first')
+    probe.mockClear()
+    vi.advanceTimersByTime(10000)
+    expect(probe).not.toHaveBeenCalled()
+  })
+})

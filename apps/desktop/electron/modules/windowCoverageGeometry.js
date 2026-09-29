@@ -49,4 +49,8 @@ function sameCoverage(a, b) {
   return a.every((rect, index) => compareRects(rect, b[index]) === 0)
 }
 
-module.exports = { displayCoverage, sameCoverage }
+function coversWholeMonitor(frame, monitorBounds) {
+  return Boolean(frame && monitorBounds) && contains(frame, monitorBounds)
+}
+
+module.exports = { displayCoverage, sameCoverage, coversWholeMonitor }

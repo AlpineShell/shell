@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import windowCoverageGeometry from './windowCoverageGeometry.js'
 
-const { displayCoverage, sameCoverage } = windowCoverageGeometry
+const { displayCoverage, sameCoverage, coversWholeMonitor } = windowCoverageGeometry
 
 const PRIMARY = { x: 0, y: 0, width: 3440, height: 1440 }
 const SECONDARY_SCALED = { x: 3440, y: 0, width: 2880, height: 1800 }
@@ -72,5 +72,30 @@ describe('sameCoverage', () => {
 
   it('treats a display measured for the first time as changed', () => {
     expect(sameCoverage(undefined, [])).toBe(false)
+  })
+})
+
+describe('coversWholeMonitor', () => {
+  const MONITOR = { left: 0, top: 0, right: 3440, bottom: 1440 }
+
+  it('reads a window exactly the size of the monitor as full screen', () => {
+    expect(coversWholeMonitor({ ...MONITOR }, MONITOR)).toBe(true)
+  })
+
+  it('reads a window that overhangs the monitor on every side as full screen', () => {
+    expect(coversWholeMonitor({ left: -8, top: -8, right: 3448, bottom: 1448 }, MONITOR)).toBe(true)
+  })
+
+  it('does not read a window that leaves the Ridge uncovered as full screen', () => {
+    expect(coversWholeMonitor(MAXIMIZED, MONITOR)).toBe(false)
+  })
+
+  it('does not read a full-screen window on another monitor as covering this one', () => {
+    expect(coversWholeMonitor({ left: 3440, top: 0, right: 6320, bottom: 1800 }, MONITOR)).toBe(false)
+  })
+
+  it('reads nothing as full screen when a bound is missing', () => {
+    expect(coversWholeMonitor(null, MONITOR)).toBe(false)
+    expect(coversWholeMonitor(MONITOR, null)).toBe(false)
   })
 })
