@@ -68,6 +68,17 @@ function getMineDir() {
   return path.join(app.getPath('userData'), 'wallpapers')
 }
 
+let lastPickedFolder = null
+
+function pickerStartFolder() {
+  if (lastPickedFolder) return lastPickedFolder
+  try {
+    return app.getPath('pictures')
+  } catch {
+    return undefined
+  }
+}
+
 function getPrefPath() {
   return path.join(app.getPath('userData'), 'wallpaper.json')
 }
@@ -168,11 +179,13 @@ module.exports = {
     'windows/wallpaper-pick': async () => {
       const result = await dialog.showOpenDialog({
         title: 'Choose wallpaper',
+        defaultPath: pickerStartFolder(),
         properties: ['openFile'],
         filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'webp'] }],
       })
       if (result.canceled || result.filePaths.length === 0) return null
       const sourcePath = result.filePaths[0]
+      lastPickedFolder = path.dirname(sourcePath)
       const minePath = getMineDir()
       try {
         if (!fs.existsSync(minePath)) fs.mkdirSync(minePath, { recursive: true })
