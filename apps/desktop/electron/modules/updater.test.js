@@ -238,7 +238,7 @@ describe('the update notice', () => {
     expect(shownNotices[0]).toMatchObject({
       id: updater.UPDATE_NOTICE_ID,
       title: 'Update available',
-      message: 'Alpine Shell 10.0.0 is ready to install.',
+      message: 'Alpine Shell 10.0.0 is available.',
       action: { label: 'Open updates' },
       timeoutMs: 0,
       waitForTurn: true,
@@ -251,8 +251,8 @@ describe('the update notice', () => {
     checkInTheBackground('token-10c')
     updaterListeners.get('update-available')({ version: '10.1.0' })
     expect(shownNotices.map((request) => request.message)).toEqual([
-      'Alpine Shell 10.0.0 is ready to install.',
-      'Alpine Shell 10.1.0 is ready to install.',
+      'Alpine Shell 10.0.0 is available.',
+      'Alpine Shell 10.1.0 is available.',
     ])
   })
 

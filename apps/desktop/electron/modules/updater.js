@@ -55,7 +55,7 @@ function announceAvailableUpdate(version) {
   notice.show({
     id: UPDATE_NOTICE_ID,
     title: 'Update available',
-    message: `Alpine Shell ${version} is ready to install.`,
+    message: `Alpine Shell ${version} is available.`,
     action: openUpdatesPage ? { label: 'Open updates', run: () => openUpdatesPage() } : null,
     timeoutMs: 0,
     waitForTurn: true,
