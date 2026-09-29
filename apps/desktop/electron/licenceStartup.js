@@ -8,7 +8,7 @@ function holdsAtSetup(status, context) {
   return Boolean(context.packaged)
     && isUnlicensed(status)
     && REASONS_WITHOUT_A_GENUINE_LICENCE.has(status.reason)
-    && !context.shellRegisteredToAlpine
+    && !context.desktopClaimedByAlpine
 }
 
 function planStartupForLicence(status, context) {

@@ -127,7 +127,7 @@ function setStartup() {
 }
 
 function mayRegisterShell() {
-  return licenceGateError() === null || isShellRegisteredToAlpine()
+  return licenceGateError() === null || isDesktopClaimedByAlpine()
 }
 
 function ensureShellRegistration(gpoBlocked) {
@@ -160,6 +160,14 @@ function hasGpoShellOverride() {
 function isShellRegisteredToAlpine() {
   const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
   return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
+}
+
+function hasAlpineRunEntry() {
+  return regQuery(RUN_KEY, RUN_VALUE_NAME) !== null
+}
+
+function isDesktopClaimedByAlpine() {
+  return isShellRegisteredToAlpine() || hasAlpineRunEntry()
 }
 
 function lazyContext(sources) {
@@ -441,7 +449,7 @@ module.exports = {
   }),
 
   isFirstRun,
-  isShellRegisteredToAlpine,
+  isDesktopClaimedByAlpine,
   isAutostartLaunch,
   shouldLeaveShellToExplorer,
   takeOverFromExplorer,

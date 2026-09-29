@@ -965,7 +965,7 @@ function signalShellReadyForUpdate() {
 function licenceStartupPlan(status) {
   return planStartupForLicence(status, {
     packaged: !isDev,
-    get shellRegisteredToAlpine() { return setup.isShellRegisteredToAlpine() },
+    get desktopClaimedByAlpine() { return setup.isDesktopClaimedByAlpine() },
   })
 }
 
