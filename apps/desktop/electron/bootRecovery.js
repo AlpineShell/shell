@@ -1,16 +1,19 @@
 const fs = require('fs')
 const path = require('path')
 const { execFileSync, spawn } = require('child_process')
+const { regQuery } = require('./registryRead')
 
 const BOOT_ATTEMPTS_FILE = '.shell-boot-attempts'
 const MAX_UNFINISHED_BOOTS = 2
 const START_SHELL = 'start-shell'
+const CHECK_FOR_EXPLORER_DESKTOP = 'check-for-explorer-desktop'
 const FALL_BACK_TO_EXPLORER = 'fall-back-to-explorer'
 const EXIT_ALPINE = 'exit-alpine'
 const HAND_SIGN_IN_TO_EXPLORER = 'hand-sign-in-to-explorer'
 const AUTOSTART_LAUNCH_ARG = '--autostart'
 const UNGUARDED_LAUNCH_ARGS = ['--setup', '--uninstall', '--uninstall-cleanup']
 const WINLOGON_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+const EXPLORER_SHELL = 'explorer.exe'
 
 function guardsLaunch({ packaged, portable, argv }) {
   return Boolean(packaged) && !portable && !argv.some((arg) => UNGUARDED_LAUNCH_ARGS.includes(arg))
@@ -21,15 +24,40 @@ function parseUnfinishedBoots(text) {
   return Number.isInteger(count) && count > 0 ? count : 0
 }
 
-function planShellBoot(context) {
-  const unfinishedBoots = context.unfinishedBoots
-  const startShell = { action: START_SHELL, unfinishedBoots: unfinishedBoots + 1 }
-  if (unfinishedBoots < MAX_UNFINISHED_BOOTS) return startShell
-  if (context.argv.includes(AUTOSTART_LAUNCH_ARG)) {
+function startShellPlan(unfinishedBoots) {
+  return { action: START_SHELL, unfinishedBoots: unfinishedBoots + 1 }
+}
+
+function planShellBoot({ unfinishedBoots, argv }) {
+  if (unfinishedBoots < MAX_UNFINISHED_BOOTS) return startShellPlan(unfinishedBoots)
+  if (argv.includes(AUTOSTART_LAUNCH_ARG)) {
     return { action: FALL_BACK_TO_EXPLORER, unfinishedBoots, startExplorer: false }
   }
-  if (context.explorerHostsShell === true) return startShell
+  return { action: CHECK_FOR_EXPLORER_DESKTOP, unfinishedBoots }
+}
+
+function planExplorerDesktopCheck({ unfinishedBoots, explorerHostsShell }) {
+  if (explorerHostsShell === true) return startShellPlan(unfinishedBoots)
   return { action: FALL_BACK_TO_EXPLORER, unfinishedBoots, startExplorer: true }
+}
+
+function probeExplorerDesktop(shellHostedByExplorer) {
+  try {
+    return shellHostedByExplorer()
+  } catch (e) {
+    console.error('[bootRecovery] Could not tell whether Explorer runs the desktop:', e.message)
+    return null
+  }
+}
+
+function decideShellBoot({ unfinishedBoots, argv, shellHostedByExplorer }) {
+  const plan = planShellBoot({ unfinishedBoots, argv })
+  if (plan.action !== CHECK_FOR_EXPLORER_DESKTOP) return plan
+  const previousShell = regQuery(WINLOGON_KEY, 'Shell')
+  registerExplorerAsShell()
+  const checked = planExplorerDesktopCheck({ unfinishedBoots, explorerHostsShell: probeExplorerDesktop(shellHostedByExplorer) })
+  if (checked.action === START_SHELL) restoreShellValue(previousShell)
+  return checked
 }
 
 function planFailedStart(context) {
@@ -69,13 +97,27 @@ function restoreUnfinishedBoots(filePath, count) {
   else forgetUnfinishedBoots(filePath)
 }
 
+function writeShellValue(value) {
+  execFileSync('reg', ['add', WINLOGON_KEY, '/v', 'Shell', '/t', 'REG_SZ', '/d', value, '/f'], { windowsHide: true })
+}
+
 function registerExplorerAsShell() {
   try {
-    execFileSync('reg', ['add', WINLOGON_KEY, '/v', 'Shell', '/t', 'REG_SZ', '/d', 'explorer.exe', '/f'], { windowsHide: true })
+    writeShellValue(EXPLORER_SHELL)
     return true
   } catch (e) {
     console.error('[bootRecovery] Could not register Explorer as the shell:', e.message)
     return false
+  }
+}
+
+function restoreShellValue(previousShell) {
+  const shell = typeof previousShell === 'string' ? previousShell.trim() : ''
+  if (shell === '' || shell.toLowerCase() === EXPLORER_SHELL) return
+  try {
+    writeShellValue(shell)
+  } catch (e) {
+    console.error('[bootRecovery] Could not put the shell registration back:', e.message)
   }
 }
 
@@ -107,12 +149,15 @@ function fallBackToExplorer(plan) {
 module.exports = {
   MAX_UNFINISHED_BOOTS,
   START_SHELL,
+  CHECK_FOR_EXPLORER_DESKTOP,
   FALL_BACK_TO_EXPLORER,
   EXIT_ALPINE,
   HAND_SIGN_IN_TO_EXPLORER,
   guardsLaunch,
   parseUnfinishedBoots,
   planShellBoot,
+  planExplorerDesktopCheck,
+  decideShellBoot,
   planFailedStart,
   bootAttemptsPath,
   readUnfinishedBoots,

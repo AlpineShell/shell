@@ -28,10 +28,10 @@ function guardsThisLaunch() {
 function guardShellBoot() {
   if (!guardsThisLaunch()) return
   const unfinishedBoots = bootRecovery.readUnfinishedBoots(BOOT_ATTEMPTS_PATH)
-  const plan = bootRecovery.planShellBoot({
+  const plan = bootRecovery.decideShellBoot({
     unfinishedBoots,
     argv: process.argv,
-    get explorerHostsShell() { return explorerShell.shellHostedByExplorer() },
+    shellHostedByExplorer: () => explorerShell.shellHostedByExplorer(),
   })
   if (plan.action === bootRecovery.FALL_BACK_TO_EXPLORER) {
     console.error(`[main] Alpine Shell did not finish starting ${plan.unfinishedBoots} times in a row, so Explorer takes the shell`)
@@ -540,6 +540,7 @@ function destroyShellForDisplay(displayId) {
   if (!shell.desktop.isDestroyed()) shell.desktop.destroy()
 
   shells.delete(displayId)
+  reviewTopBarsSettled()
 }
 
 function repositionShell(display) {
@@ -1023,6 +1024,10 @@ function isUpdateRestart() {
 
 function markTopBarSettled(win) {
   settledTopBars.add(win)
+  reviewTopBarsSettled()
+}
+
+function reviewTopBarsSettled() {
   if (areAllTopBarsSettled()) forgetBootAttempts()
   if (topBarSettleListener) topBarSettleListener()
 }

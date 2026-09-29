@@ -9,25 +9,41 @@ const childProcess = nodeRequire('child_process')
 
 const WINLOGON_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
 const WINDOWS_DIR = path.resolve(path.join(path.sep, 'Windows'))
+const ALPINE_SHELL = path.resolve(path.join(path.sep, 'Programs', 'alpine-shell', 'Alpine Shell.exe'))
 const WINLOGON_LAUNCH = ['Alpine Shell.exe']
 const AUTOSTART_LAUNCH = ['Alpine Shell.exe', '--autostart']
 
-const execFileSyncMock = vi.fn(() => '')
+let registeredShell = null
+
+function inject(moduleId, exports) {
+  nodeRequire.cache[moduleId] = { id: moduleId, filename: moduleId, loaded: true, exports }
+}
+
+const execFileSyncMock = vi.fn((file, args) => {
+  if (file === 'reg' && args[0] === 'add' && args[1] === WINLOGON_KEY && args[3] === 'Shell') registeredShell = args[7]
+  return ''
+})
 const spawnMock = vi.fn(() => ({ pid: 4242, on: () => {}, unref: () => {} }))
 childProcess.execFileSync = (...args) => execFileSyncMock(...args)
 childProcess.spawn = (...args) => spawnMock(...args)
+inject(nodeRequire.resolve('./registryRead.js'), {
+  regQuery: (keyPath, valueName) => (keyPath === WINLOGON_KEY && valueName === 'Shell' ? registeredShell : null),
+})
 
 const { default: bootRecovery } = await import('./bootRecovery.js')
 
 const {
   MAX_UNFINISHED_BOOTS,
   START_SHELL,
+  CHECK_FOR_EXPLORER_DESKTOP,
   FALL_BACK_TO_EXPLORER,
   EXIT_ALPINE,
   HAND_SIGN_IN_TO_EXPLORER,
   guardsLaunch,
   parseUnfinishedBoots,
   planShellBoot,
+  planExplorerDesktopCheck,
+  decideShellBoot,
   planFailedStart,
   bootAttemptsPath,
   readUnfinishedBoots,
@@ -38,13 +54,14 @@ const {
 } = bootRecovery
 
 function boot({ unfinishedBoots, argv = WINLOGON_LAUNCH, explorerHostsShell = false }) {
-  const probe = vi.fn(() => explorerHostsShell)
-  const plan = planShellBoot({
-    unfinishedBoots,
-    argv,
-    get explorerHostsShell() { return probe() },
+  const shellWhenProbed = []
+  const probe = vi.fn(() => {
+    shellWhenProbed.push(registeredShell)
+    if (explorerHostsShell instanceof Error) throw explorerHostsShell
+    return explorerHostsShell
   })
-  return { plan, probe }
+  const plan = decideShellBoot({ unfinishedBoots, argv, shellHostedByExplorer: probe })
+  return { plan, probe, shellWhenProbed }
 }
 
 function failedStart({ guarded = true, updaterAwaitsReady = false, explorerHostsShell = false, optedOut = false } = {}) {
@@ -66,6 +83,7 @@ beforeEach(() => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-boot-'))
   previousSystemRoot = process.env.SystemRoot
   process.env.SystemRoot = WINDOWS_DIR
+  registeredShell = ALPINE_SHELL
   execFileSyncMock.mockClear()
   spawnMock.mockClear()
 })
@@ -106,36 +124,81 @@ describe('parseUnfinishedBoots', () => {
 
 describe('planShellBoot', () => {
   it('starts the shell and counts the attempt while earlier starts came up', () => {
-    const { plan, probe } = boot({ unfinishedBoots: 0 })
-    expect(plan).toEqual({ action: START_SHELL, unfinishedBoots: 1 })
-    expect(probe).not.toHaveBeenCalled()
+    expect(planShellBoot({ unfinishedBoots: 0, argv: WINLOGON_LAUNCH })).toEqual({ action: START_SHELL, unfinishedBoots: 1 })
   })
 
   it('gives a second start a chance after one start that never came up', () => {
-    expect(boot({ unfinishedBoots: 1 }).plan).toEqual({ action: START_SHELL, unfinishedBoots: 2 })
+    expect(planShellBoot({ unfinishedBoots: 1, argv: WINLOGON_LAUNCH })).toEqual({ action: START_SHELL, unfinishedBoots: 2 })
   })
 
-  it('hands the sign-in to Explorer after two starts in a row that never came up', () => {
-    const { plan } = boot({ unfinishedBoots: MAX_UNFINISHED_BOOTS })
-    expect(plan).toEqual({ action: FALL_BACK_TO_EXPLORER, unfinishedBoots: 2, startExplorer: true })
+  it('looks for an Explorer desktop after two starts in a row that never came up', () => {
+    expect(planShellBoot({ unfinishedBoots: MAX_UNFINISHED_BOOTS, argv: WINLOGON_LAUNCH })).toEqual({ action: CHECK_FOR_EXPLORER_DESKTOP, unfinishedBoots: 2 })
+  })
+
+  it('keeps quiet at a sign-in Explorer already runs', () => {
+    expect(planShellBoot({ unfinishedBoots: 2, argv: AUTOSTART_LAUNCH })).toEqual({ action: FALL_BACK_TO_EXPLORER, unfinishedBoots: 2, startExplorer: false })
+  })
+})
+
+describe('planExplorerDesktopCheck', () => {
+  it('hands the sign-in to Explorer when no Explorer desktop is running', () => {
+    expect(planExplorerDesktopCheck({ unfinishedBoots: 2, explorerHostsShell: false })).toEqual({ action: FALL_BACK_TO_EXPLORER, unfinishedBoots: 2, startExplorer: true })
   })
 
   it('starts Explorer when it cannot tell who holds the shell', () => {
-    expect(boot({ unfinishedBoots: 2, explorerHostsShell: null }).plan.startExplorer).toBe(true)
+    expect(planExplorerDesktopCheck({ unfinishedBoots: 2, explorerHostsShell: null }).startExplorer).toBe(true)
   })
 
-  it('keeps quiet at a sign-in Explorer already runs, without probing for it', () => {
+  it('gives a start from the Start menu on a working Explorer desktop a fresh try', () => {
+    expect(planExplorerDesktopCheck({ unfinishedBoots: 2, explorerHostsShell: true })).toEqual({ action: START_SHELL, unfinishedBoots: 3 })
+  })
+
+  it('falls back at once after a fresh try that did not come up either', () => {
+    expect(planExplorerDesktopCheck({ unfinishedBoots: 3, explorerHostsShell: false }).action).toBe(FALL_BACK_TO_EXPLORER)
+  })
+})
+
+describe('decideShellBoot', () => {
+  it('neither probes nor touches the shell while earlier starts came up', () => {
+    const { plan, probe } = boot({ unfinishedBoots: 1 })
+    expect(plan).toEqual({ action: START_SHELL, unfinishedBoots: 2 })
+    expect(probe).not.toHaveBeenCalled()
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('does not probe at a sign-in Explorer already runs', () => {
     const { plan, probe } = boot({ unfinishedBoots: 2, argv: AUTOSTART_LAUNCH, explorerHostsShell: true })
     expect(plan).toEqual({ action: FALL_BACK_TO_EXPLORER, unfinishedBoots: 2, startExplorer: false })
     expect(probe).not.toHaveBeenCalled()
   })
 
-  it('gives a start from the Start menu on a working Explorer desktop a fresh try', () => {
-    expect(boot({ unfinishedBoots: 2, explorerHostsShell: true }).plan).toEqual({ action: START_SHELL, unfinishedBoots: 3 })
+  it('registers Explorer as the shell before it probes, so a probe that dies still leaves the next sign-in on Explorer', () => {
+    const { plan, shellWhenProbed } = boot({ unfinishedBoots: 2 })
+    expect(shellWhenProbed).toEqual(['explorer.exe'])
+    expect(plan).toEqual({ action: FALL_BACK_TO_EXPLORER, unfinishedBoots: 2, startExplorer: true })
+    expect(registeredShell).toBe('explorer.exe')
   })
 
-  it('falls back at once after a fresh try that did not come up either', () => {
-    expect(boot({ unfinishedBoots: 3 }).plan.action).toBe(FALL_BACK_TO_EXPLORER)
+  it('puts the shell back for a fresh try from the Start menu on a working Explorer desktop', () => {
+    const { plan, shellWhenProbed } = boot({ unfinishedBoots: 2, explorerHostsShell: true })
+    expect(shellWhenProbed).toEqual(['explorer.exe'])
+    expect(plan).toEqual({ action: START_SHELL, unfinishedBoots: 3 })
+    expect(registeredShell).toBe(ALPINE_SHELL)
+  })
+
+  it('writes nothing back when Explorer already was the shell', () => {
+    registeredShell = 'explorer.exe'
+    expect(boot({ unfinishedBoots: 2, explorerHostsShell: true }).plan.action).toBe(START_SHELL)
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+    expect(registeredShell).toBe('explorer.exe')
+  })
+
+  it('falls back when the probe throws', () => {
+    const quietErrors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { plan } = boot({ unfinishedBoots: 2, explorerHostsShell: new Error('koffi failed to load') })
+    expect(plan).toEqual({ action: FALL_BACK_TO_EXPLORER, unfinishedBoots: 2, startExplorer: true })
+    expect(registeredShell).toBe('explorer.exe')
+    quietErrors.mockRestore()
   })
 })
 
