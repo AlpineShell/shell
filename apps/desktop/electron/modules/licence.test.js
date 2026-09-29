@@ -89,8 +89,8 @@ function licenceRecord(overrides = {}) {
   }
 }
 
-function jsonResponse(status, body) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+function jsonResponse(status, body, headers = {}) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 }
 
 function routedFetch(routes) {
@@ -569,6 +569,104 @@ describe('the device flow sign-in', () => {
     await settle()
     await advance(5000)
     expect(progress().at(-1).phase).toBe('expired')
+  })
+
+  it('waits out a rate limit as long as the server asks and keeps polling through a failing gateway until the approval arrives', async () => {
+    let tokenPolls = 0
+    const replies = [
+      () => jsonResponse(429, { message: 'Too many requests. Please try again later.' }, { 'X-Retry-After': '12' }),
+      () => new Response('<html>Bad Gateway</html>', { status: 502, headers: { 'Content-Type': 'text/html' } }),
+      () => jsonResponse(503, { message: 'Service Unavailable' }),
+      () => jsonResponse(200, { access_token: 'sess_1', token_type: 'Bearer' }),
+    ]
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: () => { tokenPolls += 1; return replies[tokenPolls - 1]() } },
+      { path: '/licences/activate', reply: jsonResponse(200, activated) },
+      { path: '/api/auth/sign-out', reply: jsonResponse(200, { success: true }) },
+    ])
+    const { service, progress, broadcast } = makeService({ fetch })
+    service.start(broadcast)
+    service.handlers['licence/sign-in']()
+    await settle()
+
+    await advance(5000)
+    expect(tokenPolls).toBe(1)
+    await advance(11000)
+    expect(tokenPolls).toBe(1)
+    await advance(1000)
+    expect(tokenPolls).toBe(2)
+    await advance(5000)
+    expect(tokenPolls).toBe(3)
+    await advance(5000)
+    expect(tokenPolls).toBe(4)
+
+    expect(progress().map((p) => p.phase)).toEqual(['idle', 'starting', 'waiting', 'activating', 'done'])
+    expect(progress().at(-1).outcome).toMatchObject({ kind: 'activated' })
+    expect(service.status().state).toBe('valid')
+  })
+
+  it('never waits more than 30 seconds for a Retry-After and reads one given as a date', async () => {
+    let tokenPolls = 0
+    const replies = [
+      () => jsonResponse(429, {}, { 'Retry-After': '3600' }),
+      () => jsonResponse(503, {}, { 'Retry-After': new Date(Date.now() + 20000).toUTCString() }),
+      () => jsonResponse(400, { error: 'authorization_pending' }),
+    ]
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: () => { tokenPolls += 1; return replies[Math.min(tokenPolls, replies.length) - 1]() } },
+    ])
+    const { service, progress, broadcast } = makeService({ fetch })
+    service.start(broadcast)
+    service.handlers['licence/sign-in']()
+    await settle()
+
+    await advance(5000)
+    expect(tokenPolls).toBe(1)
+    await advance(29000)
+    expect(tokenPolls).toBe(1)
+    await advance(1000)
+    expect(tokenPolls).toBe(2)
+    await advance(19000)
+    expect(tokenPolls).toBe(2)
+    await advance(1000)
+    expect(tokenPolls).toBe(3)
+    expect(progress().at(-1).phase).toBe('waiting')
+  })
+
+  it('reports expiry when the service keeps failing until the code runs out', async () => {
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: () => jsonResponse(503, { message: 'Service Unavailable' }) },
+    ])
+    const { service, progress, broadcast } = makeService({ fetch })
+    service.start(broadcast)
+    service.handlers['licence/sign-in']()
+    await settle()
+    await advance(deviceCode.expires_in * 1000)
+    expect(progress().at(-1).phase).toBe('waiting')
+    await advance(5000)
+    expect(progress().at(-1).phase).toBe('expired')
+  })
+
+  it('still ends the sign-in on any other client error', async () => {
+    const cases = [
+      { reply: jsonResponse(400, { error: 'invalid_grant' }), error: 'invalid_grant' },
+      { reply: jsonResponse(404, { message: 'Not Found' }), error: 'token-404' },
+    ]
+    for (const { reply, error } of cases) {
+      const fetch = routedFetch([
+        { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+        { path: '/api/auth/device/token', reply },
+      ])
+      const { service, progress, broadcast } = makeService({ fetch })
+      service.start(broadcast)
+      service.handlers['licence/sign-in']()
+      await settle()
+      await advance(5000)
+      expect(progress().at(-1)).toMatchObject({ phase: 'error', error })
+    }
   })
 
   it('stops polling when the sign-in is cancelled', async () => {

@@ -373,6 +373,7 @@ if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
 
 contextBridge.exposeInMainWorld('shell', {
   settingsIcon: bootSettingsIcon,
+  reportRenderError: (detail) => ipcRenderer.send('shell/render-error', detail),
   theme: {
     initial: bootTheme,
     get: () => ipcRenderer.invoke('theme/get'),

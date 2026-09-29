@@ -2,6 +2,58 @@ const { app, BrowserWindow, Menu, screen, ipcMain, protocol, net, powerMonitor, 
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
+const installer = require('./modules/installer')
+const explorerShell = require('./modules/explorerShell')
+const bootRecovery = require('./bootRecovery')
+const { createCrashLog, createRepeatFilter, describeError, truncateText } = require('./crashLog')
+const { planRendererReload } = require('./rendererRecovery')
+
+const crashLog = createCrashLog()
+const BOOT_ATTEMPTS_PATH = bootRecovery.bootAttemptsPath(app.getPath('userData'))
+const HAND_BACK_CONFIRM_DELAY_MS = 1200
+
+const bypassSingleInstance =
+  process.argv.includes('--uninstall') ||
+  process.argv.includes('--uninstall-cleanup') ||
+  installer.isPortableRun()
+const gotSingleInstanceLock = bypassSingleInstance ? true : app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) app.quit()
+
+let bootCountedBeforeThisLaunch = null
+
+function guardsThisLaunch() {
+  return bootRecovery.guardsLaunch({ packaged: app.isPackaged, portable: installer.isPortableRun(), argv: process.argv })
+}
+
+function guardShellBoot() {
+  if (!guardsThisLaunch()) return
+  const unfinishedBoots = bootRecovery.readUnfinishedBoots(BOOT_ATTEMPTS_PATH)
+  const plan = bootRecovery.decideShellBoot({
+    unfinishedBoots,
+    argv: process.argv,
+    shellHostedByExplorer: () => explorerShell.shellHostedByExplorer(),
+  })
+  if (plan.action === bootRecovery.FALL_BACK_TO_EXPLORER) {
+    console.error(`[main] Alpine Shell did not finish starting ${plan.unfinishedBoots} times in a row, so Explorer takes the shell`)
+    crashLog.record('fell-back-to-explorer', { unfinishedBoots: plan.unfinishedBoots, startedExplorer: plan.startExplorer })
+    bootRecovery.fallBackToExplorer(plan)
+    process.exit(1)
+  }
+  bootRecovery.recordUnfinishedBoots(BOOT_ATTEMPTS_PATH, plan.unfinishedBoots)
+  bootCountedBeforeThisLaunch = unfinishedBoots
+}
+
+function forgetBootAttempts() {
+  bootRecovery.forgetUnfinishedBoots(BOOT_ATTEMPTS_PATH)
+}
+
+function uncountThisLaunch() {
+  if (bootCountedBeforeThisLaunch === null) return
+  bootRecovery.restoreUnfinishedBoots(BOOT_ATTEMPTS_PATH, bootCountedBeforeThisLaunch)
+  bootCountedBeforeThisLaunch = null
+}
+
+if (gotSingleInstanceLock) guardShellBoot()
 
 try { require('node:module').enableCompileCache(path.join(app.getPath('userData'), 'v8-cache')) } catch {}
 
@@ -74,7 +126,6 @@ let shellWindow = null
 try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error('[main] shellWindow load error:', e.message) }
 const gpuPreference = require('./modules/gpuPreference')
 const { processAutostart } = require('./modules/autostart')
-const installer = require('./modules/installer')
 const updater = require('./modules/updater')
 const windowsUpdate = require('./modules/windowsUpdate')
 const licence = require('./modules/licence')
@@ -101,6 +152,7 @@ trustedSenders.setAppLocation(APP_LOCATION)
 const UPDATE_READY_TIMEOUT_MS = 10000
 const settledTopBars = new Set()
 let topBarSettleListener = null
+let updateReadySignalled = false
 
 // ── Single instance + alpine-shell:// deep links ─────────────────────────────
 // A normal packaged run holds a single-instance lock, so the website "Install in
@@ -116,12 +168,6 @@ function shellLaunchCommand() {
   })
 }
 
-const bypassSingleInstance =
-  process.argv.includes('--uninstall') ||
-  process.argv.includes('--uninstall-cleanup') ||
-  installer.isPortableRun()
-const gotSingleInstanceLock = bypassSingleInstance ? true : app.requestSingleInstanceLock()
-if (!gotSingleInstanceLock) app.quit()
 if (!bypassSingleInstance) {
   const launch = shellLaunchCommand()
   if (launch.args.length) {
@@ -190,9 +236,32 @@ function loadAppURL(win, url) {
     attempts++
     setTimeout(() => { if (!win.isDestroyed()) win.loadURL(url) }, Math.min(2000, 400 + attempts * 200))
   })
-  win.webContents.on('render-process-gone', () => {
-    setTimeout(() => { if (!win.isDestroyed()) win.loadURL(url) }, 600)
+  let recentCrashes = []
+  win.webContents.on('render-process-gone', (_event, details) => {
+    if (win.isDestroyed()) return
+    const plan = planRendererReload({ recentCrashes, now: Date.now() })
+    recentCrashes = plan.crashes
+    crashLog.record('render-process-gone', { view: viewOfURL(url), reason: details?.reason ?? null, exitCode: details?.exitCode ?? null, reloading: plan.reload })
+    if (!plan.reload) {
+      letClicksThroughDeadTopBar(win)
+      return
+    }
+    setTimeout(() => { if (!win.isDestroyed()) win.loadURL(url) }, plan.delayMs)
   })
+}
+
+function viewOfURL(url) {
+  try {
+    return new URL(url).searchParams.get('mode')
+  } catch {
+    return null
+  }
+}
+
+function letClicksThroughDeadTopBar(win) {
+  if (win.isDestroyed() || !win.topBarState) return
+  win.topBarState.interactiveZones = []
+  if (win.restorePassiveTopBar) win.restorePassiveTopBar()
 }
 
 const TOP_BAR_HEIGHT = 24
@@ -492,6 +561,7 @@ function destroyShellForDisplay(displayId) {
   if (!shell.desktop.isDestroyed()) shell.desktop.destroy()
 
   shells.delete(displayId)
+  reviewTopBarsSettled()
 }
 
 function repositionShell(display) {
@@ -806,7 +876,45 @@ openApps.setShellAppsProvider(() => {
   return [{ id: -1, hwnd, name: 'Settings', title: currentSettingsPage || 'Settings', path: SETTINGS_APP_PATH, icon: SETTINGS_ICON_DATA_URL }]
 })
 
-app.whenReady().then(async () => {
+app.whenReady().then(startApp).catch(recoverFromFailedStart).catch(() => app.exit(1))
+
+function recoverFromFailedStart(error) {
+  console.error('[main] Alpine Shell could not start:', error)
+  crashLog.record('startup-failed', describeError(error))
+  try { if (shellWindow) shellWindow.destroy() } catch {}
+  try { unregisterAll() } catch {}
+  const plan = bootRecovery.planFailedStart({
+    guarded: guardsThisLaunch(),
+    updaterAwaitsReady: isUpdateRestart() && !updateReadySignalled,
+    get explorerHostsShell() { return explorerShell.shellHostedByExplorer() },
+    get optedOut() { return installer.isShellOptedOut() },
+  })
+  if (plan.action === bootRecovery.HAND_SIGN_IN_TO_EXPLORER) {
+    handSignInToExplorer(() => app.exit(1))
+    return
+  }
+  if (plan.action === bootRecovery.FALL_BACK_TO_EXPLORER) bootRecovery.fallBackToExplorer(plan)
+  app.exit(1)
+}
+
+function handSignInToExplorer(done) {
+  const revert = installer.revertShellTemporarily()
+  if (!revert.success) {
+    console.error('[main] The hand-back helper did not start, so Explorer takes the shell directly:', revert.error)
+    bootRecovery.fallBackToExplorer({ startExplorer: true })
+    done()
+    return
+  }
+  setTimeout(() => {
+    if (!installer.isRevertHelperRunning(revert.handoff)) {
+      revert.abandonHandoff()
+      bootRecovery.fallBackToExplorer({ startExplorer: true })
+    }
+    done()
+  }, HAND_BACK_CONFIRM_DELAY_MS)
+}
+
+async function startApp() {
   grantOnlyShellPermissions()
   if (!isDev) Menu.setApplicationMenu(null)
 
@@ -826,6 +934,7 @@ app.whenReady().then(async () => {
 
   if (setup.shouldLeaveShellToExplorer(process.argv)) {
     console.log('[main] Explorer holds the shell until the next sign-in, so this autostart launch exits')
+    uncountThisLaunch()
     app.exit(0)
     return
   }
@@ -910,7 +1019,8 @@ app.whenReady().then(async () => {
     return
   }
 
-  if (!isDev && (installer.isPortableRun() || setup.isFirstRun())) {
+  if (!isDev && (installer.isPortableRun() || setup.isFirstRun() || !licenceStartupPlan(licence.status()).startShell)) {
+    forgetBootAttempts()
     createSetupWindow()
     return
   }
@@ -926,7 +1036,7 @@ app.whenReady().then(async () => {
       fileHandlers.openFile(startupFile).catch((e) => console.error('[main] file open failed:', e && e.message))
     }, 1500)
   }
-})
+}
 
 function getUpdateReadyMarkerPath() {
   const index = process.argv.indexOf('--update-ready-marker')
@@ -941,6 +1051,11 @@ function isUpdateRestart() {
 
 function markTopBarSettled(win) {
   settledTopBars.add(win)
+  reviewTopBarsSettled()
+}
+
+function reviewTopBarsSettled() {
+  if (areAllTopBarsSettled()) forgetBootAttempts()
   if (topBarSettleListener) topBarSettleListener()
 }
 
@@ -953,10 +1068,9 @@ function signalShellReadyForUpdate() {
   const markerPath = getUpdateReadyMarkerPath()
   if (!markerPath) return
 
-  let written = false
   const writeMarker = () => {
-    if (written) return
-    written = true
+    if (updateReadySignalled) return
+    updateReadySignalled = true
     topBarSettleListener = null
     try {
       fs.writeFileSync(markerPath, String(Date.now()))
@@ -989,9 +1103,16 @@ function signalShellReadyForUpdate() {
   writeMarkerWhenSettled()
 }
 
+function licenceStartupPlan(status) {
+  return planStartupForLicence(status, {
+    packaged: !isDev,
+    get desktopClaimedByAlpine() { return setup.isDesktopClaimedByAlpine() },
+  })
+}
+
 function openSignInWhenUnlicensed() {
   const status = licence.status()
-  const plan = planStartupForLicence(status)
+  const plan = licenceStartupPlan(status)
   if (!plan.openSignIn) return
   console.error(`[licence] no verifiable licence on this PC (${status.reason}); the shell keeps running and the sign-in window opens`)
   setTimeout(() => createSetupWindow('signIn'), STARTUP_SIGN_IN_DELAY_MS)
@@ -1087,13 +1208,18 @@ function startShellMode() {
     }
   }
 
-  const runsStartupApps = shellExclusivity.shouldProcessAutostart({
+  const autostartContext = {
     development: isDev,
     updateRestart: isUpdateRestart(),
     actingAsShell: takeover.actingAsShell,
     launchedByAutostart: setup.isAutostartLaunch(process.argv),
-  })
-  if (runsStartupApps) setTimeout(() => { processAutostart().catch((e) => console.error('[autostart] processAutostart error:', e)) }, 1500)
+    get ranThisLogon() { return installer.autostartRanThisLogon() },
+  }
+  setTimeout(() => {
+    if (!shellExclusivity.shouldProcessAutostart(autostartContext)) return
+    installer.recordAutostartLogon()
+    processAutostart().catch((e) => console.error('[autostart] processAutostart error:', e))
+  }, 1500)
 
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)
@@ -1158,8 +1284,31 @@ if (isDev) listenForLauncherQuit({ pipePath: process.env.ALPINE_DEV_CONTROL_PIPE
 
 process.on('uncaughtException', (err) => {
   console.error('[main] Uncaught exception:', err)
+  crashLog.record('uncaught-exception', describeError(err))
 })
 
 process.on('unhandledRejection', (err) => {
   console.error('[main] Unhandled rejection:', err)
+  crashLog.record('unhandled-rejection', describeError(err))
+})
+
+app.on('child-process-gone', (_event, details) => {
+  if (details.reason === 'clean-exit') return
+  crashLog.record('child-process-gone', {
+    type: details.type,
+    reason: details.reason,
+    exitCode: details.exitCode,
+    name: details.name ?? details.serviceName ?? null,
+  })
+})
+
+const isRepeatedRenderError = createRepeatFilter()
+
+ipcMain.on('shell/render-error', (event, detail) => {
+  const view = viewOfURL(event.sender.getURL())
+  if (isRepeatedRenderError(`render-error:${view}`)) return
+  crashLog.record('render-error', {
+    view,
+    detail: truncateText(typeof detail === 'string' ? detail : String(detail)),
+  })
 })

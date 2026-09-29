@@ -1592,6 +1592,17 @@ declare global {
     match: number
   }
 
+  interface RootReloadPlan {
+    reload: boolean
+    delayMs: number
+  }
+
+  interface RootErrorBoundaryProps {
+    view: string
+    onFailure?: () => void
+    children: import('react').ReactNode
+  }
+
   interface Window {
     alpineBoot?: AlpineBootState
     fileHandlers: {
@@ -1748,6 +1759,7 @@ declare global {
     }
     shell: {
       settingsIcon: string
+      reportRenderError: (detail: string) => void
       theme: {
         initial: ThemeState
         get: () => Promise<ThemeState>

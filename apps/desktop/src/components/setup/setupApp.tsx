@@ -254,9 +254,14 @@ export default function SetupApp() {
   async function handleInstall() {
     setCurrentStep('')
     setPage('installing')
-    const res = await window.setup.install({ shell: true, cursor: installCursor })
-    setResult(res)
-    setPage(res.error ? 'error' : 'complete')
+    try {
+      const res = await window.setup.install({ shell: true, cursor: installCursor })
+      setResult(res)
+      setPage(res.error ? 'error' : 'complete')
+    } catch (e) {
+      setResult({ shell: false, startup: false, cursor: false, gpoBlocked: false, error: e instanceof Error ? e.message : String(e) })
+      setPage('error')
+    }
   }
 
   async function handleRestoreShell() {
