@@ -183,8 +183,12 @@ async function readCappedBody(res, maxBytes) {
   return Buffer.concat(chunks)
 }
 
+function removeBackupIfPluginInPlace(finalDir, backup) {
+  if (fs.existsSync(finalDir)) removeQuietly(backup)
+}
+
 async function swapIntoPlace(staging, finalDir, backup) {
-  removeQuietly(backup)
+  removeBackupIfPluginInPlace(finalDir, backup)
   let movedAside = false
   if (fs.existsSync(finalDir)) {
     await renameWithRetry(finalDir, backup)
@@ -195,7 +199,7 @@ async function swapIntoPlace(staging, finalDir, backup) {
   } catch (e) {
     if (movedAside) {
       removeQuietly(finalDir)
-      try { fs.renameSync(backup, finalDir) } catch { void 0 }
+      await renameWithRetry(backup, finalDir).catch(() => undefined)
     }
     throw e
   }
@@ -269,7 +273,7 @@ async function install(payload, { pluginsDir, onChange, withPluginStopped = runD
     return { ok: false, error: 'install-failed', detail: String((e && e.message) || e) }
   } finally {
     removeQuietly(staging)
-    removeQuietly(backup)
+    removeBackupIfPluginInPlace(finalDir, backup)
   }
 
   if (typeof onChange === 'function') onChange()

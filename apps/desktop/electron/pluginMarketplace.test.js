@@ -68,8 +68,27 @@ function bundleRequests(fetchMock) {
   return fetchMock.mock.calls.filter(([url]) => url.endsWith(BUNDLE_KEY))
 }
 
-function installedManifest(pluginsDir) {
-  return JSON.parse(fs.readFileSync(path.join(pluginsDir, PLUGIN_ID, 'plugin.json'), 'utf8'))
+function installedManifest(pluginsDir, folder = PLUGIN_ID) {
+  return JSON.parse(fs.readFileSync(path.join(pluginsDir, folder, 'plugin.json'), 'utf8'))
+}
+
+function installOldVersion(pluginsDir) {
+  fs.mkdirSync(path.join(pluginsDir, PLUGIN_ID))
+  fs.writeFileSync(path.join(pluginsDir, PLUGIN_ID, 'plugin.json'), JSON.stringify({ id: PLUGIN_ID, version: '1.1.0' }))
+}
+
+const realRenameSync = fs.renameSync
+
+function busyRenames(failuresByFolderPrefix) {
+  const remaining = new Map(Object.entries(failuresByFolderPrefix))
+  return vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+    const prefix = [...remaining.keys()].find((candidate) => path.basename(String(from)).startsWith(candidate))
+    if (prefix && remaining.get(prefix) > 0) {
+      remaining.set(prefix, remaining.get(prefix) - 1)
+      throw Object.assign(new Error('resource busy'), { code: 'EBUSY' })
+    }
+    return realRenameSync(from, to)
+  })
 }
 
 let pluginsDir = ''
@@ -79,6 +98,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   fs.rmSync(pluginsDir, { recursive: true, force: true })
 })
@@ -132,8 +152,7 @@ describe('installing from the marketplace', () => {
   })
 
   it('refuses a bundle whose own version is not the one the catalog offers', async () => {
-    fs.mkdirSync(path.join(pluginsDir, PLUGIN_ID))
-    fs.writeFileSync(path.join(pluginsDir, PLUGIN_ID, 'plugin.json'), JSON.stringify({ id: PLUGIN_ID, version: '1.1.0' }))
+    installOldVersion(pluginsDir)
     serveCatalog({ bundle: demoBundle('1.0.0'), version: '1.2.0' })
     const onChange = vi.fn()
     const result = await install({ id: PLUGIN_ID }, { pluginsDir, onChange, requireSignature: false })
@@ -150,8 +169,7 @@ describe('installing from the marketplace', () => {
   })
 
   it('swaps an update in only while the plugin is stopped', async () => {
-    fs.mkdirSync(path.join(pluginsDir, PLUGIN_ID))
-    fs.writeFileSync(path.join(pluginsDir, PLUGIN_ID, 'plugin.json'), JSON.stringify({ id: PLUGIN_ID, version: '1.1.0' }))
+    installOldVersion(pluginsDir)
     serveCatalog({ bundle: demoBundle('1.2.0') })
     const seenWhileStopped = []
     const withPluginStopped = vi.fn(async (id, work) => {
@@ -169,8 +187,7 @@ describe('installing from the marketplace', () => {
   })
 
   it('keeps the old copy when the update cannot be swapped in', async () => {
-    fs.mkdirSync(path.join(pluginsDir, PLUGIN_ID))
-    fs.writeFileSync(path.join(pluginsDir, PLUGIN_ID, 'plugin.json'), JSON.stringify({ id: PLUGIN_ID, version: '1.1.0' }))
+    installOldVersion(pluginsDir)
     serveCatalog({ bundle: demoBundle('1.2.0') })
     const onChange = vi.fn()
     const busy = Object.assign(new Error('resource busy'), { code: 'EBUSY' })
@@ -185,6 +202,35 @@ describe('installing from the marketplace', () => {
     expect(result).toMatchObject({ ok: false, error: 'install-failed' })
     expect(installedManifest(pluginsDir).version).toBe('1.1.0')
     expect(onChange).not.toHaveBeenCalled()
+    expect(fs.readdirSync(pluginsDir)).toEqual([PLUGIN_ID])
+  })
+
+  it('puts the old copy back when the new one cannot be moved in and the old one is busy at first', async () => {
+    installOldVersion(pluginsDir)
+    serveCatalog({ bundle: demoBundle('1.2.0') })
+    busyRenames({ '.installing-': Infinity, '.backup-': 1 })
+    const onChange = vi.fn()
+    const result = await install({ id: PLUGIN_ID }, { pluginsDir, onChange, requireSignature: false })
+    expect(result).toMatchObject({ ok: false, error: 'install-failed' })
+    expect(installedManifest(pluginsDir).version).toBe('1.1.0')
+    expect(fs.readdirSync(pluginsDir)).toEqual([PLUGIN_ID])
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('never deletes the old copy when it cannot be put back, and the next install replaces it', async () => {
+    installOldVersion(pluginsDir)
+    serveCatalog({ bundle: demoBundle('1.2.0') })
+    const renames = busyRenames({ '.installing-': Infinity, '.backup-': Infinity })
+    const failed = await install({ id: PLUGIN_ID }, { pluginsDir, requireSignature: false })
+    expect(failed).toMatchObject({ ok: false, error: 'install-failed' })
+    const leftBehind = fs.readdirSync(pluginsDir)
+    expect(leftBehind).toHaveLength(1)
+    expect(installedManifest(pluginsDir, leftBehind[0]).version).toBe('1.1.0')
+
+    renames.mockRestore()
+    const retried = await install({ id: PLUGIN_ID }, { pluginsDir, requireSignature: false })
+    expect(retried).toMatchObject({ ok: true, version: '1.2.0' })
+    expect(installedManifest(pluginsDir).version).toBe('1.2.0')
     expect(fs.readdirSync(pluginsDir)).toEqual([PLUGIN_ID])
   })
 })
