@@ -992,7 +992,7 @@ async function startApp() {
     return
   }
 
-  if (!isDev && (installer.isPortableRun() || setup.isFirstRun())) {
+  if (!isDev && (installer.isPortableRun() || setup.isFirstRun() || !licenceStartupPlan(licence.status()).startShell)) {
     forgetBootAttempts()
     createSetupWindow()
     return
@@ -1076,9 +1076,16 @@ function signalShellReadyForUpdate() {
   writeMarkerWhenSettled()
 }
 
+function licenceStartupPlan(status) {
+  return planStartupForLicence(status, {
+    packaged: !isDev,
+    get desktopClaimedByAlpine() { return setup.isDesktopClaimedByAlpine() },
+  })
+}
+
 function openSignInWhenUnlicensed() {
   const status = licence.status()
-  const plan = planStartupForLicence(status)
+  const plan = licenceStartupPlan(status)
   if (!plan.openSignIn) return
   console.error(`[licence] no verifiable licence on this PC (${status.reason}); the shell keeps running and the sign-in window opens`)
   setTimeout(() => createSetupWindow('signIn'), STARTUP_SIGN_IN_DELAY_MS)

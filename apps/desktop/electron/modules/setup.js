@@ -128,10 +128,15 @@ function setStartup() {
   regAdd(RUN_KEY, RUN_VALUE_NAME, autostartCommand())
 }
 
+function mayRegisterShell() {
+  return licenceGateError() === null || isDesktopClaimedByAlpine()
+}
+
 function ensureShellRegistration(gpoBlocked) {
   if (!electronApp().isPackaged) return
   if (installer.isShellOptedOut()) return
   if (gpoBlocked) return
+  if (!mayRegisterShell()) return
 
   const desiredShell = getShellExePath()
   if (regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell') !== desiredShell) {
@@ -157,6 +162,14 @@ function hasGpoShellOverride() {
 function isShellRegisteredToAlpine() {
   const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
   return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
+}
+
+function hasAlpineRunEntry() {
+  return regQuery(RUN_KEY, RUN_VALUE_NAME) !== null
+}
+
+function isDesktopClaimedByAlpine() {
+  return isShellRegisteredToAlpine() || hasAlpineRunEntry()
 }
 
 function lazyContext(sources) {
@@ -445,6 +458,7 @@ module.exports = {
   }),
 
   isFirstRun,
+  isDesktopClaimedByAlpine,
   isAutostartLaunch,
   shouldLeaveShellToExplorer,
   takeOverFromExplorer,
