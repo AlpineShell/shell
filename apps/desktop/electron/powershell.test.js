@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
+import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { createPersistentRunner, runPowerShellFile, quotePowerShellLiteral, escapePowerShellSingleQuoted } from './powershell.js'
+import { createPersistentRunner, runPowerShellFile, quotePowerShellLiteral, escapePowerShellSingleQuoted, writePowerShellScriptFile } from './powershell.js'
 
 const SCRIPT_PATH = path.resolve(path.join(path.sep, 'scripts', 'bluetoothRadio.ps1'))
 
@@ -259,6 +261,11 @@ describe('quotePowerShellLiteral', () => {
     expect(quotePowerShellLiteral('\u2018a\u201Ab\u201B')).toBe("'\u2018\u2018a\u201A\u201Ab\u201B\u201B'")
   })
 
+  it('keeps a shortcut target with a typographic apostrophe in one string', () => {
+    expect(quotePowerShellLiteral('C:\\Users\\O\u2019Brien\\AppData\\Local\\Programs\\Tool\\tool.exe'))
+      .toBe("'C:\\Users\\O\u2019\u2019Brien\\AppData\\Local\\Programs\\Tool\\tool.exe'")
+  })
+
   it('keeps an injected command inside the string', () => {
     expect(quotePowerShellLiteral('x\u2019; Start-Process calc; \u2019')).toBe("'x\u2019\u2019; Start-Process calc; \u2019\u2019'")
   })
@@ -272,5 +279,27 @@ describe('escapePowerShellSingleQuoted', () => {
   it('escapes without adding the surrounding quotes', () => {
     expect(escapePowerShellSingleQuoted("it's \u2019")).toBe("it''s \u2019\u2019")
     expect(escapePowerShellSingleQuoted(42)).toBe('42')
+  })
+})
+
+describe('writePowerShellScriptFile', () => {
+  let dir
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-ps-script-'))
+  })
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('writes UTF-8 behind a byte order mark, so Windows PowerShell does not read the script as ANSI', () => {
+    const scriptPath = path.join(dir, 'icons.ps1')
+    const script = `$entries = @(@{ p=${quotePowerShellLiteral('C:\\Users\\Micha\u0142\\O\u2019Brien.exe')}; i=0 })`
+    writePowerShellScriptFile(scriptPath, script)
+
+    const bytes = fs.readFileSync(scriptPath)
+    expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+    expect(bytes.subarray(3).toString('utf8')).toBe(script)
   })
 })

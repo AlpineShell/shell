@@ -1,6 +1,8 @@
+const fs = require('fs')
 const { exec, spawn } = require('child_process')
 
 const POWERSHELL_SINGLE_QUOTES = /['\u2018\u2019\u201A\u201B]/g
+const UTF8_BYTE_ORDER_MARK = '\uFEFF'
 
 function escapePowerShellSingleQuoted(value) {
   return String(value).replace(POWERSHELL_SINGLE_QUOTES, '$&$&')
@@ -8,6 +10,10 @@ function escapePowerShellSingleQuoted(value) {
 
 function quotePowerShellLiteral(value) {
   return `'${escapePowerShellSingleQuoted(value)}'`
+}
+
+function writePowerShellScriptFile(filePath, script) {
+  fs.writeFileSync(filePath, `${UTF8_BYTE_ORDER_MARK}${script}`, 'utf8')
 }
 
 function runPowerShell(command) {
@@ -184,4 +190,4 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
   return { run, warm, dispose }
 }
 
-module.exports = { runPowerShell, runPowerShellFile, createPersistentRunner, escapePowerShellSingleQuoted, quotePowerShellLiteral }
+module.exports = { runPowerShell, runPowerShellFile, createPersistentRunner, escapePowerShellSingleQuoted, quotePowerShellLiteral, writePowerShellScriptFile }
