@@ -3,11 +3,6 @@ const path = require('path')
 const { loadLicenceConfig } = require('./licenceConfig')
 
 // Public base URL for the plugin marketplace (catalog + bundles + assets).
-// Resolution order (first non-empty wins):
-//   1. process.env.ALPINE_PLUGINS_BASE / STORAGE_PUBLIC_URL   (CI, shell overrides)
-//   2. electron/marketplaceConfig.generated.js                (baked at build)
-//   3. apps/desktop/.env  ALPINE_PLUGINS_BASE / STORAGE_PUBLIC_URL  (dev convenience)
-//   4. DEFAULT_BASE
 // The base is a *public read* URL — the same value the website uses as
 // NEXT_PUBLIC_PLUGINS_BASE. It is not a secret; it ships inside the app.
 const DEFAULT_BASE = 'https://bucket-production-4979d.up.railway.app/alpine-plugins'

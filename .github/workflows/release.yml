@@ -54,6 +54,15 @@ jobs:
       - name: Build SDK
         run: bun run sdk:build
 
+      - name: Bake marketplace base
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          ALPINE_PLUGINS_BASE: ${{ vars.ALPINE_PLUGINS_BASE }}
+        run: |
+          node scripts/generateMarketplaceConfig.js
+          node -e "const c=require('./electron/marketplaceConfig.generated.js');if(c.pluginsBase&&!/^https:\/\//i.test(c.pluginsBase)){console.error('::error::the marketplace base must be https, a release build ignores anything else');process.exit(1)}console.log('marketplace base: '+(c.pluginsBase||'built-in default'))"
+
       - name: Bake licence config
         working-directory: apps/desktop
         shell: bash
