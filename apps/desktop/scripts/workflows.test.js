@@ -83,6 +83,10 @@ describe('release workflow', () => {
     expect(buildJob.slice(stepIndex(buildJob, feedPublishStep) + 1)).not.toContain('- name: ')
   })
 
+  it('replaces the installer artifact when the build job is re-run', () => {
+    expect(stepBody(release, 'Keep the installer for the release')).toContain('overwrite: true')
+  })
+
   it('keeps a write token away from the build and grants it to the attach job alone', () => {
     expect(release).toMatch(/^permissions:\n {2}contents: read\n/m)
     expect(release.match(/contents: write/g)).toHaveLength(1)

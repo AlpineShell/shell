@@ -148,6 +148,8 @@ jobs:
           path: apps/desktop/release/*.exe
           if-no-files-found: error
           retention-days: 1
+          compression-level: 0
+          overwrite: true
 
       - name: Publish installer + latest.yml to Railway
         if: ${{ !github.event.release.prerelease }}
