@@ -255,6 +255,11 @@ declare global {
     selectedIndex: number
   }
 
+  interface AltTabThumbnailPayload {
+    hwnd: number
+    thumbnail: string
+  }
+
   type DisplayMode = 'internal' | 'clone' | 'extend' | 'external'
 
   interface DisplayModeOption {
@@ -1724,6 +1729,7 @@ declare global {
       onShow: (callback: (data: AltTabShowPayload) => void) => void
       onHide: (callback: () => void) => void
       onSelectionChanged: (callback: (index: number) => void) => void
+      onThumbnail: (callback: (data: AltTabThumbnailPayload) => void) => void
       activate: (hwnd: number) => Promise<void>
     }
     displayMode: {
