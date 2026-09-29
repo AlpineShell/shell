@@ -7,6 +7,7 @@ const { loadLicenceConfig } = require('../licenceConfig')
 const { guardHandlers, SETTINGS_WINDOW } = require('../trustedSenders')
 
 const PLUGINS_DIR_NAME = 'plugins'
+const PLUGIN_DATA_DIR_NAME = 'plugin-data'
 const STATE_FILE_NAME = 'pluginState.json'
 const MANIFEST_FILE = 'plugin.json'
 const DEFAULT_ENTRY = 'index.js'
@@ -70,6 +71,32 @@ function triggerReload() {
 function getPluginsDir() {
   if (!pluginsDir) pluginsDir = path.join(app.getPath('userData'), PLUGINS_DIR_NAME)
   return pluginsDir
+}
+
+function pluginDataDir(id) {
+  if (typeof id !== 'string' || !SAFE_ID.test(id)) return null
+  return path.join(app.getPath('userData'), PLUGIN_DATA_DIR_NAME, id)
+}
+
+function ensurePluginDataDir(id) {
+  const dir = pluginDataDir(id)
+  if (!dir) return null
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+  } catch (e) {
+    console.error(`[plugins] data folder for "${id}" could not be created:`, e.message)
+  }
+  return dir
+}
+
+function removePluginData(id) {
+  const dir = pluginDataDir(id)
+  if (!dir) return
+  try {
+    fs.rmSync(dir, { recursive: true, force: true })
+  } catch (e) {
+    console.error(`[plugins] data folder for "${id}" could not be removed:`, e.message)
+  }
 }
 
 function getPresetPluginsDir() {
@@ -240,7 +267,11 @@ module.exports = {
         marketplace.uninstall(id, {
           pluginsDir: getPluginsDir(),
           onChange: () => triggerReload(),
-          withPluginStopped: (pluginId, work) => pluginStopper(pluginId, work),
+          withPluginStopped: (pluginId, work) =>
+            pluginStopper(pluginId, async () => {
+              await work()
+              removePluginData(pluginId)
+            }),
         }),
     }, [SETTINGS_WINDOW]),
   },
@@ -257,6 +288,7 @@ module.exports = {
   unregisterPluginCapability,
   onPluginsChanged,
   setPluginStopper,
+  ensurePluginDataDir,
   listPlugins,
   mimeFor,
 }

@@ -89,6 +89,7 @@ function startBackend(record) {
     type: 'init',
     id: record.id,
     dir: path.dirname(entry),
+    dataDir: plugins.ensurePluginDataDir(record.id),
     entry,
     settings: pluginSettings.getValues(record.id),
     launch: launchCommand({
