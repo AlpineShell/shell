@@ -505,6 +505,8 @@ function removeStartup({ id }) {
   return { ok: true }
 }
 
+const ELEVATED_CHANGE_FAILED_EXIT_CODE = 3
+
 function buildElevatedLine({ info, enabled }) {
   if (info.kind === 'task') {
     return `schtasks /change /tn "${info.taskPath}" /${enabled ? 'enable' : 'disable'}`
@@ -512,18 +514,37 @@ function buildElevatedLine({ info, enabled }) {
   return `reg add "${info.approvedKey}" /v "${info.approvedValue}" /t REG_BINARY /d ${enabled ? APPROVED_ENABLED : APPROVED_DISABLED} /f`
 }
 
+function buildCheckedElevatedLine(change) {
+  return `${buildElevatedLine(change)}\r\nif ($LASTEXITCODE -ne 0) { exit ${ELEVATED_CHANGE_FAILED_EXIT_CODE} }`
+}
+
+async function settleFailedSystemChanges(changes) {
+  pendingChanges.clear()
+  try { await refreshStartup() } catch {}
+  for (const change of changes) {
+    const entry = cachedStartup.find((e) => e.id === change.id)
+    const applied = Boolean(entry) && entry.enabled === change.enabled
+    if (applied && change.record !== false && change.from !== change.enabled) {
+      addHistory({ id: change.id, name: change.name, from: change.from, to: change.enabled, scope: 'system' })
+    }
+  }
+  broadcastStartup()
+}
+
 async function applySystemChanges() {
   const changes = [...pendingChanges.values()]
   if (changes.length === 0) return { ok: true }
 
-  const payload = changes.map(buildElevatedLine).join('\r\n')
+  const payload = changes.map(buildCheckedElevatedLine).join('\r\n')
   const encoded = Buffer.from(payload, 'utf16le').toString('base64')
-  const command = `powershell -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'"`
+  const command = `powershell -NoProfile -Command "$elevated = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'; exit $elevated.ExitCode"`
 
   try {
     await execAsync(command, { windowsHide: true })
-  } catch {
-    return { ok: false, error: 'Changes were not applied (elevation was cancelled).' }
+  } catch (e) {
+    if (e && e.code === 1) return { ok: false, error: 'Changes were not applied (elevation was cancelled).' }
+    await settleFailedSystemChanges(changes)
+    return { ok: false, error: 'Some changes could not be applied.' }
   }
 
   for (const change of changes) {

@@ -30,6 +30,21 @@ describe('buildLicenceConfig', () => {
     expect(() => buildLicenceConfig({ ALPINE_RELEASE_BUILD: '1', ALPINE_LICENCE_PUBLIC_KEYS: '[]' })).toThrow(/at least one key/)
   })
 
+  it('refuses a release build that would reach the account service over plain http', () => {
+    const release = { ALPINE_RELEASE_BUILD: '1', ALPINE_LICENCE_PUBLIC_KEYS: JSON.stringify([key]) }
+    expect(() => buildLicenceConfig({ ...release, ALPINE_AUTH_BASE: 'http://auth.alpineshell.com' })).toThrow(/https address in ALPINE_AUTH_BASE$/)
+    expect(() => buildLicenceConfig({ ...release, ALPINE_WEBSITE_BASE: 'http://alpineshell.com' })).toThrow(/https address in ALPINE_WEBSITE_BASE$/)
+    expect(() => buildLicenceConfig({ ...release, ALPINE_AUTH_BASE: 'http://localhost:3001', ALPINE_WEBSITE_BASE: 'http://localhost:3000' })).toThrow(/ALPINE_AUTH_BASE and ALPINE_WEBSITE_BASE/)
+  })
+
+  it('lets a development build point at a local http service', () => {
+    expect(buildLicenceConfig({ ALPINE_AUTH_BASE: 'http://localhost:3001', ALPINE_WEBSITE_BASE: 'http://localhost:3000' })).toMatchObject({
+      isReleaseBuild: false,
+      authBase: 'http://localhost:3001',
+      websiteBase: 'http://localhost:3000',
+    })
+  })
+
   it('refuses a key that is not Ed25519', () => {
     const rsa = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey.export({ type: 'spki', format: 'pem' }).toString()
     expect(() => buildLicenceConfig({ ALPINE_RELEASE_BUILD: '1', ALPINE_LICENCE_PUBLIC_KEYS: JSON.stringify([{ kid: 'rsa', spkiPem: rsa }]) })).toThrow(/not Ed25519/)

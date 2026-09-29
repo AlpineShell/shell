@@ -7,6 +7,7 @@ const {
   GENERATED_CONFIG_FILE,
   readDotEnv,
   normaliseBase,
+  isSecureBase,
   parsePublicKeys,
 } = require('../electron/licenceConfig')
 const { GENERATED_KEY_FILE } = require('../electron/pluginSignature')
@@ -36,10 +37,14 @@ function buildLicenceConfig(settings) {
   const unusable = publicKeys.filter((key) => !isEd25519PublicKey(key.spkiPem)).map((key) => key.kid)
   if (unusable.length > 0) throw new Error(`ALPINE_LICENCE_PUBLIC_KEYS holds keys that are not Ed25519 SPKI PEM: ${unusable.join(', ')}`)
   if (isReleaseBuild && publicKeys.length === 0) throw new Error('ALPINE_RELEASE_BUILD=1 needs at least one key in ALPINE_LICENCE_PUBLIC_KEYS')
+  const authBase = normaliseBase(settings.ALPINE_AUTH_BASE, DEFAULT_AUTH_BASE)
+  const websiteBase = normaliseBase(settings.ALPINE_WEBSITE_BASE, DEFAULT_WEBSITE_BASE)
+  const insecure = [['ALPINE_AUTH_BASE', authBase], ['ALPINE_WEBSITE_BASE', websiteBase]].filter(([, base]) => !isSecureBase(base)).map(([name]) => name)
+  if (isReleaseBuild && insecure.length > 0) throw new Error(`ALPINE_RELEASE_BUILD=1 needs an https address in ${insecure.join(' and ')}`)
   return {
     isReleaseBuild,
-    authBase: normaliseBase(settings.ALPINE_AUTH_BASE, DEFAULT_AUTH_BASE),
-    websiteBase: normaliseBase(settings.ALPINE_WEBSITE_BASE, DEFAULT_WEBSITE_BASE),
+    authBase,
+    websiteBase,
     publicKeys,
   }
 }

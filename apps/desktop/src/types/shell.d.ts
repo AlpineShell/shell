@@ -255,6 +255,11 @@ declare global {
     selectedIndex: number
   }
 
+  interface AltTabThumbnailPayload {
+    hwnd: number
+    thumbnail: string
+  }
+
   type DisplayMode = 'internal' | 'clone' | 'extend' | 'external'
 
   interface DisplayModeOption {
@@ -290,6 +295,10 @@ declare global {
     brightnessReductionPercent: number
     reduceBackgroundPolling: boolean
     throttleProcesses: boolean
+  }
+
+  interface GpuPreferences {
+    highPerformance: boolean
   }
 
   interface BatterySaverState {
@@ -1602,6 +1611,17 @@ declare global {
     match: number
   }
 
+  interface RootReloadPlan {
+    reload: boolean
+    delayMs: number
+  }
+
+  interface RootErrorBoundaryProps {
+    view: string
+    onFailure?: () => void
+    children: import('react').ReactNode
+  }
+
   interface Window {
     alpineBoot?: AlpineBootState
     fileHandlers: {
@@ -1719,6 +1739,7 @@ declare global {
       onShow: (callback: (data: AltTabShowPayload) => void) => void
       onHide: (callback: () => void) => void
       onSelectionChanged: (callback: (index: number) => void) => void
+      onThumbnail: (callback: (data: AltTabThumbnailPayload) => void) => void
       activate: (hwnd: number) => Promise<void>
     }
     displayMode: {
@@ -1757,6 +1778,7 @@ declare global {
     }
     shell: {
       settingsIcon: string
+      reportRenderError: (detail: string) => void
       theme: {
         initial: ThemeState
         get: () => Promise<ThemeState>
@@ -1876,6 +1898,10 @@ declare global {
         state: () => Promise<BatterySaverState>
         setOverride: (override: BatterySaverOverride) => Promise<BatterySaverState>
         onStateChanged: (callback: (state: BatterySaverState) => void) => () => void
+      }
+      gpu: {
+        preferences: () => Promise<GpuPreferences>
+        setPreferences: (partial: Partial<GpuPreferences>) => Promise<GpuPreferences>
       }
       media: {
         session: () => Promise<MediaPlayback>

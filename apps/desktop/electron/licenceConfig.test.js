@@ -48,6 +48,12 @@ describe('a release build', () => {
     expect(config.websiteBase).toBe(DEFAULT_WEBSITE_BASE)
   })
 
+  it('never talks to the account service over plain http', () => {
+    const config = resolveLicenceConfig({ baked: { ...baked, authBase: 'http://auth.alpineshell.com', websiteBase: 'http://alpineshell.com' }, env: {}, dotEnv: {} })
+    expect(config.authBase).toBe(DEFAULT_AUTH_BASE)
+    expect(config.websiteBase).toBe(DEFAULT_WEBSITE_BASE)
+  })
+
   it('never carries a development enforcement flag', () => {
     expect(resolveLicenceConfig({ baked: { ...baked, enforceInDevelopment: true }, env: {}, dotEnv: {} }).enforceInDevelopment).toBe(false)
   })

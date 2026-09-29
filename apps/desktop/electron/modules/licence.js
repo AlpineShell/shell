@@ -13,6 +13,7 @@ const MINUTE_MS = 60 * 1000
 const DEVICE_CODE_DEFAULT_INTERVAL_S = 5
 const DEVICE_CODE_SLOW_DOWN_S = 5
 const DEVICE_CODE_DEFAULT_EXPIRES_S = 600
+const DEVICE_CODE_RETRY_AFTER_MAX_MS = 30 * 1000
 const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code'
 const NO_LICENCE_RECHECK_MS = 10 * 1000
 const NO_LICENCE_RECHECK_WINDOW_MS = 20 * MINUTE_MS
@@ -48,6 +49,43 @@ function idleProgress() {
 
 function stringOrNull(value) {
   return typeof value === 'string' ? value : null
+}
+
+function isTransientFailure(status) {
+  return status === 429 || (status >= 500 && status <= 599)
+}
+
+function retryAfterHeader(headers) {
+  if (!headers || typeof headers.get !== 'function') return null
+  return headers.get('x-retry-after') ?? headers.get('retry-after')
+}
+
+function retryAfterMs(headers, now) {
+  const value = retryAfterHeader(headers)
+  if (!value) return null
+  const trimmed = value.trim()
+  if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000
+  const retryAt = Date.parse(trimmed)
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - now) : null
+}
+
+function isWebsiteDevicePage(websiteBase, value) {
+  let page
+  let devicePage
+  try {
+    page = new URL(value)
+    devicePage = new URL(`${websiteBase}/device`)
+  } catch {
+    return false
+  }
+  return page.origin === devicePage.origin && page.pathname.replace(/\/+$/, '') === devicePage.pathname
+}
+
+function deviceVerificationUrl(websiteBase, body) {
+  const offered = stringOrNull(body.verification_uri_complete) || stringOrNull(body.verification_uri)
+  if (offered && isWebsiteDevicePage(websiteBase, offered)) return offered
+  const userCode = stringOrNull(body.user_code)
+  return userCode ? `${websiteBase}/device?user_code=${encodeURIComponent(userCode)}` : `${websiteBase}/device`
 }
 
 function seatFromServer(entry) {
@@ -198,9 +236,9 @@ function createLicenceService(overrides = {}) {
       if (authorization) headers.Authorization = authorization
       const response = await deps.fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal })
       const text = await response.text()
-      return { status: response.status, body: parseJson(text), error: null }
+      return { status: response.status, body: parseJson(text), headers: response.headers, error: null }
     } catch (error) {
-      return { status: 0, body: null, error: error && error.message ? error.message : 'network' }
+      return { status: 0, body: null, headers: null, error: error && error.message ? error.message : 'network' }
     } finally {
       clearTimeout(abortTimer)
     }
@@ -306,8 +344,10 @@ function createLicenceService(overrides = {}) {
     const expiresSeconds = Number.isFinite(code.expires_in) && code.expires_in > 0 ? code.expires_in : DEVICE_CODE_DEFAULT_EXPIRES_S
     const deadline = deps.now() + expiresSeconds * 1000
     let intervalMs = intervalSeconds * 1000
+    let retryWaitMs = 0
     while (!flow.cancelled) {
-      await sleep(intervalMs)
+      await sleep(Math.max(intervalMs, retryWaitMs))
+      retryWaitMs = 0
       if (flow.cancelled) return { outcome: 'cancelled' }
       if (deps.now() > deadline) return { outcome: 'expired' }
       const response = await postJson(`${config.authBase}/api/auth/device/token`, {
@@ -320,6 +360,10 @@ function createLicenceService(overrides = {}) {
       if (body.error === 'authorization_pending' || response.status === 0) continue
       if (body.error === 'slow_down') {
         intervalMs += DEVICE_CODE_SLOW_DOWN_S * 1000
+        continue
+      }
+      if (isTransientFailure(response.status)) {
+        retryWaitMs = Math.min(retryAfterMs(response.headers, deps.now()) ?? 0, DEVICE_CODE_RETRY_AFTER_MAX_MS)
         continue
       }
       if (body.error === 'access_denied') return { outcome: 'denied' }
@@ -336,13 +380,11 @@ function createLicenceService(overrides = {}) {
       setProgress({ phase: 'error', error: code.status === 0 ? 'unreachable' : `device-code-${code.status}` })
       return
     }
-    const verificationUri = code.body.verification_uri_complete || code.body.verification_uri || null
-    if (verificationUri) {
-      try {
-        await deps.openExternal(verificationUri)
-      } catch (error) {
-        deps.log(`could not open the browser: ${error.message}`)
-      }
+    const verificationUri = deviceVerificationUrl(config.websiteBase, code.body)
+    try {
+      await deps.openExternal(verificationUri)
+    } catch (error) {
+      deps.log(`could not open the browser: ${error.message}`)
     }
     setProgress({ phase: 'waiting', userCode: stringOrNull(code.body.user_code), verificationUri })
     const grant = await pollDeviceToken(flow, code.body)

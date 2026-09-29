@@ -20,12 +20,13 @@ function buildDelaySeconds(seconds) {
 }
 
 function buildFindAlpineProcess() {
-  return 'Get-Process -Name $imageName -ErrorAction SilentlyContinue'
+  return 'Get-Process -Name $imageName -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sessionId }'
 }
 
 function buildWaitForProcessExit() {
   return [
     `$imageName = [System.IO.Path]::GetFileNameWithoutExtension($env:${IMAGE_VAR})`,
+    '$sessionId = (Get-Process -Id $PID).SessionId',
     '$stillRunning = $false',
     '$waitTicks = 0',
     `while (${buildFindAlpineProcess()}) {`,

@@ -1,9 +1,12 @@
 const fs = require('fs')
 const path = require('path')
 const { execFile } = require('child_process')
+const { quotePowerShellLiteral } = require('./powershell')
 
 const WORKER_ENTRY = path.join(__dirname, 'shellExecuteWorker.js')
 const REQUEST_TIMEOUT_MS = 15000
+const CONSENT_REQUEST_TIMEOUT_MS = 120000
+const ELEVATE_VERB = 'runas'
 
 let worker = null
 let workerReady = false
@@ -35,24 +38,33 @@ function retryAllThroughFallback() {
   }
 }
 
+function stopWorker(target) {
+  target.removeAllListeners()
+  target.on('error', () => {})
+  target.terminate().catch(() => {})
+}
+
 function dropWorker(reason) {
   if (!worker) return
   const dropped = worker
   worker = null
   workerReady = false
-  dropped.removeAllListeners()
-  dropped.on('error', () => {})
-  dropped.terminate().catch(() => {})
+  stopWorker(dropped)
   settleAll(false)
   console.error('[shellExecute] dropped worker:', reason)
+}
+
+function startWorker() {
+  const { Worker } = require('worker_threads')
+  const started = new Worker(WORKER_ENTRY)
+  started.unref()
+  return started
 }
 
 function ensureWorker() {
   if (worker || workerUnavailable) return worker
   try {
-    const { Worker } = require('worker_threads')
-    const started = new Worker(WORKER_ENTRY)
-    started.unref()
+    const started = startWorker()
     started.on('message', (message) => {
       if (message.ready) { workerReady = true; return }
       if (!message.ok) console.error('[shellExecute] failed, detail', message.detail)
@@ -80,14 +92,16 @@ function ensureWorker() {
   return worker
 }
 
-function quotePowerShell(text) {
-  return `'${String(text).replace(/'/g, "''")}'`
+function startProcessCommand(file, args, verb) {
+  return [
+    `Start-Process -FilePath ${quotePowerShellLiteral(file)}`,
+    ...(args ? [`-ArgumentList ${quotePowerShellLiteral(args)}`] : []),
+    ...(verb ? [`-Verb ${quotePowerShellLiteral(verb)}`] : []),
+  ].join(' ')
 }
 
-function fallbackExecute(file, args) {
-  const command = args
-    ? `Start-Process -FilePath ${quotePowerShell(file)} -ArgumentList ${quotePowerShell(args)}`
-    : `Start-Process -FilePath ${quotePowerShell(file)}`
+function fallbackExecute(file, args, verb) {
+  const command = startProcessCommand(file, args, verb)
   return new Promise((resolve) => {
     execFile('powershell', ['-NoProfile', '-Command', command], { windowsHide: true }, (err) => {
       if (err) console.error('[shellExecute] fallback failed for', file, '-', err.message)
@@ -112,6 +126,44 @@ function shellExecute(file, args) {
     if (typeof timer.unref === 'function') timer.unref()
     pendingRequests.set(id, { resolve, timer, file: target, args: parameters })
     active.postMessage({ id, file: target, args: parameters })
+  })
+}
+
+function shellExecuteElevated(file, { startConsentWorker = startWorker, timeoutMs = CONSENT_REQUEST_TIMEOUT_MS } = {}) {
+  const target = String(file || '').trim()
+  if (!target) return Promise.resolve(false)
+  if (workerUnavailable) return fallbackExecute(target, null, ELEVATE_VERB)
+  let consentWorker
+  try {
+    consentWorker = startConsentWorker()
+  } catch (e) {
+    console.error('[shellExecute] consent worker unavailable, falling back to Start-Process:', e.message)
+    return fallbackExecute(target, null, ELEVATE_VERB)
+  }
+  const id = ++nextRequestId
+  return new Promise((resolve) => {
+    let ready = false
+    const timer = setTimeout(() => {
+      console.error('[shellExecute] no answer to the elevation prompt for', target, 'within', timeoutMs, 'ms')
+      finish(false)
+    }, timeoutMs)
+    if (typeof timer.unref === 'function') timer.unref()
+    function finish(result) {
+      clearTimeout(timer)
+      stopWorker(consentWorker)
+      resolve(result)
+    }
+    consentWorker.on('message', (message) => {
+      if (message.ready) { ready = true; return }
+      if (!message.ok) console.error('[shellExecute] elevation failed, detail', message.detail)
+      finish(!!message.ok)
+    })
+    consentWorker.on('error', (e) => {
+      console.error('[shellExecute] consent worker error:', e.message)
+      finish(ready ? false : fallbackExecute(target, null, ELEVATE_VERB))
+    })
+    consentWorker.on('exit', () => finish(false))
+    consentWorker.postMessage({ id, file: target, args: null, verb: ELEVATE_VERB })
   })
 }
 
@@ -145,4 +197,4 @@ function shellExecuteCommandLine(commandLine) {
   return shellExecute(file, args)
 }
 
-module.exports = { shellExecute, shellExecuteCommandLine, splitCommandLine }
+module.exports = { shellExecute, shellExecuteElevated, shellExecuteCommandLine, splitCommandLine, startProcessCommand }

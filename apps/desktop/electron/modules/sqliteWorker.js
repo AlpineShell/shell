@@ -78,8 +78,11 @@ function ensureWorker() {
     return null
   }
   worker = proc
+  let workerPid = null
+  proc.once('spawn', () => { workerPid = proc.pid })
   proc.on('message', handleMessage)
   proc.on('exit', () => {
+    if (workerPid) winsqlite.removeSnapshotsOf(workerPid)
     if (worker !== proc) return
     worker = null
     rejectPending('sqlite worker exited')
@@ -172,4 +175,9 @@ function warm() {
   ensureWorker()
 }
 
-module.exports = { readRows, withSnapshot, warm, dispose: () => dropWorker('disposed') }
+function removeLeftoverSnapshots() {
+  winsqlite.removeAllSnapshots()
+  winsqlite.removeLegacySnapshots()
+}
+
+module.exports = { readRows, withSnapshot, warm, removeLeftoverSnapshots, dispose: () => dropWorker('disposed') }
