@@ -1,10 +1,16 @@
 const fs = require('fs')
 const path = require('path')
-const { PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require('@aws-sdk/client-s3')
+const { PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require('@aws-sdk/client-s3')
 const { Upload } = require('@aws-sdk/lib-storage')
+const { extractFile } = require('@electron/asar')
 const { readStorageEnv, createStorageClient } = require('./storage')
 
-const releaseDir = path.join(__dirname, '..', 'release')
+const appDir = path.join(__dirname, '..')
+const releaseDir = path.join(appDir, 'release')
+const packedAppPath = path.join(releaseDir, 'win-unpacked', 'resources', 'app.asar')
+const packedLicenceConfigPath = path.join('electron', 'licenceConfig.generated.js')
+const appUpdateConfigPath = path.join(releaseDir, 'win-unpacked', 'resources', 'app-update.yml')
+const feedManifestKey = 'latest.yml'
 const uploadExtensions = ['.exe', '.exe.blockmap', '.yml']
 const installerKeyPattern = /^Alpine Shell Setup (.+)\.exe$/
 const versionsToKeep = 5
@@ -62,6 +68,100 @@ function compareVersionsDescending(a, b) {
   return 0
 }
 
+function manifestVersion(manifestText) {
+  if (typeof manifestText !== 'string') return null
+  const match = manifestText.match(/^version:\s*['"]?([^'"\s]+)['"]?\s*$/m)
+  return match ? match[1] : null
+}
+
+function licenceKeyIds(licenceConfig) {
+  const publicKeys = licenceConfig && Array.isArray(licenceConfig.publicKeys) ? licenceConfig.publicKeys : []
+  return publicKeys.map((key) => key && key.kid).filter(Boolean)
+}
+
+function pointsAtFeed(appUpdateConfig, feedUrl) {
+  if (typeof appUpdateConfig !== 'string') return false
+  return appUpdateConfig.split(/\r?\n/).some((line) => line.trim() === `url: ${feedUrl}`)
+}
+
+function feedVersionProblem(releaseManifest, feedManifest) {
+  const releaseVersion = manifestVersion(releaseManifest)
+  if (!releaseVersion) return `release/${feedManifestKey} names no version`
+  if (feedManifest === null) return null
+  const feedVersion = manifestVersion(feedManifest)
+  if (!feedVersion) return `the ${feedManifestKey} in the bucket names no version, so ${releaseVersion} cannot be checked against it`
+  if (releaseManifest === feedManifest) return null
+  if (compareVersionsDescending(releaseVersion, feedVersion) >= 0) {
+    return `version ${releaseVersion} is not newer than ${feedVersion}, which the update feed already offers`
+  }
+  return null
+}
+
+function releaseReadinessProblems({ licenceConfig, appUpdateConfig, feedUrl, releaseManifest, feedManifest }) {
+  const problems = []
+  if (!licenceConfig || licenceConfig.isReleaseBuild !== true || licenceKeyIds(licenceConfig).length === 0) {
+    problems.push('the licence config packed into release/win-unpacked/resources/app.asar is not a release build with at least one licence key; bake it with ALPINE_RELEASE_BUILD=1 and ALPINE_LICENCE_PUBLIC_KEYS set, then build again')
+  }
+  if (!pointsAtFeed(appUpdateConfig, feedUrl)) {
+    problems.push(`release/win-unpacked/resources/app-update.yml does not point at ${feedUrl}`)
+  }
+  const versionProblem = feedVersionProblem(releaseManifest, feedManifest)
+  if (versionProblem) problems.push(versionProblem)
+  return problems
+}
+
+function readTextOrNull(filePath) {
+  try {
+    return fs.readFileSync(filePath, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+function moduleExports(source) {
+  const packedModule = { exports: {} }
+  new Function('module', 'exports', source)(packedModule, packedModule.exports)
+  return packedModule.exports
+}
+
+function readPackedLicenceConfig(archivePath) {
+  try {
+    return moduleExports(extractFile(archivePath, packedLicenceConfigPath).toString('utf8'))
+  } catch {
+    return null
+  }
+}
+
+async function readFeedManifest(client, bucket) {
+  try {
+    const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: feedManifestKey }))
+    return await response.Body.transformToString()
+  } catch (error) {
+    if (error.name === 'NoSuchKey' || (error.$metadata && error.$metadata.httpStatusCode === 404)) return null
+    throw error
+  }
+}
+
+async function refuseUnlessReadyToPublish(client, bucket) {
+  let feedManifest
+  try {
+    feedManifest = await readFeedManifest(client, bucket)
+  } catch (error) {
+    console.error(`Could not read ${feedManifestKey} from bucket ${bucket}: ${error.message}`)
+    process.exit(1)
+  }
+  const problems = releaseReadinessProblems({
+    licenceConfig: readPackedLicenceConfig(packedAppPath),
+    appUpdateConfig: readTextOrNull(appUpdateConfigPath),
+    feedUrl: require('../package.json').build.publish.url,
+    releaseManifest: readTextOrNull(path.join(releaseDir, feedManifestKey)),
+    feedManifest,
+  })
+  if (problems.length === 0) return
+  for (const problem of problems) console.error(`Refusing to publish: ${problem}`)
+  process.exit(1)
+}
+
 async function listInstallerVersions(client, bucket) {
   const versions = []
   let continuationToken
@@ -79,9 +179,14 @@ async function listInstallerVersions(client, bucket) {
 }
 
 async function pruneOldReleases(client, bucket, keepCount) {
-  const staleVersions = (await listInstallerVersions(client, bucket))
-    .sort(compareVersionsDescending)
-    .slice(keepCount)
+  let installerVersions
+  try {
+    installerVersions = await listInstallerVersions(client, bucket)
+  } catch (error) {
+    console.error(`Failed to list installers to prune: ${error.message}`)
+    return
+  }
+  const staleVersions = installerVersions.sort(compareVersionsDescending).slice(keepCount)
 
   for (const version of staleVersions) {
     for (const key of [`Alpine Shell Setup ${version}.exe`, `Alpine Shell Setup ${version}.exe.blockmap`]) {
@@ -104,6 +209,8 @@ async function publish() {
     console.error(`No uploadable artifacts found in ${releaseDir}`)
     process.exit(1)
   }
+
+  await refuseUnlessReadyToPublish(client, config.bucket)
 
   const manifestFiles = artifacts.filter((fileName) => fileName.endsWith('.yml'))
   const binaryFiles = artifacts.filter((fileName) => !fileName.endsWith('.yml'))
@@ -129,4 +236,6 @@ async function publish() {
   await pruneOldReleases(client, config.bucket, versionsToKeep)
 }
 
-publish()
+if (require.main === module) publish()
+
+module.exports = { compareVersionsDescending, manifestVersion, readPackedLicenceConfig, releaseReadinessProblems }

@@ -3,8 +3,9 @@
 
 ## Requirements 
 
-- Windows 10/11 
-- Node.js 18+
+- Windows 11 
+- [Bun](https://bun.sh) 1.3.12, the version CI and releases use (1.3.13 and later can fail a clean install on Windows)
+- Node.js 20.19+ or 22.12+ for Vite and the build scripts
 
 ## Getting Started
 

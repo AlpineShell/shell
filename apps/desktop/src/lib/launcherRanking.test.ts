@@ -155,7 +155,7 @@ describe("result keys", () => {
 })
 
 describe("adoptInstalledAppMatch", () => {
-  const openTeams = { kind: "open" as const, key: "c:\program files\windowsapps\msteams\ms-teams.exe", match: 10_101 }
+  const openTeams = { kind: "open" as const, key: "c:\\program files\\windowsapps\\msteams\\ms-teams.exe", match: 10_101 }
   const installedTeams = { kind: "app" as const, key: "msteams_8wekyb3d8bbwe!msteams", match: 19_998 }
 
   it("lets a running window stand in for its installed app without losing the app's match or memory", () => {
