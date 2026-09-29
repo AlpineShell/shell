@@ -381,6 +381,46 @@ describe('the device flow sign-in', () => {
     expect(service.status().state).toBe('valid')
   })
 
+  it('opens only the website device page, whatever the server offers', async () => {
+    const fallback = `${WEBSITE_BASE}/device?user_code=ABCD-EFGH`
+    const offers = [
+      { offered: { verification_uri: 'https://alpineshell.com/device/' }, opened: 'https://alpineshell.com/device/' },
+      { offered: { verification_uri_complete: 'https://auth.alpineshell.com/device?user_code=ABCD-EFGH' }, opened: fallback },
+      { offered: { verification_uri_complete: 'http://alpineshell.com/device?user_code=ABCD-EFGH' }, opened: fallback },
+      { offered: { verification_uri_complete: 'https://alpineshell.com.evil.example/device' }, opened: fallback },
+      { offered: { verification_uri_complete: 'https://alpineshell.com@evil.example/device' }, opened: fallback },
+      { offered: { verification_uri_complete: 'https://alpineshell.com/account' }, opened: fallback },
+      { offered: { verification_uri_complete: 'search-ms:query=x&crumb=location:\\\\attacker\\share' }, opened: fallback },
+      { offered: { verification_uri_complete: 'file://attacker/share/payload.exe' }, opened: fallback },
+      { offered: { verification_uri: '/device' }, opened: fallback },
+      { offered: {}, opened: fallback },
+    ]
+    for (const { offered, opened } of offers) {
+      const fetch = routedFetch([
+        { path: '/api/auth/device/code', reply: () => jsonResponse(200, { device_code: 'dc_1', user_code: 'ABCD-EFGH', interval: 5, expires_in: 600, ...offered }) },
+        { path: '/api/auth/device/token', reply: () => jsonResponse(400, { error: 'authorization_pending' }) },
+      ])
+      const { service, openExternal } = makeService({ fetch })
+      service.handlers['licence/sign-in']()
+      await settle()
+      expect(openExternal).toHaveBeenCalledWith(opened)
+      expect(service.handlers['licence/sign-in-state']()).toMatchObject({ phase: 'waiting', verificationUri: opened })
+      service.handlers['licence/cancel-sign-in']()
+    }
+  })
+
+  it('opens the bare device page when the server sends no code to put in the link', async () => {
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, { device_code: 'dc_1', verification_uri: 'https://evil.example/device', interval: 5, expires_in: 600 }) },
+      { path: '/api/auth/device/token', reply: () => jsonResponse(400, { error: 'authorization_pending' }) },
+    ])
+    const { service, openExternal } = makeService({ fetch })
+    service.handlers['licence/sign-in']()
+    await settle()
+    expect(openExternal).toHaveBeenCalledWith(`${WEBSITE_BASE}/device`)
+    service.handlers['licence/cancel-sign-in']()
+  })
+
   it('sends the Windows computer name when no name was chosen and caps a long one', async () => {
     const fetch = routedFetch([
       { path: '/api/auth/device/code', reply: () => jsonResponse(200, deviceCode) },
