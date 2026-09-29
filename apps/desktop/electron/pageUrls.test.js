@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import path from 'path'
 import { pathToFileURL } from 'url'
 
-const { isAppPageUrl, pluginIdOfPageUrl, isShellPageUrl, mayNavigate, isBrowserLink, acceptsIpcSender } = await import('./pageUrls.js')
+const { isAppPageUrl, pluginIdOfPageUrl, mayNavigate, isBrowserLink, acceptsIpcSender } = await import('./pageUrls.js')
 
 const INSTALL_DIR = path.resolve(path.join(path.sep, 'Programs', 'Alpine Shell', 'resources', 'app.asar'))
 const INDEX_PATH = path.join(INSTALL_DIR, 'dist', 'index.html')
@@ -89,15 +89,6 @@ describe('mayNavigate', () => {
     expect(mayNavigate('https://www.openstreetmap.org/', 'https://evil.example/', PACKAGED)).toBe(false)
     expect(mayNavigate('https://www.openstreetmap.org/', `${INDEX_URL}?mode=settings`, PACKAGED)).toBe(false)
     expect(mayNavigate('', `${INDEX_URL}?mode=settings`, PACKAGED)).toBe(false)
-  })
-})
-
-describe('isShellPageUrl', () => {
-  it('accepts the shell page and plugin pages only', () => {
-    expect(isShellPageUrl(`${INDEX_URL}?mode=topbar`, PACKAGED)).toBe(true)
-    expect(isShellPageUrl('alpine-plugin://com.alpine.android/window/page.html', PACKAGED)).toBe(true)
-    expect(isShellPageUrl('https://evil.example/', PACKAGED)).toBe(false)
-    expect(isShellPageUrl(fileUrl('dist', 'other.html'), PACKAGED)).toBe(false)
   })
 })
 

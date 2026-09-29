@@ -45,10 +45,6 @@ function pluginIdOfPageUrl(value) {
   return url.hostname || null
 }
 
-function isShellPageUrl(value, appLocation) {
-  return isAppPageUrl(value, appLocation) || pluginIdOfPageUrl(value) !== null
-}
-
 function mayNavigate(fromUrl, toUrl, appLocation) {
   if (isAppPageUrl(fromUrl, appLocation)) return isAppPageUrl(toUrl, appLocation)
   const pluginId = pluginIdOfPageUrl(fromUrl)
@@ -77,7 +73,6 @@ function acceptsIpcSender(channel, senderUrl, appLocation, request) {
 module.exports = {
   isAppPageUrl,
   pluginIdOfPageUrl,
-  isShellPageUrl,
   mayNavigate,
   isBrowserLink,
   acceptsIpcSender,

@@ -81,6 +81,7 @@ const licence = require('./modules/licence')
 const { planStartupForLicence } = require('./licenceStartup')
 const trustedSenders = require('./trustedSenders')
 const pageUrls = require('./pageUrls')
+const { keepToShellPages } = require('./shellPageGuard')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -170,20 +171,7 @@ function openInBrowser(url) {
   electronShell.openExternal(url).catch((e) => console.error('[main] could not open link:', e && e.message))
 }
 
-function keepToShellPages(contents) {
-  contents.setWindowOpenHandler(({ url }) => {
-    openInBrowser(url)
-    return { action: 'deny' }
-  })
-  contents.on('will-navigate', (event) => {
-    if (!pageUrls.mayNavigate(contents.getURL(), event.url, APP_LOCATION)) event.preventDefault()
-  })
-  contents.on('will-redirect', (event) => {
-    if (event.isMainFrame && !pageUrls.isShellPageUrl(event.url, APP_LOCATION)) event.preventDefault()
-  })
-}
-
-app.on('web-contents-created', (_event, contents) => keepToShellPages(contents))
+app.on('web-contents-created', (_event, contents) => keepToShellPages(contents, APP_LOCATION, openInBrowser))
 
 function grantOnlyShellPermissions() {
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(GRANTED_PERMISSIONS.has(permission)))
