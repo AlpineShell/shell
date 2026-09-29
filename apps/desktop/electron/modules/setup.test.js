@@ -229,6 +229,52 @@ describe('the Run entry while Explorer holds the shell', () => {
     expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
   })
 
+  it('never claims the Windows shell or the Run entry at startup without a licence, even with setup marked complete', () => {
+    electronApp.isPackaged = true
+    markSetupComplete()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    licenceMock.requireValid.mockImplementation(() => { throw licenceRequiredError() })
+
+    expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: false })
+    expect(shellValue()).toBe('explorer.exe')
+    expect(runValue()).toBeNull()
+    expect(regCalls).toHaveLength(0)
+  })
+
+  it('keeps the registration of a PC that already runs Alpine as its shell when the licence is gone', () => {
+    electronApp.isPackaged = true
+    markSetupComplete()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), INSTALLED_EXE)
+    registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${INSTALLED_EXE}"`)
+    licenceMock.requireValid.mockImplementation(() => { throw licenceRequiredError() })
+
+    expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: true })
+    expect(shellValue()).toBe(INSTALLED_EXE)
+    expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
+  })
+
+  it('takes the Windows shell back without a licence when a reinstall or a revert until next sign-in left Explorer there and kept the Run entry', () => {
+    electronApp.isPackaged = true
+    markSetupComplete()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${INSTALLED_EXE}" --autostart`)
+    licenceMock.requireValid.mockImplementation(() => { throw licenceRequiredError() })
+
+    expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: true })
+    expect(shellValue()).toBe(INSTALLED_EXE)
+    expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
+  })
+
+  it('claims the Windows shell and the Run entry at startup with a licence', () => {
+    electronApp.isPackaged = true
+    markSetupComplete()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+
+    expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: true })
+    expect(shellValue()).toBe(INSTALLED_EXE)
+    expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
+  })
+
   it('exits the launch that its own Run entry starts while Explorer holds the shell', () => {
     electronApp.isPackaged = true
     setup.handlers['setup/set-shell'](fromSetupWindow)
@@ -271,5 +317,24 @@ describe('the Run entry while Explorer holds the shell', () => {
     expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(true)
     expect(regCalls).toHaveLength(0)
     expect(installerMock.clearShellHandoff).not.toHaveBeenCalled()
+  })
+})
+
+describe('whether Alpine has claimed the desktop', () => {
+  it('counts a PC whose Winlogon Shell points at Alpine', () => {
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), INSTALLED_EXE)
+    expect(setup.isDesktopClaimedByAlpine()).toBe(true)
+  })
+
+  it('counts a PC that Explorer holds only until the Run entry takes the shell back', () => {
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${INSTALLED_EXE}" --autostart`)
+    expect(setup.isDesktopClaimedByAlpine()).toBe(true)
+  })
+
+  it('does not count a PC with Explorer as its shell and no Run entry', () => {
+    expect(setup.isDesktopClaimedByAlpine()).toBe(false)
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    expect(setup.isDesktopClaimedByAlpine()).toBe(false)
   })
 })
