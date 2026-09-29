@@ -117,7 +117,8 @@
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "signExts": [".dll", ".node"]
     },
     "nsis": {
       "oneClick": true,
