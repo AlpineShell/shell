@@ -19,6 +19,20 @@ nodeRequire.cache[electronModuleId] = {
   },
 }
 
+const licenceConfigModuleId = nodeRequire.resolve('../licenceConfig.js')
+const realLicenceConfig = nodeRequire('../licenceConfig.js')
+let releaseBuild = false
+
+nodeRequire.cache[licenceConfigModuleId] = {
+  id: licenceConfigModuleId,
+  filename: licenceConfigModuleId,
+  loaded: true,
+  exports: {
+    ...realLicenceConfig,
+    loadLicenceConfig: () => ({ ...realLicenceConfig.loadLicenceConfig(), isReleaseBuild: releaseBuild }),
+  },
+}
+
 const plugins = nodeRequire('./plugins.js')
 const { setTrustedWindowsAccessor, SETTINGS_WINDOW, UNTRUSTED_SENDER } = nodeRequire('../trustedSenders.js')
 
@@ -29,6 +43,27 @@ const settingsWindow = { webContents: { id: 4 }, isDestroyed: () => false }
 const topbarWindow = { webContents: { id: 5 }, isDestroyed: () => false }
 const fromSettings = { sender: settingsWindow.webContents }
 const fromTopbar = { sender: topbarWindow.webContents }
+const UPDATE_BUNDLE_KEY = `plugins/${PLUGIN_ID}/1.1.0/${PLUGIN_ID}-1.1.0.alpineplugin`
+
+function serveUnsignedUpdate() {
+  const fetchMock = vi.fn(async (url) => {
+    if (url.endsWith(`/plugins/${PLUGIN_ID}/latest.json`)) {
+      return new Response(JSON.stringify({ id: PLUGIN_ID, version: '1.1.0', url: UPDATE_BUNDLE_KEY, sha256: 'a'.repeat(64), signature: null }))
+    }
+    if (url.endsWith(UPDATE_BUNDLE_KEY)) return new Response(Buffer.from('unsigned bundle'))
+    return new Response(null, { status: 404 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function bundleRequests(fetchMock) {
+  return fetchMock.mock.calls.filter(([url]) => url.endsWith(UPDATE_BUNDLE_KEY))
+}
+
+function installedVersion() {
+  return JSON.parse(fs.readFileSync(path.join(pluginDir(), 'plugin.json'), 'utf8')).version
+}
 
 beforeEach(() => {
   fs.mkdirSync(pluginDir(), { recursive: true })
@@ -37,6 +72,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  releaseBuild = false
+  vi.unstubAllGlobals()
   setTrustedWindowsAccessor(null)
   plugins.setPluginStopper((_id, work) => work())
   for (const entry of fs.readdirSync(userDataDir)) fs.rmSync(path.join(userDataDir, entry), { recursive: true, force: true })
@@ -84,6 +121,25 @@ describe('uninstalling through the plugins handlers', () => {
     expect(result).toMatchObject({ ok: false, error: 'remove-failed' })
     expect(fs.existsSync(pluginDataDir())).toBe(true)
     expect(fs.existsSync(pluginDir())).toBe(true)
+  })
+})
+
+describe('installing through the plugins handlers', () => {
+  it('refuses an unsigned bundle in a release build before downloading it', async () => {
+    releaseBuild = true
+    const fetchMock = serveUnsignedUpdate()
+    const result = await plugins.handlers['plugins/marketplace-install'](fromSettings, { id: PLUGIN_ID })
+    expect(result).toEqual({ ok: false, error: 'unverified', reason: 'no-signature' })
+    expect(bundleRequests(fetchMock)).toHaveLength(0)
+    expect(installedVersion()).toBe('1.0.0')
+  })
+
+  it('lets a development build download an unsigned bundle', async () => {
+    const fetchMock = serveUnsignedUpdate()
+    const result = await plugins.handlers['plugins/marketplace-install'](fromSettings, { id: PLUGIN_ID })
+    expect(result).toEqual({ ok: false, error: 'digest-mismatch' })
+    expect(bundleRequests(fetchMock)).toHaveLength(1)
+    expect(installedVersion()).toBe('1.0.0')
   })
 })
 
