@@ -10,6 +10,7 @@ const workflows = Object.fromEntries(
 const ci = workflows['ci.yml']
 const release = workflows['release.yml']
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+const rootPackageJson = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))
 
 const feedPublishStep = 'Publish installer + latest.yml to Railway'
 
@@ -52,6 +53,10 @@ describe('workflows', () => {
   it('check pull requests with the Bun that builds releases', () => {
     expect(bunVersion(ci)).toMatch(/^\d+\.\d+\.\d+$/)
     expect(bunVersion(ci)).toBe(bunVersion(release))
+  })
+
+  it('name the same Bun as the packageManager of the repo', () => {
+    expect(rootPackageJson.packageManager).toBe(`bun@${bunVersion(ci)}`)
   })
 
   it('typecheck, lint and test every pull request', () => {
