@@ -226,7 +226,8 @@ describe('the graphics setting', () => {
   it('leaves the high-performance GPU off until someone turns it on, and applies it at the next start', () => {
     const highPerformanceGpu = settingsEntry('high-performance-gpu') as SettingsEntry
     expect(highPerformanceGpu.control.kind).toBe('toggle')
-    expect(isSettingsValueEntry(highPerformanceGpu) && highPerformanceGpu.defaultValue).toBe(false)
+    expect(isSettingsValueEntry(highPerformanceGpu)).toBe(true)
+    expect((highPerformanceGpu as SettingsValueEntry).defaultValue).toBe(false)
     expect(highPerformanceGpu.applies).toBe('restart')
   })
 })
