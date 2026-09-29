@@ -192,9 +192,9 @@ contextBridge.exposeInMainWorld('notice', {
     ipcRenderer.on('notice/hide', handler)
     return () => ipcRenderer.removeListener('notice/hide', handler)
   },
-  runAction: () => ipcRenderer.invoke('notice/action'),
-  confirm: () => ipcRenderer.invoke('notice/confirm'),
-  dismiss: () => ipcRenderer.invoke('notice/dismiss'),
+  runAction: (id) => ipcRenderer.invoke('notice/action', id),
+  confirm: (id) => ipcRenderer.invoke('notice/confirm', id),
+  dismiss: (id) => ipcRenderer.invoke('notice/dismiss', id),
 })
 
 contextBridge.exposeInMainWorld('screenshot', {

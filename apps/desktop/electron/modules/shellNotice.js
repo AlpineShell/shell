@@ -16,6 +16,7 @@ let dismissTimer = null
 let escapeHeld = false
 let topbarsRaised = false
 let waiting = []
+let noticeSequence = 0
 
 function start(_broadcast, broadcastToTopbars) {
   toTopbars = typeof broadcastToTopbars === 'function' ? broadcastToTopbars : null
@@ -152,9 +153,14 @@ function returnDisplacedNoticeToLine(id) {
   waiting.unshift(currentRequest)
 }
 
+function nextNoticeId() {
+  noticeSequence += 1
+  return `notice-${noticeSequence}`
+}
+
 function show(request) {
   if (!request || typeof request.message !== 'string') return null
-  const id = typeof request.id === 'string' && request.id ? request.id : `notice-${Date.now()}`
+  const id = typeof request.id === 'string' && request.id ? request.id : nextNoticeId()
   if (mustWaitForCurrentNotice(request, id)) {
     waitForTurn(id, request)
     return id
@@ -199,7 +205,18 @@ function dismiss(id) {
   hide()
 }
 
-function runCurrentAction() {
+function isNoLongerOnScreen(id) {
+  return typeof id === 'string' && (!current || current.id !== id)
+}
+
+function dismissOnScreen(id) {
+  if (typeof id === 'string') forgetWaiting(id)
+  if (!isNoLongerOnScreen(id)) hide()
+  return { ok: true }
+}
+
+function runCurrentAction(id) {
+  if (isNoLongerOnScreen(id)) return { ok: false }
   const action = pendingAction
   clearCurrent()
   const result = action ? runCallback('action', action.run) : { ok: false }
@@ -207,7 +224,8 @@ function runCurrentAction() {
   return result
 }
 
-function runCurrentConfirm() {
+function runCurrentConfirm(id) {
+  if (isNoLongerOnScreen(id)) return { ok: false }
   const confirm = pendingConfirm
   pendingConfirm = null
   pendingCancel = null
@@ -220,12 +238,9 @@ function runCurrentConfirm() {
 module.exports = {
   handlers: {
     'notice/current': () => current,
-    'notice/action': () => runCurrentAction(),
-    'notice/confirm': () => runCurrentConfirm(),
-    'notice/dismiss': () => {
-      hide()
-      return { ok: true }
-    },
+    'notice/action': (_event, id) => runCurrentAction(id),
+    'notice/confirm': (_event, id) => runCurrentConfirm(id),
+    'notice/dismiss': (_event, id) => dismissOnScreen(id),
   },
   start,
   show,

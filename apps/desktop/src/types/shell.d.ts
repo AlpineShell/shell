@@ -1602,9 +1602,9 @@ declare global {
       current: () => Promise<ShellNotice | null>
       onShow: (callback: (notice: ShellNotice) => void) => () => void
       onHide: (callback: () => void) => () => void
-      runAction: () => Promise<{ ok: boolean }>
-      confirm: () => Promise<{ ok: boolean }>
-      dismiss: () => Promise<{ ok: boolean }>
+      runAction: (id: string) => Promise<{ ok: boolean }>
+      confirm: (id: string) => Promise<{ ok: boolean }>
+      dismiss: (id: string) => Promise<{ ok: boolean }>
     }
     plugins: {
       list: () => Promise<PluginRecord[]>

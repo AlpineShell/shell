@@ -8,8 +8,7 @@ export function useShellNotice(): ShellNotice | null {
   useEffect(() => {
     const accept = (next: ShellNotice | null) => {
       if (!next) return
-      if (next.displayId != null && next.displayId !== MY_DISPLAY_ID) return
-      setNotice(next)
+      setNotice(next.displayId != null && next.displayId !== MY_DISPLAY_ID ? null : next)
     }
     window.notice.current().then(accept)
     const stopShow = window.notice.onShow(accept)

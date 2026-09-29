@@ -192,14 +192,14 @@ export default function NoticeStrip() {
                             <button
                                 type="button"
                                 className={`rounded-md px-2 py-1 text-[11px] leading-4 ${quietButton}`}
-                                onClick={() => window.notice.dismiss()}
+                                onClick={() => window.notice.dismiss(notice.id)}
                             >
                                 {notice.confirm.cancelLabel}
                             </button>
                             <button
                                 type="button"
                                 className={`rounded-md px-2.5 py-1 text-[11px] font-medium leading-4 ${strongButton}`}
-                                onClick={() => window.notice.confirm()}
+                                onClick={() => window.notice.confirm(notice.id)}
                             >
                                 {notice.confirm.label}
                             </button>
@@ -209,7 +209,7 @@ export default function NoticeStrip() {
                         <button
                             type="button"
                             className={`mt-2 rounded-md px-2 py-1 text-[11px] leading-4 ${strongButton}`}
-                            onClick={() => window.notice.runAction()}
+                            onClick={() => window.notice.runAction(notice.id)}
                         >
                             {notice.action.label}
                         </button>
@@ -220,7 +220,7 @@ export default function NoticeStrip() {
                         type="button"
                         aria-label="Dismiss"
                         className={`-mr-1 -mt-0.5 rounded-md px-1.5 py-0.5 text-[13px] leading-4 ${quietButton}`}
-                        onClick={() => window.notice.dismiss()}
+                        onClick={() => window.notice.dismiss(notice.id)}
                     >
                         ×
                     </button>

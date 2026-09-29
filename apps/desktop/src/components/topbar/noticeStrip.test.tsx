@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { render, act, waitFor } from "@testing-library/react";
+import { render, act, waitFor, fireEvent, screen } from "@testing-library/react";
 import NoticeStrip from "./noticeStrip";
 import { getChromeSurface, setChromeSurface, nextSurfaceId } from "./chrome/chromeStore";
 
@@ -127,5 +127,34 @@ describe("NoticeStrip as a chrome surface", () => {
         render(<NoticeStrip />);
         await emit(notice({ displayId: 4242 }));
         expect(getChromeSurface()).toBeNull();
+    });
+
+    it("gives up its notice when the next one goes to another display", async () => {
+        render(<NoticeStrip />);
+        await emit(notice({ id: "backup", action: { label: "Open" } }));
+        await waitFor(() => expect(getChromeSurface()).not.toBeNull());
+        await emit(notice({ id: "restart", displayId: 4242, action: { label: "Restart" } }));
+        expect(getChromeSurface()).toBeNull();
+        expect(setActiveRegion).toHaveBeenLastCalledWith(null);
+    });
+});
+
+describe("NoticeStrip buttons", () => {
+    it("name the notice they answer", async () => {
+        render(<NoticeStrip />);
+        await emit(notice({ id: "restart", action: { label: "Restart" } }));
+        fireEvent.click(await screen.findByText("Restart"));
+        fireEvent.click(screen.getByLabelText("Dismiss"));
+        expect(window.notice.runAction).toHaveBeenCalledWith("restart");
+        expect(window.notice.dismiss).toHaveBeenCalledWith("restart");
+    });
+
+    it("name the question they answer", async () => {
+        render(<NoticeStrip />);
+        await emit(notice({ id: "install", confirm: { label: "Install", cancelLabel: "Not now" } }));
+        fireEvent.click(await screen.findByText("Install"));
+        fireEvent.click(screen.getByText("Not now"));
+        expect(window.notice.confirm).toHaveBeenCalledWith("install");
+        expect(window.notice.dismiss).toHaveBeenCalledWith("install");
     });
 });

@@ -1,10 +1,30 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
+import { createRequire } from 'module'
+
+const nodeRequire = createRequire(import.meta.url)
+const electronPath = nodeRequire.resolve('electron')
+let cursorDisplayId = 1
+
+nodeRequire.cache[electronPath] = {
+  id: electronPath,
+  filename: electronPath,
+  loaded: true,
+  exports: {
+    screen: {
+      getCursorScreenPoint: () => ({ x: 0, y: 0 }),
+      getDisplayNearestPoint: () => ({ id: cursorDisplayId }),
+    },
+    BrowserWindow: { getAllWindows: () => [] },
+    globalShortcut: { register: () => true, unregister: () => undefined },
+  },
+}
 
 const { default: notice } = await import('./modules/shellNotice.js')
 
 let sent
 
 beforeEach(() => {
+  cursorDisplayId = 1
   sent = []
   notice.start(null, (channel, payload) => sent.push({ channel, payload }))
   notice.handlers['notice/dismiss']()
@@ -215,5 +235,57 @@ describe('shellNotice notices that wait for their turn', () => {
     expect(lastShown().message).toBe('Restart now?')
     notice.handlers['notice/confirm']()
     expect(run).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('shellNotice answers only the notice that was clicked', () => {
+  afterEach(() => {
+    for (const id of ['backup', 'restart']) notice.dismiss(id)
+  })
+
+  it('ignores a button on a notice that a notice on another display has since replaced', () => {
+    const openBackup = vi.fn()
+    const restart = vi.fn()
+    notice.show({ id: 'backup', message: 'Backup failed', action: { label: 'Open', run: openBackup }, waitForTurn: true })
+    const stale = lastShown()
+    cursorDisplayId = 2
+    notice.show({ id: 'restart', message: 'Restart required', action: { label: 'Restart', run: restart }, waitForTurn: true, timeoutMs: 0 })
+    expect(stale.displayId).toBe(1)
+    expect(lastShown()).toMatchObject({ id: 'restart', displayId: 2 })
+    expect(notice.handlers['notice/action'](null, stale.id)).toEqual({ ok: false })
+    expect(restart).not.toHaveBeenCalled()
+    expect(openBackup).not.toHaveBeenCalled()
+    expect(sent.at(-1)).toMatchObject({ channel: 'notice/show', payload: { id: 'restart' } })
+  })
+
+  it('runs the button of the notice on screen', () => {
+    const restart = vi.fn()
+    notice.show({ id: 'restart', message: 'Restart required', action: { label: 'Restart', run: restart }, waitForTurn: true, timeoutMs: 0 })
+    expect(notice.handlers['notice/action'](null, 'restart')).toEqual({ ok: true })
+    expect(restart).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the notice on screen alone when a replaced one is closed, and drops the replaced one', () => {
+    notice.show({ id: 'backup', message: 'Backup failed', waitForTurn: true, timeoutMs: 0 })
+    notice.show({ id: 'restart', message: 'Restart required', waitForTurn: true, timeoutMs: 0 })
+    notice.handlers['notice/dismiss'](null, 'backup')
+    expect(sent.at(-1)).toMatchObject({ channel: 'notice/show', payload: { id: 'restart' } })
+    notice.handlers['notice/dismiss'](null, 'restart')
+    expect(sent.at(-1).channel).toBe('notice/hide')
+  })
+
+  it('ignores an answer to a question that is no longer on screen', () => {
+    const run = vi.fn()
+    notice.show({ id: 'backup', message: 'Restore now?', confirm: { label: 'Restore', run } })
+    notice.show({ id: 'restart', message: 'Opened report.pdf', timeoutMs: 0 })
+    expect(notice.handlers['notice/confirm'](null, 'backup')).toEqual({ ok: false })
+    expect(run).not.toHaveBeenCalled()
+    expect(lastShown().id).toBe('restart')
+  })
+
+  it('gives every notice raised without an id one of its own', () => {
+    const first = notice.show({ message: 'one', timeoutMs: 0 })
+    const second = notice.show({ message: 'two', timeoutMs: 0 })
+    expect(first).not.toBe(second)
   })
 })
