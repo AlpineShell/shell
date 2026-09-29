@@ -7,6 +7,7 @@ const explorerShell = require('./modules/explorerShell')
 const bootRecovery = require('./bootRecovery')
 const { createCrashLog, createRepeatFilter, describeError, truncateText } = require('./crashLog')
 const { planRendererReload } = require('./rendererRecovery')
+const { PRIVILEGED_SCHEMES } = require('./privilegedSchemes')
 
 const crashLog = createCrashLog()
 const BOOT_ATTEMPTS_PATH = bootRecovery.bootAttemptsPath(app.getPath('userData'))
@@ -57,10 +58,7 @@ if (gotSingleInstanceLock) guardShellBoot()
 
 try { require('node:module').enableCompileCache(path.join(app.getPath('userData'), 'v8-cache')) } catch {}
 
-protocol.registerSchemesAsPrivileged([
-  { scheme: 'alpine-wallpaper', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } },
-  { scheme: 'alpine-plugin', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-])
+protocol.registerSchemesAsPrivileged(PRIVILEGED_SCHEMES)
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
 const network = require('./modules/network')
