@@ -13,6 +13,7 @@ const {
   planAutostartLaunch,
   shouldProcessAutostart,
   matchHandoffLogon,
+  updateHandsShellBackToAlpine,
   planShellRevert,
   settleShellRevert,
   planMarkerAge,
@@ -225,6 +226,15 @@ describe('planAutostartLaunch', () => {
     expect(autostartLaunch({ handedOffThisLogon: null }).steps).toEqual([])
   })
 
+  it('exits the launch that Explorer starts from the Run entry while an update installs', () => {
+    expect(autostartLaunch({ handedOffThisLogon: false, updateInProgress: true }).steps).toEqual([EXIT_ALPINE])
+  })
+
+  it('keeps the autostart launch during an update unless Explorer is confirmed to host the shell', () => {
+    expect(autostartLaunch({ handedOffThisLogon: false, updateInProgress: true, explorerHostsShell: null }).steps).toEqual([])
+    expect(autostartLaunch({ handedOffThisLogon: false, updateInProgress: true, explorerHostsShell: false }).steps).toEqual([])
+  })
+
   it('keeps the autostart launch unless Explorer is confirmed to host the shell', () => {
     expect(autostartLaunch({ explorerHostsShell: false }).steps).toEqual([])
     expect(autostartLaunch({ explorerHostsShell: null }).steps).toEqual([])
@@ -289,6 +299,50 @@ describe('shouldProcessAutostart', () => {
   it('skips them in development and after an update restart', () => {
     expect(startupApps({ development: true })).toBe(false)
     expect(startupApps({ updateRestart: true })).toBe(false)
+  })
+
+  it('starts them only once per sign-in, so a restarted Alpine does not launch them twice', () => {
+    expect(startupApps({ ranThisLogon: true })).toBe(false)
+    expect(startupApps({ ranThisLogon: false })).toBe(true)
+  })
+
+  it('starts them when it cannot tell whether they already ran in this sign-in', () => {
+    expect(startupApps({ ranThisLogon: null })).toBe(true)
+  })
+
+  it('does not look up the sign-in when Alpine is not the one to start the startup apps', () => {
+    let lookedUp = false
+    const context = {
+      development: false,
+      updateRestart: false,
+      actingAsShell: false,
+      launchedByAutostart: false,
+      get ranThisLogon() {
+        lookedUp = true
+        return false
+      },
+    }
+    expect(shouldProcessAutostart(context)).toBe(false)
+    expect(lookedUp).toBe(false)
+  })
+})
+
+describe('updateHandsShellBackToAlpine', () => {
+  const ALPINE_SHELL = 'C:\\Users\\someone\\AppData\\Local\\Programs\\alpine-shell\\Alpine Shell.exe'
+
+  it('hands the shell back to Alpine when Alpine was the shell before the update', () => {
+    expect(updateHandsShellBackToAlpine({ previousShell: ALPINE_SHELL, optedOut: false })).toBe(true)
+  })
+
+  it('leaves Explorer as the shell for someone who runs Alpine on top of Explorer', () => {
+    expect(updateHandsShellBackToAlpine({ previousShell: 'explorer.exe', optedOut: false })).toBe(false)
+    expect(updateHandsShellBackToAlpine({ previousShell: 'C:\\Windows\\Explorer.EXE', optedOut: false })).toBe(false)
+    expect(updateHandsShellBackToAlpine({ previousShell: null, optedOut: false })).toBe(false)
+    expect(updateHandsShellBackToAlpine({ previousShell: '  ', optedOut: false })).toBe(false)
+  })
+
+  it('never makes Alpine the shell for someone who turned it off for good', () => {
+    expect(updateHandsShellBackToAlpine({ previousShell: ALPINE_SHELL, optedOut: true })).toBe(false)
   })
 })
 

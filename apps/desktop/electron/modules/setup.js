@@ -11,6 +11,7 @@ const { regQuery } = require('../registryRead')
 const { guardHandlers } = require('../trustedSenders')
 
 const LICENCE_REQUIRED = 'licence-required'
+const SHELL_REGISTRATION_FAILED = 'Could not register Alpine Shell as your desktop.'
 const CURSOR_VARIANT = 'Bibata-Modern-Ice'
 const REVERT_QUIT_DELAY_MS = 1200
 const REVERT_BLOCKED_MESSAGES = {
@@ -97,15 +98,16 @@ function setAsShell() {
   installer.clearShellHandoff()
   const shellValue = getShellExePath()
   regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', shellValue)
-
   try {
-    regAdd('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'AutoRestartShell', '0', 'REG_DWORD')
+    regAdd(XAML_START_MENU_KEY, 'EnableXamlStartMenu', '0', 'REG_DWORD')
   } catch (e) {
-    console.error('[setup] Could not set AutoRestartShell (may need admin):', e.message)
+    console.error('[setup] Could not set EnableXamlStartMenu:', e.message)
   }
-
-  regAdd(XAML_START_MENU_KEY, 'EnableXamlStartMenu', '0', 'REG_DWORD')
-  regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'RestartApps', '0', 'REG_DWORD')
+  try {
+    regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'RestartApps', '0', 'REG_DWORD')
+  } catch (e) {
+    console.error('[setup] Could not set RestartApps:', e.message)
+  }
 
   try {
     execSync('schtasks /change /tn "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" /disable', { windowsHide: true })
@@ -238,6 +240,7 @@ function autostartLaunchContext(argv) {
     packaged: () => electronApp().isPackaged,
     launchedByAutostart: () => isAutostartLaunch(argv),
     handedOffThisLogon: () => installer.shellHandoffFromThisLogon(),
+    updateInProgress: () => installer.isUpdateHandoffActive(),
     explorerHostsShell: () => explorerShell.shellHostedByExplorer(),
   })
 }
@@ -402,6 +405,12 @@ module.exports = {
         } catch (e) {
           console.error('[setup] Cursor error:', e.message)
         }
+      }
+
+      if (options.shell) results.shell = isShellRegisteredToAlpine()
+      if (options.shell && !results.shell) {
+        results.error = SHELL_REGISTRATION_FAILED
+        return results
       }
 
       markSetupComplete()

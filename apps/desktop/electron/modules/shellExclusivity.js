@@ -47,18 +47,28 @@ function revertBlockedReason({ packaged, updatePending }) {
 function planAutostartLaunch(context) {
   const explorerKeepsTheShell = context.packaged
     && context.launchedByAutostart
-    && context.handedOffThisLogon === true
+    && (context.handedOffThisLogon === true || context.updateInProgress === true)
     && context.explorerHostsShell === true
   return { steps: explorerKeepsTheShell ? [EXIT_ALPINE] : [] }
 }
 
-function shouldProcessAutostart({ development, updateRestart, actingAsShell, launchedByAutostart }) {
-  return !development && !updateRestart && Boolean(actingAsShell) && !launchedByAutostart
+function shouldProcessAutostart(context) {
+  return !context.development
+    && !context.updateRestart
+    && Boolean(context.actingAsShell)
+    && !context.launchedByAutostart
+    && context.ranThisLogon !== true
 }
 
 function matchHandoffLogon({ recordedLogonId, currentLogonId }) {
   if (!recordedLogonId || !currentLogonId) return null
   return recordedLogonId === currentLogonId
+}
+
+function updateHandsShellBackToAlpine({ previousShell, optedOut }) {
+  if (optedOut) return false
+  const shell = typeof previousShell === 'string' ? previousShell.trim() : ''
+  return shell !== '' && !shell.toLowerCase().includes('explorer.exe')
 }
 
 function planShellRevert({ shellHandedToExplorer, replacementConfirmed }) {
@@ -89,6 +99,7 @@ module.exports = {
   planAutostartLaunch,
   shouldProcessAutostart,
   matchHandoffLogon,
+  updateHandsShellBackToAlpine,
   planShellRevert,
   settleShellRevert,
   planMarkerAge,

@@ -13,6 +13,7 @@ const INSTALLED_EXE = path.join('C:', 'Programs', 'alpine-shell', 'Alpine Shell.
 
 const registry = new Map()
 const regCalls = []
+const refusedWrites = new Set()
 let userDataDir = ''
 const electronApp = { getPath: () => userDataDir, isPackaged: false, getVersion: () => '1.0.0', exit: vi.fn(), relaunch: vi.fn() }
 
@@ -63,6 +64,7 @@ inject(nodeRequire.resolve('../registryRead.js'), { regQuery: (keyPath, valueNam
 
 childProcess.execFileSync = (file, args) => {
   regCalls.push([file, ...args])
+  if (file === 'reg' && args[0] === 'add' && refusedWrites.has(registryKey(args[1], args[3]))) throw new Error('Access is denied.')
   if (file === 'reg' && args[0] === 'add') registry.set(registryKey(args[1], args[3]), args[7])
   if (file === 'reg' && args[0] === 'delete') registry.delete(registryKey(args[1], args[3]))
   return ''
@@ -84,6 +86,7 @@ const runValue = () => registry.get(registryKey(RUN_KEY, 'AlpineShell')) ?? null
 beforeEach(() => {
   registry.clear()
   regCalls.length = 0
+  refusedWrites.clear()
   licenceMock.requireValid.mockReset()
   licenceMock.requireValid.mockImplementation(() => ({ state: 'valid' }))
   licenceMock.releaseSelf.mockReset()
@@ -178,6 +181,45 @@ describe('setup handlers behind the licence gate', () => {
     expect(licenceMock.releaseSelf).not.toHaveBeenCalled()
     expect(installerMock.uninstall).not.toHaveBeenCalled()
     installerMock.isUpdateHandoffActive = wasUpdateHandoffActive
+  })
+})
+
+describe('installing when Windows does not take the shell registration', () => {
+  let quietErrors
+
+  beforeEach(() => {
+    quietErrors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    quietErrors.mockRestore()
+  })
+
+  it('reports the failure instead of setup complete and lets setup run again', async () => {
+    refusedWrites.add(registryKey(WINLOGON_KEY, 'Shell'))
+
+    const result = await setup.handlers['setup/install'](fromSetupWindow, { shell: true, cursor: false })
+
+    expect(result.shell).toBe(false)
+    expect(result.error).toBe('Could not register Alpine Shell as your desktop.')
+    expect(fs.existsSync(setupCompletePath())).toBe(false)
+  })
+
+  it('completes setup when the shell is registered even though a later setting could not be written', async () => {
+    refusedWrites.add(registryKey('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu'))
+
+    const result = await setup.handlers['setup/install'](fromSetupWindow, { shell: true, cursor: false })
+
+    expect(result.shell).toBe(true)
+    expect(result.error).toBeNull()
+    expect(runValue()).not.toBeNull()
+    expect(fs.existsSync(setupCompletePath())).toBe(true)
+  })
+
+  it('never switches off shell restarts for every account on the PC', async () => {
+    await setup.handlers['setup/install'](fromSetupWindow, { shell: true, cursor: false })
+
+    expect(regCalls.some((call) => call.some((arg) => String(arg).startsWith('HKLM')))).toBe(false)
   })
 })
 
@@ -310,6 +352,17 @@ describe('the Run entry while Explorer holds the shell', () => {
     electronApp.isPackaged = true
     expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(false)
     expect(explorerShellMock.shellHostedByExplorer).not.toHaveBeenCalled()
+  })
+
+  it('exits the launch that its own Run entry starts while an update installs under Explorer', () => {
+    electronApp.isPackaged = true
+    const wasUpdateHandoffActive = installerMock.isUpdateHandoffActive
+    installerMock.isUpdateHandoffActive = () => true
+
+    expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(true)
+    expect(setup.shouldLeaveShellToExplorer(START_MENU_LAUNCH)).toBe(false)
+
+    installerMock.isUpdateHandoffActive = wasUpdateHandoffActive
   })
 
   it('leaves the registry and the hand-off alone when it exits', () => {

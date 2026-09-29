@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
+import crypto from 'crypto'
 import path from 'path'
 import { createRequire } from 'module'
 
@@ -38,7 +39,13 @@ childProcess.execFileSync = (file, args) => {
   if (file === 'reg' && args[0] === 'delete') registry.delete(registryKey(args[1], args[3]))
   return ''
 }
-childProcess.spawn = () => ({ pid: 4242, on: () => {}, unref: () => {} })
+childProcess.execSync = () => ''
+const spawnMock = vi.fn()
+childProcess.spawn = (...args) => spawnMock(...args)
+
+function startedProcess() {
+  return { pid: 4242, on: () => {}, unref: () => {} }
+}
 
 const { default: installer } = await import('./installer.js')
 
@@ -58,6 +65,8 @@ beforeEach(() => {
   process.env.TEMP = tempDir
   logonSessionMock.currentLogonId.mockReset()
   logonSessionMock.currentLogonId.mockImplementation(() => THIS_SIGN_IN)
+  spawnMock.mockReset()
+  spawnMock.mockImplementation(startedProcess)
   vi.spyOn(os, 'uptime').mockReturnValue(10 * 60 * 60)
 })
 
@@ -142,5 +151,152 @@ describe('shellHandoffFromThisLogon', () => {
   it('does not look up the sign-in when nothing was handed over', () => {
     expect(installer.shellHandoffFromThisLogon()).toBe(false)
     expect(logonSessionMock.currentLogonId).not.toHaveBeenCalled()
+  })
+})
+
+describe('the branded update hand-off', () => {
+  const ALPINE_SHELL = process.execPath
+  const LEAVE_SHELL_TO_EXPLORER = '--leave-shell-to-explorer'
+  let resourcesDir = ''
+  let installerFile = ''
+  let previousResourcesPath
+
+  function prepareUpdaterExe() {
+    const scriptsDir = path.join(resourcesDir, 'scripts')
+    fs.mkdirSync(scriptsDir, { recursive: true })
+    const source = 'class AlpineUpdater {}'
+    fs.writeFileSync(path.join(scriptsDir, 'updaterScreen.cs'), source)
+    const hash = crypto.createHash('sha256').update(source).digest('hex').slice(0, 12)
+    fs.mkdirSync(path.join(userDataDir, 'updater'), { recursive: true })
+    fs.writeFileSync(path.join(userDataDir, 'updater', `AlpineUpdater-${hash}.exe`), '')
+  }
+
+  function helperArgs() {
+    return spawnMock.mock.calls[0][1]
+  }
+
+  beforeEach(() => {
+    electronApp.isPackaged = true
+    previousResourcesPath = process.resourcesPath
+    resourcesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-installer-resources-'))
+    process.resourcesPath = resourcesDir
+    installerFile = path.join(tempDir, 'Alpine Shell Setup 9.9.9.exe')
+    fs.writeFileSync(installerFile, '')
+    prepareUpdaterExe()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), ALPINE_SHELL)
+  })
+
+  afterEach(() => {
+    electronApp.isPackaged = false
+    if (previousResourcesPath === undefined) delete process.resourcesPath
+    else process.resourcesPath = previousResourcesPath
+    fs.rmSync(resourcesDir, { recursive: true, force: true })
+  })
+
+  it('parks the shell on Explorer while the helper installs and hands it back to Alpine afterwards', () => {
+    expect(installer.startBrandedUpdate(installerFile, '9.9.9')).toBe(true)
+
+    expect(registry.get(registryKey(WINLOGON_KEY, 'Shell'))).toBe('explorer.exe')
+    expect(helperArgs()).not.toContain(LEAVE_SHELL_TO_EXPLORER)
+    expect(installer.isUpdateHandoffActive()).toBe(true)
+  })
+
+  it('tells the helper to leave Explorer as the shell for someone who turned Alpine off for good', () => {
+    installer.setShellOptOut(true)
+
+    expect(installer.startBrandedUpdate(installerFile, '9.9.9')).toBe(true)
+
+    expect(helperArgs()).toContain(LEAVE_SHELL_TO_EXPLORER)
+  })
+
+  it('tells the helper to leave Explorer as the shell when Explorer was the shell before the update', () => {
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+
+    expect(installer.startBrandedUpdate(installerFile, '9.9.9')).toBe(true)
+
+    expect(helperArgs()).toContain(LEAVE_SHELL_TO_EXPLORER)
+  })
+
+  it('puts the shell back and stays open when the helper never starts', () => {
+    spawnMock.mockImplementation(() => ({ pid: undefined, on: () => {}, unref: () => {} }))
+
+    expect(installer.startBrandedUpdate(installerFile, '9.9.9')).toBe(false)
+
+    expect(registry.get(registryKey(WINLOGON_KEY, 'Shell'))).toBe(ALPINE_SHELL)
+    expect(installer.isUpdateHandoffActive()).toBe(false)
+  })
+
+  it('puts the shell back when starting the helper throws', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    spawnMock.mockImplementation(() => { throw new Error('EACCES') })
+
+    expect(installer.startBrandedUpdate(installerFile, '9.9.9')).toBe(false)
+
+    expect(registry.get(registryKey(WINLOGON_KEY, 'Shell'))).toBe(ALPINE_SHELL)
+    expect(installer.isUpdateHandoffActive()).toBe(false)
+  })
+})
+
+describe('the startup apps sign-in record', () => {
+  it('remembers that the startup apps ran in this sign-in', () => {
+    installer.recordAutostartLogon()
+    expect(installer.autostartRanThisLogon()).toBe(true)
+  })
+
+  it('runs them again at the next sign-in', () => {
+    logonSessionMock.currentLogonId.mockImplementation(() => EARLIER_SIGN_IN)
+    installer.recordAutostartLogon()
+
+    logonSessionMock.currentLogonId.mockImplementation(() => THIS_SIGN_IN)
+    expect(installer.autostartRanThisLogon()).toBe(false)
+  })
+
+  it('cannot tell when the sign-in is unknown, so the startup apps still run', () => {
+    installer.recordAutostartLogon()
+    logonSessionMock.currentLogonId.mockImplementation(() => null)
+    expect(installer.autostartRanThisLogon()).toBe(null)
+  })
+
+  it('records nothing when the sign-in is unknown', () => {
+    logonSessionMock.currentLogonId.mockImplementation(() => null)
+    installer.recordAutostartLogon()
+    expect(fs.existsSync(path.join(userDataDir, '.autostart-logon'))).toBe(false)
+  })
+
+  it('runs them again after a restart, even when Windows hands out the same sign-in id', () => {
+    installer.recordAutostartLogon()
+    const stamped = new Date(Date.now() - 2 * HOUR_MS)
+    fs.utimesSync(path.join(userDataDir, '.autostart-logon'), stamped, stamped)
+    os.uptime.mockReturnValue(60 * 60)
+    expect(installer.autostartRanThisLogon()).toBe(false)
+  })
+
+  it('keeps the record for a sign-in that lasts for days', () => {
+    installer.recordAutostartLogon()
+    const stamped = new Date(Date.now() - 30 * HOUR_MS)
+    fs.utimesSync(path.join(userDataDir, '.autostart-logon'), stamped, stamped)
+    os.uptime.mockReturnValue(40 * 60 * 60)
+    expect(installer.autostartRanThisLogon()).toBe(true)
+  })
+})
+
+describe('the shell restart setting', () => {
+  const HKLM_WINLOGON_KEY = 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+  const autoRestartShell = () => registryKey(HKLM_WINLOGON_KEY, 'AutoRestartShell')
+
+  it('turns shell restarts back on where an earlier version turned them off', () => {
+    registry.set(autoRestartShell(), '0x0')
+    installer.revertShell()
+    expect(registry.get(autoRestartShell())).toBe('1')
+  })
+
+  it('leaves a shell restart setting that Alpine never turned off alone', () => {
+    registry.set(autoRestartShell(), '0x1')
+    installer.revertShell()
+    expect(registry.get(autoRestartShell())).toBe('0x1')
+
+    registry.delete(autoRestartShell())
+    installer.revertShell()
+    expect(registry.has(autoRestartShell())).toBe(false)
   })
 })

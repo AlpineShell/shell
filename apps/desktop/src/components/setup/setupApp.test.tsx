@@ -228,6 +228,30 @@ describe('SetupApp', () => {
     expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeTruthy()
   })
 
+  it('says the installation failed when Windows did not take Alpine Shell as the desktop', async () => {
+    const bridge = await renderSetup({ licence: licenceStatus({ state: 'valid', email: 'someone@example.com' }) })
+    bridge.install.mockResolvedValueOnce({ shell: false, startup: false, cursor: false, gpoBlocked: false, error: 'Could not register Alpine Shell as your desktop.' })
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByText('Installation failed')).toBeTruthy()
+    expect(screen.getByText('Could not register Alpine Shell as your desktop.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Restart Now' })).toBeNull()
+  })
+
+  it('leaves the spinner for the failure page when the install call itself fails', async () => {
+    const bridge = await renderSetup({ licence: licenceStatus({ state: 'valid', email: 'someone@example.com' }) })
+    bridge.install.mockRejectedValueOnce(new Error('reg.exe is blocked by policy'))
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByText('Installation failed')).toBeTruthy()
+    expect(screen.getByText('reg.exe is blocked by policy')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Try Again' })).toBeTruthy()
+  })
+
   it('offers to make Alpine Shell the desktop again on a licensed PC that was handed back', async () => {
     const bridge = await renderSetup({
       licence: licenceStatus({ state: 'valid', email: 'someone@example.com' }),

@@ -17,8 +17,13 @@ const UPDATER_CACHE_DIR_NAME = `${INSTALL_DIR_NAME}-updater`
 const SHELL_OPT_OUT_FILE = '.shell-opt-out'
 const SHELL_HANDOFF_FILE = '.shell-handoff'
 const UPDATE_HANDOFF_FILE = '.update-in-progress'
+const AUTOSTART_LOGON_FILE = '.autostart-logon'
+const LEAVE_SHELL_TO_EXPLORER_FLAG = '--leave-shell-to-explorer'
 const UPDATE_HANDOFF_MAX_AGE_MS = 15 * 60 * 1000
 const SHELL_HANDOFF_MAX_AGE_MS = 12 * 60 * 60 * 1000
+const AUTOSTART_LOGON_MAX_AGE_MS = Number.POSITIVE_INFINITY
+const HKLM_WINLOGON_KEY = 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+const SHELL_AUTO_RESTART_TURNED_OFF = '0x0'
 const SHELL_REVERT_FAILED = 'Could not hand the Windows shell back to Explorer.'
 const SHELL_HANDOFF_HELPER_FAILED = 'Windows Explorer could not be brought back, so nothing was changed.'
 const SHELL_HANDOFF_HELPER_MISSING = 'Windows Explorer is registered as your shell, but Alpine Shell could not close itself. Restart Windows to finish.'
@@ -94,10 +99,15 @@ function getInstalledVersion() {
 function revertShell() {
   try { regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe') } catch {}
   try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell') } catch {}
-  try { regAdd('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'AutoRestartShell', '1', 'REG_DWORD') } catch {}
+  restoreShellAutoRestart()
   try { regDelete(WINLOGON_KEY, 'RestartApps') } catch {}
   try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
   try { execSync('schtasks /change /tn "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" /enable', { windowsHide: true }) } catch {}
+}
+
+function restoreShellAutoRestart() {
+  if (regQuery(HKLM_WINLOGON_KEY, 'AutoRestartShell') !== SHELL_AUTO_RESTART_TURNED_OFF) return
+  try { regAdd(HKLM_WINLOGON_KEY, 'AutoRestartShell', '1', 'REG_DWORD') } catch {}
 }
 
 function isShellRevertedToExplorer() {
@@ -194,6 +204,20 @@ function clearUpdateHandoff() {
 
 function isUpdateHandoffActive() {
   return isMarkerActive(userDataFile(UPDATE_HANDOFF_FILE), UPDATE_HANDOFF_MAX_AGE_MS, os.uptime() * 1000)
+}
+
+function autostartRanThisLogon() {
+  const markerPath = userDataFile(AUTOSTART_LOGON_FILE)
+  if (!isMarkerActive(markerPath, AUTOSTART_LOGON_MAX_AGE_MS, os.uptime() * 1000)) return false
+  return shellExclusivity.matchHandoffLogon({
+    recordedLogonId: logonSession.parseLogonId(readMarker(markerPath)),
+    currentLogonId: logonSession.currentLogonId(),
+  })
+}
+
+function recordAutostartLogon() {
+  const logonId = logonSession.currentLogonId()
+  if (logonId) writeMarker(userDataFile(AUTOSTART_LOGON_FILE), logonId)
 }
 
 function writeRevertHelper(scriptName, script) {
@@ -523,6 +547,8 @@ function startBrandedUpdate(installerPath, version) {
   if (!installerPath || !fs.existsSync(installerPath)) return false
   const updaterExe = ensureUpdaterExe()
   if (!updaterExe) return false
+  const previousShell = regQuery(WINLOGON_KEY, 'Shell')
+  const handShellBack = shellExclusivity.updateHandsShellBackToAlpine({ previousShell, optedOut: isShellOptedOut() })
   const brandingDir = path.dirname(getUpdaterSourcePath())
   const logoPath = path.join(brandingDir, 'alpineWordmark.png')
   const displayFontPath = path.join(brandingDir, 'averiaSerifLibre.ttf')
@@ -532,19 +558,31 @@ function startBrandedUpdate(installerPath, version) {
   }
   try {
     regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe')
-    spawn(updaterExe, [
+    const helper = spawn(updaterExe, [
       installerPath,
       getInstalledExePath(),
       version || '',
       fs.existsSync(logoPath) ? logoPath : '',
       fs.existsSync(displayFontPath) ? displayFontPath : '',
-    ], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
-    return true
+      ...(handShellBack ? [] : [LEAVE_SHELL_TO_EXPLORER_FLAG]),
+    ], { detached: true, stdio: 'ignore', windowsHide: true })
+    helper.on('error', (e) => console.error('[installer] Update helper failed to start:', e.message))
+    helper.unref()
+    if (helper.pid) return true
+    abandonBrandedUpdate(previousShell)
+    return false
   } catch (e) {
-    clearUpdateHandoff()
+    abandonBrandedUpdate(previousShell)
     console.error('[installer] Failed to start branded update:', e.message)
     return false
   }
+}
+
+function abandonBrandedUpdate(previousShell) {
+  if (previousShell) {
+    try { regAdd(WINLOGON_KEY, 'Shell', previousShell) } catch {}
+  }
+  clearUpdateHandoff()
 }
 
 module.exports = {
@@ -570,6 +608,8 @@ module.exports = {
   clearShellHandoff,
   isUpdateHandoffActive,
   clearUpdateHandoff,
+  autostartRanThisLogon,
+  recordAutostartLogon,
   isRevertHelperRunning,
   relaunchFromInstalled,
   startBrandedUpdate,
