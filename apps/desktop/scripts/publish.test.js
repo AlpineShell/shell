@@ -1,18 +1,27 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 
-const { compareVersionsDescending, manifestVersion, releaseReadinessProblems } = await import('./publish.js')
+const { compareVersionsDescending, manifestVersion, readPackedLicenceConfig, releaseReadinessProblems } = await import('./publish.js')
+const { renderModule } = await import('./generateLicenceConfig.js')
+const { createPackage } = await import('@electron/asar')
 
 const feedUrl = 'https://auth.alpineshell.com/releases/'
 const releaseLicenceConfig = { isReleaseBuild: true, publicKeys: [{ kid: 'lic-2026-09', spkiPem: 'pem' }] }
 const appUpdateConfig = `provider: generic\r\nurl: ${feedUrl}\r\nchannel: latest\r\nupdaterCacheDirName: alpine-shell-updater\r\n`
+
+function feedManifestFor(version, sha512 = 'c2hhNTEy') {
+  return `version: ${version}\nfiles:\n  - url: Alpine-Shell-Setup-${version}.exe\n    sha512: ${sha512}\npath: Alpine-Shell-Setup-${version}.exe\n`
+}
 
 function readyRelease(overrides = {}) {
   return {
     licenceConfig: releaseLicenceConfig,
     appUpdateConfig,
     feedUrl,
-    releaseVersion: '0.20260928.0',
-    feedVersion: '0.20260925.0',
+    releaseManifest: feedManifestFor('0.20260928.0'),
+    feedManifest: feedManifestFor('0.20260925.0'),
     ...overrides,
   }
 }
@@ -44,7 +53,16 @@ describe('releaseReadinessProblems', () => {
   })
 
   it('lets the very first release through when the feed has no latest.yml yet', () => {
-    expect(releaseReadinessProblems(readyRelease({ feedVersion: null }))).toEqual([])
+    expect(releaseReadinessProblems(readyRelease({ feedManifest: null }))).toEqual([])
+  })
+
+  it('refuses when the latest.yml in the bucket names no version', () => {
+    expect(releaseReadinessProblems(readyRelease({ feedManifest: 'files: []\n' }))).toEqual(['the latest.yml in the bucket names no version, so 0.20260928.0 cannot be checked against it'])
+  })
+
+  it('lets an interrupted publish of the same build run again', () => {
+    const liveManifest = feedManifestFor('0.20260928.0')
+    expect(releaseReadinessProblems(readyRelease({ releaseManifest: liveManifest, feedManifest: liveManifest }))).toEqual([])
   })
 
   it('refuses a development licence config', () => {
@@ -69,18 +87,57 @@ describe('releaseReadinessProblems', () => {
   })
 
   it('refuses the unbumped 0.1.0 of a local build once the feed is ahead of it', () => {
-    expect(releaseReadinessProblems(readyRelease({ releaseVersion: '0.1.0' }))).toEqual(['version 0.1.0 is not newer than 0.20260925.0, which the update feed already offers'])
+    expect(releaseReadinessProblems(readyRelease({ releaseManifest: feedManifestFor('0.1.0') }))).toEqual(['version 0.1.0 is not newer than 0.20260925.0, which the update feed already offers'])
   })
 
-  it('refuses to publish the version the feed already offers again', () => {
-    expect(releaseReadinessProblems(readyRelease({ releaseVersion: '0.20260925.0' }))).toHaveLength(1)
+  it('refuses a different build of the version the feed already offers', () => {
+    const rebuilt = feedManifestFor('0.20260925.0', 'cmVidWlsdA==')
+    expect(releaseReadinessProblems(readyRelease({ releaseManifest: rebuilt }))).toEqual(['version 0.20260925.0 is not newer than 0.20260925.0, which the update feed already offers'])
   })
 
   it('refuses when latest.yml names no version', () => {
-    expect(releaseReadinessProblems(readyRelease({ releaseVersion: null }))).toEqual(['release/latest.yml names no version'])
+    expect(releaseReadinessProblems(readyRelease({ releaseManifest: 'files: []\n' }))).toEqual(['release/latest.yml names no version'])
+    expect(releaseReadinessProblems(readyRelease({ releaseManifest: null }))).toEqual(['release/latest.yml names no version'])
   })
 
   it('reports every problem at once', () => {
-    expect(releaseReadinessProblems({ licenceConfig: null, appUpdateConfig: null, feedUrl, releaseVersion: '0.1.0', feedVersion: '0.2.0' })).toHaveLength(3)
+    expect(releaseReadinessProblems({ licenceConfig: null, appUpdateConfig: null, feedUrl, releaseManifest: feedManifestFor('0.1.0'), feedManifest: feedManifestFor('0.2.0') })).toHaveLength(3)
+  })
+})
+
+describe('readPackedLicenceConfig', () => {
+  let dir
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpinepublish-'))
+  })
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  async function packApp(files) {
+    const appDir = path.join(dir, 'app')
+    for (const [relativePath, content] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(appDir, relativePath)), { recursive: true })
+      fs.writeFileSync(path.join(appDir, relativePath), content)
+    }
+    const archivePath = path.join(dir, 'app.asar')
+    await createPackage(appDir, archivePath)
+    return archivePath
+  }
+
+  it('reads the licence config the installer ships, not the one in the source tree', async () => {
+    const archivePath = await packApp({ 'electron/licenceConfig.generated.js': renderModule(releaseLicenceConfig), 'electron/main.js': '' })
+    expect(readPackedLicenceConfig(archivePath)).toEqual(releaseLicenceConfig)
+  })
+
+  it('returns null when the archive holds no licence config', async () => {
+    const archivePath = await packApp({ 'electron/main.js': '' })
+    expect(readPackedLicenceConfig(archivePath)).toBeNull()
+  })
+
+  it('returns null when there is no packed app', () => {
+    expect(readPackedLicenceConfig(path.join(dir, 'missing.asar'))).toBeNull()
   })
 })

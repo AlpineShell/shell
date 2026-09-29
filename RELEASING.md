@@ -57,15 +57,19 @@ bun run release
 This bakes the licence config, builds the renderer with Vite, builds the NSIS installer with
 electron-builder (which also generates `latest.yml`) and runs `scripts/publish.js`, which uploads
 the installer and `latest.yml` to the store. `publish.js` refuses to upload anything unless the
-baked licence config is a release build with at least one key, the packaged
-`resources/app-update.yml` points at `build.publish.url`, and the version in `release/latest.yml` is
-newer than the `latest.yml` already in the bucket.
+licence config packed into `resources/app.asar` is a release build with at least one key, the
+packaged `resources/app-update.yml` points at `build.publish.url`, and the version in
+`release/latest.yml` is newer than the `latest.yml` already in the bucket. A bucket `latest.yml` that
+names no version is refused too.
 
-You can re-run only the upload step with `bun run publish` if the build artifacts already exist.
+You can re-run only the upload step with `bun run publish` if the build artifacts already exist. When
+the bucket's `latest.yml` is byte for byte the one in `release/`, that build is already live and
+`publish.js` uploads it again, so an interrupted publish can be finished this way.
 
 Old installers are pruned automatically: after each upload, `scripts/publish.js` keeps only the five
 most recent versions in the bucket (plus `latest.yml`) and deletes older `.exe` / `.exe.blockmap`
-objects, so storage stays bounded.
+objects, so storage stays bounded. By then the new version is live, so a failed prune is logged and
+does not fail the publish.
 
 ## Automated Releases (GitHub Actions)
 
