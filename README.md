@@ -4,7 +4,8 @@
 ## Requirements 
 
 - Windows 10/11 
-- Node.js 18+
+- [Bun](https://bun.sh) 1.3.12 or later
+- Node.js 20.19+ or 22.12+ for Vite and the build scripts
 
 ## Getting Started
 

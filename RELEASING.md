@@ -8,26 +8,28 @@ one-time setup, the environment variables required to publish, and the per-relea
 
 1. Provision the S3-compatible store (Railway/MinIO) and the `alpine-shell` bucket. See
    `docs/STORAGE.md` for the exact provisioning steps and env mapping.
-2. Set `build.publish.url` in `package.json` to the store's public app-update URL. Keep the
-   trailing slash. For example:
+2. Leave `build.publish.url` in `apps/desktop/package.json` pointing at the licence-gated feed of
+   the auth service. Keep the trailing slash:
 
    ```json
    "publish": {
      "provider": "generic",
-     "url": "https://bucket-production-4979d.up.railway.app/alpine-shell/",
+     "url": "https://auth.alpineshell.com/releases/",
      "channel": "latest"
    }
    ```
 
-   electron-updater fetches `latest.yml` and the installer from this base URL, so it must point
-   at the public root of the store where those artifacts are uploaded.
+   electron-updater asks this URL for `latest.yml` and the installer with the licence token as a
+   bearer header, and the auth service redirects a valid licence to a short-lived presigned URL on
+   the bucket. Never point it at the bucket itself: the feed is what checks the licence.
 
 ## Required Environment Variables
 
 The publish script (`scripts/publish.js`) uploads the build artifacts to the store using the
-S3-compatible API. Set these before running a release:
+S3-compatible API. Set these before publishing:
 
 - `STORAGE_ENDPOINT`: the S3-compatible endpoint of the store.
+- `STORAGE_REGION`: optional, defaults to `us-east-1`.
 - `STORAGE_ACCESS_KEY_ID`: access key ID for the store.
 - `STORAGE_SECRET_ACCESS_KEY`: secret access key for the store.
 - `STORAGE_BUCKET`: the bucket name (`alpine-shell`).
@@ -37,19 +39,27 @@ See `docs/STORAGE.md` for how to obtain these.
 
 ## Release Steps
 
-1. Bump `version` in `package.json` to the new release version.
-2. Run the release:
+Cut a release by publishing a GitHub Release; the workflow under Automated Releases below does the
+rest. A local build is the fallback for when CI is unavailable, and it needs everything the
+workflow reads from its secrets, set in the environment or in `apps/desktop/.env`:
 
-   ```sh
-   bun run release
-   ```
+- `ALPINE_RELEASE_BUILD=1`, `ALPINE_LICENCE_PUBLIC_KEYS` and `ALPINE_MARKETPLACE_PUBKEY`, so
+  `scripts/generateLicenceConfig.js` bakes a release config instead of a development one.
+- The `STORAGE_*` variables above.
+- A `version` in `apps/desktop/package.json` newer than the one the feed offers.
 
-   This:
-   - builds the renderer with Vite,
-   - builds the NSIS installer with electron-builder (which also generates `latest.yml`),
-   - runs `scripts/publish.js`, which uploads the installer and `latest.yml` to the store.
-3. Once the new `latest.yml` and installer are in the bucket, existing installs detect the new
-   version on their next update check and auto-update.
+Then run `bun run typecheck` and `bun run test`, and finally:
+
+```sh
+bun run release
+```
+
+This bakes the licence config, builds the renderer with Vite, builds the NSIS installer with
+electron-builder (which also generates `latest.yml`) and runs `scripts/publish.js`, which uploads
+the installer and `latest.yml` to the store. `publish.js` refuses to upload anything unless the
+baked licence config is a release build with at least one key, the packaged
+`resources/app-update.yml` points at `build.publish.url`, and the version in `release/latest.yml` is
+newer than the `latest.yml` already in the bucket.
 
 You can re-run only the upload step with `bun run publish` if the build artifacts already exist.
 
@@ -59,26 +69,44 @@ objects, so storage stays bounded.
 
 ## Automated Releases (GitHub Actions)
 
-`.github/workflows/release.yml` runs the whole pipeline on a Windows runner whenever you publish a
-GitHub Release:
+`.github/workflows/release.yml` runs on a `blacksmith-4vcpu-windows-2025` runner, because NSIS must
+build on Windows, whenever a GitHub Release is published:
 
-1. In GitHub, create a new Release with a tag like `v0.2.0`. The tag is the version — the workflow
-   sets the `package.json` version from it (a leading `v` is stripped).
-2. The workflow installs dependencies, runs `bun run release` (Vite build + NSIS installer +
-   `latest.yml` + upload to the store with pruning), and attaches the installer to the GitHub Release.
-3. Installed clients auto-update from the store on their next check.
+1. Create a Release with a strict `MAJOR.MINOR.PATCH` tag greater than the last one, such as
+   `v0.20260928.0`. The workflow strips the leading `v` and writes the version into
+   `apps/desktop/package.json`.
+2. The `verify` job runs `ci.yml` on the tagged commit: the frozen install, typecheck, lint and
+   tests every pull request gets. Only when it passes does the build job install dependencies with
+   `bun install --frozen-lockfile`, build the SDK, bake and check the licence config, build the
+   renderer and the installer, and check the update feed URL, the Electron fuses and, once signing
+   is set up, every signature.
+3. For a full release it then runs `scripts/publish.js`, which uploads the installer and
+   `latest.yml` to the store and prunes old versions. A pre-release stops short of that: its
+   installer is attached to the GitHub Release for testing and the update feed is left alone. To
+   ship that build to everyone, publish a full release with a new tag.
+4. A separate job, the only one with a write token, attaches the installer to the GitHub Release.
+5. Installed clients see the new version on their next update check.
 
-Add these repository secrets first (GitHub repo -> Settings -> Secrets and variables -> Actions):
+Repository secrets (Settings > Secrets and variables > Actions):
 
-- `STORAGE_ENDPOINT`
-- `STORAGE_ACCESS_KEY_ID`
-- `STORAGE_SECRET_ACCESS_KEY`
-- `STORAGE_BUCKET`
-- `STORAGE_FORCE_PATH_STYLE`
+- `STORAGE_ENDPOINT`, `STORAGE_REGION` (optional), `STORAGE_ACCESS_KEY_ID`,
+  `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET` and `STORAGE_FORCE_PATH_STYLE`: the store
+  `publish.js` uploads to.
+- `ALPINE_LICENCE_PUBLIC_KEYS`: the licence verification keys baked into the build. The job fails
+  without at least one.
+- `ALPINE_MARKETPLACE_PUBKEY`: the public half of `ALPINE_PLUGIN_SIGNING_KEY`, baked so the build
+  can verify plugin signatures. The job warns without it.
+- `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD`: optional, see Code Signing below.
 
-The job uses `windows-latest` because NSIS must build on Windows. Releasing on a published Release —
-rather than on every push to `main` — keeps each version explicit and avoids pushing an update to
-every user on every commit. Running `bun run release` locally remains a manual fallback.
+Repository variables:
+
+- `ALPINE_AUTH_BASE` and `ALPINE_WEBSITE_BASE`: optional overrides of the auth service and website
+  the build talks to. Unset, they default to `https://auth.alpineshell.com` and
+  `https://alpineshell.com`.
+
+Releasing on a published Release rather than on every push to `main` keeps each version explicit.
+Because `publish.js` refuses a version the feed already offers, re-run only the failed job when the
+attach step fails, not the whole workflow.
 
 ## Installer Lifecycle (Portable -> NSIS)
 
@@ -143,26 +171,28 @@ This packs the plugin folder into `<id>.alpineplugin` (a zip with `plugin.json` 
 built with the system `tar`/bsdtar and containment-checked against symlinks and path escapes),
 computes its SHA-256, signs the digest with Ed25519, uploads the immutable bundle plus a per-plugin
 `plugins/<id>/latest.json`, and rolls the plugin's card into the shared `plugins/index.json` catalog
-(fetched, merged, re-uploaded `no-cache`). `apps/web` and the desktop marketplace both read that same
+(fetched, merged, re-uploaded `no-cache`). The
+[website](https://github.com/AlpineShell/website) and the desktop marketplace both read that same
 `index.json`.
 
 ### Required environment for plugin publishing
 
 - Storage credentials: the `STORAGE_*` variables; see `docs/STORAGE.md`.
-- `ALPINE_PLUGIN_SIGNING_KEY` — base64 of a PKCS8 PEM Ed25519 **private** key. If unset, the script
-  warns and publishes **unsigned** (fine for first-party curated bundles during bring-up, but the
-  desktop install path enforces the signature, so production bundles must be signed).
+- `ALPINE_PLUGIN_SIGNING_KEY`: base64 of a PKCS8 PEM Ed25519 **private** key. If unset, the script
+  warns and publishes **unsigned**. Production bundles must be signed: the desktop only treats a
+  bundle as verified when its signature checks out against the marketplace key baked into the build.
 
 Generate the key pair once:
 
 ```sh
-node -e "const c=require('crypto');const{publicKey,privateKey}=c.generateKeyPairSync('ed25519');console.log('PUB',publicKey.export({type:'spki',format:'der'}).subarray(-32).toString('base64'));console.log('PRIV_B64',Buffer.from(privateKey.export({type:'pkcs8',format:'pem'})).toString('base64'))"
+node -e "const c=require('crypto');const{publicKey,privateKey}=c.generateKeyPairSync('ed25519');const b64=(pem)=>Buffer.from(pem).toString('base64');console.log('ALPINE_MARKETPLACE_PUBKEY='+b64(publicKey.export({type:'spki',format:'pem'})));console.log('ALPINE_PLUGIN_SIGNING_KEY='+b64(privateKey.export({type:'pkcs8',format:'pem'})))"
 ```
 
-Paste `PUB` into `MARKETPLACE_PUBLIC_KEY` in `electron/pluginMarketplaceContract.js` (the client
-verifies against it), and store `PRIV_B64` as the `ALPINE_PLUGIN_SIGNING_KEY` GitHub secret / local
-env. The public key baked into the app and the private key used to sign must always match, or every
-install will fail signature verification.
+Store `ALPINE_MARKETPLACE_PUBKEY` as the repository secret of that name: the release workflow bakes
+it into `electron/marketplacePublicKey.generated.js`, which the client verifies against (a PEM, an
+escaped one-line PEM or a base64 PEM all work). Store `ALPINE_PLUGIN_SIGNING_KEY` wherever you run
+`publish:plugin`. The public key baked into the app and the private key used to sign must always
+match, or every bundle will fail signature verification.
 
 ## Storage: Railway/MinIO
 
@@ -171,9 +201,31 @@ Railway/MinIO is the store. The upload code (`scripts/publish.js` for installers
 factory, which reads the `STORAGE_*` env vars. See `docs/STORAGE.md` for the exact provisioning
 steps and env mapping.
 
-## Code Signing Note
+## Code Signing
 
-Auto-update on Windows works without code signing: clients will download and apply updates from the
-configured store. However, until the installer is code-signed, Windows SmartScreen will show an
-"unrecognized app" / publisher warning prompt when users run the installer. Code signing the NSIS
-installer removes that prompt and improves the reputation of subsequent auto-updates.
+Auto-update on Windows works without code signing, but until the build is signed Windows
+SmartScreen shows an "unrecognized app" prompt on the installer, and Smart App Control or an App
+Control policy can refuse to load it at all. Those policies check every DLL and native module as
+well, so a signed `Alpine Shell.exe` would still fail to start the moment it loaded an unsigned
+`ffmpeg.dll` or `koffi.node`. Every PE file the installer ships therefore has to be signed, not
+just the installer.
+
+Nothing is signed until the `WIN_CSC_LINK` secret exists. From then on the release job hands it and
+`WIN_CSC_KEY_PASSWORD` to electron-builder, and to no other step. electron-builder signs every
+`.exe`, `.dll` and `.node` file it packs (`build.win.signExts` adds the last two) and the installer,
+and `forceCodeSigning` makes the build fail instead of shipping unsigned. The "Verify code
+signatures" step then runs `Get-AuthenticodeSignature` over every `.exe`, `.dll` and `.node` in
+`release/win-unpacked` and the installer, and stops the release before publishing if any of them is
+not `Valid`. Without the secret the build warns and ships unsigned, as it does today.
+
+`WIN_CSC_LINK` takes what electron-builder accepts for a certificate: a base64-encoded `.pfx`, or a
+link to one. A certificate whose key lives on a hardware token or in a cloud HSM, which is how
+public CAs issue code signing certificates now, needs `win.azureSignOptions` or a
+`win.signtoolOptions.sign` hook in the build step instead, and `SIGN_WINDOWS_BINARIES` in
+`release.yml` then has to key off that service's secret rather than `WIN_CSC_LINK`; `signExts` and
+the signature check stay as they are.
+
+Two executables stay unsigned whatever this config says: the update cover `AlpineUpdater-*.exe` and
+`msix-launcher.exe` are compiled on the user's PC at run time from the `.cs` sources in
+`electron/scripts`. Test the first signed build on a PC with Smart App Control on before claiming
+support for it.
