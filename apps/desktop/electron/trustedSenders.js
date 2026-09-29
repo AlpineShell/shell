@@ -1,6 +1,15 @@
+const { acceptsIpcSender } = require('./pageUrls')
+
 const UNTRUSTED_SENDER = 'untrusted-sender'
 
 let trustedWindowsAccessor = null
+let appLocation = null
+
+function setAppLocation(location) {
+  appLocation = location && typeof location === 'object'
+    ? { indexPath: location.indexPath || null, devServerUrl: location.devServerUrl || null }
+    : null
+}
 
 function setTrustedWindowsAccessor(accessor) {
   trustedWindowsAccessor = typeof accessor === 'function' ? accessor : null
@@ -51,6 +60,29 @@ function guardHandler(handler) {
   }
 }
 
+function senderUrlOf(event) {
+  try {
+    const frame = event && event.senderFrame
+    return frame && typeof frame.url === 'string' ? frame.url : ''
+  } catch {
+    return ''
+  }
+}
+
+function isShellSender(channel, event, request) {
+  return acceptsIpcSender(channel, senderUrlOf(event), appLocation, request)
+}
+
+function guardShellSender(channel, handler) {
+  return (event, ...args) => {
+    if (!isShellSender(channel, event, args[0])) {
+      console.error(`[ipc] refused '${channel}' from ${senderUrlOf(event) || 'a frame without a url'}`)
+      throw untrustedSenderError()
+    }
+    return handler(event, ...args)
+  }
+}
+
 function guardHandlers(handlers) {
   const guarded = {}
   for (const [channel, handler] of Object.entries(handlers)) {
@@ -62,7 +94,10 @@ function guardHandlers(handlers) {
 module.exports = {
   UNTRUSTED_SENDER,
   setTrustedWindowsAccessor,
+  setAppLocation,
   isTrustedSender,
+  isShellSender,
   guardHandler,
   guardHandlers,
+  guardShellSender,
 }

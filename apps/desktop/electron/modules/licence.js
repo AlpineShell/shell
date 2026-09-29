@@ -69,6 +69,25 @@ function retryAfterMs(headers, now) {
   return Number.isFinite(retryAt) ? Math.max(0, retryAt - now) : null
 }
 
+function isWebsiteDevicePage(websiteBase, value) {
+  let page
+  let devicePage
+  try {
+    page = new URL(value)
+    devicePage = new URL(`${websiteBase}/device`)
+  } catch {
+    return false
+  }
+  return page.origin === devicePage.origin && page.pathname.replace(/\/+$/, '') === devicePage.pathname
+}
+
+function deviceVerificationUrl(websiteBase, body) {
+  const offered = stringOrNull(body.verification_uri_complete) || stringOrNull(body.verification_uri)
+  if (offered && isWebsiteDevicePage(websiteBase, offered)) return offered
+  const userCode = stringOrNull(body.user_code)
+  return userCode ? `${websiteBase}/device?user_code=${encodeURIComponent(userCode)}` : `${websiteBase}/device`
+}
+
 function seatFromServer(entry) {
   return {
     id: stringOrNull(entry.id) ?? '',
@@ -361,13 +380,11 @@ function createLicenceService(overrides = {}) {
       setProgress({ phase: 'error', error: code.status === 0 ? 'unreachable' : `device-code-${code.status}` })
       return
     }
-    const verificationUri = code.body.verification_uri_complete || code.body.verification_uri || null
-    if (verificationUri) {
-      try {
-        await deps.openExternal(verificationUri)
-      } catch (error) {
-        deps.log(`could not open the browser: ${error.message}`)
-      }
+    const verificationUri = deviceVerificationUrl(config.websiteBase, code.body)
+    try {
+      await deps.openExternal(verificationUri)
+    } catch (error) {
+      deps.log(`could not open the browser: ${error.message}`)
     }
     setProgress({ phase: 'waiting', userCode: stringOrNull(code.body.user_code), verificationUri })
     const grant = await pollDeviceToken(flow, code.body)

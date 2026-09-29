@@ -15,6 +15,7 @@ import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/ch
 import { SETTINGS_REGISTRY, isSettingsValueEntry, settingsEntryHint, settingsPageRoute } from "../../settings/registry"
 import { useSettingsValues, writeSettingsValue } from "../../hooks/useSettingsValue"
 import { scoreField, scoreItem, deriveFields, type SearchFields } from "../../lib/launcherSearch"
+import { evaluateArithmetic } from "../../lib/launcherArithmetic"
 import { adoptInstalledAppMatch, appResultKey, rankEntries, settingResultKey, tabResultKey, windowCommandResultKey } from "../../lib/launcherRanking"
 import { useApps } from "../../hooks/useApps"
 import { useLauncherMemory } from "../../hooks/useLauncherMemory"
@@ -63,8 +64,8 @@ function tryMath(expr: string): string | null {
   if (!/^[\d\s+\-*/.%^(),]+$/.test(expr)) return null
   try {
     const sanitized = expr.replace(/\^/g, "**").replace(/,/g, ".")
-    const result = new Function(`"use strict"; return (${sanitized})`)()
-    if (typeof result !== "number" || !isFinite(result)) return null
+    const result = evaluateArithmetic(sanitized)
+    if (!isFinite(result)) return null
     return Number.isInteger(result) ? result.toString() : parseFloat(result.toPrecision(12)).toString()
   } catch {
     return null
@@ -908,7 +909,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
         navigator.clipboard.writeText(mathResult)
         window.launcher.hide()
       } else if (selectedEntry.type === "map") {
-        window.open(`https://www.openstreetmap.org/?mlat=${selectedEntry.result.lat}&mlon=${selectedEntry.result.lon}#map=16/${selectedEntry.result.lat}/${selectedEntry.result.lon}`)
+        window.launcher.openMap(selectedEntry.result)
         window.launcher.hide()
       } else if (selectedEntry.type === "result") {
         activateResult(selectedEntry.result)
@@ -1230,7 +1231,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
                       {mapResult && (
                         <button
                           onMouseMove={() => setSelected(mathOffset)}
-                          onClick={() => { window.open(`https://www.openstreetmap.org/?mlat=${mapResult.lat}&mlon=${mapResult.lon}#map=16/${mapResult.lat}/${mapResult.lon}`); window.launcher.hide() }}
+                          onClick={() => { window.launcher.openMap(mapResult); window.launcher.hide() }}
                           className={`flex items-center gap-3 px-2.5 rounded-md text-left cursor-pointer transition-colors overflow-hidden ${
                             selected === mathOffset ? selectedBg : hoverBg
                           }`}

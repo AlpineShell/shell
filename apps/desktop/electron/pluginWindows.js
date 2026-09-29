@@ -61,7 +61,7 @@ function open(pluginId, pluginDir, request) {
     return { ok: true, reused: true }
   }
 
-  const { BrowserWindow } = require('electron')
+  const { app, BrowserWindow } = require('electron')
   const win = new BrowserWindow({
     useContentSize: true,
     width: clampDimension(options.width, DEFAULT_WIDTH),
@@ -79,6 +79,7 @@ function open(pluginId, pluginDir, request) {
       nodeIntegration: false,
       sandbox: false,
       backgroundThrottling: false,
+      devTools: !app.isPackaged,
       additionalArguments: [
         `--alpine-plugin-id=${pluginId}`,
         `--alpine-window-id=${id}`,

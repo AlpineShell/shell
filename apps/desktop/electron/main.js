@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, protocol, net, powerMonitor } = require('electron')
+const { app, BrowserWindow, Menu, screen, ipcMain, protocol, net, powerMonitor, session, shell: electronShell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
@@ -131,6 +131,8 @@ const windowsUpdate = require('./modules/windowsUpdate')
 const licence = require('./modules/licence')
 const { planStartupForLicence } = require('./licenceStartup')
 const trustedSenders = require('./trustedSenders')
+const pageUrls = require('./pageUrls')
+const { keepToShellPages } = require('./shellPageGuard')
 const {
   registerAppBar,
   unregisterAppBar,
@@ -141,6 +143,11 @@ const {
 
 const isDev = !app.isPackaged
 const BASE_URL = isDev ? 'http://127.0.0.1:5173' : null
+const APP_INDEX_PATH = path.join(__dirname, '..', 'dist', 'index.html')
+const APP_LOCATION = { indexPath: isDev ? null : APP_INDEX_PATH, devServerUrl: BASE_URL }
+const GRANTED_PERMISSIONS = new Set(['clipboard-sanitized-write'])
+
+trustedSenders.setAppLocation(APP_LOCATION)
 
 const UPDATE_READY_TIMEOUT_MS = 10000
 const settledTopBars = new Set()
@@ -202,7 +209,19 @@ app.commandLine.appendSwitch('force_high_performance_gpu')
 function getURL(mode, displayId) {
   const params = displayId != null ? `mode=${mode}&displayId=${displayId}` : `mode=${mode}`
   if (isDev) return `${BASE_URL}?${params}`
-  return `file://${path.join(__dirname, '..', 'dist', 'index.html')}?${params}`
+  return `${pathToFileURL(APP_INDEX_PATH).href}?${params}`
+}
+
+function openInBrowser(url) {
+  if (!pageUrls.isBrowserLink(url)) return
+  electronShell.openExternal(url).catch((e) => console.error('[main] could not open link:', e && e.message))
+}
+
+app.on('web-contents-created', (_event, contents) => keepToShellPages(contents, APP_LOCATION, openInBrowser))
+
+function grantOnlyShellPermissions() {
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(GRANTED_PERMISSIONS.has(permission)))
+  session.defaultSession.setPermissionCheckHandler((_contents, permission) => GRANTED_PERMISSIONS.has(permission))
 }
 
 function loadAppURL(win, url) {
@@ -367,6 +386,7 @@ function createDesktopWindow(display) {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
       backgroundThrottling: false,
     },
   })
@@ -404,6 +424,7 @@ function createTopBarWindow(display) {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
       backgroundThrottling: false,
     },
   })
@@ -586,6 +607,7 @@ function createScreenshotWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
       backgroundThrottling: false,
     },
   })
@@ -633,6 +655,7 @@ function createSetupWindow(page) {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
     },
   })
 
@@ -705,6 +728,7 @@ function createSettingsWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
     },
   })
   settingsWin.on('page-title-updated', (e) => e.preventDefault())
@@ -811,7 +835,7 @@ function openPluginApp(pluginId, app) {
     .catch((e) => console.error('[deeplink] open-app failed:', e && e.message))
 }
 
-ipcMain.handle('windows/open-settings', (_event, page) => {
+ipc.handle('windows/open-settings', (_event, page) => {
   const target = typeof page === 'string' && page ? page : null
   const wasOpen = settingsWin && !settingsWin.isDestroyed()
   pendingSettingsPage = target
@@ -828,13 +852,13 @@ ipcMain.handle('windows/open-settings', (_event, page) => {
   }
 })
 
-ipcMain.handle('windows/close-settings', () => {
+ipc.handle('windows/close-settings', () => {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.destroy()
   }
 })
 
-ipcMain.handle('windows/set-settings-page', (_event, name) => {
+ipc.handle('windows/set-settings-page', (_event, name) => {
   currentSettingsPage = typeof name === 'string' && name ? name : null
   openApps.refresh()
 })
@@ -891,6 +915,9 @@ function handSignInToExplorer(done) {
 }
 
 async function startApp() {
+  grantOnlyShellPermissions()
+  if (!isDev) Menu.setApplicationMenu(null)
+
   if (process.argv.includes('--uninstall-cleanup')) {
     installer.revertSystemChanges()
     app.exit(0)
@@ -970,7 +997,7 @@ async function startApp() {
   if (altTab && altTab.setOverlayDisplayProvider) altTab.setOverlayDisplayProvider(() => launcher.getActiveDisplayId())
   if (altTab && altTab.activeDisplay) launcher.setDisplayProvider(() => altTab.activeDisplay())
 
-  ipcMain.handle('setup/test-out', trustedSenders.guardHandler(() => {
+  ipc.handle('setup/test-out', trustedSenders.guardHandler(() => {
     try {
       licence.requireValid()
     } catch (e) {

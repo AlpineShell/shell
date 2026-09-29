@@ -2,6 +2,7 @@ const { app, shell } = require('electron')
 const { execFile, spawn, execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
+const { quotePowerShellLiteral } = require('../powershell')
 
 let cachedBuild = null
 function getCurrentBuild() {
@@ -86,13 +87,9 @@ function getProgressFilePath() {
   return path.join(app.getPath('userData'), 'windows-update-progress.json')
 }
 
-function toPowerShellSingleQuotedLiteral(value) {
-  return "'" + value.replace(/'/g, "''") + "'"
-}
-
 function buildInstallScript(progressFilePath, targetUpdateId) {
-  const progressLiteral = toPowerShellSingleQuotedLiteral(progressFilePath)
-  const idLiteral = toPowerShellSingleQuotedLiteral(targetUpdateId || '')
+  const progressLiteral = quotePowerShellLiteral(progressFilePath)
+  const idLiteral = quotePowerShellLiteral(targetUpdateId || '')
   return [
     "$ErrorActionPreference = 'Stop'",
     "$ProgressPreference = 'SilentlyContinue'",

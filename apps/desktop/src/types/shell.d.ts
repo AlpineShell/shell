@@ -1680,6 +1680,7 @@ declare global {
       launchAdmin: (id: number) => Promise<{ success: boolean }>
       uninstall: (id: number) => Promise<{ ok: boolean; mode: 'store' | 'desktop' | 'settings' | 'none' }>
       openLocation: (id: number) => Promise<{ success: boolean }>
+      openMap: (place: { lat: number; lon: number }) => Promise<{ success: boolean }>
       closeWindow: (hwnd: number) => Promise<{ success: boolean }>
       endTask: (pid: number) => Promise<{ success: boolean }>
       insertText: (text: string) => Promise<{ ok: boolean }>
