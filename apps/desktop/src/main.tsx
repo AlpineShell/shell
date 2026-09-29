@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import type { ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import { useWallpaper } from './hooks/useWallpaper'
+import DesktopApp from './components/desktop/desktopApp'
 
 type Mode = 'topbar' | 'desktop' | 'screenshot' | 'setup' | 'settings'
 
@@ -13,17 +13,6 @@ function getMode(): Mode {
   if (mode === 'setup') return 'setup'
   if (mode === 'settings') return 'settings'
   return 'desktop'
-}
-
-function DesktopApp() {
-  const wallpaper = useWallpaper()
-
-  return (
-    <div
-      className="w-screen h-screen bg-cover bg-center"
-      style={wallpaper ? { backgroundImage: `url('${wallpaper}')` } : { backgroundColor: '#1a1a2e' }}
-    />
-  )
 }
 
 async function resolveView(mode: Mode): Promise<ReactNode> {

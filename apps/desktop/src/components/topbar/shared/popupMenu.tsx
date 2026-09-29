@@ -143,6 +143,20 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         return () => observer.disconnect();
     }, [open, shape]);
 
+    function triggerClose() {
+        pendingClose.current = true;
+        if (activeMenu === selfRef.current) activeMenu = null;
+        clearChromeSurface(idRef.current);
+        clearTimeout(shrinkTimer.current);
+        regionBottomRef.current = 0;
+        window.topbar.setActiveRegion(null);
+        clearTimeout(closeTimer.current);
+        closeTimer.current = setTimeout(() => {
+            setOpen(false);
+            setShape(null);
+        }, CLOSE_MS);
+    }
+
     useEffect(() => {
         if (!open) return;
         const remove = window.topbar.onCloseMenus(() => triggerClose());
@@ -158,20 +172,6 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
             window.topbar.setActiveRegion(null);
         }
     }, []);
-
-    function triggerClose() {
-        pendingClose.current = true;
-        if (activeMenu === selfRef.current) activeMenu = null;
-        clearChromeSurface(idRef.current);
-        clearTimeout(shrinkTimer.current);
-        regionBottomRef.current = 0;
-        window.topbar.setActiveRegion(null);
-        clearTimeout(closeTimer.current);
-        closeTimer.current = setTimeout(() => {
-            setOpen(false);
-            setShape(null);
-        }, CLOSE_MS);
-    }
 
     function handleEnter() {
         clearTimeout(closeTimer.current);
