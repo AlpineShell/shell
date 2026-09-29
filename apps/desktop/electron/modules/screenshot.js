@@ -1,4 +1,4 @@
-const { app, screen, desktopCapturer, clipboard } = require('electron')
+const { app, screen, desktopCapturer, clipboard, ClipboardItem } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -138,6 +138,11 @@ function hideOverlay() {
   return true
 }
 
+function copyPngToClipboard(pngBuffer) {
+  const item = new ClipboardItem({ 'image/png': new Blob([pngBuffer], { type: 'image/png' }) })
+  clipboard.write([item]).catch((err) => console.error('[screenshot] Failed to copy to the clipboard:', err))
+}
+
 function cropAndSave(region) {
   if (!capturedImage || !capturedDisplay) return
 
@@ -155,7 +160,7 @@ function cropAndSave(region) {
   const filepath = path.join(getScreenshotsFolder(), filename)
   fs.writeFileSync(filepath, pngBuffer)
 
-  clipboard.writeImage(cropped)
+  copyPngToClipboard(pngBuffer)
 
   console.log(`[screenshot] Saved: ${filepath}`)
 }
