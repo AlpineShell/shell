@@ -21,6 +21,9 @@ const AUTOSTART_LOGON_FILE = '.autostart-logon'
 const LEAVE_SHELL_TO_EXPLORER_FLAG = '--leave-shell-to-explorer'
 const UPDATE_HANDOFF_MAX_AGE_MS = 15 * 60 * 1000
 const SHELL_HANDOFF_MAX_AGE_MS = 12 * 60 * 60 * 1000
+const AUTOSTART_LOGON_MAX_AGE_MS = Number.POSITIVE_INFINITY
+const HKLM_WINLOGON_KEY = 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+const SHELL_AUTO_RESTART_TURNED_OFF = '0x0'
 const SHELL_REVERT_FAILED = 'Could not hand the Windows shell back to Explorer.'
 const SHELL_HANDOFF_HELPER_FAILED = 'Windows Explorer could not be brought back, so nothing was changed.'
 const SHELL_HANDOFF_HELPER_MISSING = 'Windows Explorer is registered as your shell, but Alpine Shell could not close itself. Restart Windows to finish.'
@@ -96,9 +99,15 @@ function getInstalledVersion() {
 function revertShell() {
   try { regAdd(WINLOGON_KEY, 'Shell', 'explorer.exe') } catch {}
   try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', 'AlpineShell') } catch {}
+  restoreShellAutoRestart()
   try { regDelete(WINLOGON_KEY, 'RestartApps') } catch {}
   try { regDelete('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu') } catch {}
   try { execSync('schtasks /change /tn "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" /enable', { windowsHide: true }) } catch {}
+}
+
+function restoreShellAutoRestart() {
+  if (regQuery(HKLM_WINLOGON_KEY, 'AutoRestartShell') !== SHELL_AUTO_RESTART_TURNED_OFF) return
+  try { regAdd(HKLM_WINLOGON_KEY, 'AutoRestartShell', '1', 'REG_DWORD') } catch {}
 }
 
 function isShellRevertedToExplorer() {
@@ -198,8 +207,10 @@ function isUpdateHandoffActive() {
 }
 
 function autostartRanThisLogon() {
+  const markerPath = userDataFile(AUTOSTART_LOGON_FILE)
+  if (!isMarkerActive(markerPath, AUTOSTART_LOGON_MAX_AGE_MS, os.uptime() * 1000)) return false
   return shellExclusivity.matchHandoffLogon({
-    recordedLogonId: logonSession.parseLogonId(readMarker(userDataFile(AUTOSTART_LOGON_FILE))),
+    recordedLogonId: logonSession.parseLogonId(readMarker(markerPath)),
     currentLogonId: logonSession.currentLogonId(),
   })
 }

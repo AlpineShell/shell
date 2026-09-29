@@ -45,6 +45,12 @@
     Push $0
     nsExec::Exec /TIMEOUT=20000 '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --uninstall-cleanup'
     Pop $0
+    ClearErrors
+    ReadRegDWORD $0 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "AutoRestartShell"
+    ${ifNot} ${Errors}
+    ${andIf} $0 == 0
+      WriteRegDWORD HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "AutoRestartShell" 1
+    ${endIf}
     Pop $0
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "Shell" "explorer.exe"
     DeleteRegValue HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Run" "AlpineShell"

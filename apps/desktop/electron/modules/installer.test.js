@@ -39,6 +39,7 @@ childProcess.execFileSync = (file, args) => {
   if (file === 'reg' && args[0] === 'delete') registry.delete(registryKey(args[1], args[3]))
   return ''
 }
+childProcess.execSync = () => ''
 const spawnMock = vi.fn()
 childProcess.spawn = (...args) => spawnMock(...args)
 
@@ -251,8 +252,51 @@ describe('the startup apps sign-in record', () => {
   })
 
   it('cannot tell when the sign-in is unknown, so the startup apps still run', () => {
+    installer.recordAutostartLogon()
+    logonSessionMock.currentLogonId.mockImplementation(() => null)
+    expect(installer.autostartRanThisLogon()).toBe(null)
+  })
+
+  it('records nothing when the sign-in is unknown', () => {
     logonSessionMock.currentLogonId.mockImplementation(() => null)
     installer.recordAutostartLogon()
-    expect(installer.autostartRanThisLogon()).toBe(null)
+    expect(fs.existsSync(path.join(userDataDir, '.autostart-logon'))).toBe(false)
+  })
+
+  it('runs them again after a restart, even when Windows hands out the same sign-in id', () => {
+    installer.recordAutostartLogon()
+    const stamped = new Date(Date.now() - 2 * HOUR_MS)
+    fs.utimesSync(path.join(userDataDir, '.autostart-logon'), stamped, stamped)
+    os.uptime.mockReturnValue(60 * 60)
+    expect(installer.autostartRanThisLogon()).toBe(false)
+  })
+
+  it('keeps the record for a sign-in that lasts for days', () => {
+    installer.recordAutostartLogon()
+    const stamped = new Date(Date.now() - 30 * HOUR_MS)
+    fs.utimesSync(path.join(userDataDir, '.autostart-logon'), stamped, stamped)
+    os.uptime.mockReturnValue(40 * 60 * 60)
+    expect(installer.autostartRanThisLogon()).toBe(true)
+  })
+})
+
+describe('the shell restart setting', () => {
+  const HKLM_WINLOGON_KEY = 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+  const autoRestartShell = () => registryKey(HKLM_WINLOGON_KEY, 'AutoRestartShell')
+
+  it('turns shell restarts back on where an earlier version turned them off', () => {
+    registry.set(autoRestartShell(), '0x0')
+    installer.revertShell()
+    expect(registry.get(autoRestartShell())).toBe('1')
+  })
+
+  it('leaves a shell restart setting that Alpine never turned off alone', () => {
+    registry.set(autoRestartShell(), '0x1')
+    installer.revertShell()
+    expect(registry.get(autoRestartShell())).toBe('0x1')
+
+    registry.delete(autoRestartShell())
+    installer.revertShell()
+    expect(registry.has(autoRestartShell())).toBe(false)
   })
 })
