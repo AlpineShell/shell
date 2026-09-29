@@ -56,6 +56,7 @@
     DeleteRegValue HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Run" "AlpineShell"
     DeleteRegValue HKCU "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "RestartApps"
     DeleteRegValue HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "EnableXamlStartMenu"
+    DeleteRegValue HKCU "Software\Microsoft\DirectX\UserGpuPreferences" "$INSTDIR\Alpine Shell.exe"
     nsExec::Exec 'schtasks /change /tn "\Microsoft\Windows\Application Experience\StartupAppTask" /enable'
   ${endIf}
 !macroend

@@ -107,7 +107,8 @@
       },
       {
         "from": "wallpapers",
-        "to": "wallpapers"
+        "to": "wallpapers",
+        "filter": ["**/*", "!CREDITS.md"]
       },
       {
         "from": "presets/plugins",

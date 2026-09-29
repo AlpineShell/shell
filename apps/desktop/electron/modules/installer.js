@@ -9,6 +9,7 @@ const revertScript = require('./revertScript')
 const shellExclusivity = require('./shellExclusivity')
 const logonSession = require('../logonSession')
 const { regQuery } = require('../registryRead')
+const { GPU_PREFERENCES_KEY } = require('./gpuPreference')
 
 const PRODUCT_NAME = 'Alpine Shell'
 const INSTALL_DIR_NAME = 'alpine-shell'
@@ -393,9 +394,14 @@ function clearSetupFlag() {
   if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath)
 }
 
+function clearGpuPreference() {
+  try { regDelete(GPU_PREFERENCES_KEY, getInstalledExePath()) } catch {}
+}
+
 function revertSystemChanges() {
   revertShell()
   restoreDefaultCursors()
+  clearGpuPreference()
   clearSetupFlag()
 }
 

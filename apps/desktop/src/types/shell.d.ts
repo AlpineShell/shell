@@ -292,6 +292,10 @@ declare global {
     throttleProcesses: boolean
   }
 
+  interface GpuPreferences {
+    highPerformance: boolean
+  }
+
   interface BatterySaverState {
     active: boolean
     reason: BatterySaverReason
@@ -1680,7 +1684,6 @@ declare global {
       launchAdmin: (id: number) => Promise<{ success: boolean }>
       uninstall: (id: number) => Promise<{ ok: boolean; mode: 'store' | 'desktop' | 'settings' | 'none' }>
       openLocation: (id: number) => Promise<{ success: boolean }>
-      openMap: (place: { lat: number; lon: number }) => Promise<{ success: boolean }>
       closeWindow: (hwnd: number) => Promise<{ success: boolean }>
       endTask: (pid: number) => Promise<{ success: boolean }>
       insertText: (text: string) => Promise<{ ok: boolean }>
@@ -1879,6 +1882,10 @@ declare global {
         state: () => Promise<BatterySaverState>
         setOverride: (override: BatterySaverOverride) => Promise<BatterySaverState>
         onStateChanged: (callback: (state: BatterySaverState) => void) => () => void
+      }
+      gpu: {
+        preferences: () => Promise<GpuPreferences>
+        setPreferences: (partial: Partial<GpuPreferences>) => Promise<GpuPreferences>
       }
       media: {
         session: () => Promise<MediaPlayback>

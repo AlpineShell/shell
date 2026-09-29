@@ -251,7 +251,6 @@ contextBridge.exposeInMainWorld('launcher', {
   launchAdmin: (id) => ipcRenderer.invoke('launcher/launch-admin', id),
   uninstall: (id) => ipcRenderer.invoke('launcher/uninstall', id),
   openLocation: (id) => ipcRenderer.invoke('launcher/open-location', id),
-  openMap: (place) => ipcRenderer.invoke('launcher/open-map', place),
   closeWindow: (hwnd) => ipcRenderer.invoke('launcher/close-window', hwnd),
   endTask: (pid) => ipcRenderer.invoke('launcher/end-task', pid),
   insertText: (text) => ipcRenderer.invoke('launcher/insert-text', text),
@@ -522,6 +521,10 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('battery-saver/state-changed', handler)
       return () => ipcRenderer.removeListener('battery-saver/state-changed', handler)
     },
+  },
+  gpu: {
+    preferences: () => ipcRenderer.invoke('gpu/preferences-get'),
+    setPreferences: (partial) => ipcRenderer.invoke('gpu/preferences-set', partial),
   },
   media: {
     session: () => ipcRenderer.invoke('media/session'),
