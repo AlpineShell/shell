@@ -4,7 +4,7 @@
 ## Requirements 
 
 - Windows 10/11 
-- Node.js 18+
+- Node.js 22.12+
 
 ## Getting Started
 
