@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, protocol, net, powerMonitor, session, shell: electronShell } = require('electron')
+const { app, BrowserWindow, Menu, screen, ipcMain, protocol, net, powerMonitor, session, shell: electronShell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
@@ -329,6 +329,7 @@ function createDesktopWindow(display) {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
       backgroundThrottling: false,
     },
   })
@@ -366,6 +367,7 @@ function createTopBarWindow(display) {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
       backgroundThrottling: false,
     },
   })
@@ -547,6 +549,7 @@ function createScreenshotWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
       backgroundThrottling: false,
     },
   })
@@ -594,6 +597,7 @@ function createSetupWindow(page) {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
     },
   })
 
@@ -666,6 +670,7 @@ function createSettingsWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: isDev,
     },
   })
   settingsWin.on('page-title-updated', (e) => e.preventDefault())
@@ -815,6 +820,7 @@ openApps.setShellAppsProvider(() => {
 
 app.whenReady().then(async () => {
   grantOnlyShellPermissions()
+  if (!isDev) Menu.setApplicationMenu(null)
 
   if (process.argv.includes('--uninstall-cleanup')) {
     installer.revertSystemChanges()
