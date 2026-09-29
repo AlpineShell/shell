@@ -106,8 +106,23 @@ async function getRunEntries(keys) {
   return entries
 }
 
-async function deleteRunOnceEntry(registryKey, name) {
-  await execText(`reg delete "${registryKey}" /v "${name}" /f`)
+function execSucceeds(cmd) {
+  return new Promise((resolve) => {
+    exec(cmd, { windowsHide: true }, (err) => resolve(!err))
+  })
+}
+
+function deleteRunOnceEntry(registryKey, name) {
+  return execSucceeds(`reg delete "${registryKey}" /v "${name}" /f`)
+}
+
+async function claimRunOnceEntries(entries) {
+  const claimed = []
+  for (const entry of entries) {
+    if (await deleteRunOnceEntry(entry.registryKey, entry.name)) claimed.push(entry)
+    else console.log(`[autostart] Skipped ${entry.name}: its RunOnce entry in ${entry.registryKey} could not be removed`)
+  }
+  return claimed
 }
 
 function getStartupFolderEntries() {
@@ -356,13 +371,11 @@ async function processAutostart() {
   ])
   const folderEntries = getStartupFolderEntries()
 
-  for (const entry of runOnceEntries) {
-    await deleteRunOnceEntry(entry.registryKey, entry.name)
-  }
+  const claimedRunOnceEntries = await claimRunOnceEntries(runOnceEntries)
 
   const launchableEntries = [
     ...runEntries.filter(entry => !isBlockedEntry(entry) && !isRunEntryDisabled(entry, approved)),
-    ...runOnceEntries.filter(entry => !isBlockedEntry(entry)),
+    ...claimedRunOnceEntries.filter(entry => !isBlockedEntry(entry)),
     ...folderEntries.filter(entry => !isBlockedEntry(entry) && !isFolderEntryDisabled(entry, approved)),
   ]
 
