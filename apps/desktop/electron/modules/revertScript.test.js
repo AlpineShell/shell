@@ -77,10 +77,20 @@ describe('buildWaitForProcessExit', () => {
   it('distinguishes a real exit from a timeout', () => {
     expect(lines).toContain('if ($waitTicks -ge 60) { $stillRunning = $true; break }')
   })
+
+  it('waits only for Alpine in this Windows session, not for another signed-in user\'s', () => {
+    expect(lines).toContain('$sessionId = (Get-Process -Id $PID).SessionId')
+    expect(lines).toContain('while (Get-Process -Name $imageName -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sessionId })')
+    expect(lines.indexOf('$sessionId =')).toBeLessThan(lines.indexOf('while ('))
+  })
 })
 
 describe('buildForceProcessExit', () => {
   const lines = buildForceProcessExit().join('\n')
+
+  it('only stops Alpine in this Windows session', () => {
+    expect(lines).toContain('Where-Object { $_.SessionId -eq $sessionId } | Stop-Process -Force')
+  })
 
   it('only forces an exit when the wait timed out', () => {
     expect(buildForceProcessExit()[0]).toBe('if ($stillRunning) {')

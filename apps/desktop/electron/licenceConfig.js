@@ -37,6 +37,15 @@ function normaliseBase(value, fallback) {
   return /^https?:\/\/[^\s/]+/.test(trimmed) ? trimmed : fallback
 }
 
+function isSecureBase(base) {
+  return typeof base === 'string' && base.startsWith('https://')
+}
+
+function normaliseSecureBase(value, fallback) {
+  const base = normaliseBase(value, fallback)
+  return isSecureBase(base) ? base : fallback
+}
+
 function isPublicKeyEntry(entry) {
   return Boolean(entry)
     && typeof entry.kid === 'string' && entry.kid.trim().length > 0
@@ -60,8 +69,8 @@ function parsePublicKeys(value) {
 function releaseConfig(baked) {
   return {
     isReleaseBuild: true,
-    authBase: normaliseBase(baked.authBase, DEFAULT_AUTH_BASE),
-    websiteBase: normaliseBase(baked.websiteBase, DEFAULT_WEBSITE_BASE),
+    authBase: normaliseSecureBase(baked.authBase, DEFAULT_AUTH_BASE),
+    websiteBase: normaliseSecureBase(baked.websiteBase, DEFAULT_WEBSITE_BASE),
     publicKeys: parsePublicKeys(baked.publicKeys),
     enforceInDevelopment: false,
   }
@@ -110,6 +119,7 @@ module.exports = {
   parseEnvText,
   readDotEnv,
   normaliseBase,
+  isSecureBase,
   parsePublicKeys,
   resolveLicenceConfig,
   loadLicenceConfig,

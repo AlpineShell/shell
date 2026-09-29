@@ -251,6 +251,7 @@ contextBridge.exposeInMainWorld('launcher', {
   launchAdmin: (id) => ipcRenderer.invoke('launcher/launch-admin', id),
   uninstall: (id) => ipcRenderer.invoke('launcher/uninstall', id),
   openLocation: (id) => ipcRenderer.invoke('launcher/open-location', id),
+  openMap: (place) => ipcRenderer.invoke('launcher/open-map', place),
   closeWindow: (hwnd) => ipcRenderer.invoke('launcher/close-window', hwnd),
   endTask: (pid) => ipcRenderer.invoke('launcher/end-task', pid),
   insertText: (text) => ipcRenderer.invoke('launcher/insert-text', text),
@@ -372,6 +373,7 @@ if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
 
 contextBridge.exposeInMainWorld('shell', {
   settingsIcon: bootSettingsIcon,
+  reportRenderError: (detail) => ipcRenderer.send('shell/render-error', detail),
   theme: {
     initial: bootTheme,
     get: () => ipcRenderer.invoke('theme/get'),

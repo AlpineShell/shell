@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import path from 'path'
+import { pathToFileURL } from 'url'
 
-const { setTrustedWindowsAccessor, isTrustedSender, guardHandlers, UNTRUSTED_SENDER } = await import('./trustedSenders.js')
+const { setTrustedWindowsAccessor, setAppLocation, isTrustedSender, isShellSender, guardHandlers, guardShellSender, UNTRUSTED_SENDER } = await import('./trustedSenders.js')
+
+const INDEX_PATH = path.resolve(path.join(path.sep, 'Programs', 'Alpine Shell', 'resources', 'app.asar', 'dist', 'index.html'))
+const INDEX_URL = pathToFileURL(INDEX_PATH).href
+const PLUGIN_PAGE_URL = 'alpine-plugin://com.alpine.android/window/page.html'
 
 function fakeWindow(id, { destroyed = false } = {}) {
   const webContents = { id, mainFrame: { id: `frame-${id}` } }
@@ -12,8 +18,14 @@ function eventFrom(win, { frame } = {}) {
   return { sender, senderFrame: frame === undefined ? sender.mainFrame : frame }
 }
 
+function eventFromPage(url) {
+  return { sender: { id: 1 }, senderFrame: { url } }
+}
+
 afterEach(() => {
   setTrustedWindowsAccessor(null)
+  setAppLocation(null)
+  vi.restoreAllMocks()
 })
 
 describe('trusted senders', () => {
@@ -60,5 +72,55 @@ describe('trusted senders', () => {
     expect(run).not.toHaveBeenCalled()
     expect(guarded['setup/install'](eventFrom(settingsWin), { shell: true })).toBe('done')
     expect(run).toHaveBeenCalledWith(expect.anything(), { shell: true })
+  })
+})
+
+describe('shell senders', () => {
+  it('refuses every sender until main says where the shell page lives', () => {
+    expect(isShellSender('run/exec', eventFromPage(`${INDEX_URL}?mode=topbar`))).toBe(false)
+  })
+
+  it('accepts the shell page and refuses a page the window was navigated to', () => {
+    setAppLocation({ indexPath: INDEX_PATH, devServerUrl: null })
+    expect(isShellSender('run/exec', eventFromPage(`${INDEX_URL}?mode=topbar`))).toBe(true)
+    expect(isShellSender('run/exec', eventFromPage('https://evil.example/'))).toBe(false)
+    expect(isShellSender('run/exec', eventFromPage(PLUGIN_PAGE_URL))).toBe(false)
+  })
+
+  it('keeps plugin windows to their own channels and their own plugin', () => {
+    setAppLocation({ indexPath: INDEX_PATH, devServerUrl: null })
+    const request = { pluginId: 'com.alpine.android', windowId: 'main', name: 'tap' }
+    expect(isShellSender('plugin-window/command', eventFromPage(PLUGIN_PAGE_URL), request)).toBe(true)
+    expect(isShellSender('plugin-window/command', eventFromPage(`${INDEX_URL}?mode=topbar`), request)).toBe(false)
+    expect(isShellSender('plugin-window/command', eventFromPage(PLUGIN_PAGE_URL), { ...request, pluginId: 'com.alpine.ubuntu' })).toBe(false)
+  })
+
+  it('checks a plugin window call against the plugin it names', () => {
+    setAppLocation({ indexPath: INDEX_PATH, devServerUrl: null })
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const command = vi.fn(() => ({ ok: true }))
+    const guarded = guardShellSender('plugin-window/command', command)
+    expect(() => guarded(eventFromPage(PLUGIN_PAGE_URL), { pluginId: 'com.alpine.ubuntu', windowId: 'main', name: 'install' })).toThrow(UNTRUSTED_SENDER)
+    expect(command).not.toHaveBeenCalled()
+    expect(guarded(eventFromPage(PLUGIN_PAGE_URL), { pluginId: 'com.alpine.android', windowId: 'main', name: 'tap' })).toEqual({ ok: true })
+  })
+
+  it('refuses a frame that is gone or cannot be read', () => {
+    setAppLocation({ indexPath: INDEX_PATH, devServerUrl: null })
+    const disposed = { sender: { id: 1 }, get senderFrame() { throw new Error('Render frame was disposed') } }
+    expect(isShellSender('run/exec', { sender: { id: 1 }, senderFrame: null })).toBe(false)
+    expect(isShellSender('run/exec', disposed)).toBe(false)
+    expect(isShellSender('run/exec', null)).toBe(false)
+  })
+
+  it('wraps a handler so a foreign page is refused before it runs', () => {
+    setAppLocation({ indexPath: null, devServerUrl: 'http://127.0.0.1:5173' })
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const run = vi.fn(() => ({ ok: true }))
+    const guarded = guardShellSender('run/exec', run)
+    expect(() => guarded(eventFromPage('https://evil.example/'), 'calc.exe')).toThrow(UNTRUSTED_SENDER)
+    expect(run).not.toHaveBeenCalled()
+    expect(guarded(eventFromPage('http://127.0.0.1:5173/?mode=topbar'), 'calc.exe')).toEqual({ ok: true })
+    expect(run).toHaveBeenCalledWith(expect.anything(), 'calc.exe')
   })
 })

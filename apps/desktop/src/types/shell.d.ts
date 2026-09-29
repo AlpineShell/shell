@@ -1596,6 +1596,17 @@ declare global {
     match: number
   }
 
+  interface RootReloadPlan {
+    reload: boolean
+    delayMs: number
+  }
+
+  interface RootErrorBoundaryProps {
+    view: string
+    onFailure?: () => void
+    children: import('react').ReactNode
+  }
+
   interface Window {
     alpineBoot?: AlpineBootState
     fileHandlers: {
@@ -1673,6 +1684,7 @@ declare global {
       launchAdmin: (id: number) => Promise<{ success: boolean }>
       uninstall: (id: number) => Promise<{ ok: boolean; mode: 'store' | 'desktop' | 'settings' | 'none' }>
       openLocation: (id: number) => Promise<{ success: boolean }>
+      openMap: (place: { lat: number; lon: number }) => Promise<{ success: boolean }>
       closeWindow: (hwnd: number) => Promise<{ success: boolean }>
       endTask: (pid: number) => Promise<{ success: boolean }>
       insertText: (text: string) => Promise<{ ok: boolean }>
@@ -1751,6 +1763,7 @@ declare global {
     }
     shell: {
       settingsIcon: string
+      reportRenderError: (detail: string) => void
       theme: {
         initial: ThemeState
         get: () => Promise<ThemeState>

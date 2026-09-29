@@ -7,8 +7,9 @@ const appIcons = require('./appIcons')
 const appManager = require('./appManager')
 const appxPackages = require('./appxPackages')
 const appActivator = require('../appActivator')
-const { shellExecute } = require('../shellExecute')
+const { shellExecute, shellExecuteElevated } = require('../shellExecute')
 const { shellLinkInShortcut } = require('../launcherDeepLink')
+const { openStreetMapUrl } = require('../mapLink')
 const plugins = require('./plugins')
 const pluginBackendHost = require('../pluginBackendHost')
 const notice = require('./shellNotice')
@@ -622,7 +623,7 @@ function launchAdminItem(item) {
   if (!item) return { success: false }
   if (item.shellLink) return launchItem(item)
   if (item.lnkPath) {
-    exec(`powershell -NoProfile -Command "Start-Process '${item.lnkPath.replace(/'/g, "''")}' -Verb RunAs"`, { windowsHide: true })
+    shellExecuteElevated(item.lnkPath).catch(() => {})
   } else if (item.appId) {
     appActivator.activate(item.appId)
   }
@@ -657,6 +658,13 @@ async function uninstallItem(item) {
   const result = await appManager.uninstallByLaunch({ appId: item.appId, target: item.target, name: item.name })
   scheduleStartAppsRefresh()
   return result
+}
+
+function openMap(place) {
+  const url = openStreetMapUrl(place)
+  if (!url) return { success: false }
+  electronShell.openExternal(url).catch((e) => console.error('[launcher] map open failed:', e.message))
+  return { success: true }
 }
 
 function openItemLocation(item) {
@@ -710,6 +718,7 @@ module.exports = {
       return { success: true }
     },
     'launcher/open-location': (_event, id) => openItemLocation(findItem(id)),
+    'launcher/open-map': (_event, place) => openMap(place),
     'launcher/insert-text': async (_event, text) => {
       const hwnd = lastUserForeground
       hideForOverlay()

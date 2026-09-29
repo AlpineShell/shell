@@ -33,6 +33,7 @@ class AlpineUpdater {
     [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
 
     const int SW_HIDE = 0;
+    const int SW_SHOWNA = 8;
     const int LOGPIXELSY = 90;
     static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     const uint SWP_NOSIZE = 0x0001;
@@ -61,6 +62,12 @@ class AlpineUpdater {
 
     const string ShellKeyPath = @"Software\Microsoft\Windows NT\CurrentVersion\Winlogon";
     const string PreviewFlag = "--preview";
+    const string LeaveShellToExplorerFlag = "--leave-shell-to-explorer";
+    const string AlpineProcessName = "Alpine Shell";
+    const string ExplorerProcessName = "explorer";
+    const int ReadyTimeoutMs = 60000;
+    const int AlpineStartGraceMs = 3000;
+    const int ExplorerRestartSettleMs = 1500;
 
     static string installerPath = "";
     static string alpineExe = "";
@@ -77,6 +84,7 @@ class AlpineUpdater {
     static volatile bool suppressTaskbar = true;
     static bool workerStarted = false;
     static bool previewMode = false;
+    static bool handShellBackToAlpine = true;
     static float dpiScale = 1f;
 
     public static readonly Color CoverGround = ColorTranslator.FromHtml("#212120");
@@ -91,6 +99,8 @@ class AlpineUpdater {
             if (arg == PreviewFlag) {
                 previewMode = true;
                 suppressTaskbar = false;
+            } else if (arg == LeaveShellToExplorerFlag) {
+                handShellBackToAlpine = false;
             } else {
                 positional.Add(arg);
             }
@@ -315,6 +325,14 @@ class AlpineUpdater {
         } catch { }
     }
 
+    static void RestoreTaskbar() {
+        suppressTaskbar = false;
+        try {
+            IntPtr tray = FindWindow("Shell_TrayWnd", null);
+            if (tray != IntPtr.Zero) ShowWindow(tray, SW_SHOWNA);
+        } catch { }
+    }
+
     static void InstallInputGuard() {
         if (keyboardHook != IntPtr.Zero) return;
         try {
@@ -367,15 +385,26 @@ class AlpineUpdater {
         }
     }
 
-    static void KillByName(string name) {
-        foreach (Process p in Process.GetProcessesByName(name)) {
-            try { p.Kill(); } catch { }
-        }
+    static int CurrentSessionId() {
+        using (Process self = Process.GetCurrentProcess()) return self.SessionId;
     }
 
-    static void WaitGone(string name, int timeoutMs) {
+    static void KillInThisSession(string name) {
+        try {
+            int sessionId = CurrentSessionId();
+            foreach (Process p in Process.GetProcessesByName(name)) {
+                using (p) {
+                    try {
+                        if (p.SessionId == sessionId) p.Kill();
+                    } catch { }
+                }
+            }
+        } catch { }
+    }
+
+    static void WaitGoneFromThisSession(string name, int timeoutMs) {
         int waited = 0;
-        while (Process.GetProcessesByName(name).Length > 0 && waited < timeoutMs) {
+        while (IsRunningInThisSession(name) && waited < timeoutMs) {
             Thread.Sleep(250);
             waited += 250;
         }
@@ -387,56 +416,109 @@ class AlpineUpdater {
         } catch { }
     }
 
-    static void WaitForMarker(int timeoutMs) {
+    static bool IsRunningInThisSession(string processName) {
+        try {
+            int sessionId = CurrentSessionId();
+            bool running = false;
+            foreach (Process p in Process.GetProcessesByName(processName)) {
+                using (p) {
+                    if (p.SessionId == sessionId) running = true;
+                }
+            }
+            return running;
+        } catch {
+            return true;
+        }
+    }
+
+    static bool WaitForMarker(int timeoutMs) {
         if (readyMarkerPath.Length == 0) {
             Thread.Sleep(4000);
-            return;
+            return IsRunningInThisSession(AlpineProcessName);
         }
         int waited = 0;
         while (waited < timeoutMs) {
             try {
-                if (File.Exists(readyMarkerPath)) return;
+                if (File.Exists(readyMarkerPath)) return true;
             } catch { }
+            if (waited >= AlpineStartGraceMs && !IsRunningInThisSession(AlpineProcessName)) return false;
             Thread.Sleep(120);
             waited += 120;
         }
+        return false;
     }
 
     static void RunUpdate() {
+        bool alpineCameUp = false;
         try {
             try { readyMarkerPath = Path.Combine(Path.GetTempPath(), "alpine-shell-update-ready.flag"); } catch { readyMarkerPath = ""; }
 
-            WaitGone("Alpine Shell", 15000);
-            KillByName("Alpine Shell");
+            WaitGoneFromThisSession(AlpineProcessName, 15000);
+            KillInThisSession(AlpineProcessName);
             Thread.Sleep(500);
 
-            if (installerPath.Length > 0) {
-                ProcessStartInfo psi = new ProcessStartInfo(installerPath, "/S");
-                psi.UseShellExecute = false;
-                Process inst = Process.Start(psi);
-                if (inst != null) inst.WaitForExit();
-            }
-
-            DeleteMarker();
-            HandBackToAlpine();
-            WaitForMarker(60000);
-            Thread.Sleep(300);
-            DeleteMarker();
+            RunInstaller();
+            alpineCameUp = StartUpdatedAlpine();
         } catch {
-            try { HandBackToAlpine(); } catch { }
-            try { Thread.Sleep(2000); } catch { }
+            alpineCameUp = false;
         } finally {
+            if (alpineCameUp) {
+                try { Thread.Sleep(300); } catch { }
+            } else {
+                try { FallBackToExplorer(); } catch { }
+            }
+            DeleteMarker();
             FadeOutAndExit();
         }
     }
 
-    static void HandBackToAlpine() {
-        suppressTaskbar = false;
-        if (alpineExe.Length > 0) {
+    static void RunInstaller() {
+        if (installerPath.Length == 0) return;
+        try {
+            ProcessStartInfo psi = new ProcessStartInfo(installerPath, "/S");
+            psi.UseShellExecute = false;
+            using (Process inst = Process.Start(psi)) {
+                if (inst != null) inst.WaitForExit();
+            }
+        } catch { }
+    }
+
+    static bool StartUpdatedAlpine() {
+        if (alpineExe.Length == 0 || !File.Exists(alpineExe)) return false;
+        DeleteMarker();
+        if (handShellBackToAlpine) {
+            suppressTaskbar = false;
             SetShell(BuildShellValue());
-            LaunchAlpine();
         }
-        KillByName("explorer");
+        if (!LaunchAlpine()) return false;
+        if (handShellBackToAlpine) KillInThisSession(ExplorerProcessName);
+        if (!WaitForMarker(ReadyTimeoutMs)) return false;
+        if (handShellBackToAlpine) {
+            try { SetShell(alpineExe); } catch { }
+        } else {
+            RestoreTaskbar();
+        }
+        return true;
+    }
+
+    static void FallBackToExplorer() {
+        suppressTaskbar = false;
+        KillInThisSession(AlpineProcessName);
+        try { SetShell("explorer.exe"); } catch { }
+        KillInThisSession(AlpineProcessName);
+        Thread.Sleep(ExplorerRestartSettleMs);
+        if (!IsRunningInThisSession(ExplorerProcessName)) StartExplorer();
+        RestoreTaskbar();
+    }
+
+    static void StartExplorer() {
+        try {
+            string windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            ProcessStartInfo psi = new ProcessStartInfo(Path.Combine(windowsDir, "explorer.exe"));
+            psi.UseShellExecute = false;
+            psi.WorkingDirectory = windowsDir;
+            using (Process.Start(psi)) { }
+        } catch { }
     }
 
     static string BuildShellValue() {
@@ -446,15 +528,17 @@ class AlpineUpdater {
         return alpineExe;
     }
 
-    static void LaunchAlpine() {
-        if (alpineExe.Length == 0) return;
+    static bool LaunchAlpine() {
         try {
             ProcessStartInfo psi = new ProcessStartInfo(alpineExe);
             psi.UseShellExecute = true;
             if (readyMarkerPath.Length > 0) psi.Arguments = "--update-ready-marker \"" + readyMarkerPath + "\"";
             try { psi.WorkingDirectory = System.IO.Path.GetDirectoryName(alpineExe); } catch { }
-            Process.Start(psi);
-        } catch { }
+            using (Process.Start(psi)) { }
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     static void FadeOutAndExit() {

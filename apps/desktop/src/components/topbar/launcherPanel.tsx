@@ -15,6 +15,7 @@ import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "./chrome/ch
 import { SETTINGS_REGISTRY, isSettingsValueEntry, settingsEntryHint, settingsPageRoute } from "../../settings/registry"
 import { useSettingsValues, writeSettingsValue } from "../../hooks/useSettingsValue"
 import { scoreField, scoreItem, deriveFields, type SearchFields } from "../../lib/launcherSearch"
+import { evaluateArithmetic } from "../../lib/launcherArithmetic"
 import { adoptInstalledAppMatch, appResultKey, rankEntries, settingResultKey, tabResultKey, windowCommandResultKey } from "../../lib/launcherRanking"
 import { useApps } from "../../hooks/useApps"
 import { useLauncherMemory } from "../../hooks/useLauncherMemory"
@@ -63,8 +64,8 @@ function tryMath(expr: string): string | null {
   if (!/^[\d\s+\-*/.%^(),]+$/.test(expr)) return null
   try {
     const sanitized = expr.replace(/\^/g, "**").replace(/,/g, ".")
-    const result = new Function(`"use strict"; return (${sanitized})`)()
-    if (typeof result !== "number" || !isFinite(result)) return null
+    const result = evaluateArithmetic(sanitized)
+    if (!isFinite(result)) return null
     return Number.isInteger(result) ? result.toString() : parseFloat(result.toPrecision(12)).toString()
   } catch {
     return null

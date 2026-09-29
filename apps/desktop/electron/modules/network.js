@@ -9,6 +9,7 @@ const {
   disposeNetworkNative,
 } = require('../networkNative')
 const batterySaver = require('./batterySaver')
+const { wifiConnect } = require('./wifiConnect')
 
 let lastSignal = undefined
 let lastType = undefined
@@ -160,36 +161,6 @@ const runWifiRescanCycle = singleFlight(
 function scanWifiNetworks() {
   runWifiRescanCycle().catch(logNetworkFailure)
   return fetchWifiList()
-}
-
-function wifiConnect(ssid, password) {
-  return new Promise((resolve) => {
-    exec(`netsh wlan connect name="${ssid}"`, (err) => {
-      if (!err) return resolve({ success: true })
-      if (!password) return resolve({ success: false, needsPassword: true })
-
-      const fs = require('fs')
-      const os = require('os')
-      const profileXml = `<?xml version="1.0"?>
-<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
-  <name>${ssid}</name>
-  <SSIDConfig><SSID><name>${ssid}</name></SSID></SSIDConfig>
-  <connectionType>ESS</connectionType>
-  <connectionMode>auto</connectionMode>
-  <MSM><security>
-    <authEncryption><authentication>WPA2PSK</authentication><encryption>AES</encryption><useOneX>false</useOneX></authEncryption>
-    <sharedKey><keyType>passPhrase</keyType><protected>false</protected><keyMaterial>${password}</keyMaterial></sharedKey>
-  </security></MSM>
-</WLANProfile>`
-
-      const tmpPath = path.join(os.tmpdir(), `wifi_${Date.now()}.xml`)
-      fs.writeFileSync(tmpPath, profileXml)
-      exec(`netsh wlan add profile filename="${tmpPath}" && netsh wlan connect name="${ssid}"`, (err2) => {
-        try { fs.unlinkSync(tmpPath) } catch {}
-        resolve({ success: !err2 })
-      })
-    })
-  })
 }
 
 function wifiDisconnect() {
