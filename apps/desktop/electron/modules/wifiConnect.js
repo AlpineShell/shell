@@ -61,7 +61,7 @@ async function addProfileAndConnect(ssid, password) {
     if (!(await runNetsh(['wlan', 'add', 'profile', `filename=${profilePath}`]))) return false
     return await connectToProfile(ssid)
   } finally {
-    await fs.promises.rm(profileDirectory, { recursive: true, force: true })
+    await fs.promises.rm(profileDirectory, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
   }
 }
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -38,6 +38,10 @@ function failFirstConnect() {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
+  for (const call of calls) {
+    if (call.profilePath) fs.rmSync(path.dirname(call.profilePath), { recursive: true, force: true })
+  }
   calls.length = 0
   netsh = () => null
 })
@@ -151,5 +155,16 @@ describe('wifiConnect', () => {
 
     expect(calls).toHaveLength(3)
     expect(fs.existsSync(path.dirname(calls[1].profilePath))).toBe(false)
+  })
+
+  it('still reports a connection that succeeded when the folder cannot be removed', async () => {
+    netsh = failFirstConnect()
+    const busy = Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+    const removeFolder = vi.spyOn(fs.promises, 'rm').mockRejectedValue(busy)
+
+    await expect(wifi.wifiConnect('Home WiFi', PASSWORD)).resolves.toEqual({ success: true })
+
+    expect(calls).toHaveLength(3)
+    expect(removeFolder).toHaveBeenCalledWith(path.dirname(calls[1].profilePath), expect.objectContaining({ recursive: true }))
   })
 })
