@@ -97,11 +97,6 @@
         "filter": ["OFL-*.txt"]
       },
       {
-        "from": "wallpapers",
-        "to": "licenses/wallpapers",
-        "filter": ["CREDITS.md"]
-      },
-      {
         "from": "public/cursor",
         "to": "cursor",
         "filter": ["**/*", "!Bibata-Original-Ice/**"]
