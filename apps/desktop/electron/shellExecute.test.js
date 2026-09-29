@@ -4,7 +4,7 @@ import os from 'os'
 import path from 'path'
 import shellExecute from './shellExecute.js'
 
-const { splitCommandLine } = shellExecute
+const { splitCommandLine, startProcessCommand } = shellExecute
 
 let fixtureDir
 let spacedExecutable
@@ -59,5 +59,20 @@ describe('splitCommandLine', () => {
 
   it('returns the whole token when there is no space', () => {
     expect(splitCommandLine('alpine-no-such-binary.exe')).toEqual({ file: 'alpine-no-such-binary.exe', args: '' })
+  })
+})
+
+describe('startProcessCommand', () => {
+  it('starts a file, with its arguments when there are any', () => {
+    expect(startProcessCommand('app.exe', null, null)).toBe("Start-Process -FilePath 'app.exe'")
+    expect(startProcessCommand('app.exe', '--flag one', null)).toBe("Start-Process -FilePath 'app.exe' -ArgumentList '--flag one'")
+  })
+
+  it('asks Windows for elevation with the runas verb', () => {
+    expect(startProcessCommand('Tool.lnk', null, 'runas')).toBe("Start-Process -FilePath 'Tool.lnk' -Verb 'runas'")
+  })
+
+  it('keeps a typographic apostrophe in a shortcut name inside the string', () => {
+    expect(startProcessCommand('O\u2019Brien\u2019s Tool.lnk', null, 'runas')).toBe("Start-Process -FilePath 'O\u2019\u2019Brien\u2019\u2019s Tool.lnk' -Verb 'runas'")
   })
 })

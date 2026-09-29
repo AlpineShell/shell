@@ -1,5 +1,6 @@
 const { spawn } = require('child_process')
 const { shellExecute } = require('./shellExecute')
+const { escapePowerShellSingleQuoted } = require('./powershell')
 
 const TYPE_DEFINITION = [
   'Add-Type -TypeDefinition @\'',
@@ -53,7 +54,7 @@ function ensureProcess() {
 }
 
 function escapeForSingleQuote(value) {
-  return String(value).replace(/'/g, "''").replace(/[\r\n]/g, '')
+  return escapePowerShellSingleQuoted(value).replace(/[\r\n]/g, '')
 }
 
 function isPackagedAumid(appId) {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 import path from 'node:path'
-import { createPersistentRunner, runPowerShellFile } from './powershell.js'
+import { createPersistentRunner, runPowerShellFile, quotePowerShellLiteral, escapePowerShellSingleQuoted } from './powershell.js'
 
 const SCRIPT_PATH = path.resolve(path.join(path.sep, 'scripts', 'bluetoothRadio.ps1'))
 
@@ -245,5 +245,32 @@ describe('createPersistentRunner', () => {
     expect(spawnWorker).toHaveBeenCalledTimes(1)
     expect(worker.writes.some((w) => w.includes('LAZY_INIT'))).toBe(true)
     expect(commandWrites(worker)).toHaveLength(0)
+  })
+})
+
+describe('quotePowerShellLiteral', () => {
+  it('wraps a value in single quotes and doubles an apostrophe', () => {
+    expect(quotePowerShellLiteral('Notepad.lnk')).toBe("'Notepad.lnk'")
+    expect(quotePowerShellLiteral("O'Brien's Tool.lnk")).toBe("'O''Brien''s Tool.lnk'")
+  })
+
+  it('doubles every typographic quote PowerShell also ends a string on', () => {
+    expect(quotePowerShellLiteral('O\u2019Brien')).toBe("'O\u2019\u2019Brien'")
+    expect(quotePowerShellLiteral('\u2018a\u201Ab\u201B')).toBe("'\u2018\u2018a\u201A\u201Ab\u201B\u201B'")
+  })
+
+  it('keeps an injected command inside the string', () => {
+    expect(quotePowerShellLiteral('x\u2019; Start-Process calc; \u2019')).toBe("'x\u2019\u2019; Start-Process calc; \u2019\u2019'")
+  })
+
+  it('leaves characters that a single-quoted string never expands alone', () => {
+    expect(quotePowerShellLiteral('$env:TEMP "x" `n %PATH%')).toBe('\'$env:TEMP "x" `n %PATH%\'')
+  })
+})
+
+describe('escapePowerShellSingleQuoted', () => {
+  it('escapes without adding the surrounding quotes', () => {
+    expect(escapePowerShellSingleQuoted("it's \u2019")).toBe("it''s \u2019\u2019")
+    expect(escapePowerShellSingleQuoted(42)).toBe('42')
   })
 })

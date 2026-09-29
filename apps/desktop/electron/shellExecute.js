@@ -1,9 +1,12 @@
 const fs = require('fs')
 const path = require('path')
 const { execFile } = require('child_process')
+const { quotePowerShellLiteral } = require('./powershell')
 
 const WORKER_ENTRY = path.join(__dirname, 'shellExecuteWorker.js')
 const REQUEST_TIMEOUT_MS = 15000
+const CONSENT_REQUEST_TIMEOUT_MS = 120000
+const ELEVATE_VERB = 'runas'
 
 let worker = null
 let workerReady = false
@@ -31,7 +34,7 @@ function settleAll(ok) {
 function retryAllThroughFallback() {
   for (const id of Array.from(pendingRequests.keys())) {
     const request = takeRequest(id)
-    if (request) request.resolve(fallbackExecute(request.file, request.args))
+    if (request) request.resolve(fallbackExecute(request.file, request.args, request.verb))
   }
 }
 
@@ -80,14 +83,16 @@ function ensureWorker() {
   return worker
 }
 
-function quotePowerShell(text) {
-  return `'${String(text).replace(/'/g, "''")}'`
+function startProcessCommand(file, args, verb) {
+  return [
+    `Start-Process -FilePath ${quotePowerShellLiteral(file)}`,
+    ...(args ? [`-ArgumentList ${quotePowerShellLiteral(args)}`] : []),
+    ...(verb ? [`-Verb ${quotePowerShellLiteral(verb)}`] : []),
+  ].join(' ')
 }
 
-function fallbackExecute(file, args) {
-  const command = args
-    ? `Start-Process -FilePath ${quotePowerShell(file)} -ArgumentList ${quotePowerShell(args)}`
-    : `Start-Process -FilePath ${quotePowerShell(file)}`
+function fallbackExecute(file, args, verb) {
+  const command = startProcessCommand(file, args, verb)
   return new Promise((resolve) => {
     execFile('powershell', ['-NoProfile', '-Command', command], { windowsHide: true }, (err) => {
       if (err) console.error('[shellExecute] fallback failed for', file, '-', err.message)
@@ -96,23 +101,29 @@ function fallbackExecute(file, args) {
   })
 }
 
-function shellExecute(file, args) {
+function shellExecute(file, args, verb) {
   const target = String(file || '').trim()
   if (!target) return Promise.resolve(false)
   const parameters = args ? String(args) : null
+  const operation = verb ? String(verb) : null
   const active = ensureWorker()
-  if (!active) return fallbackExecute(target, parameters)
+  if (!active) return fallbackExecute(target, parameters, operation)
   const id = ++nextRequestId
+  const timeoutMs = operation === ELEVATE_VERB ? CONSENT_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       pendingRequests.delete(id)
-      dropWorker(`no reply for ${target} within ${REQUEST_TIMEOUT_MS} ms`)
+      dropWorker(`no reply for ${target} within ${timeoutMs} ms`)
       resolve(false)
-    }, REQUEST_TIMEOUT_MS)
+    }, timeoutMs)
     if (typeof timer.unref === 'function') timer.unref()
-    pendingRequests.set(id, { resolve, timer, file: target, args: parameters })
-    active.postMessage({ id, file: target, args: parameters })
+    pendingRequests.set(id, { resolve, timer, file: target, args: parameters, verb: operation })
+    active.postMessage({ id, file: target, args: parameters, verb: operation })
   })
+}
+
+function shellExecuteElevated(file) {
+  return shellExecute(file, null, ELEVATE_VERB)
 }
 
 function existsLoose(candidate) {
@@ -145,4 +156,4 @@ function shellExecuteCommandLine(commandLine) {
   return shellExecute(file, args)
 }
 
-module.exports = { shellExecute, shellExecuteCommandLine, splitCommandLine }
+module.exports = { shellExecute, shellExecuteElevated, shellExecuteCommandLine, splitCommandLine, startProcessCommand }

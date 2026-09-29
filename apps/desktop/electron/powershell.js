@@ -1,5 +1,15 @@
 const { exec, spawn } = require('child_process')
 
+const POWERSHELL_SINGLE_QUOTES = /['\u2018\u2019\u201A\u201B]/g
+
+function escapePowerShellSingleQuoted(value) {
+  return String(value).replace(POWERSHELL_SINGLE_QUOTES, '$&$&')
+}
+
+function quotePowerShellLiteral(value) {
+  return `'${escapePowerShellSingleQuoted(value)}'`
+}
+
 function runPowerShell(command) {
   return new Promise((resolve) => {
     exec(
@@ -174,4 +184,4 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
   return { run, warm, dispose }
 }
 
-module.exports = { runPowerShell, runPowerShellFile, createPersistentRunner }
+module.exports = { runPowerShell, runPowerShellFile, createPersistentRunner, escapePowerShellSingleQuoted, quotePowerShellLiteral }
