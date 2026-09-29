@@ -34,8 +34,14 @@ function settleAll(ok) {
 function retryAllThroughFallback() {
   for (const id of Array.from(pendingRequests.keys())) {
     const request = takeRequest(id)
-    if (request) request.resolve(fallbackExecute(request.file, request.args, request.verb))
+    if (request) request.resolve(fallbackExecute(request.file, request.args))
   }
+}
+
+function stopWorker(target) {
+  target.removeAllListeners()
+  target.on('error', () => {})
+  target.terminate().catch(() => {})
 }
 
 function dropWorker(reason) {
@@ -43,19 +49,22 @@ function dropWorker(reason) {
   const dropped = worker
   worker = null
   workerReady = false
-  dropped.removeAllListeners()
-  dropped.on('error', () => {})
-  dropped.terminate().catch(() => {})
+  stopWorker(dropped)
   settleAll(false)
   console.error('[shellExecute] dropped worker:', reason)
+}
+
+function startWorker() {
+  const { Worker } = require('worker_threads')
+  const started = new Worker(WORKER_ENTRY)
+  started.unref()
+  return started
 }
 
 function ensureWorker() {
   if (worker || workerUnavailable) return worker
   try {
-    const { Worker } = require('worker_threads')
-    const started = new Worker(WORKER_ENTRY)
-    started.unref()
+    const started = startWorker()
     started.on('message', (message) => {
       if (message.ready) { workerReady = true; return }
       if (!message.ok) console.error('[shellExecute] failed, detail', message.detail)
@@ -101,29 +110,61 @@ function fallbackExecute(file, args, verb) {
   })
 }
 
-function shellExecute(file, args, verb) {
+function shellExecute(file, args) {
   const target = String(file || '').trim()
   if (!target) return Promise.resolve(false)
   const parameters = args ? String(args) : null
-  const operation = verb ? String(verb) : null
   const active = ensureWorker()
-  if (!active) return fallbackExecute(target, parameters, operation)
+  if (!active) return fallbackExecute(target, parameters)
   const id = ++nextRequestId
-  const timeoutMs = operation === ELEVATE_VERB ? CONSENT_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       pendingRequests.delete(id)
-      dropWorker(`no reply for ${target} within ${timeoutMs} ms`)
+      dropWorker(`no reply for ${target} within ${REQUEST_TIMEOUT_MS} ms`)
       resolve(false)
-    }, timeoutMs)
+    }, REQUEST_TIMEOUT_MS)
     if (typeof timer.unref === 'function') timer.unref()
-    pendingRequests.set(id, { resolve, timer, file: target, args: parameters, verb: operation })
-    active.postMessage({ id, file: target, args: parameters, verb: operation })
+    pendingRequests.set(id, { resolve, timer, file: target, args: parameters })
+    active.postMessage({ id, file: target, args: parameters })
   })
 }
 
-function shellExecuteElevated(file) {
-  return shellExecute(file, null, ELEVATE_VERB)
+function shellExecuteElevated(file, { startConsentWorker = startWorker, timeoutMs = CONSENT_REQUEST_TIMEOUT_MS } = {}) {
+  const target = String(file || '').trim()
+  if (!target) return Promise.resolve(false)
+  if (workerUnavailable) return fallbackExecute(target, null, ELEVATE_VERB)
+  let consentWorker
+  try {
+    consentWorker = startConsentWorker()
+  } catch (e) {
+    console.error('[shellExecute] consent worker unavailable, falling back to Start-Process:', e.message)
+    return fallbackExecute(target, null, ELEVATE_VERB)
+  }
+  const id = ++nextRequestId
+  return new Promise((resolve) => {
+    let ready = false
+    const timer = setTimeout(() => {
+      console.error('[shellExecute] no answer to the elevation prompt for', target, 'within', timeoutMs, 'ms')
+      finish(false)
+    }, timeoutMs)
+    if (typeof timer.unref === 'function') timer.unref()
+    function finish(result) {
+      clearTimeout(timer)
+      stopWorker(consentWorker)
+      resolve(result)
+    }
+    consentWorker.on('message', (message) => {
+      if (message.ready) { ready = true; return }
+      if (!message.ok) console.error('[shellExecute] elevation failed, detail', message.detail)
+      finish(!!message.ok)
+    })
+    consentWorker.on('error', (e) => {
+      console.error('[shellExecute] consent worker error:', e.message)
+      finish(ready ? false : fallbackExecute(target, null, ELEVATE_VERB))
+    })
+    consentWorker.on('exit', () => finish(false))
+    consentWorker.postMessage({ id, file: target, args: null, verb: ELEVATE_VERB })
+  })
 }
 
 function existsLoose(candidate) {
