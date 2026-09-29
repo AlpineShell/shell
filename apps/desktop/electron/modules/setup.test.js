@@ -13,6 +13,7 @@ const INSTALLED_EXE = path.join('C:', 'Programs', 'alpine-shell', 'Alpine Shell.
 
 const registry = new Map()
 const regCalls = []
+const refusedWrites = new Set()
 let userDataDir = ''
 const electronApp = { getPath: () => userDataDir, isPackaged: false, getVersion: () => '1.0.0', exit: vi.fn(), relaunch: vi.fn() }
 
@@ -63,18 +64,21 @@ inject(nodeRequire.resolve('../registryRead.js'), { regQuery: (keyPath, valueNam
 
 childProcess.execFileSync = (file, args) => {
   regCalls.push([file, ...args])
+  if (file === 'reg' && args[0] === 'add' && refusedWrites.has(registryKey(args[1], args[3]))) throw new Error('Access is denied.')
   if (file === 'reg' && args[0] === 'add') registry.set(registryKey(args[1], args[3]), args[7])
   if (file === 'reg' && args[0] === 'delete') registry.delete(registryKey(args[1], args[3]))
   return ''
 }
 childProcess.execSync = () => ''
 
-const { setTrustedWindowsAccessor } = nodeRequire('../trustedSenders.js')
+const { setTrustedWindowsAccessor, SETUP_WINDOW, SETTINGS_WINDOW } = nodeRequire('../trustedSenders.js')
 const { default: setup } = await import('./setup.js')
 
 const trustedWindow = { webContents: { id: 7 }, isDestroyed: () => false }
+const settingsWindow = { webContents: { id: 9 }, isDestroyed: () => false }
 const strangerWindow = { webContents: { id: 8 }, isDestroyed: () => false }
 const fromSetupWindow = { sender: trustedWindow.webContents }
+const fromSettingsWindow = { sender: settingsWindow.webContents }
 const fromStranger = { sender: strangerWindow.webContents }
 
 const setupCompletePath = () => path.join(userDataDir, '.setup-complete')
@@ -84,6 +88,7 @@ const runValue = () => registry.get(registryKey(RUN_KEY, 'AlpineShell')) ?? null
 beforeEach(() => {
   registry.clear()
   regCalls.length = 0
+  refusedWrites.clear()
   licenceMock.requireValid.mockReset()
   licenceMock.requireValid.mockImplementation(() => ({ state: 'valid' }))
   licenceMock.releaseSelf.mockReset()
@@ -96,7 +101,7 @@ beforeEach(() => {
   explorerShellMock.shellHostedByExplorer.mockImplementation(() => true)
   electronApp.isPackaged = false
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-setup-'))
-  setTrustedWindowsAccessor(() => [trustedWindow])
+  setTrustedWindowsAccessor(() => ({ [SETUP_WINDOW]: trustedWindow, [SETTINGS_WINDOW]: settingsWindow }))
 })
 
 afterEach(() => {
@@ -157,11 +162,11 @@ describe('setup handlers behind the licence gate', () => {
     licenceMock.releaseSelf.mockImplementation(async () => { order.push('release'); return true })
     installerMock.uninstall.mockImplementation(() => { order.push('uninstall'); return { success: false, error: 'stubbed', leftBehind: [] } })
 
-    await setup.handlers['setup/uninstall'](fromSetupWindow)
+    await setup.handlers['setup/uninstall'](fromSettingsWindow)
     expect(order).toEqual(['release', 'uninstall'])
 
     licenceMock.releaseSelf.mockImplementation(async () => { throw new Error('offline') })
-    await setup.handlers['setup/uninstall'](fromSetupWindow)
+    await setup.handlers['setup/uninstall'](fromSettingsWindow)
     expect(installerMock.uninstall).toHaveBeenCalledTimes(2)
   })
 
@@ -172,12 +177,51 @@ describe('setup handlers behind the licence gate', () => {
     licenceMock.releaseSelf.mockClear()
     installerMock.uninstall.mockClear()
 
-    const result = await setup.handlers['setup/uninstall'](fromSetupWindow)
+    const result = await setup.handlers['setup/uninstall'](fromSettingsWindow)
 
     expect(result.success).toBe(false)
     expect(licenceMock.releaseSelf).not.toHaveBeenCalled()
     expect(installerMock.uninstall).not.toHaveBeenCalled()
     installerMock.isUpdateHandoffActive = wasUpdateHandoffActive
+  })
+})
+
+describe('installing when Windows does not take the shell registration', () => {
+  let quietErrors
+
+  beforeEach(() => {
+    quietErrors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    quietErrors.mockRestore()
+  })
+
+  it('reports the failure instead of setup complete and lets setup run again', async () => {
+    refusedWrites.add(registryKey(WINLOGON_KEY, 'Shell'))
+
+    const result = await setup.handlers['setup/install'](fromSetupWindow, { shell: true, cursor: false })
+
+    expect(result.shell).toBe(false)
+    expect(result.error).toBe('Could not register Alpine Shell as your desktop.')
+    expect(fs.existsSync(setupCompletePath())).toBe(false)
+  })
+
+  it('completes setup when the shell is registered even though a later setting could not be written', async () => {
+    refusedWrites.add(registryKey('HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'EnableXamlStartMenu'))
+
+    const result = await setup.handlers['setup/install'](fromSetupWindow, { shell: true, cursor: false })
+
+    expect(result.shell).toBe(true)
+    expect(result.error).toBeNull()
+    expect(runValue()).not.toBeNull()
+    expect(fs.existsSync(setupCompletePath())).toBe(true)
+  })
+
+  it('never switches off shell restarts for every account on the PC', async () => {
+    await setup.handlers['setup/install'](fromSetupWindow, { shell: true, cursor: false })
+
+    expect(regCalls.some((call) => call.some((arg) => String(arg).startsWith('HKLM')))).toBe(false)
   })
 })
 
@@ -192,6 +236,23 @@ describe('setup handlers and their callers', () => {
 
   it('answers the setup window', () => {
     expect(setup.handlers['setup/status'](fromSetupWindow)).toMatchObject({ isShell: false, hasStartup: false, isFirstRun: true })
+  })
+
+  it('keeps the install and restart channels away from the settings window', async () => {
+    for (const channel of ['setup/status', 'setup/set-shell', 'setup/relaunch', 'setup/restart-windows']) {
+      expect(() => setup.handlers[channel](fromSettingsWindow)).toThrow('untrusted-sender')
+    }
+    await expect(async () => setup.handlers['setup/install'](fromSettingsWindow, { shell: true, cursor: false })).rejects.toThrow('untrusted-sender')
+    await expect(async () => setup.handlers['setup/skip'](fromSettingsWindow)).rejects.toThrow('untrusted-sender')
+    expect(regCalls).toHaveLength(0)
+  })
+
+  it('answers the revert channels only from the settings window', async () => {
+    for (const channel of ['setup/revert-temporary', 'setup/revert-permanent', 'setup/uninstall']) {
+      await expect(async () => setup.handlers[channel](fromSetupWindow)).rejects.toThrow('untrusted-sender')
+      await expect(async () => setup.handlers[channel](fromStranger)).rejects.toThrow('untrusted-sender')
+    }
+    expect(installerMock.uninstall).not.toHaveBeenCalled()
   })
 })
 
@@ -226,6 +287,52 @@ describe('the Run entry while Explorer holds the shell', () => {
     registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${INSTALLED_EXE}"`)
 
     expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: true })
+    expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
+  })
+
+  it('never claims the Windows shell or the Run entry at startup without a licence, even with setup marked complete', () => {
+    electronApp.isPackaged = true
+    markSetupComplete()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    licenceMock.requireValid.mockImplementation(() => { throw licenceRequiredError() })
+
+    expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: false })
+    expect(shellValue()).toBe('explorer.exe')
+    expect(runValue()).toBeNull()
+    expect(regCalls).toHaveLength(0)
+  })
+
+  it('keeps the registration of a PC that already runs Alpine as its shell when the licence is gone', () => {
+    electronApp.isPackaged = true
+    markSetupComplete()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), INSTALLED_EXE)
+    registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${INSTALLED_EXE}"`)
+    licenceMock.requireValid.mockImplementation(() => { throw licenceRequiredError() })
+
+    expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: true })
+    expect(shellValue()).toBe(INSTALLED_EXE)
+    expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
+  })
+
+  it('takes the Windows shell back without a licence when a reinstall or a revert until next sign-in left Explorer there and kept the Run entry', () => {
+    electronApp.isPackaged = true
+    markSetupComplete()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${INSTALLED_EXE}" --autostart`)
+    licenceMock.requireValid.mockImplementation(() => { throw licenceRequiredError() })
+
+    expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: true })
+    expect(shellValue()).toBe(INSTALLED_EXE)
+    expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
+  })
+
+  it('claims the Windows shell and the Run entry at startup with a licence', () => {
+    electronApp.isPackaged = true
+    markSetupComplete()
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+
+    expect(setup.takeOverFromExplorer()).toEqual({ actingAsShell: true })
+    expect(shellValue()).toBe(INSTALLED_EXE)
     expect(runValue()).toBe(`"${INSTALLED_EXE}" --autostart`)
   })
 
@@ -266,10 +373,40 @@ describe('the Run entry while Explorer holds the shell', () => {
     expect(explorerShellMock.shellHostedByExplorer).not.toHaveBeenCalled()
   })
 
+  it('exits the launch that its own Run entry starts while an update installs under Explorer', () => {
+    electronApp.isPackaged = true
+    const wasUpdateHandoffActive = installerMock.isUpdateHandoffActive
+    installerMock.isUpdateHandoffActive = () => true
+
+    expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(true)
+    expect(setup.shouldLeaveShellToExplorer(START_MENU_LAUNCH)).toBe(false)
+
+    installerMock.isUpdateHandoffActive = wasUpdateHandoffActive
+  })
+
   it('leaves the registry and the hand-off alone when it exits', () => {
     handToExplorer()
     expect(setup.shouldLeaveShellToExplorer(AUTOSTART_LAUNCH)).toBe(true)
     expect(regCalls).toHaveLength(0)
     expect(installerMock.clearShellHandoff).not.toHaveBeenCalled()
+  })
+})
+
+describe('whether Alpine has claimed the desktop', () => {
+  it('counts a PC whose Winlogon Shell points at Alpine', () => {
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), INSTALLED_EXE)
+    expect(setup.isDesktopClaimedByAlpine()).toBe(true)
+  })
+
+  it('counts a PC that Explorer holds only until the Run entry takes the shell back', () => {
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${INSTALLED_EXE}" --autostart`)
+    expect(setup.isDesktopClaimedByAlpine()).toBe(true)
+  })
+
+  it('does not count a PC with Explorer as its shell and no Run entry', () => {
+    expect(setup.isDesktopClaimedByAlpine()).toBe(false)
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    expect(setup.isDesktopClaimedByAlpine()).toBe(false)
   })
 })

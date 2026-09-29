@@ -22,7 +22,8 @@ function makeZip(entries) {
     lfh.writeUInt16LE(method, 8)
     lfh.writeUInt32LE(0, 14) // crc (extractor ignores)
     lfh.writeUInt32LE(body.length, 18)
-    lfh.writeUInt32LE(raw.length, 22)
+    const declaredSize = entry.declaredSize ?? raw.length
+    lfh.writeUInt32LE(declaredSize, 22)
     lfh.writeUInt16LE(nameBuf.length, 26)
     const localStart = offset
     chunks.push(lfh, nameBuf, body)
@@ -34,7 +35,7 @@ function makeZip(entries) {
     cdh.writeUInt16LE(20, 6)
     cdh.writeUInt16LE(method, 10)
     cdh.writeUInt32LE(body.length, 20)
-    cdh.writeUInt32LE(raw.length, 24)
+    cdh.writeUInt32LE(declaredSize, 24)
     cdh.writeUInt16LE(nameBuf.length, 28)
     cdh.writeUInt32LE(localStart, 42)
     central.push({ cdh, nameBuf })
@@ -93,5 +94,36 @@ describe('extractZip', () => {
 
   it('throws on non-zip input', () => {
     expect(() => extractZip(Buffer.from('not a zip at all'), dir)).toThrow(/zip/i)
+  })
+
+  it('extracts an empty deflated file', () => {
+    const zip = makeZip([{ name: 'empty.txt', data: '', method: 8 }])
+    expect(extractZip(zip, dir)).toEqual(['empty.txt'])
+    expect(fs.readFileSync(path.join(dir, 'empty.txt'), 'utf8')).toBe('')
+  })
+
+  it('stops inflating an entry at its declared size instead of expanding a bomb', () => {
+    const zip = makeZip([{ name: 'bomb.bin', data: Buffer.alloc(8 * 1024 * 1024), method: 8, declaredSize: 16 }])
+    expect(() => extractZip(zip, dir)).toThrow(/oversized/i)
+    expect(fs.existsSync(path.join(dir, 'bomb.bin'))).toBe(false)
+  })
+
+  it('refuses an archive whose entries add up past the size limit', () => {
+    const zip = makeZip([
+      { name: 'a.txt', data: 'a'.repeat(60) },
+      { name: 'b.txt', data: 'b'.repeat(60) },
+    ])
+    expect(() => extractZip(zip, dir, { maxEntries: 10, maxTotalBytes: 100 })).toThrow(/beyond 100 bytes/)
+    expect(fs.existsSync(path.join(dir, 'b.txt'))).toBe(false)
+  })
+
+  it('refuses an archive with too many entries before writing anything', () => {
+    const zip = makeZip([
+      { name: 'a.txt', data: 'a' },
+      { name: 'b.txt', data: 'b' },
+      { name: 'c.txt', data: 'c' },
+    ])
+    expect(() => extractZip(zip, dir, { maxEntries: 2, maxTotalBytes: 100 })).toThrow(/more than 2 entries/)
+    expect(fs.readdirSync(dir)).toEqual([])
   })
 })

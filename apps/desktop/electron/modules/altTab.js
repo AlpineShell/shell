@@ -1,6 +1,8 @@
 const { app, screen, nativeImage } = require('electron')
 const koffi = require('koffi')
 const displayModePolicy = require('./displayModePolicy')
+const altTabPolicy = require('./altTabPolicy')
+const keyboardHookPolicy = require('./keyboardHookPolicy')
 const appIcons = require('./appIcons')
 const { friendlyAppName } = require('../appNames')
 const exposedOwnWindows = require('./exposedOwnWindows')
@@ -113,6 +115,10 @@ let shellsRef = null
 let exposedOwnWindowsProvider = null
 let hookHandle = null
 let hookCallbackPointer = null
+let hookRefreshTimer = null
+let hookRefreshTickAt = 0
+let hookRefreshedAt = 0
+let hookInstallFailing = false
 let screenshotCallback = null
 let screenshotCancelCallback = null
 
@@ -121,6 +127,9 @@ let switcherActive = false
 let selectedIndex = 0
 let windowList = []
 let pendingRestore = null
+let switcherGeneration = 0
+let switcherBuilding = false
+let pendingSwitcherSteps = 0
 
 const HIDE_ANIMATION_MS = 300
 
@@ -248,7 +257,7 @@ function enumTaskWindows() {
   return taskEnumResults.slice()
 }
 
-function captureWindowThumbnail(hwnd) {
+function captureWindowThumbnail(hwnd, { allowScreenCopy = true } = {}) {
   if (IsIconic(hwnd)) return getCachedThumbnail(hwnd)
 
   const rectBuf = Buffer.alloc(16)
@@ -275,6 +284,7 @@ function captureWindowThumbnail(hwnd) {
   try {
     let captured = PrintWindow(hwnd, memDC, PW_RENDERFULLCONTENT)
     if (!captured) captured = PrintWindow(hwnd, memDC, 0)
+    if (!captured && !allowScreenCopy) return getCachedThumbnail(hwnd)
     if (!captured) BitBlt(memDC, 0, 0, srcWidth, srcHeight, screenDC, left, top, SRCCOPY)
 
     SetStretchBltMode(thumbDC, HALFTONE)
@@ -372,7 +382,7 @@ async function buildWindowList() {
     const identity = windowRules.identifyWindow(hwnd, title)
     if (identity) {
       const icon = await windowRules.iconForIdentity(hwnd, identity)
-      results.push({ hwnd, title: identity.title, processName: identity.name, icon: icon || '', thumbnail: captureWindowThumbnail(hwnd) || '' })
+      results.push({ hwnd, title: identity.title, processName: identity.name, icon: icon || '', thumbnail: getCachedThumbnail(hwnd) || '' })
       continue
     }
     const isAlpineShell = SHELL_PROCESS_NAMES.has(rawProcessName.toLowerCase())
@@ -383,8 +393,7 @@ async function buildWindowList() {
       : isAlpineShell && title === 'Settings'
         ? SETTINGS_ICON_DATA_URL
         : await getIcon(exePath)
-    const thumbnail = captureWindowThumbnail(hwnd)
-    results.push({ hwnd, title, processName, icon, thumbnail: thumbnail || '' })
+    results.push({ hwnd, title, processName, icon, thumbnail: getCachedThumbnail(hwnd) || '' })
   }
   return results
 }
@@ -408,6 +417,7 @@ function toHwndNum(value) {
 function warmCapture(hwnd) {
   if (!hwnd) return
   if (!warmerArmed || Date.now() < bootSettleUntil) return
+  if (!altTabPolicy.isThumbnailStale(thumbnailCache.get(hwnd), Date.now())) return
   try {
     if (IsIconic(hwnd) || isOwnWindow(hwnd) || !isAltTabWindow(hwnd)) return
     captureWindowThumbnail(hwnd)
@@ -563,14 +573,59 @@ function getActiveDisplay() {
   return screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
 }
 
+function nextTurn() {
+  return new Promise((resolve) => setImmediate(resolve))
+}
+
+async function collectSwitcherWindows() {
+  try {
+    return await buildWindowList()
+  } catch (e) {
+    console.error('[altTab] window list error:', e.message)
+    return []
+  }
+}
+
+async function refreshSwitcherThumbnails(generation, windows) {
+  try {
+    for (const entry of windows) {
+      await nextTurn()
+      if (generation !== switcherGeneration) return
+      const thumbnail = captureWindowThumbnail(entry.hwnd, { allowScreenCopy: false })
+      if (!thumbnail || thumbnail === entry.thumbnail) continue
+      if (!activeTopBar || activeTopBar.isDestroyed()) return
+      activeTopBar.webContents.send('alttab/thumbnail', { hwnd: entry.hwnd, thumbnail })
+    }
+  } catch (e) {
+    console.error('[altTab] thumbnail refresh error:', e.message)
+  }
+}
+
 async function showSwitcher() {
   if (!shellsRef) return
   warmerArmed = true
 
-  windowList = await buildWindowList()
-  if (windowList.length === 0) return
+  const generation = ++switcherGeneration
+  switcherBuilding = true
+  pendingSwitcherSteps = 0
+  const windows = await collectSwitcherWindows()
+  const isLatestBuild = generation === switcherGeneration
+  if (isLatestBuild) switcherBuilding = false
 
-  selectedIndex = windowList.length > 1 ? 1 : 0
+  const plan = altTabPolicy.planSwitcherAfterBuild({
+    isLatestBuild,
+    windowCount: windows.length,
+    altHeld: altIsDown && altKeyHeld(),
+    pendingSteps: pendingSwitcherSteps,
+  })
+  if (plan.action === 'drop') return
+  if (plan.action === 'switch') {
+    activateWindow(windows[plan.index].hwnd)
+    return
+  }
+
+  windowList = windows
+  selectedIndex = plan.index
   switcherActive = true
 
   const display = getActiveDisplay()
@@ -590,6 +645,7 @@ async function showSwitcher() {
   topBar.setIgnoreMouseEvents(false)
 
   topBar.webContents.send('alttab/show', { windows: windowList, selectedIndex })
+  refreshSwitcherThumbnails(generation, windows)
 }
 
 function restorePassiveState(topBar) {
@@ -610,6 +666,8 @@ function flushPendingRestore(keepTopBar) {
 }
 
 function hideSwitcher() {
+  switcherGeneration++
+  switcherBuilding = false
   switcherActive = false
   windowList = []
   const topBar = activeTopBar
@@ -626,8 +684,20 @@ function hideSwitcher() {
 }
 
 function hideForLauncher() {
-  if (!switcherActive && !activeTopBar) return
+  if (!switcherActive && !switcherBuilding && !activeTopBar) return
   hideSwitcher()
+}
+
+function commitSwitcherSelection() {
+  const selected = windowList[selectedIndex]
+  hideSwitcher()
+  if (selected) activateWindow(selected.hwnd)
+}
+
+function closeSwitcherIfAltReleased() {
+  if (!switcherActive || altKeyHeld()) return
+  altIsDown = false
+  commitSwitcherSelection()
 }
 
 function cycleSelection(forward) {
@@ -749,9 +819,13 @@ function shiftKeyHeld() {
   return keyHeld(VK_SHIFT)
 }
 
+function altKeyHeld() {
+  return keyHeld(VK_MENU)
+}
+
 function hookCallback(nCode, wParam, lParam) {
   try {
-    if (nCode < 0) return CallNextHookEx(hookHandle, nCode, wParam, lParam)
+    if (nCode < 0 || !shellsRef) return CallNextHookEx(hookHandle, nCode, wParam, lParam)
 
     const flags = readKeyFlags(lParam)
     if (flags & LLKHF_INJECTED) {
@@ -837,7 +911,7 @@ function hookCallback(nCode, wParam, lParam) {
           winDown = true
           winTapped = true
         } else if (isKeyUp) {
-          const fired = winTapped
+          const fired = winTapped && keyHeld(vkCode)
           winDown = false
           winTapped = false
           if (fired && winLauncherCallback) {
@@ -854,12 +928,22 @@ function hookCallback(nCode, wParam, lParam) {
       }
     }
 
+    if (vkCode === VK_TAB && isKeyDown && altIsDown && !altKeyHeld()) {
+      altIsDown = false
+      if (switcherActive) {
+        commitSwitcherSelection()
+        return 1
+      }
+    }
+
     if (vkCode === VK_TAB && isKeyDown && altIsDown) {
       const shiftDown = shiftKeyHeld()
-      if (!switcherActive) {
-        showSwitcher()
-      } else {
+      if (switcherActive) {
         cycleSelection(!shiftDown)
+      } else if (switcherBuilding) {
+        pendingSwitcherSteps += shiftDown ? -1 : 1
+      } else {
+        showSwitcher()
       }
       return 1
     }
@@ -870,11 +954,7 @@ function hookCallback(nCode, wParam, lParam) {
       }
       if (isKeyUp) {
         altIsDown = false
-        if (switcherActive) {
-          const selected = windowList[selectedIndex]
-          hideSwitcher()
-          if (selected) activateWindow(selected.hwnd)
-        }
+        if (switcherActive) commitSwitcherSelection()
       }
     }
 
@@ -892,7 +972,7 @@ function hookCallback(nCode, wParam, lParam) {
       if (handled) return 1
     }
 
-    if (vkCode === VK_ESCAPE && isKeyDown && switcherActive) {
+    if (vkCode === VK_ESCAPE && isKeyDown && (switcherActive || switcherBuilding)) {
       hideSwitcher()
       altIsDown = false
       return 1
@@ -904,20 +984,64 @@ function hookCallback(nCode, wParam, lParam) {
   return CallNextHookEx(hookHandle, nCode, wParam, lParam)
 }
 
+function registeredHookCallback() {
+  if (!hookCallbackPointer) hookCallbackPointer = koffi.register(hookCallback, koffi.pointer(LowLevelKeyboardProc))
+  return hookCallbackPointer
+}
+
 function installHook() {
-  hookCallbackPointer = koffi.register(hookCallback, koffi.pointer(LowLevelKeyboardProc))
-  hookHandle = SetWindowsHookExW(WH_KEYBOARD_LL, hookCallbackPointer, 0, 0)
-  if (!hookHandle) {
-    console.error('[altTab] Failed to install keyboard hook')
-    try { koffi.unregister(hookCallbackPointer) } catch (_) {}
-    hookCallbackPointer = null
-    hookHandle = null
+  const replacedHandle = hookHandle
+  const installedHandle = SetWindowsHookExW(WH_KEYBOARD_LL, registeredHookCallback(), 0, 0)
+  if (!installedHandle) {
+    if (!hookInstallFailing) console.error('[altTab] Failed to install keyboard hook, retrying')
+    hookInstallFailing = true
+    return
+  }
+  hookHandle = installedHandle
+  if (replacedHandle) {
+    try { UnhookWindowsHookEx(replacedHandle) } catch (_) {}
   } else {
     console.log('[altTab] Keyboard hook installed')
   }
+  hookInstallFailing = false
+}
+
+function refreshHookIfDue() {
+  const now = performance.now()
+  const due = keyboardHookPolicy.hookRefreshDue({
+    hooked: Boolean(hookHandle),
+    now,
+    lastTickAt: hookRefreshTickAt,
+    lastRefreshAt: hookRefreshedAt,
+  })
+  hookRefreshTickAt = now
+  if (!due) return
+  hookRefreshedAt = now
+  installHook()
+}
+
+function hookRefresherTick() {
+  try {
+    refreshHookIfDue()
+    closeSwitcherIfAltReleased()
+  } catch (e) {
+    console.error('[altTab] hook refresher error:', e.message)
+  }
+}
+
+function startHookRefresher() {
+  hookRefreshTickAt = performance.now()
+  hookRefreshedAt = hookRefreshTickAt
+  hookRefreshTimer = setInterval(hookRefresherTick, keyboardHookPolicy.HOOK_REFRESH_TICK_MS)
+}
+
+function stopHookRefresher() {
+  if (hookRefreshTimer) clearInterval(hookRefreshTimer)
+  hookRefreshTimer = null
 }
 
 function uninstallHook() {
+  stopHookRefresher()
   if (hookHandle) {
     UnhookWindowsHookEx(hookHandle)
     hookHandle = null
@@ -1026,6 +1150,7 @@ module.exports = {
   start(_broadcast) {
     bootSettleUntil = Date.now() + BOOT_SETTLE_MS
     installHook()
+    startHookRefresher()
     startThumbnailWarmer()
     app.on('will-quit', () => {
       uninstallHook()

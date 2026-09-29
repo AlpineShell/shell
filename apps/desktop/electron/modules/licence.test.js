@@ -6,7 +6,7 @@ import { createRequire } from 'module'
 const nodeRequire = createRequire(import.meta.url)
 
 const { createLicenceService, handlers: guardedDefaultHandlers, NO_LICENCE_RECHECK_MS } = await import('./licence.js')
-const { setTrustedWindowsAccessor, UNTRUSTED_SENDER } = nodeRequire('../trustedSenders.js')
+const { setTrustedWindowsAccessor, UNTRUSTED_SENDER, SETUP_WINDOW, SETTINGS_WINDOW } = nodeRequire('../trustedSenders.js')
 
 const NOW = Date.UTC(2026, 8, 18, 12, 0, 0)
 const MINUTE_MS = 60 * 1000
@@ -89,8 +89,8 @@ function licenceRecord(overrides = {}) {
   }
 }
 
-function jsonResponse(status, body) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+function jsonResponse(status, body, headers = {}) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 }
 
 function routedFetch(routes) {
@@ -381,6 +381,46 @@ describe('the device flow sign-in', () => {
     expect(service.status().state).toBe('valid')
   })
 
+  it('opens only the website device page, whatever the server offers', async () => {
+    const fallback = `${WEBSITE_BASE}/device?user_code=ABCD-EFGH`
+    const offers = [
+      { offered: { verification_uri: 'https://alpineshell.com/device/' }, opened: 'https://alpineshell.com/device/' },
+      { offered: { verification_uri_complete: 'https://auth.alpineshell.com/device?user_code=ABCD-EFGH' }, opened: fallback },
+      { offered: { verification_uri_complete: 'http://alpineshell.com/device?user_code=ABCD-EFGH' }, opened: fallback },
+      { offered: { verification_uri_complete: 'https://alpineshell.com.evil.example/device' }, opened: fallback },
+      { offered: { verification_uri_complete: 'https://alpineshell.com@evil.example/device' }, opened: fallback },
+      { offered: { verification_uri_complete: 'https://alpineshell.com/account' }, opened: fallback },
+      { offered: { verification_uri_complete: 'search-ms:query=x&crumb=location:\\\\attacker\\share' }, opened: fallback },
+      { offered: { verification_uri_complete: 'file://attacker/share/payload.exe' }, opened: fallback },
+      { offered: { verification_uri: '/device' }, opened: fallback },
+      { offered: {}, opened: fallback },
+    ]
+    for (const { offered, opened } of offers) {
+      const fetch = routedFetch([
+        { path: '/api/auth/device/code', reply: () => jsonResponse(200, { device_code: 'dc_1', user_code: 'ABCD-EFGH', interval: 5, expires_in: 600, ...offered }) },
+        { path: '/api/auth/device/token', reply: () => jsonResponse(400, { error: 'authorization_pending' }) },
+      ])
+      const { service, openExternal } = makeService({ fetch })
+      service.handlers['licence/sign-in']()
+      await settle()
+      expect(openExternal).toHaveBeenCalledWith(opened)
+      expect(service.handlers['licence/sign-in-state']()).toMatchObject({ phase: 'waiting', verificationUri: opened })
+      service.handlers['licence/cancel-sign-in']()
+    }
+  })
+
+  it('opens the bare device page when the server sends no code to put in the link', async () => {
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, { device_code: 'dc_1', verification_uri: 'https://evil.example/device', interval: 5, expires_in: 600 }) },
+      { path: '/api/auth/device/token', reply: () => jsonResponse(400, { error: 'authorization_pending' }) },
+    ])
+    const { service, openExternal } = makeService({ fetch })
+    service.handlers['licence/sign-in']()
+    await settle()
+    expect(openExternal).toHaveBeenCalledWith(`${WEBSITE_BASE}/device`)
+    service.handlers['licence/cancel-sign-in']()
+  })
+
   it('sends the Windows computer name when no name was chosen and caps a long one', async () => {
     const fetch = routedFetch([
       { path: '/api/auth/device/code', reply: () => jsonResponse(200, deviceCode) },
@@ -529,6 +569,104 @@ describe('the device flow sign-in', () => {
     await settle()
     await advance(5000)
     expect(progress().at(-1).phase).toBe('expired')
+  })
+
+  it('waits out a rate limit as long as the server asks and keeps polling through a failing gateway until the approval arrives', async () => {
+    let tokenPolls = 0
+    const replies = [
+      () => jsonResponse(429, { message: 'Too many requests. Please try again later.' }, { 'X-Retry-After': '12' }),
+      () => new Response('<html>Bad Gateway</html>', { status: 502, headers: { 'Content-Type': 'text/html' } }),
+      () => jsonResponse(503, { message: 'Service Unavailable' }),
+      () => jsonResponse(200, { access_token: 'sess_1', token_type: 'Bearer' }),
+    ]
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: () => { tokenPolls += 1; return replies[tokenPolls - 1]() } },
+      { path: '/licences/activate', reply: jsonResponse(200, activated) },
+      { path: '/api/auth/sign-out', reply: jsonResponse(200, { success: true }) },
+    ])
+    const { service, progress, broadcast } = makeService({ fetch })
+    service.start(broadcast)
+    service.handlers['licence/sign-in']()
+    await settle()
+
+    await advance(5000)
+    expect(tokenPolls).toBe(1)
+    await advance(11000)
+    expect(tokenPolls).toBe(1)
+    await advance(1000)
+    expect(tokenPolls).toBe(2)
+    await advance(5000)
+    expect(tokenPolls).toBe(3)
+    await advance(5000)
+    expect(tokenPolls).toBe(4)
+
+    expect(progress().map((p) => p.phase)).toEqual(['idle', 'starting', 'waiting', 'activating', 'done'])
+    expect(progress().at(-1).outcome).toMatchObject({ kind: 'activated' })
+    expect(service.status().state).toBe('valid')
+  })
+
+  it('never waits more than 30 seconds for a Retry-After and reads one given as a date', async () => {
+    let tokenPolls = 0
+    const replies = [
+      () => jsonResponse(429, {}, { 'Retry-After': '3600' }),
+      () => jsonResponse(503, {}, { 'Retry-After': new Date(Date.now() + 20000).toUTCString() }),
+      () => jsonResponse(400, { error: 'authorization_pending' }),
+    ]
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: () => { tokenPolls += 1; return replies[Math.min(tokenPolls, replies.length) - 1]() } },
+    ])
+    const { service, progress, broadcast } = makeService({ fetch })
+    service.start(broadcast)
+    service.handlers['licence/sign-in']()
+    await settle()
+
+    await advance(5000)
+    expect(tokenPolls).toBe(1)
+    await advance(29000)
+    expect(tokenPolls).toBe(1)
+    await advance(1000)
+    expect(tokenPolls).toBe(2)
+    await advance(19000)
+    expect(tokenPolls).toBe(2)
+    await advance(1000)
+    expect(tokenPolls).toBe(3)
+    expect(progress().at(-1).phase).toBe('waiting')
+  })
+
+  it('reports expiry when the service keeps failing until the code runs out', async () => {
+    const fetch = routedFetch([
+      { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+      { path: '/api/auth/device/token', reply: () => jsonResponse(503, { message: 'Service Unavailable' }) },
+    ])
+    const { service, progress, broadcast } = makeService({ fetch })
+    service.start(broadcast)
+    service.handlers['licence/sign-in']()
+    await settle()
+    await advance(deviceCode.expires_in * 1000)
+    expect(progress().at(-1).phase).toBe('waiting')
+    await advance(5000)
+    expect(progress().at(-1).phase).toBe('expired')
+  })
+
+  it('still ends the sign-in on any other client error', async () => {
+    const cases = [
+      { reply: jsonResponse(400, { error: 'invalid_grant' }), error: 'invalid_grant' },
+      { reply: jsonResponse(404, { message: 'Not Found' }), error: 'token-404' },
+    ]
+    for (const { reply, error } of cases) {
+      const fetch = routedFetch([
+        { path: '/api/auth/device/code', reply: jsonResponse(200, deviceCode) },
+        { path: '/api/auth/device/token', reply },
+      ])
+      const { service, progress, broadcast } = makeService({ fetch })
+      service.start(broadcast)
+      service.handlers['licence/sign-in']()
+      await settle()
+      await advance(5000)
+      expect(progress().at(-1)).toMatchObject({ phase: 'error', error })
+    }
   })
 
   it('stops polling when the sign-in is cancelled', async () => {
@@ -708,15 +846,18 @@ describe('the sender guard on the exported handlers', () => {
     setTrustedWindowsAccessor(null)
   })
 
-  it('refuses every licence channel to a window that is not the setup or settings window', () => {
+  it('answers every licence channel only from the setup window', () => {
     const desktopWindow = { webContents: { id: 7 }, isDestroyed: () => false }
     const settingsWindow = { webContents: { id: 8 }, isDestroyed: () => false }
-    setTrustedWindowsAccessor(() => [settingsWindow])
+    const setupWindow = { webContents: { id: 9 }, isDestroyed: () => false }
+    setTrustedWindowsAccessor(() => ({ [SETUP_WINDOW]: setupWindow, [SETTINGS_WINDOW]: settingsWindow }))
     const fromDesktop = { sender: desktopWindow.webContents }
     const fromSettings = { sender: settingsWindow.webContents }
+    const fromSetup = { sender: setupWindow.webContents }
     for (const channel of Object.keys(guardedDefaultHandlers)) {
       expect(() => guardedDefaultHandlers[channel](fromDesktop)).toThrow(UNTRUSTED_SENDER)
+      expect(() => guardedDefaultHandlers[channel](fromSettings)).toThrow(UNTRUSTED_SENDER)
     }
-    expect(guardedDefaultHandlers['licence/sign-in-state'](fromSettings)).toMatchObject({ phase: 'idle' })
+    expect(guardedDefaultHandlers['licence/sign-in-state'](fromSetup)).toMatchObject({ phase: 'idle' })
   })
 })

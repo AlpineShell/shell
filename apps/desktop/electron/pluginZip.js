@@ -12,6 +12,7 @@ const zlib = require('zlib')
 const EOCD_SIG = 0x06054b50
 const CDH_SIG = 0x02014b50
 const LFH_SIG = 0x04034b50
+const DEFAULT_LIMITS = { maxEntries: 5000, maxTotalBytes: 200 * 1024 * 1024 }
 
 function findEOCD(buf) {
   const min = 22
@@ -34,10 +35,18 @@ function safeEntryName(name) {
   return norm
 }
 
+function inflateEntry(comp, uncompSize, rawName) {
+  try {
+    return zlib.inflateRawSync(comp, { maxOutputLength: Math.max(1, uncompSize) })
+  } catch {
+    throw new Error(`Corrupt or oversized entry ${rawName}`)
+  }
+}
+
 // Extract `buffer` (a whole ZIP archive) into the existing directory `destDir`.
 // Returns the list of written file paths (relative to destDir). Throws on any
 // malformed/unsafe archive.
-function extractZip(buffer, destDir) {
+function extractZip(buffer, destDir, limits = DEFAULT_LIMITS) {
   if (!Buffer.isBuffer(buffer)) throw new Error('extractZip: buffer required')
   const eocd = findEOCD(buffer)
   if (eocd === -1) throw new Error('Not a zip file (no end-of-central-directory record)')
@@ -49,9 +58,11 @@ function extractZip(buffer, destDir) {
     throw new Error('zip64 archives are not supported')
   }
   if (cdOffset + cdSize > buffer.length) throw new Error('Corrupt zip (central directory out of range)')
+  if (totalEntries > limits.maxEntries) throw new Error(`Zip has more than ${limits.maxEntries} entries`)
 
   const realDest = fs.realpathSync(destDir)
   const written = []
+  let declaredBytes = 0
   let ptr = cdOffset
 
   for (let i = 0; i < totalEntries; i++) {
@@ -71,6 +82,8 @@ function extractZip(buffer, destDir) {
     if (compSize === 0xffffffff || uncompSize === 0xffffffff || localOffset === 0xffffffff) {
       throw new Error('zip64 entries are not supported')
     }
+    declaredBytes += uncompSize
+    if (declaredBytes > limits.maxTotalBytes) throw new Error(`Zip expands beyond ${limits.maxTotalBytes} bytes`)
 
     const isDir = rawName.endsWith('/')
     const safe = safeEntryName(rawName)
@@ -100,7 +113,7 @@ function extractZip(buffer, destDir) {
     if (method === 0) {
       data = comp
     } else if (method === 8) {
-      data = zlib.inflateRawSync(comp)
+      data = inflateEntry(comp, uncompSize, rawName)
     } else {
       throw new Error(`Unsupported compression method ${method} for ${rawName}`)
     }

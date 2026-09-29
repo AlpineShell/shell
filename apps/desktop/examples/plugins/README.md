@@ -58,6 +58,12 @@ const { usePluginData } = window.alpine
 const usage = usePluginData('claude-usage', null)   // { ok, sessionPercent, limits, ... }
 ```
 
+## Backend state (`ctx.dataDir`)
+
+An update replaces the plugin folder (`ctx.pluginDir`) whole. A backend keeps its own files in
+`ctx.dataDir` (`%APPDATA%\Alpine Shell\plugin-data\<id>\`): the host creates it before the backend
+starts, an update leaves it alone, and an uninstall removes it.
+
 ## Settings (`contributes.settings`)
 
 Declare toggles, selects and sliders in `plugin.json` and the shell draws them: in your widget's Ridge

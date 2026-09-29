@@ -5,6 +5,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const appxPackages = require('./appxPackages')
+const { quotePowerShellLiteral, writePowerShellScriptFile } = require('../powershell')
 
 const execAsync = promisify(exec)
 const iconCache = new Map()
@@ -20,7 +21,7 @@ async function runPsScript(script) {
   const id = ++psSeq
   const file = path.join(os.tmpdir(), `alpine-icons-${id}.ps1`)
   try {
-    fs.writeFileSync(file, script, 'utf8')
+    writePowerShellScriptFile(file, script)
     return await run(`powershell -NoProfile -ExecutionPolicy Bypass -File "${file}"`)
   } finally {
     try { fs.unlinkSync(file) } catch {}
@@ -382,7 +383,7 @@ async function resolveIcons(specs) {
     misses.push({ resultIndex: i, spec, identity })
   })
   if (!misses.length) return results
-  const entries = misses.map((m) => `@{ p='${String(m.spec.path).replace(/'/g, "''")}'; i=${m.spec.index | 0} }`).join(',')
+  const entries = misses.map((m) => `@{ p=${quotePowerShellLiteral(m.spec.path)}; i=${m.spec.index | 0} }`).join(',')
   const script = `Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
 using System;
@@ -466,7 +467,7 @@ async function resolveAppIcons(appIds) {
 }
 
 async function extractAppIcons(appIds) {
-  const ids = appIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')
+  const ids = appIds.map(quotePowerShellLiteral).join(',')
   const script = `Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
 using System;

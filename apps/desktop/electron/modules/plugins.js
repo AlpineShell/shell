@@ -3,13 +3,16 @@ const path = require('path')
 const fs = require('fs')
 const { parseManifest } = require('../pluginManifest')
 const marketplace = require('../pluginMarketplace')
+const { loadLicenceConfig } = require('../licenceConfig')
+const { guardHandlers, SETTINGS_WINDOW } = require('../trustedSenders')
 
 const PLUGINS_DIR_NAME = 'plugins'
+const PLUGIN_DATA_DIR_NAME = 'plugin-data'
 const STATE_FILE_NAME = 'pluginState.json'
 const MANIFEST_FILE = 'plugin.json'
 const DEFAULT_ENTRY = 'index.js'
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/
-const MARKETPLACE_SITE_BASE = (process.env.ALPINE_SITE_BASE || 'https://alpineshell.com').replace(/\/+$/, '')
+const MARKETPLACE_SITE_BASE = loadLicenceConfig().websiteBase
 
 const MIME_BY_EXTENSION = {
   '.js': 'text/javascript',
@@ -28,6 +31,7 @@ const MIME_BY_EXTENSION = {
 let pluginsDir = null
 let broadcast = null
 let disabledIds = null
+let pluginStopper = (_id, work) => work()
 
 const capabilities = new Map()
 const changeListeners = new Set()
@@ -38,6 +42,10 @@ function registerPluginCapability(channel, getter) {
 
 function unregisterPluginCapability(channel) {
   capabilities.delete(channel)
+}
+
+function setPluginStopper(stopper) {
+  if (typeof stopper === 'function') pluginStopper = stopper
 }
 
 function onPluginsChanged(listener) {
@@ -63,6 +71,32 @@ function triggerReload() {
 function getPluginsDir() {
   if (!pluginsDir) pluginsDir = path.join(app.getPath('userData'), PLUGINS_DIR_NAME)
   return pluginsDir
+}
+
+function pluginDataDir(id) {
+  if (typeof id !== 'string' || !SAFE_ID.test(id)) return null
+  return path.join(app.getPath('userData'), PLUGIN_DATA_DIR_NAME, id)
+}
+
+function ensurePluginDataDir(id) {
+  const dir = pluginDataDir(id)
+  if (!dir) return null
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+  } catch (e) {
+    console.error(`[plugins] data folder for "${id}" could not be created:`, e.message)
+  }
+  return dir
+}
+
+function removePluginData(id) {
+  const dir = pluginDataDir(id)
+  if (!dir) return
+  try {
+    fs.rmSync(dir, { recursive: true, force: true })
+  } catch (e) {
+    console.error(`[plugins] data folder for "${id}" could not be removed:`, e.message)
+  }
 }
 
 function getPresetPluginsDir() {
@@ -208,22 +242,11 @@ module.exports = {
       triggerReload()
       return true
     },
-    'plugins/set-enabled': (_event, payload) => setEnabled(payload && payload.id, !!(payload && payload.enabled)),
     'plugins/manifest': (_event, id) => listPlugins().find((p) => p.id === id) || null,
     'plugins/readme': (_event, id) => readPluginReadme(id),
     'plugins/marketplace-base': () => marketplace.getBase(),
     'plugins/marketplace-list': () => marketplace.list(),
     'plugins/marketplace-detail': (_event, id) => marketplace.detail(id),
-    'plugins/marketplace-install': (_event, payload) =>
-      marketplace.install(payload, {
-        pluginsDir: getPluginsDir(),
-        onChange: () => triggerReload(),
-      }),
-    'plugins/marketplace-uninstall': (_event, id) =>
-      marketplace.uninstall(id, {
-        pluginsDir: getPluginsDir(),
-        onChange: () => triggerReload(),
-      }),
     'plugins/marketplace-open-web': (_event, id) => {
       if (typeof id !== 'string' || !SAFE_ID.test(id)) return false
       return shell.openExternal(`${MARKETPLACE_SITE_BASE}/plugins/${encodeURIComponent(id)}`)
@@ -232,6 +255,25 @@ module.exports = {
       const getter = capabilities.get(channel)
       return getter ? getter() : null
     },
+    ...guardHandlers({
+      'plugins/set-enabled': (_event, payload) => setEnabled(payload && payload.id, !!(payload && payload.enabled)),
+      'plugins/marketplace-install': (_event, payload) =>
+        marketplace.install(payload, {
+          pluginsDir: getPluginsDir(),
+          onChange: () => triggerReload(),
+          withPluginStopped: (id, work) => pluginStopper(id, work),
+        }),
+      'plugins/marketplace-uninstall': (_event, id) =>
+        marketplace.uninstall(id, {
+          pluginsDir: getPluginsDir(),
+          onChange: () => triggerReload(),
+          withPluginStopped: (pluginId, work) =>
+            pluginStopper(pluginId, async () => {
+              await work()
+              removePluginData(pluginId)
+            }),
+        }),
+    }, [SETTINGS_WINDOW]),
   },
 
   start(b) {
@@ -245,6 +287,8 @@ module.exports = {
   registerPluginCapability,
   unregisterPluginCapability,
   onPluginsChanged,
+  setPluginStopper,
+  ensurePluginDataDir,
   listPlugins,
   mimeFor,
 }

@@ -18,6 +18,14 @@ import { pluginSettingsPage } from '../../plugins/pluginSettingsPages'
 
 type PluginTab = 'installed' | 'browse'
 
+const UNVERIFIED_MESSAGE = 'Not installed: its signature could not be verified.'
+const INSTALL_FAILED_MESSAGE = "Couldn't install. Try again."
+const UNINSTALL_FAILED_MESSAGE = "Couldn't uninstall. Try again."
+
+function installFailureMessage(error: string): string {
+  return error === 'unverified' ? UNVERIFIED_MESSAGE : INSTALL_FAILED_MESSAGE
+}
+
 function semverGt(a: string, b: string): boolean {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0)
   const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0)
@@ -32,7 +40,16 @@ function versionLabel(version?: string | null): string | null {
   return version && version !== '0.0.0' ? `v${version}` : null
 }
 
-function InstalledCard({ plugin, settingsRoute, removing, onToggle, onUninstall, onNavigate }: InstalledPluginCardProps) {
+function RowNotice({ message }: { message: string }) {
+  return (
+    <div className="flex items-center gap-2 border-t border-line-hairline bg-warning/10 px-3 py-2 text-xs text-warning">
+      <AlertTriangle size={12} className="shrink-0" />
+      {message}
+    </div>
+  )
+}
+
+function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onUninstall, onNavigate }: InstalledPluginCardProps) {
   const enabled = plugin.enabled !== false
   const logo = pluginLogoUrl(plugin)
   const subtitle = plugin.marketplace?.shortDescription || plugin.description
@@ -72,12 +89,8 @@ function InstalledCard({ plugin, settingsRoute, removing, onToggle, onUninstall,
           </>
         }
       >
-        {!plugin.loadable && (
-          <div className="flex items-center gap-2 border-t border-line-hairline bg-warning/10 px-3 py-2 text-xs text-warning">
-            <AlertTriangle size={12} className="shrink-0" />
-            {plugin.compat?.reason || (plugin.errors[0] ?? 'Cannot load this plugin.')}
-          </div>
-        )}
+        {!plugin.loadable && <RowNotice message={plugin.compat?.reason || (plugin.errors[0] ?? 'Cannot load this plugin.')} />}
+        {failure && <RowNotice message={failure} />}
       </ListRow>
     </li>
   )
@@ -88,22 +101,17 @@ type BrowseState =
   | { status: 'error'; message: string; base: string }
   | { status: 'ready'; plugins: MarketplacePlugin[]; base: string }
 
-function BrowseCard({
-  plugin,
-  installedVersion,
-  installing,
-  onInstall,
-}: {
-  plugin: MarketplacePlugin
-  installedVersion: string | null
-  installing: boolean
-  onInstall: (p: MarketplacePlugin) => void
-}) {
+function BrowseCard({ plugin, installedVersion, installing, requested, failure, onInstall }: BrowsePluginCardProps) {
   const installed = installedVersion !== null
   const canUpdate = installed && semverGt(plugin.version, installedVersion)
+  const anchor = useRef<HTMLLIElement>(null)
+
+  useEffect(() => {
+    if (requested) anchor.current?.scrollIntoView({ block: 'center' })
+  }, [requested])
 
   return (
-    <li>
+    <li ref={anchor} className={requested ? 'rounded-card ring-1 ring-line-strong' : undefined}>
       <ListRow
         icon={<Avatar src={plugin.iconUrl} alt={plugin.name} fallback={<Puzzle size={16} />} />}
         title={plugin.name}
@@ -129,7 +137,9 @@ function BrowseCard({
             )}
           </>
         }
-      />
+      >
+        {failure && <RowNotice message={failure} />}
+      </ListRow>
     </li>
   )
 }
@@ -141,8 +151,19 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
   const [browse, setBrowse] = useState<BrowseState>({ status: 'loading' })
   const [installingId, setInstallingId] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [requested, setRequested] = useState<MarketplacePlugin | null>(null)
+  const [failures, setFailures] = useState<Record<string, string>>({})
 
   const installedById = new Map(plugins.map((p) => [p.id, p]))
+
+  const recordFailure = useCallback((id: string, message: string | null) => {
+    setFailures((prev) => {
+      const next = { ...prev }
+      if (message) next[id] = message
+      else delete next[id]
+      return next
+    })
+  }, [])
 
   const refreshInstalled = useCallback(async () => {
     const list = await window.plugins.list().catch(() => null)
@@ -169,18 +190,21 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
     async (plugin: MarketplacePlugin) => {
       if (installingId) return
       setInstallingId(plugin.id)
+      recordFailure(plugin.id, null)
       const res = await window.plugins.marketplace
         .install({ id: plugin.id, version: plugin.version })
         .catch((e): InstallResult => ({ ok: false, error: 'install-failed', detail: String(e) }))
       setInstallingId(null)
-      if (res.ok) await refreshInstalled()
-      else console.error(`[plugins] install ${plugin.id} failed:`, res.error, res.detail)
+      if (res.ok) {
+        await refreshInstalled()
+        return
+      }
+      console.error(`[plugins] install ${plugin.id} failed:`, res.error, res.detail)
+      recordFailure(plugin.id, installFailureMessage(res.error))
     },
-    [installingId, refreshInstalled],
+    [installingId, recordFailure, refreshInstalled],
   )
 
-  const installRef = useRef(install)
-  installRef.current = install
   const browseRef = useRef(browse)
   browseRef.current = browse
   useEffect(() => {
@@ -188,8 +212,7 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
       setTab('browse')
       const b = browseRef.current
       const found = b.status === 'ready' ? b.plugins.find((p) => p.id === id) : undefined
-      const target = found ?? (await window.plugins.marketplace.detail(id).catch(() => null))
-      if (target) installRef.current(target)
+      setRequested(found ?? (await window.plugins.marketplace.detail(id).catch(() => null)))
     })
   }, [])
 
@@ -216,13 +239,22 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
   async function uninstall(plugin: PluginRecord) {
     if (removingId) return
     setRemovingId(plugin.id)
+    recordFailure(plugin.id, null)
     const res = await window.plugins.marketplace
       .uninstall(plugin.id)
       .catch(() => ({ ok: false, error: 'failed' }))
     setRemovingId(null)
-    if (res.ok || res.error === 'not-installed') await refreshInstalled()
-    else console.error(`[plugins] uninstall ${plugin.id} failed:`, res.error)
+    if (res.ok || res.error === 'not-installed') {
+      await refreshInstalled()
+      return
+    }
+    console.error(`[plugins] uninstall ${plugin.id} failed:`, res.error)
+    recordFailure(plugin.id, UNINSTALL_FAILED_MESSAGE)
   }
+
+  const listedPlugins = browse.status === 'ready' ? browse.plugins : []
+  const browsePlugins =
+    requested && !listedPlugins.some((p) => p.id === requested.id) ? [requested, ...listedPlugins] : listedPlugins
 
   const tabs: SegmentedOption<PluginTab>[] = [
     {
@@ -279,6 +311,7 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
                 plugin={plugin}
                 settingsRoute={pluginSettingsPage(plugin)?.route ?? null}
                 removing={removingId === plugin.id}
+                failure={failures[plugin.id] ?? null}
                 onToggle={toggle}
                 onUninstall={uninstall}
                 onNavigate={onNavigate}
@@ -295,16 +328,18 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
           title="Couldn't reach the marketplace."
           detail={browse.base && <span className="font-mono break-all">{browse.base}</span>}
         />
-      ) : browse.plugins.length === 0 ? (
+      ) : browsePlugins.length === 0 ? (
         <EmptyState variant="plain" title="No plugins published yet." />
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {browse.plugins.map((plugin) => (
+          {browsePlugins.map((plugin) => (
             <BrowseCard
               key={plugin.id}
               plugin={plugin}
               installedVersion={installedById.get(plugin.id)?.version ?? null}
               installing={installingId === plugin.id}
+              requested={requested?.id === plugin.id}
+              failure={failures[plugin.id] ?? null}
               onInstall={install}
             />
           ))}

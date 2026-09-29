@@ -8,9 +8,10 @@ const explorerShell = require('./explorerShell')
 const shellExclusivity = require('./shellExclusivity')
 const licence = require('./licence')
 const { regQuery } = require('../registryRead')
-const { guardHandlers } = require('../trustedSenders')
+const { guardHandlers, SETUP_WINDOW, SETTINGS_WINDOW } = require('../trustedSenders')
 
 const LICENCE_REQUIRED = 'licence-required'
+const SHELL_REGISTRATION_FAILED = 'Could not register Alpine Shell as your desktop.'
 const CURSOR_VARIANT = 'Bibata-Modern-Ice'
 const REVERT_QUIT_DELAY_MS = 1200
 const REVERT_BLOCKED_MESSAGES = {
@@ -97,15 +98,16 @@ function setAsShell() {
   installer.clearShellHandoff()
   const shellValue = getShellExePath()
   regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell', shellValue)
-
   try {
-    regAdd('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'AutoRestartShell', '0', 'REG_DWORD')
+    regAdd(XAML_START_MENU_KEY, 'EnableXamlStartMenu', '0', 'REG_DWORD')
   } catch (e) {
-    console.error('[setup] Could not set AutoRestartShell (may need admin):', e.message)
+    console.error('[setup] Could not set EnableXamlStartMenu:', e.message)
   }
-
-  regAdd(XAML_START_MENU_KEY, 'EnableXamlStartMenu', '0', 'REG_DWORD')
-  regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'RestartApps', '0', 'REG_DWORD')
+  try {
+    regAdd('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'RestartApps', '0', 'REG_DWORD')
+  } catch (e) {
+    console.error('[setup] Could not set RestartApps:', e.message)
+  }
 
   try {
     execSync('schtasks /change /tn "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" /disable', { windowsHide: true })
@@ -126,10 +128,15 @@ function setStartup() {
   regAdd(RUN_KEY, RUN_VALUE_NAME, autostartCommand())
 }
 
+function mayRegisterShell() {
+  return licenceGateError() === null || isDesktopClaimedByAlpine()
+}
+
 function ensureShellRegistration(gpoBlocked) {
   if (!electronApp().isPackaged) return
   if (installer.isShellOptedOut()) return
   if (gpoBlocked) return
+  if (!mayRegisterShell()) return
 
   const desiredShell = getShellExePath()
   if (regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell') !== desiredShell) {
@@ -155,6 +162,14 @@ function hasGpoShellOverride() {
 function isShellRegisteredToAlpine() {
   const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
   return currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe')
+}
+
+function hasAlpineRunEntry() {
+  return regQuery(RUN_KEY, RUN_VALUE_NAME) !== null
+}
+
+function isDesktopClaimedByAlpine() {
+  return isShellRegisteredToAlpine() || hasAlpineRunEntry()
 }
 
 function lazyContext(sources) {
@@ -225,6 +240,7 @@ function autostartLaunchContext(argv) {
     packaged: () => electronApp().isPackaged,
     launchedByAutostart: () => isAutostartLaunch(argv),
     handedOffThisLogon: () => installer.shellHandoffFromThisLogon(),
+    updateInProgress: () => installer.isUpdateHandoffActive(),
     explorerHostsShell: () => explorerShell.shellHostedByExplorer(),
   })
 }
@@ -333,8 +349,14 @@ async function runRevert(action, beforeAction = null) {
   }
 }
 
+const settingsWindowHandlers = guardHandlers({
+  'setup/revert-temporary': () => runRevert(() => installer.revertShellTemporarily()),
+  'setup/revert-permanent': () => runRevert(() => installer.revertShellPermanently()),
+  'setup/uninstall': () => runRevert(() => installer.uninstall(), releaseLicenceSeatBestEffort),
+}, [SETTINGS_WINDOW])
+
 module.exports = {
-  handlers: guardHandlers({
+  handlers: Object.assign(guardHandlers({
     'setup/status': () => getSetupStatus(),
     'setup/install': async (_event, options) => {
       const results = { shell: false, startup: false, cursor: false, gpoBlocked: false, error: licenceGateError() }
@@ -391,6 +413,12 @@ module.exports = {
         }
       }
 
+      if (options.shell) results.shell = isShellRegisteredToAlpine()
+      if (options.shell && !results.shell) {
+        results.error = SHELL_REGISTRATION_FAILED
+        return results
+      }
+
       markSetupComplete()
       return results
     },
@@ -423,9 +451,6 @@ module.exports = {
       execSync('shutdown /r /t 5 /c "Restarting to apply Alpine Shell"', { windowsHide: true })
       electronApp().exit()
     },
-    'setup/revert-temporary': () => runRevert(() => installer.revertShellTemporarily()),
-    'setup/revert-permanent': () => runRevert(() => installer.revertShellPermanently()),
-    'setup/uninstall': () => runRevert(() => installer.uninstall(), releaseLicenceSeatBestEffort),
     'setup/set-shell': () => {
       const error = licenceGateError()
       if (error) return { success: false, error }
@@ -433,9 +458,10 @@ module.exports = {
       setStartup()
       return { success: isShellRegisteredToAlpine(), error: null }
     },
-  }),
+  }, [SETUP_WINDOW]), settingsWindowHandlers),
 
   isFirstRun,
+  isDesktopClaimedByAlpine,
   isAutostartLaunch,
   shouldLeaveShellToExplorer,
   takeOverFromExplorer,

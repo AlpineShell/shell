@@ -1,4 +1,5 @@
 const { ipcMain, BrowserWindow } = require('electron')
+const { guardShellSender } = require('./trustedSenders')
 
 function sendToWindow(win, channel, data) {
   if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
@@ -34,10 +35,14 @@ function moduleLabel(handlers) {
 
 function registerHandler(label, channel, handler) {
   try {
-    ipcMain.handle(channel, handler)
+    ipcMain.handle(channel, guardShellSender(channel, handler))
   } catch (e) {
     console.error(`[ipc] ${label} handler register failed for '${channel}':`, e?.message ?? e)
   }
+}
+
+function handle(channel, handler) {
+  registerHandler('main', channel, handler)
 }
 
 function registerHandlers(label, handlers) {
@@ -72,4 +77,4 @@ function register(...modules) {
   }
 }
 
-module.exports = { register, broadcast, broadcastToTopbars }
+module.exports = { register, handle, broadcast, broadcastToTopbars }

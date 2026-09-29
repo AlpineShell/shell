@@ -39,7 +39,7 @@ parentPort.on('message', (request) => {
     cbSize: koffi.sizeof(execInfo),
     fMask: SEE_MASK_FLAG_NO_UI,
     hwnd: 0,
-    lpVerb: null,
+    lpVerb: request.verb || null,
     lpFile: request.file,
     lpParameters: request.args || null,
     lpDirectory: null,

@@ -85,7 +85,8 @@ these GitHub **secrets** and **variables** so you never hardcode the URL:
 | Secret | `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY` | Railway credentials. |
 | Secret | `STORAGE_BUCKET` | Bucket name (installer keys and `plugins/*` can share one bucket). |
 | Secret | `STORAGE_FORCE_PATH_STYLE` | `true` for MinIO. |
-| Secret | `ALPINE_MARKETPLACE_PUBKEY` | Ed25519 SPKI public key (PEM, escaped one-line PEM or base64 PEM) matching `ALPINE_PLUGIN_SIGNING_KEY`, baked into `electron/marketplacePublicKey.generated.js` so a release build can verify plugin signatures. A release build ignores the run-time environment variable of the same name. |
+| Secret | `ALPINE_MARKETPLACE_PUBKEY` | Ed25519 SPKI public key (PEM, escaped one-line PEM or base64 PEM) matching `ALPINE_PLUGIN_SIGNING_KEY`, baked into `electron/marketplacePublicKey.generated.js` so a release build can verify plugin signatures. A release build ignores the run-time environment variable of the same name, refuses to install a bundle whose signature does not verify against it, and the workflow fails when it is unset. |
+| Variable | `ALPINE_PLUGINS_BASE` | Optional https base of the plugin catalog, baked into `electron/marketplaceConfig.generated.js`. Unset, a release build uses the built-in default; the workflow fails on a base that is not https. A release build ignores the environment and `.env` for this value. |
 
 The update feed URL is not a variable: `package.json` `build.publish.url` is the only source, the
 workflow asserts that the packaged `resources/app-update.yml` carries it, and the old

@@ -3,6 +3,7 @@ const fs = require('fs')
 const path = require('path')
 const koffi = require('koffi')
 const { readCurrentUserStringValue, watchCurrentUserStringValue } = require('../registryWatch')
+const { isWallpaperFile, removedPresetReplacement } = require('./wallpaperPresets')
 
 const DESKTOP_REGISTRY_KEY = 'Control Panel\\Desktop'
 const WALLPAPER_REGISTRY_VALUE = 'Wallpaper'
@@ -66,6 +67,12 @@ function notifyWallpaperPathChange(filePath) {
 
 function getMineDir() {
   return path.join(app.getPath('userData'), 'wallpapers')
+}
+
+function getPresetsDir() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'wallpapers')
+    : path.join(__dirname, '..', '..', 'wallpapers')
 }
 
 let lastPickedFolder = null
@@ -141,6 +148,25 @@ function setWallpaper(filePath) {
   return !!ok
 }
 
+function listPresetNames(presetsDir) {
+  try {
+    return fs.readdirSync(presetsDir)
+  } catch {
+    return []
+  }
+}
+
+function replaceRemovedPreset(wallpaperPath) {
+  const presetsDir = getPresetsDir()
+  const replacement = removedPresetReplacement({
+    wallpaperPath,
+    presetsDir,
+    presetNames: listPresetNames(presetsDir),
+    exists: fs.existsSync,
+  })
+  if (replacement) setWallpaper(replacement)
+}
+
 module.exports = {
   resolveWallpaperPath,
   handlers: {
@@ -149,14 +175,10 @@ module.exports = {
       return setWallpaper(filePath)
     },
     'windows/wallpaper-presets': async () => {
-      const presetsDir = app.isPackaged
-        ? path.join(process.resourcesPath, 'wallpapers')
-        : path.join(__dirname, '..', '..', 'wallpapers')
+      const presetsDir = getPresetsDir()
       try {
         if (!fs.existsSync(presetsDir)) return []
-        const entries = fs.readdirSync(presetsDir)
-        const valid = ['.jpg', '.jpeg', '.png', '.bmp', '.webp']
-        const files = entries.filter((name) => valid.includes(path.extname(name).toLowerCase()))
+        const files = fs.readdirSync(presetsDir).filter(isWallpaperFile)
         const out = []
         for (const name of files) {
           const fullPath = path.join(presetsDir, name)
@@ -267,6 +289,7 @@ module.exports = {
     })
     app.on('will-quit', desktopWallpaperWatch.stop)
     if (!lastPath) lastPath = readDesktopWallpaperPath()
+    replaceRemovedPreset(lastPath || saved)
 
     ipcMain.on('windows/wallpaper-init', (event) => {
       event.returnValue = encode(lastPath)

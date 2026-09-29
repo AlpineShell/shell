@@ -29,6 +29,7 @@ function makeContext(init) {
   const ctx = {
     id: init.id,
     pluginDir: init.dir,
+    dataDir: init.dataDir,
     publish(channel, data) {
       if (typeof channel === 'string' && channel) post({ type: 'publish', channel, data })
     },

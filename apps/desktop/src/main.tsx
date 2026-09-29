@@ -2,7 +2,8 @@ import { StrictMode } from 'react'
 import type { ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import { useWallpaper } from './hooks/useWallpaper'
+import DesktopApp from './components/desktop/desktopApp'
+import RootErrorBoundary from './components/rootErrorBoundary'
 
 type Mode = 'topbar' | 'desktop' | 'screenshot' | 'setup' | 'settings'
 
@@ -15,24 +16,20 @@ function getMode(): Mode {
   return 'desktop'
 }
 
-function DesktopApp() {
-  const wallpaper = useWallpaper()
-
-  return (
-    <div
-      className="w-screen h-screen bg-cover bg-center"
-      style={wallpaper ? { backgroundImage: `url('${wallpaper}')` } : { backgroundColor: '#1a1a2e' }}
-    />
-  )
+function releaseTopBarInput() {
+  window.topbar?.setActiveRegion(null)
+  window.topbar?.setInteractiveZones([])
 }
 
 async function resolveView(mode: Mode): Promise<ReactNode> {
   if (mode === 'topbar') {
     const { default: TopBar } = await import('./components/topbar/topBar')
     return (
-      <div className="w-screen h-full bg-transparent">
-        <TopBar />
-      </div>
+      <RootErrorBoundary view="topbar" onFailure={releaseTopBarInput}>
+        <div className="w-screen h-full bg-transparent">
+          <TopBar />
+        </div>
+      </RootErrorBoundary>
     )
   }
   if (mode === 'screenshot') {
@@ -57,7 +54,9 @@ const root = createRoot(document.getElementById('root')!)
 if (mode === 'desktop') {
   root.render(
     <StrictMode>
-      <DesktopApp />
+      <RootErrorBoundary view="desktop">
+        <DesktopApp />
+      </RootErrorBoundary>
     </StrictMode>,
   )
 } else {

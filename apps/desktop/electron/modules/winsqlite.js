@@ -6,6 +6,8 @@ const SQLITE_OPEN_READWRITE = 0x00000002
 const SQLITE_OK = 0
 const SQLITE_ROW = 100
 const MAX_BLOB_BYTES = 256 * 1024
+const SNAPSHOT_DIRECTORY_NAME = 'alpine-sqlite'
+const LEGACY_SNAPSHOT_PREFIX = 'alpine-sqlite-'
 
 let koffi = null
 let fns = null
@@ -41,8 +43,51 @@ function emptyResult() {
   return { rows: [], truncated: false }
 }
 
+function snapshotDirectory() {
+  return path.join(os.tmpdir(), SNAPSHOT_DIRECTORY_NAME)
+}
+
+function newSnapshotPath() {
+  return path.join(snapshotDirectory(), `${process.pid}-${Date.now()}-${Math.round(process.hrtime()[1])}.db`)
+}
+
+function snapshotOwnerPid(fileName) {
+  const match = /^(\d+)-/.exec(fileName)
+  return match ? Number(match[1]) : null
+}
+
+function isLegacySnapshot(fileName) {
+  return fileName.startsWith(LEGACY_SNAPSHOT_PREFIX)
+}
+
+function removeMatchingFiles(directory, shouldRemove) {
+  let names
+  try { names = fs.readdirSync(directory) } catch { return }
+  for (const name of names) {
+    if (!shouldRemove(name)) continue
+    try { fs.rmSync(path.join(directory, name), { force: true }) } catch {}
+  }
+}
+
+function removeSnapshotsOf(pid, directory = snapshotDirectory()) {
+  removeMatchingFiles(directory, (name) => snapshotOwnerPid(name) === pid)
+}
+
+function removeAllSnapshots(directory = snapshotDirectory()) {
+  removeMatchingFiles(directory, () => true)
+}
+
+async function removeLegacySnapshots(directory = os.tmpdir()) {
+  let names
+  try { names = await fs.promises.readdir(directory) } catch { return }
+  await Promise.all(names.filter(isLegacySnapshot).map((name) =>
+    fs.promises.rm(path.join(directory, name), { force: true }).catch(() => {})
+  ))
+}
+
 function snapshot(dbPath) {
-  const tmp = path.join(os.tmpdir(), `alpine-sqlite-${process.pid}-${Date.now()}-${Math.round(process.hrtime()[1])}.db`)
+  const tmp = newSnapshotPath()
+  fs.mkdirSync(path.dirname(tmp), { recursive: true })
   fs.copyFileSync(dbPath, tmp)
   for (const ext of ['-wal', '-journal']) {
     try {
@@ -132,4 +177,16 @@ function readRows(dbPath, sql, columnTypes, rowLimit) {
   }
 }
 
-module.exports = { readRows, openSnapshot, querySnapshot, closeSnapshot, available }
+module.exports = {
+  readRows,
+  openSnapshot,
+  querySnapshot,
+  closeSnapshot,
+  available,
+  snapshotDirectory,
+  newSnapshotPath,
+  snapshotOwnerPid,
+  removeSnapshotsOf,
+  removeAllSnapshots,
+  removeLegacySnapshots,
+}

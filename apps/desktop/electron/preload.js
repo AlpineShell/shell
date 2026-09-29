@@ -219,6 +219,9 @@ contextBridge.exposeInMainWorld('alttab', {
   onSelectionChanged: (callback) => {
     ipcRenderer.on('alttab/selection-changed', (_, index) => callback(index))
   },
+  onThumbnail: (callback) => {
+    ipcRenderer.on('alttab/thumbnail', (_, data) => callback(data))
+  },
   activate: (hwnd) => ipcRenderer.invoke('alttab/activate', hwnd),
 })
 
@@ -327,10 +330,17 @@ function pageMode() {
   }
 }
 
-const MACHINE_CHANGING_PAGE_MODES = new Set(['setup', 'settings'])
 const currentPageMode = pageMode()
 
-if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
+if (currentPageMode === 'settings') {
+  contextBridge.exposeInMainWorld('setup', {
+    revertTemporary: () => ipcRenderer.invoke('setup/revert-temporary'),
+    revertPermanent: () => ipcRenderer.invoke('setup/revert-permanent'),
+    uninstall: () => ipcRenderer.invoke('setup/uninstall'),
+  })
+}
+
+if (currentPageMode === 'setup') {
   contextBridge.exposeInMainWorld('setup', {
     status: () => ipcRenderer.invoke('setup/status'),
     install: (options) => ipcRenderer.invoke('setup/install', options),
@@ -338,10 +348,7 @@ if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
     testOut: () => ipcRenderer.invoke('setup/test-out'),
     relaunch: () => ipcRenderer.invoke('setup/relaunch'),
     restartWindows: () => ipcRenderer.invoke('setup/restart-windows'),
-    revertTemporary: () => ipcRenderer.invoke('setup/revert-temporary'),
-    revertPermanent: () => ipcRenderer.invoke('setup/revert-permanent'),
     setShell: () => ipcRenderer.invoke('setup/set-shell'),
-    uninstall: () => ipcRenderer.invoke('setup/uninstall'),
     fitWindowHeight: (height) => ipcRenderer.send('setup/fit-window-height', height),
     onProgress: (callback) => {
       ipcRenderer.on('setup/progress', (_, step) => callback(step))
@@ -372,6 +379,7 @@ if (MACHINE_CHANGING_PAGE_MODES.has(currentPageMode)) {
 
 contextBridge.exposeInMainWorld('shell', {
   settingsIcon: bootSettingsIcon,
+  reportRenderError: (detail) => ipcRenderer.send('shell/render-error', detail),
   theme: {
     initial: bootTheme,
     get: () => ipcRenderer.invoke('theme/get'),
@@ -520,6 +528,10 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('battery-saver/state-changed', handler)
       return () => ipcRenderer.removeListener('battery-saver/state-changed', handler)
     },
+  },
+  gpu: {
+    preferences: () => ipcRenderer.invoke('gpu/preferences-get'),
+    setPreferences: (partial) => ipcRenderer.invoke('gpu/preferences-set', partial),
   },
   media: {
     session: () => ipcRenderer.invoke('media/session'),
