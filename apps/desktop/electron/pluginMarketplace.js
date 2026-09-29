@@ -262,6 +262,7 @@ async function install(payload, { pluginsDir, onChange, withPluginStopped = runD
       return { ok: false, error: 'bad-manifest' }
     }
     if (manifest.id !== id) return { ok: false, error: 'id-mismatch' }
+    if (manifest.version !== version) return { ok: false, error: 'version-mismatch' }
 
     await withPluginStopped(id, () => swapIntoPlace(staging, finalDir, backup))
   } catch (e) {

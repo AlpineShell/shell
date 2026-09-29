@@ -1,8 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import crypto from 'crypto'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+
+const marketplaceKeys = crypto.generateKeyPairSync('ed25519')
+process.env.ALPINE_MARKETPLACE_PUBKEY = marketplaceKeys.publicKey.export({ type: 'spki', format: 'pem' }).toString()
 
 const { install, uninstall } = await import('./pluginMarketplace.js')
 
@@ -49,10 +52,10 @@ function demoBundle(version) {
   })
 }
 
-function serveCatalog({ bundle, signature = null, sha256 = crypto.createHash('sha256').update(bundle).digest('hex') }) {
+function serveCatalog({ bundle, signature = null, sha256 = crypto.createHash('sha256').update(bundle).digest('hex'), version = '1.2.0' }) {
   const fetchMock = vi.fn(async (url) => {
     if (url.endsWith(`/plugins/${PLUGIN_ID}/latest.json`)) {
-      return new Response(JSON.stringify({ id: PLUGIN_ID, version: '1.2.0', url: BUNDLE_KEY, sha256, signature }))
+      return new Response(JSON.stringify({ id: PLUGIN_ID, version, url: BUNDLE_KEY, sha256, signature }))
     }
     if (url.endsWith(BUNDLE_KEY)) return new Response(bundle)
     return new Response(null, { status: 404 })
@@ -80,6 +83,15 @@ afterEach(() => {
   fs.rmSync(pluginsDir, { recursive: true, force: true })
 })
 
+afterAll(() => {
+  delete process.env.ALPINE_MARKETPLACE_PUBKEY
+})
+
+function signedWithMarketplaceKey(bundle) {
+  const digest = crypto.createHash('sha256').update(bundle).digest()
+  return crypto.sign(null, digest, marketplaceKeys.privateKey).toString('base64')
+}
+
 describe('installing from the marketplace', () => {
   it('refuses an unsigned bundle when signatures are required, without downloading it', async () => {
     const fetchMock = serveCatalog({ bundle: demoBundle('1.2.0') })
@@ -92,9 +104,17 @@ describe('installing from the marketplace', () => {
   it('refuses a signature that does not verify when signatures are required', async () => {
     const fetchMock = serveCatalog({ bundle: demoBundle('1.2.0'), signature: Buffer.alloc(64, 7).toString('base64') })
     const result = await install({ id: PLUGIN_ID }, { pluginsDir, requireSignature: true })
-    expect(result).toMatchObject({ ok: false, error: 'unverified' })
+    expect(result).toEqual({ ok: false, error: 'unverified', reason: 'bad-signature' })
     expect(bundleRequests(fetchMock)).toHaveLength(0)
     expect(fs.existsSync(path.join(pluginsDir, PLUGIN_ID))).toBe(false)
+  })
+
+  it('installs a bundle signed with the marketplace key when signatures are required', async () => {
+    const bundle = demoBundle('1.2.0')
+    serveCatalog({ bundle, signature: signedWithMarketplaceKey(bundle) })
+    const result = await install({ id: PLUGIN_ID }, { pluginsDir, requireSignature: true })
+    expect(result).toEqual({ ok: true, id: PLUGIN_ID, version: '1.2.0', verified: true, reason: null })
+    expect(installedManifest(pluginsDir).version).toBe('1.2.0')
   })
 
   it('installs an unsigned bundle when signatures are not required, and says it is unverified', async () => {
@@ -109,6 +129,18 @@ describe('installing from the marketplace', () => {
     const result = await install({ id: PLUGIN_ID }, { pluginsDir, requireSignature: false })
     expect(result).toEqual({ ok: false, error: 'digest-mismatch' })
     expect(fs.existsSync(path.join(pluginsDir, PLUGIN_ID))).toBe(false)
+  })
+
+  it('refuses a bundle whose own version is not the one the catalog offers', async () => {
+    fs.mkdirSync(path.join(pluginsDir, PLUGIN_ID))
+    fs.writeFileSync(path.join(pluginsDir, PLUGIN_ID, 'plugin.json'), JSON.stringify({ id: PLUGIN_ID, version: '1.1.0' }))
+    serveCatalog({ bundle: demoBundle('1.0.0'), version: '1.2.0' })
+    const onChange = vi.fn()
+    const result = await install({ id: PLUGIN_ID }, { pluginsDir, onChange, requireSignature: false })
+    expect(result).toEqual({ ok: false, error: 'version-mismatch' })
+    expect(installedManifest(pluginsDir).version).toBe('1.1.0')
+    expect(fs.readdirSync(pluginsDir)).toEqual([PLUGIN_ID])
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('stops reading a download that grows past the bundle limit', async () => {

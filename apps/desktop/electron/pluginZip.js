@@ -35,9 +35,6 @@ function safeEntryName(name) {
   return norm
 }
 
-// Extract `buffer` (a whole ZIP archive) into the existing directory `destDir`.
-// Returns the list of written file paths (relative to destDir). Throws on any
-// malformed/unsafe archive.
 function inflateEntry(comp, uncompSize, rawName) {
   try {
     return zlib.inflateRawSync(comp, { maxOutputLength: Math.max(1, uncompSize) })
@@ -46,6 +43,9 @@ function inflateEntry(comp, uncompSize, rawName) {
   }
 }
 
+// Extract `buffer` (a whole ZIP archive) into the existing directory `destDir`.
+// Returns the list of written file paths (relative to destDir). Throws on any
+// malformed/unsafe archive.
 function extractZip(buffer, destDir, limits = DEFAULT_LIMITS) {
   if (!Buffer.isBuffer(buffer)) throw new Error('extractZip: buffer required')
   const eocd = findEOCD(buffer)

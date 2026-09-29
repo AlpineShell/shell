@@ -151,9 +151,9 @@ computes its SHA-256, signs the digest with Ed25519, uploads the immutable bundl
 ### Required environment for plugin publishing
 
 - Storage credentials: the `STORAGE_*` variables; see `docs/STORAGE.md`.
-- `ALPINE_PLUGIN_SIGNING_KEY` — base64 of a PKCS8 PEM Ed25519 **private** key. If unset, the script
-  warns and publishes **unsigned** (fine for first-party curated bundles during bring-up, but the
-  desktop install path enforces the signature, so production bundles must be signed).
+- `ALPINE_PLUGIN_SIGNING_KEY`: base64 of a PKCS8 PEM Ed25519 **private** key. The script refuses to
+  publish without it, because a release build refuses to install a bundle whose signature does not
+  verify.
 
 Generate the key pair once:
 
