@@ -977,7 +977,10 @@ async function startApp() {
 
   fileHandlers.setPluginsPageOpener(() => openSettingsToPlugins())
 
-  trustedSenders.setTrustedWindowsAccessor(() => [setupWin, settingsWin])
+  trustedSenders.setTrustedWindowsAccessor(() => ({
+    [trustedSenders.SETUP_WINDOW]: setupWin,
+    [trustedSenders.SETTINGS_WINDOW]: settingsWin,
+  }))
 
   sqliteWorker.removeLeftoverSnapshots()
 
@@ -1010,7 +1013,7 @@ async function startApp() {
     closeSetupWindow()
     startShellMode()
     return { error: null }
-  }))
+  }, [trustedSenders.SETUP_WINDOW]))
 
   ipcMain.on('setup/fit-window-height', (_event, height) => {
     if (!setupWin || setupWin.isDestroyed() || !Number.isFinite(height)) return

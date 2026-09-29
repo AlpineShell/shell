@@ -62,6 +62,15 @@ jobs:
       - name: Build SDK
         run: bun run sdk:build
 
+      - name: Bake marketplace base
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          ALPINE_PLUGINS_BASE: ${{ vars.ALPINE_PLUGINS_BASE }}
+        run: |
+          node scripts/generateMarketplaceConfig.js
+          node -e "const c=require('./electron/marketplaceConfig.generated.js');if(c.pluginsBase&&!/^https:\/\//i.test(c.pluginsBase)){console.error('::error::the marketplace base must be https, a release build ignores anything else');process.exit(1)}console.log('marketplace base: '+(c.pluginsBase||'built-in default'))"
+
       - name: Bake licence config
         working-directory: apps/desktop
         shell: bash
@@ -80,7 +89,7 @@ jobs:
           test -f electron/licenceConfig.generated.js || { echo "::error::electron/licenceConfig.generated.js was not written"; exit 1; }
           node -e "const c=require('./electron/licenceConfig.generated.js');const kids=(c.publicKeys||[]).map(k=>k&&k.kid).filter(Boolean);if(c.isReleaseBuild!==true||kids.length===0){console.error('::error::licence config must be a release build with at least one kid');process.exit(1)}if(!String(c.authBase).startsWith('https://')||!String(c.websiteBase).startsWith('https://')){console.error('::error::licence config must use https for the auth and website bases');process.exit(1)}console.log('licence kids: '+kids.join(', ')+', auth '+c.authBase+', website '+c.websiteBase)"
           test -f electron/marketplacePublicKey.generated.js || { echo "::error::electron/marketplacePublicKey.generated.js was not written"; exit 1; }
-          node -e "const k=require('./electron/marketplacePublicKey.generated.js');if(typeof k.publicKeyPem!=='string'){console.log('::warning::no marketplace public key baked; set the ALPINE_MARKETPLACE_PUBKEY secret so this build can verify plugin signatures');process.exit(0)}console.log('marketplace public key baked')"
+          node -e "const k=require('./electron/marketplacePublicKey.generated.js');if(typeof k.publicKeyPem!=='string'||!k.publicKeyPem.includes('BEGIN PUBLIC KEY')){console.error('::error::no marketplace public key baked; set the ALPINE_MARKETPLACE_PUBKEY secret, a release build refuses every plugin it cannot verify');process.exit(1)}console.log('marketplace public key baked')"
 
       - name: Build renderer
         working-directory: apps/desktop

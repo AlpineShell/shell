@@ -3,9 +3,10 @@ const path = require('path')
 const fs = require('fs')
 const http = require('http')
 const crypto = require('crypto')
+const { loadLicenceConfig } = require('../licenceConfig')
 
 const STORE_FILE = 'google-calendar.json'
-const AUTH_SERVICE_BASE = (process.env.ALPINE_AUTH_BASE || 'https://auth.alpineshell.com').replace(/\/+$/, '')
+const AUTH_SERVICE_BASE = loadLicenceConfig().authBase
 const CALENDAR_BASE = 'https://www.googleapis.com'
 const TASKS_BASE = 'https://tasks.googleapis.com'
 const POLL_INTERVAL_MS = 5 * 60 * 1000

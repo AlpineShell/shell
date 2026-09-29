@@ -8,7 +8,7 @@ const explorerShell = require('./explorerShell')
 const shellExclusivity = require('./shellExclusivity')
 const licence = require('./licence')
 const { regQuery } = require('../registryRead')
-const { guardHandlers } = require('../trustedSenders')
+const { guardHandlers, SETUP_WINDOW, SETTINGS_WINDOW } = require('../trustedSenders')
 
 const LICENCE_REQUIRED = 'licence-required'
 const SHELL_REGISTRATION_FAILED = 'Could not register Alpine Shell as your desktop.'
@@ -349,8 +349,14 @@ async function runRevert(action, beforeAction = null) {
   }
 }
 
+const settingsWindowHandlers = guardHandlers({
+  'setup/revert-temporary': () => runRevert(() => installer.revertShellTemporarily()),
+  'setup/revert-permanent': () => runRevert(() => installer.revertShellPermanently()),
+  'setup/uninstall': () => runRevert(() => installer.uninstall(), releaseLicenceSeatBestEffort),
+}, [SETTINGS_WINDOW])
+
 module.exports = {
-  handlers: guardHandlers({
+  handlers: Object.assign(guardHandlers({
     'setup/status': () => getSetupStatus(),
     'setup/install': async (_event, options) => {
       const results = { shell: false, startup: false, cursor: false, gpoBlocked: false, error: licenceGateError() }
@@ -445,9 +451,6 @@ module.exports = {
       execSync('shutdown /r /t 5 /c "Restarting to apply Alpine Shell"', { windowsHide: true })
       electronApp().exit()
     },
-    'setup/revert-temporary': () => runRevert(() => installer.revertShellTemporarily()),
-    'setup/revert-permanent': () => runRevert(() => installer.revertShellPermanently()),
-    'setup/uninstall': () => runRevert(() => installer.uninstall(), releaseLicenceSeatBestEffort),
     'setup/set-shell': () => {
       const error = licenceGateError()
       if (error) return { success: false, error }
@@ -455,7 +458,7 @@ module.exports = {
       setStartup()
       return { success: isShellRegisteredToAlpine(), error: null }
     },
-  }),
+  }, [SETUP_WINDOW]), settingsWindowHandlers),
 
   isFirstRun,
   isDesktopClaimedByAlpine,

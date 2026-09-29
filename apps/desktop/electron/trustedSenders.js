@@ -1,6 +1,8 @@
 const { acceptsIpcSender } = require('./pageUrls')
 
 const UNTRUSTED_SENDER = 'untrusted-sender'
+const SETUP_WINDOW = 'setup'
+const SETTINGS_WINDOW = 'settings'
 
 let trustedWindowsAccessor = null
 let appLocation = null
@@ -15,21 +17,24 @@ function setTrustedWindowsAccessor(accessor) {
   trustedWindowsAccessor = typeof accessor === 'function' ? accessor : null
 }
 
-function liveTrustedWindows() {
-  if (!trustedWindowsAccessor) return []
+function isLiveWindow(win) {
+  try {
+    return Boolean(win) && !win.isDestroyed() && Boolean(win.webContents)
+  } catch {
+    return false
+  }
+}
+
+function liveTrustedWindows(windowNames) {
+  if (!trustedWindowsAccessor || !Array.isArray(windowNames)) return []
   let windows
   try {
     windows = trustedWindowsAccessor()
   } catch {
     return []
   }
-  return (Array.isArray(windows) ? windows : []).filter((win) => {
-    try {
-      return Boolean(win) && !win.isDestroyed() && Boolean(win.webContents)
-    } catch {
-      return false
-    }
-  })
+  if (!windows || typeof windows !== 'object') return []
+  return windowNames.map((name) => windows[name]).filter(isLiveWindow)
 }
 
 function senderIsMainFrame(event) {
@@ -40,11 +45,11 @@ function senderIsMainFrame(event) {
   return mainFrame === undefined ? true : frame === mainFrame
 }
 
-function isTrustedSender(event) {
+function isTrustedSender(event, windowNames) {
   const sender = event && event.sender
   if (!sender) return false
   if (!senderIsMainFrame(event)) return false
-  return liveTrustedWindows().some((win) => win.webContents === sender || (typeof sender.id === 'number' && win.webContents.id === sender.id))
+  return liveTrustedWindows(windowNames).some((win) => win.webContents === sender || (typeof sender.id === 'number' && win.webContents.id === sender.id))
 }
 
 function untrustedSenderError() {
@@ -53,9 +58,9 @@ function untrustedSenderError() {
   return error
 }
 
-function guardHandler(handler) {
+function guardHandler(handler, windowNames) {
   return (event, ...args) => {
-    if (!isTrustedSender(event)) throw untrustedSenderError()
+    if (!isTrustedSender(event, windowNames)) throw untrustedSenderError()
     return handler(event, ...args)
   }
 }
@@ -83,16 +88,18 @@ function guardShellSender(channel, handler) {
   }
 }
 
-function guardHandlers(handlers) {
+function guardHandlers(handlers, windowNames) {
   const guarded = {}
   for (const [channel, handler] of Object.entries(handlers)) {
-    guarded[channel] = guardHandler(handler)
+    guarded[channel] = guardHandler(handler, windowNames)
   }
   return guarded
 }
 
 module.exports = {
   UNTRUSTED_SENDER,
+  SETUP_WINDOW,
+  SETTINGS_WINDOW,
   setTrustedWindowsAccessor,
   setAppLocation,
   isTrustedSender,

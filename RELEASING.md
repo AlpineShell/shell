@@ -99,7 +99,7 @@ Repository secrets (Settings > Secrets and variables > Actions):
 - `ALPINE_LICENCE_PUBLIC_KEYS`: the licence verification keys baked into the build. The job fails
   without at least one.
 - `ALPINE_MARKETPLACE_PUBKEY`: the public half of `ALPINE_PLUGIN_SIGNING_KEY`, baked so the build
-  can verify plugin signatures. The job warns without it.
+  can verify plugin signatures. The job fails without it, because a release build refuses every plugin it cannot verify.
 - `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD`: optional, see Code Signing below.
 
 Repository variables:
@@ -182,21 +182,25 @@ computes its SHA-256, signs the digest with Ed25519, uploads the immutable bundl
 ### Required environment for plugin publishing
 
 - Storage credentials: the `STORAGE_*` variables; see `docs/STORAGE.md`.
-- `ALPINE_PLUGIN_SIGNING_KEY`: base64 of a PKCS8 PEM Ed25519 **private** key. If unset, the script
-  warns and publishes **unsigned**. Production bundles must be signed: the desktop only treats a
-  bundle as verified when its signature checks out against the marketplace key baked into the build.
+- `ALPINE_PLUGIN_SIGNING_KEY`: base64 of a PKCS8 PEM Ed25519 **private** key. The script refuses to
+  publish without it, because a release build refuses to install a bundle whose signature does not
+  verify.
 
 Generate the key pair once:
 
 ```sh
-node -e "const c=require('crypto');const{publicKey,privateKey}=c.generateKeyPairSync('ed25519');const b64=(pem)=>Buffer.from(pem).toString('base64');console.log('ALPINE_MARKETPLACE_PUBKEY='+b64(publicKey.export({type:'spki',format:'pem'})));console.log('ALPINE_PLUGIN_SIGNING_KEY='+b64(privateKey.export({type:'pkcs8',format:'pem'})))"
+node -e "const c=require('crypto');const{publicKey,privateKey}=c.generateKeyPairSync('ed25519');console.log('ALPINE_MARKETPLACE_PUBKEY='+Buffer.from(publicKey.export({type:'spki',format:'pem'})).toString('base64'));console.log('ALPINE_PLUGIN_SIGNING_KEY='+Buffer.from(privateKey.export({type:'pkcs8',format:'pem'})).toString('base64'))"
 ```
 
-Store `ALPINE_MARKETPLACE_PUBKEY` as the repository secret of that name: the release workflow bakes
-it into `electron/marketplacePublicKey.generated.js`, which the client verifies against (a PEM, an
-escaped one-line PEM or a base64 PEM all work). Store `ALPINE_PLUGIN_SIGNING_KEY` wherever you run
-`publish:plugin`. The public key baked into the app and the private key used to sign must always
-match, or every bundle will fail signature verification.
+Store `ALPINE_MARKETPLACE_PUBKEY` as a secret of this repository: the release workflow bakes it into
+`electron/marketplacePublicKey.generated.js` through `scripts/generateLicenceConfig.js`, and a release
+build refuses to install any bundle whose signature does not verify against it. Keep
+`ALPINE_PLUGIN_SIGNING_KEY` wherever plugins are published, and apart from the `STORAGE_*`
+credentials where you can. The public key baked into the app and the private key used to sign must
+always match, or every install from the store fails with "its signature could not be verified".
+
+The order matters when the key is new: re-publish every plugin in the catalog signed, check that each
+`plugins/<id>/latest.json` carries a `signature`, and only then release a build with the key baked.
 
 ## Storage: Railway/MinIO
 

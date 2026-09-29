@@ -6,7 +6,7 @@ import { createRequire } from 'module'
 const nodeRequire = createRequire(import.meta.url)
 
 const { createLicenceService, handlers: guardedDefaultHandlers, NO_LICENCE_RECHECK_MS } = await import('./licence.js')
-const { setTrustedWindowsAccessor, UNTRUSTED_SENDER } = nodeRequire('../trustedSenders.js')
+const { setTrustedWindowsAccessor, UNTRUSTED_SENDER, SETUP_WINDOW, SETTINGS_WINDOW } = nodeRequire('../trustedSenders.js')
 
 const NOW = Date.UTC(2026, 8, 18, 12, 0, 0)
 const MINUTE_MS = 60 * 1000
@@ -846,15 +846,18 @@ describe('the sender guard on the exported handlers', () => {
     setTrustedWindowsAccessor(null)
   })
 
-  it('refuses every licence channel to a window that is not the setup or settings window', () => {
+  it('answers every licence channel only from the setup window', () => {
     const desktopWindow = { webContents: { id: 7 }, isDestroyed: () => false }
     const settingsWindow = { webContents: { id: 8 }, isDestroyed: () => false }
-    setTrustedWindowsAccessor(() => [settingsWindow])
+    const setupWindow = { webContents: { id: 9 }, isDestroyed: () => false }
+    setTrustedWindowsAccessor(() => ({ [SETUP_WINDOW]: setupWindow, [SETTINGS_WINDOW]: settingsWindow }))
     const fromDesktop = { sender: desktopWindow.webContents }
     const fromSettings = { sender: settingsWindow.webContents }
+    const fromSetup = { sender: setupWindow.webContents }
     for (const channel of Object.keys(guardedDefaultHandlers)) {
       expect(() => guardedDefaultHandlers[channel](fromDesktop)).toThrow(UNTRUSTED_SENDER)
+      expect(() => guardedDefaultHandlers[channel](fromSettings)).toThrow(UNTRUSTED_SENDER)
     }
-    expect(guardedDefaultHandlers['licence/sign-in-state'](fromSettings)).toMatchObject({ phase: 'idle' })
+    expect(guardedDefaultHandlers['licence/sign-in-state'](fromSetup)).toMatchObject({ phase: 'idle' })
   })
 })

@@ -4,6 +4,7 @@ const path = require('path')
 const { getPluginsBase } = require('./marketplaceConfig')
 const { extractZip } = require('./pluginZip')
 const { verifyPackage } = require('./pluginSignature')
+const { loadLicenceConfig } = require('./licenceConfig')
 
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/
 const FETCH_TIMEOUT_MS = 20000
@@ -132,7 +133,79 @@ async function fetchInstallSource(id) {
   return null
 }
 
-async function install(payload, { pluginsDir, onChange } = {}) {
+const RENAME_ATTEMPTS = 5
+const RENAME_RETRY_MS = 200
+const RETRYABLE_FS_CODES = new Set(['EPERM', 'EBUSY', 'EACCES', 'ENOTEMPTY'])
+
+function signatureRequired() {
+  return loadLicenceConfig().isReleaseBuild === true
+}
+
+function runDirectly(_id, work) {
+  return work()
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function renameWithRetry(from, to) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      fs.renameSync(from, to)
+      return
+    } catch (e) {
+      if (attempt >= RENAME_ATTEMPTS || !RETRYABLE_FS_CODES.has(e && e.code)) throw e
+      await delay(RENAME_RETRY_MS)
+    }
+  }
+}
+
+function removeQuietly(dir) {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true })
+  } catch {
+    void 0
+  }
+}
+
+async function readCappedBody(res, maxBytes) {
+  const declared = Number(res.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > maxBytes) return null
+  if (!res.body) return Buffer.alloc(0)
+  const chunks = []
+  let total = 0
+  for await (const chunk of res.body) {
+    total += chunk.length
+    if (total > maxBytes) return null
+    chunks.push(Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks)
+}
+
+function removeBackupIfPluginInPlace(finalDir, backup) {
+  if (fs.existsSync(finalDir)) removeQuietly(backup)
+}
+
+async function swapIntoPlace(staging, finalDir, backup) {
+  removeBackupIfPluginInPlace(finalDir, backup)
+  let movedAside = false
+  if (fs.existsSync(finalDir)) {
+    await renameWithRetry(finalDir, backup)
+    movedAside = true
+  }
+  try {
+    await renameWithRetry(staging, finalDir)
+  } catch (e) {
+    if (movedAside) {
+      removeQuietly(finalDir)
+      await renameWithRetry(backup, finalDir).catch(() => undefined)
+    }
+    throw e
+  }
+}
+
+async function install(payload, { pluginsDir, onChange, withPluginStopped = runDirectly, requireSignature = signatureRequired() } = {}) {
   const id = payload && typeof payload === 'object' ? payload.id : payload
   if (typeof id !== 'string' || !SAFE_ID.test(id)) return { ok: false, error: 'invalid-id' }
   if (!pluginsDir) return { ok: false, error: 'no-plugins-dir' }
@@ -154,24 +227,25 @@ async function install(payload, { pluginsDir, onChange } = {}) {
   }
   if (!sha256 || !/^[0-9a-f]{64}$/.test(sha256)) return { ok: false, error: 'bad-digest' }
 
+  const sig = verifyPackage(sha256, signature)
+  const verified = sig.verified === true
+  if (!verified && requireSignature) return { ok: false, error: 'unverified', reason: sig.reason }
+
   let buf
   try {
     buf = await withTimeout(async (signal) => {
       const res = await fetch(`${base()}/${bundleRel.replace(/^\/+/, '')}`, { signal, redirect: 'follow' })
       if (!res.ok) throw new Error(`http-${res.status}`)
-      return Buffer.from(await res.arrayBuffer())
+      return readCappedBody(res, MAX_BUNDLE_BYTES)
     })
   } catch (e) {
     return { ok: false, error: 'download-failed', detail: String((e && e.message) || e) }
   }
+  if (buf === null) return { ok: false, error: 'too-large' }
   if (buf.length === 0) return { ok: false, error: 'empty-bundle' }
-  if (buf.length > MAX_BUNDLE_BYTES) return { ok: false, error: 'too-large' }
 
   const digest = crypto.createHash('sha256').update(buf).digest('hex')
   if (digest !== sha256) return { ok: false, error: 'digest-mismatch' }
-
-  const sig = verifyPackage(sha256, signature)
-  const verified = sig.verified === true
 
   fs.mkdirSync(pluginsDir, { recursive: true })
   const finalDir = path.join(pluginsDir, id)
@@ -192,47 +266,35 @@ async function install(payload, { pluginsDir, onChange } = {}) {
       return { ok: false, error: 'bad-manifest' }
     }
     if (manifest.id !== id) return { ok: false, error: 'id-mismatch' }
+    if (manifest.version !== version) return { ok: false, error: 'version-mismatch' }
 
-    // Swap in without ever leaving the existing install half-deleted: move the old
-    // copy aside atomically, put the new one in place, restore the old on failure.
-    fs.rmSync(backup, { recursive: true, force: true })
-    let movedAside = false
-    if (fs.existsSync(finalDir)) {
-      fs.renameSync(finalDir, backup)
-      movedAside = true
-    }
-    try {
-      fs.renameSync(staging, finalDir)
-    } catch (e) {
-      if (movedAside) {
-        try { fs.rmSync(finalDir, { recursive: true, force: true }) } catch { void 0 }
-        try { fs.renameSync(backup, finalDir) } catch { void 0 }
-      }
-      throw e
-    }
+    await withPluginStopped(id, () => swapIntoPlace(staging, finalDir, backup))
   } catch (e) {
     return { ok: false, error: 'install-failed', detail: String((e && e.message) || e) }
   } finally {
-    try { fs.rmSync(staging, { recursive: true, force: true }) } catch { void 0 }
-    try { fs.rmSync(backup, { recursive: true, force: true }) } catch { void 0 }
+    removeQuietly(staging)
+    removeBackupIfPluginInPlace(finalDir, backup)
   }
 
   if (typeof onChange === 'function') onChange()
   return { ok: true, id, version, verified, reason: sig.reason }
 }
 
-function uninstall(id, { pluginsDir, onChange } = {}) {
+async function uninstall(id, { pluginsDir, onChange, withPluginStopped = runDirectly } = {}) {
   if (typeof id !== 'string' || !SAFE_ID.test(id)) return { ok: false, error: 'invalid-id' }
   if (!pluginsDir) return { ok: false, error: 'no-plugins-dir' }
   const baseResolved = path.resolve(pluginsDir)
   const resolved = path.resolve(baseResolved, id)
   if (path.dirname(resolved) !== baseResolved) return { ok: false, error: 'unsafe-path' }
   if (!fs.existsSync(resolved)) return { ok: false, error: 'not-installed' }
+  const removing = path.join(baseResolved, `.removing-${id}-${process.pid}`)
   try {
-    fs.rmSync(resolved, { recursive: true, force: true })
+    removeQuietly(removing)
+    await withPluginStopped(id, () => renameWithRetry(resolved, removing))
   } catch (e) {
     return { ok: false, error: 'remove-failed', detail: String((e && e.message) || e) }
   }
+  removeQuietly(removing)
   if (typeof onChange === 'function') onChange()
   return { ok: true, id }
 }

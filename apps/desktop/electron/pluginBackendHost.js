@@ -7,11 +7,14 @@ const { launchCommand } = require('./shellLaunch')
 
 const RUNTIME_ENTRY = path.join(__dirname, 'pluginBackendRuntime.js')
 const COMMAND_TIMEOUT_MS = 30000
+const STOP_GRACE_MS = 1500
+const EXIT_WAIT_MS = 1500
 
 let broadcastFn = null
 let nextCallId = 1
 const running = new Map() // id -> { proc, channels: Set<string> }
 const lastByChannel = new Map() // channel -> last published data
+const heldForFileChange = new Set()
 
 function isEligible(record) {
   return record.enabled !== false && record.loadable === true && record.hasBackend === true
@@ -86,6 +89,7 @@ function startBackend(record) {
     type: 'init',
     id: record.id,
     dir: path.dirname(entry),
+    dataDir: plugins.ensurePluginDataDir(record.id),
     entry,
     settings: pluginSettings.getValues(record.id),
     launch: launchCommand({
@@ -142,19 +146,34 @@ function sendCommand(id, name, payload, options) {
 
 function stopBackend(id) {
   const state = running.get(id)
-  if (!state) return
+  if (!state) return Promise.resolve()
   running.delete(id)
   rejectPending(state, 'backend stopped')
   forgetChannels(state)
-  try {
-    state.proc.postMessage({ type: 'stop' })
-  } catch {}
   const proc = state.proc
-  setTimeout(() => {
+  const exited = new Promise((resolve) => proc.once('exit', resolve))
+  try {
+    proc.postMessage({ type: 'stop' })
+  } catch {}
+  const killTimer = setTimeout(() => {
     try {
       proc.kill()
     } catch {}
-  }, 1500)
+  }, STOP_GRACE_MS)
+  const givenUp = new Promise((resolve) => setTimeout(resolve, STOP_GRACE_MS + EXIT_WAIT_MS))
+  return Promise.race([exited, givenUp]).then(() => clearTimeout(killTimer))
+}
+
+async function withPluginStopped(id, work) {
+  heldForFileChange.add(id)
+  try {
+    pluginWindows.closeAll(id)
+    await stopBackend(id)
+    return await work()
+  } finally {
+    heldForFileChange.delete(id)
+    sync()
+  }
 }
 
 function sync() {
@@ -168,7 +187,7 @@ function sync() {
   const wanted = new Map()
   for (const record of records) if (isEligible(record)) wanted.set(record.id, record)
   for (const id of [...running.keys()]) if (!wanted.has(id)) stopBackend(id)
-  for (const [id, record] of wanted) if (!running.has(id)) startBackend(record)
+  for (const [id, record] of wanted) if (!running.has(id) && !heldForFileChange.has(id)) startBackend(record)
 }
 
 module.exports = {
@@ -189,6 +208,7 @@ module.exports = {
     pluginWindows.start()
     pluginSettings.onSettingsChanged(sendSettings)
     plugins.onPluginsChanged(sync)
+    plugins.setPluginStopper(withPluginStopped)
     sync()
   },
   sendCommand,

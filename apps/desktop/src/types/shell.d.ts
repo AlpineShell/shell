@@ -663,6 +663,7 @@ declare global {
     plugin: PluginRecord
     settingsRoute: string | null
     removing: boolean
+    failure: string | null
     onToggle: (plugin: PluginRecord) => void
     onUninstall: (plugin: PluginRecord) => void
     onNavigate: (path: string) => void
@@ -711,6 +712,15 @@ declare global {
     homepage: string | null
     repository: string | null
     screenshots: { src: string; caption?: string }[]
+  }
+
+  interface BrowsePluginCardProps {
+    plugin: MarketplacePlugin
+    installedVersion: string | null
+    installing: boolean
+    requested: boolean
+    failure: string | null
+    onInstall: (plugin: MarketplacePlugin) => void
   }
 
   interface MarketplaceIndex {

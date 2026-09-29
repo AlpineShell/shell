@@ -91,15 +91,21 @@ function sha256File(file) {
   return { hex: digest.toString('hex'), digest }
 }
 
-function signDigest(digestBuffer) {
+function readSigningKey() {
   const raw = process.env.ALPINE_PLUGIN_SIGNING_KEY
-  if (!raw) {
-    console.warn('ALPINE_PLUGIN_SIGNING_KEY not set — skipping Ed25519 signing (unsigned publish)')
-    return null
+  if (!raw) fail('ALPINE_PLUGIN_SIGNING_KEY is not set: a release build refuses unsigned bundles, so nothing was published')
+  let key
+  try {
+    key = crypto.createPrivateKey(Buffer.from(raw, 'base64').toString('utf8'))
+  } catch (error) {
+    return fail(`ALPINE_PLUGIN_SIGNING_KEY is not a base64 PKCS8 PEM private key: ${error.message}`)
   }
-  const pem = Buffer.from(raw, 'base64').toString('utf8')
-  const key = crypto.createPrivateKey(pem)
-  return crypto.sign(null, digestBuffer, key).toString('base64')
+  if (key.asymmetricKeyType !== 'ed25519') fail(`ALPINE_PLUGIN_SIGNING_KEY must be an Ed25519 key, got ${key.asymmetricKeyType}`)
+  return key
+}
+
+function signDigest(digestBuffer, signingKey) {
+  return crypto.sign(null, digestBuffer, signingKey).toString('base64')
 }
 
 async function putObject(client, bucket, key, body, contentType, cacheControl) {
@@ -152,6 +158,7 @@ async function publishPlugin(pluginDir) {
   }
   const manifest = readAndValidateManifest(resolved)
   const { id, version } = manifest
+  const signingKey = readSigningKey()
   const config = readStorageEnv()
   const client = createStorageClient(config)
 
@@ -159,7 +166,7 @@ async function publishPlugin(pluginDir) {
   try {
     const { hex, digest } = sha256File(bundlePath)
     const size = fs.statSync(bundlePath).size
-    const signature = signDigest(digest)
+    const signature = signDigest(digest, signingKey)
     const url = bundleKey(id, version)
     const publishedAt = new Date().toISOString()
 
@@ -250,7 +257,7 @@ async function publishPlugin(pluginDir) {
     }
     await updateCatalog(client, config.bucket, card)
 
-    console.log(`Published ${id}@${version} (${size} bytes${signature ? ', signed' : ', UNSIGNED'})`)
+    console.log(`Published ${id}@${version} (${size} bytes, signed)`)
   } finally {
     fs.rmSync(bundlePath, { force: true })
   }
