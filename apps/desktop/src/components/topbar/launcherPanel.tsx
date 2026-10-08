@@ -1562,12 +1562,12 @@ function LauncherWifi({ darkText, onBack }: { darkText: boolean; onBack: () => v
   })
 
   return (
-    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto min-h-0">
+    <div ref={listRef} className={`flex flex-col p-1.5 gap-0.5 max-h-[min(260px,60vh)] overflow-y-auto min-h-0 snap-y snap-proximity cc-scroll ${darkText ? "cc-scroll-light" : ""}`}>
       <button
         data-idx={0}
         onMouseMove={() => setSelected(0)}
         onClick={toggleRadio}
-        className={`flex shrink-0 items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${selected === 0 ? selectedBg : ""}`}
+        className={`flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${selected === 0 ? selectedBg : ""}`}
       >
         <Wifi size={18} className={`w-7 shrink-0 ${dimText}`} />
         <span className={`flex-1 text-[13px] ${textColor}`}>Wi-Fi</span>
@@ -1589,7 +1589,7 @@ function LauncherWifi({ darkText, onBack }: { darkText: boolean; onBack: () => v
                 data-idx={idx}
                 onMouseMove={() => setSelected(idx)}
                 onClick={() => activateNetwork(network)}
-                className={`w-full flex shrink-0 items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${idx === selected ? selectedBg : ""}`}
+                className={`w-full flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${idx === selected ? selectedBg : ""}`}
               >
                 <span className="w-7 shrink-0 flex justify-center">
                   <WifiSignalIcon signal={network.signal} color={network.connected ? iconColor : iconDim} size={16} />
@@ -1678,7 +1678,7 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
   })
 
   return (
-    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto min-h-0">
+    <div ref={listRef} className={`flex flex-col p-1.5 gap-0.5 max-h-[min(260px,60vh)] overflow-y-auto min-h-0 snap-y snap-proximity cc-scroll ${darkText ? "cc-scroll-light" : ""}`}>
       <button
         type="button"
         role="switch"
@@ -1688,7 +1688,7 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
         data-idx={0}
         onMouseMove={() => setSelection({ id: BLUETOOTH_RADIO_ROW, index: 0 })}
         onClick={toggleRadio}
-        className={`flex shrink-0 items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${current.id === BLUETOOTH_RADIO_ROW ? selectedBg : ""}`}
+        className={`flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${current.id === BLUETOOTH_RADIO_ROW ? selectedBg : ""}`}
       >
         <Bluetooth size={18} className={`w-7 shrink-0 ${dimText}`} />
         <span className={`flex-1 text-[13px] ${textColor}`}>Bluetooth</span>
@@ -1715,7 +1715,7 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
               aria-disabled={!actionable}
               onMouseMove={() => setSelection({ id: device.id, index })}
               onClick={() => activate(device.id)}
-              className={`w-full flex shrink-0 items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${actionable ? "cursor-pointer" : "cursor-default"} ${current.id === device.id ? selectedBg : ""}`}
+              className={`w-full flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${actionable ? "cursor-pointer" : "cursor-default"} ${current.id === device.id ? selectedBg : ""}`}
             >
               <span className="w-7 shrink-0 flex justify-center">
                 {busy ? <Loader2 size={15} className={`animate-spin ${dimText}`} /> : device.connected ? <BluetoothConnected color={iconColor} size={15} /> : <Bluetooth color={iconDim} size={15} />}
@@ -1797,13 +1797,13 @@ function LauncherMenu({ items, darkText, onBack, onSelectionChange, emptyText }:
   })
 
   return (
-    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto min-h-0">
+    <div ref={listRef} className={`flex flex-col p-1.5 gap-0.5 max-h-[min(260px,60vh)] overflow-y-auto min-h-0 snap-y snap-proximity cc-scroll ${darkText ? "cc-scroll-light" : ""}`}>
       {items.length === 0 && emptyText ? (
         <div className={`px-2.5 py-4 text-[13px] shrink-0 ${dimText}`}>{emptyText}</div>
       ) : items.map((item, idx) => {
         const Icon = item.icon
         const isSel = idx === selected
-        const rowClass = `flex shrink-0 items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${isSel ? selectedBg : ""}`
+        const rowClass = `flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${isSel ? selectedBg : ""}`
         const iconEl = (
           <span className="w-7 shrink-0 flex justify-center">
             {item.iconSrc ? <img src={item.iconSrc} alt="" className="w-[18px] h-[18px] object-contain" draggable={false} /> : Icon ? <Icon size={18} className={dimText} /> : null}
