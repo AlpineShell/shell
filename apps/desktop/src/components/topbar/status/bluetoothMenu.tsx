@@ -52,7 +52,7 @@ function DeviceRow({ device, onToggle, darkText }: { device: BluetoothDevice; on
             onClick={onToggle}
             disabled={!actionable}
             aria-label={deviceActionLabel(device)}
-            className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition-colors ${actionable ? `cursor-pointer ${darkText ? "hover:bg-black/5" : "hover:bg-white/10"}` : "cursor-default"}`}
+            className={`w-full shrink-0 flex items-center justify-between px-2 py-1.5 rounded-md text-left transition-colors ${actionable ? `cursor-pointer ${darkText ? "hover:bg-black/5" : "hover:bg-white/10"}` : "cursor-default"}`}
         >
             <div className={`flex items-center gap-2.5 min-w-0 ${darkText ? "text-black" : "text-white"}`}>
                 <div className="relative w-3.75 h-3.75 shrink-0">
@@ -132,7 +132,7 @@ export default function BluetoothMenu({ onBack, darkText }: BluetoothMenuProps) 
                     <span className="text-sm">{notice}</span>
                 </div>
             ) : (
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-col gap-0.5 overflow-y-auto min-h-0 max-h-[50vh]">
                     {state.devices.map((device) => (
                         <DeviceRow
                             key={device.id}
