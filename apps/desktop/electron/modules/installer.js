@@ -260,6 +260,17 @@ function isRevertHelperRunning(helper) {
   return Boolean(helper && helper.running)
 }
 
+function restoreExplorerWhenAlpineExits() {
+  try {
+    const helper = revertScript.buildRestoreExplorerOnExitScript({ processId: process.pid })
+    const scriptPath = writeRevertHelper('alpine_restore_explorer.ps1', helper.script)
+    return launchRevertHelper(scriptPath, helper.env)
+  } catch (e) {
+    console.error('[installer] Could not start the helper that brings Explorer back:', e.message)
+    return null
+  }
+}
+
 function getProcessImageName() {
   return path.basename(process.execPath)
 }
@@ -617,6 +628,7 @@ module.exports = {
   autostartRanThisLogon,
   recordAutostartLogon,
   isRevertHelperRunning,
+  restoreExplorerWhenAlpineExits,
   relaunchFromInstalled,
   startBrandedUpdate,
   ensureUpdaterExe,

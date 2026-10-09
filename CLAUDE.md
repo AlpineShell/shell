@@ -72,6 +72,7 @@ Desktop-only iteration: `bun --filter alpine-shell dev` (Vite server only), `bun
 - **Volume control**: Uses a persistent PowerShell process (`volume.js`) that compiles a C# COM interop class once, then sends instant commands. This avoids 200ms+ startup per PowerShell invocation.
 - **Brightness**: External monitors use DDC/CI via dxva2.dll (koffi FFI). Internal displays use WMI. Both are probed at startup.
 - **AppBar**: Reserves screen work area via `SystemParametersInfoW(SPI_SETWORKAREA)` so maximized windows don't overlap the topbar.
+- **Test out**: The setup window's test-out is the one place Alpine ends Explorer (`setup.retireExplorerForTestOut`). It first starts a hidden helper (`revertScript.buildRestoreExplorerOnExitScript`) that waits for this Alpine process to exit and starts Explorer unless a shell window is back within ten seconds, then posts `WM_USER + 436` (the taskbar's "Exit Explorer") to Explorer's `Shell_TrayWnd`, waits for that process to end and only then starts shell mode, so `SetShellWindow` succeeds and tray icons re-register with Alpine. Nothing is written to the registry, so the next sign-in is Explorer again. Never force-kill Explorer instead: Winlogon respawns a shell it started when that shell is killed.
 
 ## Adding a New System Module
 

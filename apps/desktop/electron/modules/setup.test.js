@@ -39,12 +39,14 @@ const installerMock = {
   isUpdateHandoffActive: () => false,
   isInstalled: () => true,
   getInstalledVersion: () => '1.0.0',
-  isRevertHelperRunning: () => false,
+  isRevertHelperRunning: vi.fn(() => false),
+  restoreExplorerWhenAlpineExits: vi.fn(() => ({ pid: 1, running: true })),
   uninstall: vi.fn(() => ({ success: false, error: 'uninstall stubbed', leftBehind: [] })),
 }
 
 const explorerShellMock = {
   shellHostedByExplorer: vi.fn(() => true),
+  exitExplorerShell: vi.fn(() => []),
 }
 
 function registryKey(keyPath, valueName) {
@@ -99,6 +101,12 @@ beforeEach(() => {
   installerMock.shellHandoffFromThisLogon.mockImplementation(() => false)
   explorerShellMock.shellHostedByExplorer.mockReset()
   explorerShellMock.shellHostedByExplorer.mockImplementation(() => true)
+  explorerShellMock.exitExplorerShell.mockReset()
+  explorerShellMock.exitExplorerShell.mockImplementation(() => [])
+  installerMock.isRevertHelperRunning.mockReset()
+  installerMock.isRevertHelperRunning.mockImplementation(() => false)
+  installerMock.restoreExplorerWhenAlpineExits.mockReset()
+  installerMock.restoreExplorerWhenAlpineExits.mockImplementation(() => ({ pid: 1, running: true }))
   electronApp.isPackaged = false
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-setup-'))
   setTrustedWindowsAccessor(() => ({ [SETUP_WINDOW]: trustedWindow, [SETTINGS_WINDOW]: settingsWindow }))
@@ -408,5 +416,121 @@ describe('whether Alpine has claimed the desktop', () => {
     expect(setup.isDesktopClaimedByAlpine()).toBe(false)
     registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
     expect(setup.isDesktopClaimedByAlpine()).toBe(false)
+  })
+})
+
+describe('retiring Explorer for a test-out', () => {
+  const EXPLORER_PROCESS_ID = 3141
+  const runningProcessIds = new Set()
+  const spies = []
+
+  function freshSetup() {
+    delete nodeRequire.cache[nodeRequire.resolve('./setup.js')]
+    return nodeRequire('./setup.js')
+  }
+
+  function noSuchProcess() {
+    const error = new Error('kill ESRCH')
+    error.code = 'ESRCH'
+    return error
+  }
+
+  function explorerExitsWhenAsked() {
+    explorerShellMock.exitExplorerShell.mockImplementation(() => {
+      runningProcessIds.delete(EXPLORER_PROCESS_ID)
+      return [EXPLORER_PROCESS_ID]
+    })
+  }
+
+  async function settle(promise) {
+    await vi.advanceTimersByTimeAsync(15000)
+    return promise
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    runningProcessIds.clear()
+    runningProcessIds.add(EXPLORER_PROCESS_ID)
+    spies.push(vi.spyOn(process, 'kill').mockImplementation((processId) => {
+      if (!runningProcessIds.has(processId)) throw noSuchProcess()
+      return true
+    }))
+    spies.push(vi.spyOn(console, 'error').mockImplementation(() => {}))
+    installerMock.isRevertHelperRunning.mockImplementation((helper) => Boolean(helper && helper.running))
+  })
+
+  afterEach(() => {
+    spies.splice(0).forEach((spy) => spy.mockRestore())
+    vi.useRealTimers()
+  })
+
+  it('leaves Explorer alone when it does not hold the desktop', async () => {
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => false)
+    await expect(settle(freshSetup().retireExplorerForTestOut())).resolves.toBe(false)
+    expect(installerMock.restoreExplorerWhenAlpineExits).not.toHaveBeenCalled()
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+  })
+
+  it('leaves Explorer alone when it cannot tell who holds the desktop', async () => {
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => null)
+    await expect(settle(freshSetup().retireExplorerForTestOut())).resolves.toBe(false)
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+  })
+
+  it('keeps Explorer running when the helper that brings it back did not start', async () => {
+    installerMock.restoreExplorerWhenAlpineExits.mockImplementation(() => null)
+    await expect(settle(freshSetup().retireExplorerForTestOut())).resolves.toBe(false)
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+  })
+
+  it('keeps Explorer running when that helper died before Explorer was asked to leave', async () => {
+    const helper = { pid: 1, running: true }
+    installerMock.restoreExplorerWhenAlpineExits.mockImplementation(() => helper)
+    const retirement = freshSetup().retireExplorerForTestOut()
+    helper.running = false
+    await expect(settle(retirement)).resolves.toBe(false)
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+  })
+
+  it('starts the helper first, then asks Explorer to exit, and resolves once Explorer is gone', async () => {
+    explorerExitsWhenAsked()
+    await expect(settle(freshSetup().retireExplorerForTestOut())).resolves.toBe(true)
+    expect(installerMock.restoreExplorerWhenAlpineExits.mock.invocationCallOrder[0])
+      .toBeLessThan(explorerShellMock.exitExplorerShell.mock.invocationCallOrder[0])
+  })
+
+  it('waits for the Explorer process itself to end, not just for the request to be sent', async () => {
+    explorerShellMock.exitExplorerShell.mockImplementation(() => [EXPLORER_PROCESS_ID])
+    let resolved = false
+    const retirement = freshSetup().retireExplorerForTestOut().then((value) => { resolved = true; return value })
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(resolved).toBe(false)
+    runningProcessIds.delete(EXPLORER_PROCESS_ID)
+    await expect(settle(retirement)).resolves.toBe(true)
+  })
+
+  it('gives up and reports Explorer still there when it does not exit in time', async () => {
+    explorerShellMock.exitExplorerShell.mockImplementation(() => [EXPLORER_PROCESS_ID])
+    await expect(settle(freshSetup().retireExplorerForTestOut())).resolves.toBe(false)
+  })
+
+  it('reports nothing retired instead of failing the test-out when Explorer cannot be asked to leave', async () => {
+    explorerShellMock.exitExplorerShell.mockImplementation(() => { throw new Error('user32 unavailable') })
+    await expect(settle(freshSetup().retireExplorerForTestOut())).resolves.toBe(false)
+  })
+
+  it('reports nothing retired when no Explorer window took the request', async () => {
+    await expect(settle(freshSetup().retireExplorerForTestOut())).resolves.toBe(false)
+  })
+
+  it('retires Explorer once even when test-out is asked for twice', async () => {
+    explorerExitsWhenAsked()
+    const setupModule = freshSetup()
+    const first = setupModule.retireExplorerForTestOut()
+    const second = setupModule.retireExplorerForTestOut()
+    expect(second).toBe(first)
+    await settle(first)
+    expect(installerMock.restoreExplorerWhenAlpineExits).toHaveBeenCalledTimes(1)
+    expect(explorerShellMock.exitExplorerShell).toHaveBeenCalledTimes(1)
   })
 })

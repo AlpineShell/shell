@@ -1001,15 +1001,18 @@ async function startApp() {
   if (altTab && altTab.setOverlayDisplayProvider) altTab.setOverlayDisplayProvider(() => launcher.getActiveDisplayId())
   if (altTab && altTab.activeDisplay) launcher.setDisplayProvider(() => altTab.activeDisplay())
 
-  ipc.handle('setup/test-out', trustedSenders.guardHandler(() => {
+  ipc.handle('setup/test-out', trustedSenders.guardHandler(async () => {
     try {
       licence.requireValid()
     } catch (e) {
       if (e && e.code === 'licence-required') return { error: 'licence-required' }
       throw e
     }
+    const explorerRetired = await setup.retireExplorerForTestOut()
+    if (!setupWin) return { error: null }
     closeSetupWindow()
     startShellMode()
+    if (explorerRetired && trayHost) trayHost.announceTaskbar()
     return { error: null }
   }, [trustedSenders.SETUP_WINDOW]))
 

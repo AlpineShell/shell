@@ -14,6 +14,8 @@ const LICENCE_REQUIRED = 'licence-required'
 const SHELL_REGISTRATION_FAILED = 'Could not register Alpine Shell as your desktop.'
 const CURSOR_VARIANT = 'Bibata-Modern-Ice'
 const REVERT_QUIT_DELAY_MS = 1200
+const EXPLORER_EXIT_TIMEOUT_MS = 10000
+const EXPLORER_EXIT_POLL_MS = 200
 const REVERT_BLOCKED_MESSAGES = {
   [shellExclusivity.REVERT_BLOCKED_IN_DEVELOPMENT]: 'Unavailable in development.',
   [shellExclusivity.REVERT_BLOCKED_BY_UPDATE]: 'An update is in progress. Try again once it has finished.',
@@ -301,6 +303,50 @@ function confirmHandoffStillRunning(handoff) {
   })
 }
 
+function isProcessRunning(processId) {
+  try {
+    process.kill(processId, 0)
+    return true
+  } catch (e) {
+    return e.code === 'EPERM'
+  }
+}
+
+async function waitForProcessesToExit(processIds, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  while (processIds.some(isProcessRunning)) {
+    if (Date.now() >= deadline) return false
+    await new Promise(r => setTimeout(r, EXPLORER_EXIT_POLL_MS))
+  }
+  return true
+}
+
+async function retireExplorer() {
+  if (explorerShell.shellHostedByExplorer() !== true) return false
+  const restorer = installer.restoreExplorerWhenAlpineExits()
+  if (!await confirmHandoffStillRunning(restorer)) {
+    console.error('[setup] The helper that brings Explorer back is not running, so Explorer stays on screen during the test')
+    return false
+  }
+  const explorerProcessIds = explorerShell.exitExplorerShell()
+  if (explorerProcessIds.length === 0) return false
+  if (await waitForProcessesToExit(explorerProcessIds, EXPLORER_EXIT_TIMEOUT_MS)) return true
+  console.error('[setup] Explorer did not exit in time, so Alpine Shell starts beside it')
+  return false
+}
+
+let explorerRetirement = null
+
+function retireExplorerForTestOut() {
+  if (!explorerRetirement) {
+    explorerRetirement = retireExplorer().catch((e) => {
+      console.error('[setup] Could not retire Explorer, so Alpine Shell starts beside it:', e.message)
+      return false
+    })
+  }
+  return explorerRetirement
+}
+
 function exitShellAfterReply() {
   setTimeout(exitShell, 0)
 }
@@ -465,6 +511,7 @@ module.exports = {
   isAutostartLaunch,
   shouldLeaveShellToExplorer,
   takeOverFromExplorer,
+  retireExplorerForTestOut,
   setShellShutdown,
 
   start(b) {

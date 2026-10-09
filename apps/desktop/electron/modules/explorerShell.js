@@ -3,6 +3,8 @@ const windowEnum = require('./windowEnum')
 const SHELL_TRAY_CLASS = 'Shell_TrayWnd'
 const EXPLORER_PROCESS_NAME = 'explorer'
 const MAX_SHELL_TRAY_WINDOWS = 32
+const WM_USER = 0x0400
+const EXIT_EXPLORER_MESSAGE = WM_USER + 436
 
 let bindings = null
 
@@ -12,6 +14,7 @@ function loadBindings() {
   const user32 = koffi.load('user32.dll')
   bindings = {
     FindWindowExW: user32.func('__stdcall', 'FindWindowExW', 'uintptr_t', ['uintptr_t', 'uintptr_t', 'str16', 'str16']),
+    PostMessageW: user32.func('__stdcall', 'PostMessageW', 'int', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t']),
   }
   return bindings
 }
@@ -58,4 +61,19 @@ function shellHostedByExplorer() {
   return windows === null ? null : windows.length > 0
 }
 
-module.exports = { shellHostedByExplorer }
+function askExplorerToExit(hwnd) {
+  const { PostMessageW } = loadBindings()
+  return PostMessageW(hwnd, EXIT_EXPLORER_MESSAGE, 0, 0) !== 0
+}
+
+function exitExplorerShell() {
+  const windows = probeHostedShellWindows() || []
+  const processIds = new Set()
+  for (const hwnd of windows) {
+    const processId = windowEnum.windowProcessId(hwnd)
+    if (processId && askExplorerToExit(hwnd)) processIds.add(processId)
+  }
+  return [...processIds]
+}
+
+module.exports = { shellHostedByExplorer, exitExplorerShell }

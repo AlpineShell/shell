@@ -333,6 +333,15 @@ function broadcastTaskbarCreated() {
   if (msg) SendMessageTimeoutW(HWND_BROADCAST, msg, 0, 0, SMTO_ABORTIFHUNG, 1000, null)
 }
 
+function announceTaskbar() {
+  if (!toNum(trayHwnd)) return
+  try {
+    broadcastTaskbarCreated()
+  } catch (e) {
+    console.error('[trayHost] announce error:', e.message)
+  }
+}
+
 function reapDeadOwners() {
   let changed = false
   for (const [id, r] of icons) {
@@ -352,6 +361,8 @@ module.exports = {
       forwardClick(id, button === 'right' ? 'right' : 'left', x | 0, y | 0)
     },
   },
+
+  announceTaskbar,
 
   start(broadcast) {
     broadcastRef = broadcast
