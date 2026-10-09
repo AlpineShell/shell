@@ -296,7 +296,7 @@ describe('buildUninstallScript', () => {
 })
 
 describe('buildRestoreExplorerOnExitScript', () => {
-  const { script, env, skippedDirs } = buildRestoreExplorerOnExitScript({ processId: 4242 })
+  const { script, env, skippedDirs } = buildRestoreExplorerOnExitScript({ processId: 4242, shellGraceSeconds: 10 })
 
   it('watches the one Alpine process that retired Explorer, passed through the environment', () => {
     expect(env).toEqual({ ALPINE_REVERT_PROCESS_ID: '4242' })
@@ -320,6 +320,13 @@ describe('buildRestoreExplorerOnExitScript', () => {
   it('treats a desktop it cannot inspect as one without a shell, so Explorer still comes back', () => {
     expect(script).toContain('$canSeeDesktopShell = $false')
     expect(script).toContain('function Test-DesktopShell { $canSeeDesktopShell -and ([AlpineShell.DesktopShell]::GetShellWindow() -ne [IntPtr]::Zero) }')
+  })
+
+  it('checks once and starts Explorer straight away when there is no grace period', () => {
+    const immediate = buildRestoreExplorerOnExitScript({ processId: 4242, shellGraceSeconds: 0 }).script
+    expect(immediate).not.toContain('$graceTicks')
+    const afterExit = immediate.slice(immediate.indexOf('WaitForExit()'))
+    expect(afterExit.indexOf('if (-not (Test-DesktopShell)) {')).toBeLessThan(afterExit.indexOf(START_EXPLORER))
   })
 
   it('starts Explorer outside the install directory', () => {

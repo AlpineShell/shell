@@ -6,6 +6,8 @@ const {
   EXIT_ALPINE,
   REVERT_BLOCKED_IN_DEVELOPMENT,
   REVERT_BLOCKED_BY_UPDATE,
+  REVERT_BLOCKED_IN_TEST_SESSION,
+  REVERT_BLOCKED_WITHOUT_TEST_SESSION,
   planShellActivation,
   requiresShellRegistration,
   isRegistrationSatisfied,
@@ -189,6 +191,23 @@ describe('revertBlockedReason', () => {
 
   it('blocks a revert while an update owns the shell registration', () => {
     expect(revertBlockedReason({ packaged: true, updatePending: true })).toBe(REVERT_BLOCKED_BY_UPDATE)
+  })
+
+  it('blocks the install reverts during a test-out, which never registered Alpine Shell', () => {
+    expect(revertBlockedReason({ packaged: true, updatePending: false, testSession: true })).toBe(REVERT_BLOCKED_IN_TEST_SESSION)
+  })
+
+  it('lets a test-out end itself', () => {
+    expect(revertBlockedReason({ packaged: true, updatePending: false, testSession: true, endsTestSession: true })).toBe(null)
+  })
+
+  it('refuses to end a test-out that is not running', () => {
+    expect(revertBlockedReason({ packaged: true, updatePending: false, endsTestSession: true })).toBe(REVERT_BLOCKED_WITHOUT_TEST_SESSION)
+  })
+
+  it('still blocks ending a test-out in development and during an update', () => {
+    expect(revertBlockedReason({ packaged: false, updatePending: false, testSession: true, endsTestSession: true })).toBe(REVERT_BLOCKED_IN_DEVELOPMENT)
+    expect(revertBlockedReason({ packaged: true, updatePending: true, testSession: true, endsTestSession: true })).toBe(REVERT_BLOCKED_BY_UPDATE)
   })
 })
 

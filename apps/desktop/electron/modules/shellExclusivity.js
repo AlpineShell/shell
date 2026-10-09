@@ -3,6 +3,8 @@ const EXIT_ALPINE = 'exit-alpine'
 
 const REVERT_BLOCKED_IN_DEVELOPMENT = 'development'
 const REVERT_BLOCKED_BY_UPDATE = 'update-in-progress'
+const REVERT_BLOCKED_IN_TEST_SESSION = 'test-session'
+const REVERT_BLOCKED_WITHOUT_TEST_SESSION = 'no-test-session'
 
 function idlePlan(shellRegisteredToAlpine) {
   return { steps: [], actingAsShell: Boolean(shellRegisteredToAlpine) }
@@ -38,9 +40,11 @@ function isRegistrationSatisfied(plan, registrationVerified) {
   return !requiresShellRegistration(plan) || Boolean(registrationVerified)
 }
 
-function revertBlockedReason({ packaged, updatePending }) {
+function revertBlockedReason({ packaged, updatePending, testSession = false, endsTestSession = false }) {
   if (!packaged) return REVERT_BLOCKED_IN_DEVELOPMENT
   if (updatePending) return REVERT_BLOCKED_BY_UPDATE
+  if (testSession && !endsTestSession) return REVERT_BLOCKED_IN_TEST_SESSION
+  if (!testSession && endsTestSession) return REVERT_BLOCKED_WITHOUT_TEST_SESSION
   return null
 }
 
@@ -92,6 +96,8 @@ module.exports = {
   EXIT_ALPINE,
   REVERT_BLOCKED_IN_DEVELOPMENT,
   REVERT_BLOCKED_BY_UPDATE,
+  REVERT_BLOCKED_IN_TEST_SESSION,
+  REVERT_BLOCKED_WITHOUT_TEST_SESSION,
   planShellActivation,
   requiresShellRegistration,
   isRegistrationSatisfied,

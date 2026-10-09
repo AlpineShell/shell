@@ -1008,7 +1008,7 @@ async function startApp() {
       if (e && e.code === 'licence-required') return { error: 'licence-required' }
       throw e
     }
-    const explorerRetired = await setup.retireExplorerForTestOut()
+    const explorerRetired = await setup.beginTestSession()
     if (!setupWin) return { error: null }
     closeSetupWindow()
     startShellMode()

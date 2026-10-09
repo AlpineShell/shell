@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { ConfirmButton, PageTitle, Row } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
+import { useTestSession } from '../../hooks/useTestSession'
 
-type RevertAction = 'temporary' | 'permanent' | 'delete'
+type RevertAction = 'temporary' | 'permanent' | 'delete' | 'endTest'
 
 type ActionState =
   | { phase: 'idle' }
@@ -49,6 +50,15 @@ const ACTIONS: RevertActionSpec[] = [
   },
 ]
 
+const END_TEST_ACTION: RevertActionSpec = {
+  id: 'endTest',
+  label: 'Return to Windows',
+  description: 'End the test and go back to Windows Explorer.',
+  actionLabel: 'Return',
+  confirmLabel: 'Return to Windows',
+  run: () => window.setup.endTestSession(),
+}
+
 const DONE_COPY: Record<RevertAction, { title: string; detail: string }> = {
   temporary: {
     title: 'Switching to Windows Explorer…',
@@ -62,6 +72,10 @@ const DONE_COPY: Record<RevertAction, { title: string; detail: string }> = {
     title: 'Removing Alpine Shell…',
     detail: 'Alpine Shell is closing and will finish uninstalling in the background.',
   },
+  endTest: {
+    title: 'Switching to Windows Explorer…',
+    detail: 'Alpine Shell is closing.',
+  },
 }
 
 const GPO_WARNING = 'Your organisation’s policy controls the Windows shell, so this may not take effect at sign-in.'
@@ -69,7 +83,9 @@ const LEFT_BEHIND_WARNING = 'These folders could not be removed automatically an
 
 export default function SystemRevertPage() {
   const [state, setState] = useState<ActionState>({ phase: 'idle' })
+  const testSession = useTestSession()
   const isDev = import.meta.env.DEV
+  const actions = testSession ? [END_TEST_ACTION] : ACTIONS
 
   async function runAction(spec: RevertActionSpec) {
     setState({ phase: 'running', action: spec.id })
@@ -103,9 +119,9 @@ export default function SystemRevertPage() {
         </div>
       )}
 
-      {state.phase !== 'done' && (
+      {state.phase !== 'done' && testSession !== null && (
         <div className="flex flex-col gap-4">
-          {ACTIONS.map((spec) => (
+          {actions.map((spec) => (
             <RevertRow
               key={spec.id}
               label={spec.label}

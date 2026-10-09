@@ -16,9 +16,12 @@ const CURSOR_VARIANT = 'Bibata-Modern-Ice'
 const REVERT_QUIT_DELAY_MS = 1200
 const EXPLORER_EXIT_TIMEOUT_MS = 10000
 const EXPLORER_EXIT_POLL_MS = 200
+const TEST_SESSION_HAND_BACK_FAILED = 'Windows Explorer could not be brought back, so Alpine Shell stays open.'
 const REVERT_BLOCKED_MESSAGES = {
   [shellExclusivity.REVERT_BLOCKED_IN_DEVELOPMENT]: 'Unavailable in development.',
   [shellExclusivity.REVERT_BLOCKED_BY_UPDATE]: 'An update is in progress. Try again once it has finished.',
+  [shellExclusivity.REVERT_BLOCKED_IN_TEST_SESSION]: 'Alpine Shell is only being tested. Use Return to Windows instead.',
+  [shellExclusivity.REVERT_BLOCKED_WITHOUT_TEST_SESSION]: 'There is no test to end.',
 }
 const XAML_START_MENU_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced'
 const RUN_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'
@@ -335,16 +338,27 @@ async function retireExplorer() {
   return false
 }
 
-let explorerRetirement = null
+let testSessionExplorerRetirement = null
 
-function retireExplorerForTestOut() {
-  if (!explorerRetirement) {
-    explorerRetirement = retireExplorer().catch((e) => {
+function beginTestSession() {
+  if (!testSessionExplorerRetirement) {
+    testSessionExplorerRetirement = retireExplorer().catch((e) => {
       console.error('[setup] Could not retire Explorer, so Alpine Shell starts beside it:', e.message)
       return false
     })
   }
-  return explorerRetirement
+  return testSessionExplorerRetirement
+}
+
+function isTestSession() {
+  return testSessionExplorerRetirement !== null
+}
+
+function handBackFromTestSession() {
+  const reportHandBackFailed = () => ({ success: false, error: TEST_SESSION_HAND_BACK_FAILED })
+  const handoff = installer.startExplorerWhenAlpineExits()
+  if (!handoff) return reportHandBackFailed()
+  return { success: true, error: null, handoff, abandonHandoff: reportHandBackFailed }
 }
 
 function exitShellAfterReply() {
@@ -369,10 +383,12 @@ async function releaseLicenceSeatBestEffort() {
   }
 }
 
-async function runRevert(action, beforeAction = null) {
+async function runRevert(action, { beforeAction = null, endsTestSession = false } = {}) {
   const blockedReason = shellExclusivity.revertBlockedReason({
     packaged: electronApp().isPackaged,
     updatePending: updater.isUpdatePending() || installer.isUpdateHandoffActive(),
+    testSession: isTestSession(),
+    endsTestSession,
   })
   if (blockedReason) return { success: false, gpoBlocked: false, error: REVERT_BLOCKED_MESSAGES[blockedReason], leftBehind: [] }
 
@@ -396,9 +412,11 @@ async function runRevert(action, beforeAction = null) {
 }
 
 const settingsWindowHandlers = guardHandlers({
+  'setup/test-session': () => isTestSession(),
+  'setup/end-test-session': () => runRevert(handBackFromTestSession, { endsTestSession: true }),
   'setup/revert-temporary': () => runRevert(() => installer.revertShellTemporarily()),
   'setup/revert-permanent': () => runRevert(() => installer.revertShellPermanently()),
-  'setup/uninstall': () => runRevert(() => installer.uninstall(), releaseLicenceSeatBestEffort),
+  'setup/uninstall': () => runRevert(() => installer.uninstall(), { beforeAction: releaseLicenceSeatBestEffort }),
 }, [SETTINGS_WINDOW])
 
 module.exports = {
@@ -511,7 +529,7 @@ module.exports = {
   isAutostartLaunch,
   shouldLeaveShellToExplorer,
   takeOverFromExplorer,
-  retireExplorerForTestOut,
+  beginTestSession,
   setShellShutdown,
 
   start(b) {

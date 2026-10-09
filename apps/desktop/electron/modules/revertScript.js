@@ -4,7 +4,6 @@ const MIN_PATH_COMPONENTS_BELOW_ROOT = 3
 const PROCESS_EXIT_SETTLE_SECONDS = 2
 const EXPLORER_START_SETTLE_SECONDS = 3
 const DIRECTORY_RETRY_SECONDS = 2
-const DESKTOP_SHELL_GRACE_TICKS = 10
 
 const IMAGE_VAR = 'ALPINE_REVERT_IMAGE'
 const PROCESS_ID_VAR = 'ALPINE_REVERT_PROCESS_ID'
@@ -151,25 +150,32 @@ function buildWaitForProcessIdExit() {
   ]
 }
 
-function buildStartExplorerUnlessDesktopShellReturns() {
+function buildWaitForDesktopShell(graceSeconds) {
+  if (graceSeconds <= 0) return []
   return [
     '$graceTicks = 0',
-    `while (-not (Test-DesktopShell) -and $graceTicks -lt ${DESKTOP_SHELL_GRACE_TICKS}) {`,
+    `while (-not (Test-DesktopShell) -and $graceTicks -lt ${Math.round(graceSeconds)}) {`,
     '  $graceTicks++',
     `  ${buildDelaySeconds(1)}`,
     '}',
+  ]
+}
+
+function buildStartExplorerUnlessDesktopShellReturns(graceSeconds) {
+  return [
+    ...buildWaitForDesktopShell(graceSeconds),
     'if (-not (Test-DesktopShell)) {',
     ...buildStartExplorer().map(line => `  ${line}`),
     '}',
   ]
 }
 
-function buildRestoreExplorerOnExitScript({ processId }) {
+function buildRestoreExplorerOnExitScript({ processId, shellGraceSeconds }) {
   return {
     script: buildScript([
       ...buildDesktopShellProbe(),
       ...buildWaitForProcessIdExit(),
-      ...buildStartExplorerUnlessDesktopShellReturns(),
+      ...buildStartExplorerUnlessDesktopShellReturns(shellGraceSeconds),
     ]),
     env: { [PROCESS_ID_VAR]: String(processId) },
     skippedDirs: [],
