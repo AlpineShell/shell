@@ -22,6 +22,7 @@ const AUTOSTART_LOGON_FILE = '.autostart-logon'
 const LEAVE_SHELL_TO_EXPLORER_FLAG = '--leave-shell-to-explorer'
 const UPDATE_HANDOFF_MAX_AGE_MS = 15 * 60 * 1000
 const SHELL_HANDOFF_MAX_AGE_MS = 12 * 60 * 60 * 1000
+const RESTORE_EXPLORER_GRACE_SECONDS = 10
 const AUTOSTART_LOGON_MAX_AGE_MS = Number.POSITIVE_INFINITY
 const HKLM_WINLOGON_KEY = 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
 const SHELL_AUTO_RESTART_TURNED_OFF = '0x0'
@@ -258,6 +259,25 @@ function launchRevertHelper(scriptPath, env) {
 
 function isRevertHelperRunning(helper) {
   return Boolean(helper && helper.running)
+}
+
+function launchExplorerRestorer(scriptName, shellGraceSeconds) {
+  try {
+    const helper = revertScript.buildRestoreExplorerOnExitScript({ processId: process.pid, shellGraceSeconds })
+    const scriptPath = writeRevertHelper(scriptName, helper.script)
+    return launchRevertHelper(scriptPath, helper.env)
+  } catch (e) {
+    console.error('[installer] Could not start the helper that brings Explorer back:', e.message)
+    return null
+  }
+}
+
+function restoreExplorerWhenAlpineExits() {
+  return launchExplorerRestorer('alpine_restore_explorer.ps1', RESTORE_EXPLORER_GRACE_SECONDS)
+}
+
+function startExplorerWhenAlpineExits() {
+  return launchExplorerRestorer('alpine_end_test_session.ps1', 0)
 }
 
 function getProcessImageName() {
@@ -617,6 +637,8 @@ module.exports = {
   autostartRanThisLogon,
   recordAutostartLogon,
   isRevertHelperRunning,
+  restoreExplorerWhenAlpineExits,
+  startExplorerWhenAlpineExits,
   relaunchFromInstalled,
   startBrandedUpdate,
   ensureUpdaterExe,

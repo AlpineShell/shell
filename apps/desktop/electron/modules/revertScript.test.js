@@ -10,6 +10,7 @@ const {
   buildRemoveDirectory,
   buildTemporaryRevertScript,
   buildPermanentRevertScript,
+  buildRestoreExplorerOnExitScript,
   buildUninstallScript,
 } = revertScript
 
@@ -291,5 +292,57 @@ describe('buildUninstallScript', () => {
   it('waits for Alpine to exit before touching anything', () => {
     const { script } = uninstallHelper()
     expect(script.indexOf('while (Get-Process')).toBeLessThan(script.indexOf('_?='))
+  })
+})
+
+describe('buildRestoreExplorerOnExitScript', () => {
+  const { script, env, skippedDirs } = buildRestoreExplorerOnExitScript({ processId: 4242, shellGraceSeconds: 10 })
+
+  it('watches the one Alpine process that retired Explorer, passed through the environment', () => {
+    expect(env).toEqual({ ALPINE_REVERT_PROCESS_ID: '4242' })
+    expect(script).toContain('$watchedProcess = Get-Process -Id $env:ALPINE_REVERT_PROCESS_ID -ErrorAction SilentlyContinue')
+    expect(script).toContain('if ($watchedProcess) { $watchedProcess.WaitForExit() }')
+    expect(script).not.toContain('4242')
+  })
+
+  it('learns to see the desktop shell before it starts waiting, so a crash is answered at once', () => {
+    expect(script.indexOf('Add-Type')).toBeLessThan(script.indexOf('WaitForExit()'))
+    expect(script).toContain('public static extern IntPtr GetShellWindow();')
+  })
+
+  it('starts Explorer only after Alpine has exited and no shell came back within the grace period', () => {
+    const afterExit = script.slice(script.indexOf('WaitForExit()'))
+    expect(afterExit).toContain('while (-not (Test-DesktopShell) -and $graceTicks -lt 10) {')
+    expect(afterExit.indexOf('if (-not (Test-DesktopShell)) {')).toBeLessThan(afterExit.indexOf(START_EXPLORER))
+    expect(script.indexOf(START_EXPLORER)).toBeGreaterThan(script.indexOf('WaitForExit()'))
+  })
+
+  it('treats a desktop it cannot inspect as one without a shell, so Explorer still comes back', () => {
+    expect(script).toContain('$canSeeDesktopShell = $false')
+    expect(script).toContain('function Test-DesktopShell { $canSeeDesktopShell -and ([AlpineShell.DesktopShell]::GetShellWindow() -ne [IntPtr]::Zero) }')
+  })
+
+  it('checks once and starts Explorer straight away when there is no grace period', () => {
+    const immediate = buildRestoreExplorerOnExitScript({ processId: 4242, shellGraceSeconds: 0 }).script
+    expect(immediate).not.toContain('$graceTicks')
+    const afterExit = immediate.slice(immediate.indexOf('WaitForExit()'))
+    expect(afterExit.indexOf('if (-not (Test-DesktopShell)) {')).toBeLessThan(afterExit.indexOf(START_EXPLORER))
+  })
+
+  it('starts Explorer outside the install directory', () => {
+    expect(script).toContain(`${START_EXPLORER} -WorkingDirectory $env:SystemRoot`)
+  })
+
+  it('never stops a process and never writes the registry', () => {
+    expect(script).not.toContain('Stop-Process')
+    expect(script).not.toContain('Set-ItemProperty')
+  })
+
+  it('runs without console programs, stays ASCII and deletes nothing but itself', () => {
+    expect(script).not.toMatch(CONSOLE_TOOLS)
+    expect(script).toMatch(/^[\x00-\x7F]*$/)
+    expect(script.match(/Remove-Item/g)).toHaveLength(1)
+    expect(script.trimEnd().split('\r\n').at(-1)).toBe('Remove-Item -LiteralPath $PSCommandPath -Force')
+    expect(skippedDirs).toEqual([])
   })
 })

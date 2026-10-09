@@ -1669,6 +1669,8 @@ declare global {
       install: (options: SetupOptions) => Promise<SetupResult>
       skip: () => Promise<SetupGateResult>
       testOut: () => Promise<SetupGateResult>
+      isTestSession: () => Promise<boolean>
+      endTestSession: () => Promise<RevertResult>
       relaunch: () => Promise<void>
       restartWindows: () => Promise<void>
       revertTemporary: () => Promise<RevertResult>

@@ -6,6 +6,7 @@ const EXPLORER_START_SETTLE_SECONDS = 3
 const DIRECTORY_RETRY_SECONDS = 2
 
 const IMAGE_VAR = 'ALPINE_REVERT_IMAGE'
+const PROCESS_ID_VAR = 'ALPINE_REVERT_PROCESS_ID'
 const SHELL_KEY_VAR = 'ALPINE_REVERT_SHELL_KEY'
 const SHELL_EXE_VAR = 'ALPINE_REVERT_SHELL_EXE'
 const UNINSTALLER_VAR = 'ALPINE_REVERT_UNINSTALLER'
@@ -131,6 +132,56 @@ function buildPermanentRevertScript({ processImageName }) {
   }
 }
 
+function buildDesktopShellProbe() {
+  return [
+    '$canSeeDesktopShell = $false',
+    'try {',
+    `  Add-Type -Namespace AlpineShell -Name DesktopShell -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetShellWindow();' -ErrorAction Stop`,
+    '  $canSeeDesktopShell = $true',
+    '} catch {}',
+    'function Test-DesktopShell { $canSeeDesktopShell -and ([AlpineShell.DesktopShell]::GetShellWindow() -ne [IntPtr]::Zero) }',
+  ]
+}
+
+function buildWaitForProcessIdExit() {
+  return [
+    `$watchedProcess = Get-Process -Id $env:${PROCESS_ID_VAR} -ErrorAction SilentlyContinue`,
+    'if ($watchedProcess) { $watchedProcess.WaitForExit() }',
+  ]
+}
+
+function buildWaitForDesktopShell(graceSeconds) {
+  if (graceSeconds <= 0) return []
+  return [
+    '$graceTicks = 0',
+    `while (-not (Test-DesktopShell) -and $graceTicks -lt ${Math.round(graceSeconds)}) {`,
+    '  $graceTicks++',
+    `  ${buildDelaySeconds(1)}`,
+    '}',
+  ]
+}
+
+function buildStartExplorerUnlessDesktopShellReturns(graceSeconds) {
+  return [
+    ...buildWaitForDesktopShell(graceSeconds),
+    'if (-not (Test-DesktopShell)) {',
+    ...buildStartExplorer().map(line => `  ${line}`),
+    '}',
+  ]
+}
+
+function buildRestoreExplorerOnExitScript({ processId, shellGraceSeconds }) {
+  return {
+    script: buildScript([
+      ...buildDesktopShellProbe(),
+      ...buildWaitForProcessIdExit(),
+      ...buildStartExplorerUnlessDesktopShellReturns(shellGraceSeconds),
+    ]),
+    env: { [PROCESS_ID_VAR]: String(processId) },
+    skippedDirs: [],
+  }
+}
+
 function buildUninstallScript({ processImageName, uninstallerPath, installDir, deletableInstallDir, userDataDirs, cacheDirs }) {
   const candidates = [deletableInstallDir, ...(userDataDirs || []), ...(cacheDirs || [])].filter(Boolean)
   const removable = candidates.filter(isSafeDeletablePath)
@@ -167,5 +218,6 @@ module.exports = {
   buildRemoveDirectory,
   buildTemporaryRevertScript,
   buildPermanentRevertScript,
+  buildRestoreExplorerOnExitScript,
   buildUninstallScript,
 }

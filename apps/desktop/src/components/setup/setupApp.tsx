@@ -185,6 +185,7 @@ export default function SetupApp() {
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [result, setResult] = useState<SetupResult | null>(null)
   const [currentStep, setCurrentStep] = useState('')
+  const [testingOut, setTestingOut] = useState(false)
 
   useEffect(() => {
     const applyProgress = (next: LicenceSignInProgress) => {
@@ -277,10 +278,15 @@ export default function SetupApp() {
   }
 
   async function handleTestOut() {
-    const res = await window.setup.testOut()
-    if (res && res.error) {
-      setResult({ shell: false, startup: false, cursor: false, gpoBlocked: false, error: res.error })
-      setPage('error')
+    setTestingOut(true)
+    try {
+      const res = await window.setup.testOut()
+      if (res && res.error) {
+        setResult({ shell: false, startup: false, cursor: false, gpoBlocked: false, error: res.error })
+        setPage('error')
+      }
+    } finally {
+      setTestingOut(false)
     }
   }
 
@@ -425,14 +431,14 @@ export default function SetupApp() {
               </Button>
             ) : (
               <div className="flex items-center gap-2">
-                <Button className="flex-1" busy={installing} onClick={handleInstall}>
+                <Button className="flex-1" busy={installing} disabled={testingOut} onClick={handleInstall}>
                   {installing ? verbIng : verb}
                 </Button>
                 <IconButton
                   label={`Customize ${verb.toLowerCase()}`}
                   shape="round"
                   tooltip="topEnd"
-                  disabled={installing}
+                  disabled={installing || testingOut}
                   onClick={() => setPage('options')}
                 >
                   <Settings size={16} />
@@ -442,6 +448,7 @@ export default function SetupApp() {
                     label="Test out, resets on restart"
                     shape="round"
                     tooltip="topEnd"
+                    busy={testingOut}
                     disabled={installing}
                     onClick={handleTestOut}
                   >

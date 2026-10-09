@@ -167,6 +167,21 @@ describe('SetupApp', () => {
     expect(screen.getByRole('button', { name: 'Install' })).toBeTruthy()
   })
 
+  it('holds the buttons while Explorer hands the desktop over for a test-out', async () => {
+    const bridge = await renderSetup({ licence: licenceStatus({ state: 'valid', email: 'someone@example.com' }) })
+    let finishTestOut: (result: { error: string | null }) => void = () => {}
+    bridge.testOut.mockImplementation(() => new Promise((resolve) => { finishTestOut = resolve }))
+    const testOutButton = screen.getByRole('button', { name: 'Test out, resets on restart' }) as HTMLButtonElement
+    fireEvent.click(testOutButton)
+    expect(bridge.testOut).toHaveBeenCalledTimes(1)
+    expect(testOutButton.getAttribute('aria-busy')).toBe('true')
+    expect(testOutButton.disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Install' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Customize install' }) as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => finishTestOut({ error: 'licence-required' }))
+    expect(screen.getByText('Sign in first')).toBeTruthy()
+  })
+
   it('starts the device flow and shows the code while waiting', async () => {
     const bridge = await renderSetup()
     fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }))
