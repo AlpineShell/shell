@@ -3,6 +3,7 @@ const { execFile, spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 const { shellExecute } = require('../shellExecute')
+const { letLaunchedAppComeForward } = require('./winFocus')
 
 const DIR_LISTING_TTL_MS = 30000
 
@@ -166,6 +167,7 @@ async function runDirect(raw) {
   const query = String(raw || '').trim()
   if (!query) return { ok: false }
   const info = await resolve(query)
+  letLaunchedAppComeForward()
 
   if (info && (info.kind === 'folder' || info.kind === 'file')) {
     shell.openPath(info.display).catch(() => {})
@@ -202,6 +204,7 @@ async function runInTerminal(raw) {
   const query = String(raw || '').trim()
   if (!query) return { ok: false }
   const terminal = await detectTerminal()
+  letLaunchedAppComeForward()
   if (terminal.type === 'wt' && spawnDetached('wt.exe', ['cmd', '/k', query])) return { ok: true }
   spawnDetached('cmd.exe', ['/k', query])
   return { ok: true }

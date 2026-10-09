@@ -6,6 +6,7 @@ const browserFavicons = require('./browserFavicons')
 const firefoxData = require('./firefoxData')
 const chromiumPaths = require('./chromiumPaths')
 const launcherPrefs = require('./launcherPrefs')
+const { letLaunchedAppComeForward } = require('./winFocus')
 
 const MAX_BOOKMARKS = 3000
 const RELOAD_DEBOUNCE_MS = 600
@@ -160,6 +161,7 @@ module.exports = {
     },
     'bookmarks/open': (_event, url) => {
       if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return { ok: false }
+      letLaunchedAppComeForward()
       shell.openExternal(url).catch((e) => console.error('[bookmarks] open error:', e.message))
       return { ok: true }
     },

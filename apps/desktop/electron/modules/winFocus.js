@@ -13,10 +13,12 @@ const ShowWindow = user32.func('__stdcall', 'ShowWindow', 'int', ['uintptr_t', '
 const PostMessageW = user32.func('__stdcall', 'PostMessageW', 'int', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t'])
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const SendInput = user32.func('__stdcall', 'SendInput', 'uint32', ['uint32', 'void *', 'int'])
+const AllowSetForegroundWindow = user32.func('__stdcall', 'AllowSetForegroundWindow', 'int', ['uint32'])
 
 const SW_MAXIMIZE = 3
 const SW_MINIMIZE = 6
 const WM_CLOSE = 0x0010
+const ASFW_ANY = 0xFFFFFFFF
 
 const INPUT_KEYBOARD = 1
 const KEYEVENTF_KEYUP = 0x0002
@@ -68,6 +70,10 @@ function forceForeground(hwnd) {
   }
 }
 
+function letLaunchedAppComeForward() {
+  return AllowSetForegroundWindow(ASFW_ANY) !== 0
+}
+
 function writeUnicodeInput(buf, offset, codeUnit, keyUp) {
   buf.writeUInt32LE(INPUT_KEYBOARD, offset)
   buf.writeUInt16LE(0, offset + KEYBDINPUT_OFFSET)
@@ -108,4 +114,4 @@ function insertText(hwnd, text) {
   })
 }
 
-module.exports = { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow, sendUnicode, insertText }
+module.exports = { forceForeground, getForegroundWindow, letLaunchedAppComeForward, minimizeWindow, maximizeWindow, closeWindow, sendUnicode, insertText }
