@@ -1134,7 +1134,10 @@ function startShellMode() {
 
   const takeover = setup.takeOverFromExplorer()
 
-  if (shellWindow && takeover.actingAsShell) shellWindow.register()
+  if (shellWindow && takeover.actingAsShell) {
+    shellWindow.onAppCommand(volume.applyAppCommand)
+    shellWindow.register()
+  }
 
   if (altTab) altTab.setShells(shells)
   if (altTab && altTab.setExposedOwnWindows) altTab.setExposedOwnWindows(exposedOwnWindowHandles)

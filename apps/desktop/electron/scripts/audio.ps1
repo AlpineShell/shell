@@ -157,9 +157,33 @@ public class Audio {
         }));
     }
 
+    private static int ReadVolumePercent() {
+        return (int)Math.Round(ReadVolume() * 100);
+    }
+
+    private static string FormatState() {
+        return ReadVolumePercent() + "|" + (ReadMute() ? "1" : "0");
+    }
+
     public static string GetState() {
+        return OnBoundEndpoint(new Func<string>(FormatState));
+    }
+
+    public static string StepVolume(int deltaPercent) {
         return OnBoundEndpoint(new Func<string>(delegate {
-            return ((int)Math.Round(ReadVolume() * 100)) + "|" + (ReadMute() ? "1" : "0");
+            var context = Guid.Empty;
+            int steppedPercent = Math.Max(0, Math.Min(100, ReadVolumePercent() + deltaPercent));
+            boundVolume.SetMasterVolumeLevelScalar(steppedPercent / 100f, ref context);
+            if (ReadMute()) boundVolume.SetMute(false, ref context);
+            return FormatState();
+        }));
+    }
+
+    public static string ToggleMute() {
+        return OnBoundEndpoint(new Func<string>(delegate {
+            var context = Guid.Empty;
+            boundVolume.SetMute(!ReadMute(), ref context);
+            return FormatState();
         }));
     }
 

@@ -2,6 +2,7 @@ const { spawn } = require('child_process')
 const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { volumeKeyAction } = require('./appCommandPolicy')
 
 const SCRIPT_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts', 'audio.ps1')
@@ -104,14 +105,45 @@ async function getMute() {
   }
 }
 
+function parseState(raw) {
+  const [rawVolume, rawMute] = raw.trim().split('|')
+  const volume = parseInt(rawVolume, 10)
+  if (isNaN(volume)) return null
+  return { volume, muted: rawMute === '1' }
+}
+
 async function getState() {
   try {
-    const [rawVolume, rawMute] = (await runCmd('[Audio]::GetState()')).trim().split('|')
-    const volume = parseInt(rawVolume, 10)
-    if (isNaN(volume)) return null
-    return { volume, muted: rawMute === '1' }
+    return parseState(await runCmd('[Audio]::GetState()'))
   } catch {
     return null
+  }
+}
+
+function publishState(state) {
+  if (!state || !broadcastToTopbarsRef) return
+  if (state.volume !== lastVolume) {
+    lastVolume = state.volume
+    broadcastToTopbarsRef('system/volume-changed', state.volume)
+  }
+  if (state.muted !== lastMute) {
+    lastMute = state.muted
+    broadcastToTopbarsRef('system/mute-changed', state.muted)
+  }
+}
+
+function volumeKeyCommand(action) {
+  if (action.kind === 'toggle-mute') return '[Audio]::ToggleMute()'
+  return `[Audio]::StepVolume(${action.delta})`
+}
+
+async function applyAppCommand(appCommand) {
+  const action = volumeKeyAction(appCommand)
+  if (!action) return
+  try {
+    publishState(parseState(await runCmd(volumeKeyCommand(action))))
+  } catch (e) {
+    console.error('[volume] volume key error:', e.message)
   }
 }
 
@@ -193,6 +225,8 @@ module.exports = {
     },
   },
 
+  applyAppCommand,
+
   start(_broadcast, broadcastToTopbars) {
     broadcastToTopbarsRef = broadcastToTopbars
     if (peakSubscribers.size > 0) startPeakMeter()
@@ -200,16 +234,7 @@ module.exports = {
 
     setInterval(async () => {
       if (Date.now() - lastSetTime < 1500) return
-      const state = await getState()
-      if (!state) return
-      if (state.volume !== lastVolume) {
-        lastVolume = state.volume
-        broadcastToTopbars('system/volume-changed', state.volume)
-      }
-      if (state.muted !== lastMute) {
-        lastMute = state.muted
-        broadcastToTopbars('system/mute-changed', state.muted)
-      }
+      publishState(await getState())
     }, 1000)
   },
 }

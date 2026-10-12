@@ -1,4 +1,5 @@
 const koffi = require('koffi')
+const { shellHookAppCommand } = require('./appCommandPolicy')
 
 const user32 = koffi.load('user32.dll')
 const gdi32 = koffi.load('gdi32.dll')
@@ -36,6 +37,7 @@ const GetSystemMetrics = user32.func('__stdcall', 'GetSystemMetrics', 'int', ['i
 const SetShellWindow = user32.func('__stdcall', 'SetShellWindow', 'int', ['uintptr_t'])
 const SetTaskmanWindow = user32.func('__stdcall', 'SetTaskmanWindow', 'int', ['uintptr_t'])
 const RegisterShellHookWindow = user32.func('__stdcall', 'RegisterShellHookWindow', 'int', ['uintptr_t'])
+const RegisterWindowMessageW = user32.func('__stdcall', 'RegisterWindowMessageW', 'uint32', ['str16'])
 const GetShellWindow = user32.func('__stdcall', 'GetShellWindow', 'uintptr_t', [])
 const GetModuleHandleW = kernel32.func('__stdcall', 'GetModuleHandleW', 'uintptr_t', ['str16'])
 const GetLastError = kernel32.func('__stdcall', 'GetLastError', 'uint32', [])
@@ -74,13 +76,28 @@ let defview = 0
 let listview = 0
 let wndProcPtr = null
 let registered = false
+let shellHookMessage = 0
+let appCommandListener = null
 
 function toNum(value) {
   return typeof value === 'bigint' ? Number(value) : value
 }
 
+function dispatchAppCommand(hookCode, lParam) {
+  const appCommand = shellHookAppCommand(hookCode, lParam)
+  if (appCommand === null || !appCommandListener) return
+  setImmediate(() => {
+    try { appCommandListener(appCommand) } catch (e) { console.error('[shellWindow] app command error:', e.message) }
+  })
+}
+
 function shellWndProc(h, msg, wParam, lParam) {
+  if (shellHookMessage && msg === shellHookMessage) dispatchAppCommand(wParam, lParam)
   return DefWindowProcW(h, msg, wParam, lParam)
+}
+
+function onAppCommand(listener) {
+  appCommandListener = typeof listener === 'function' ? listener : null
 }
 
 function registerClass(name, hInstance) {
@@ -156,6 +173,7 @@ function register() {
     const shellOk = SetShellWindow(progman)
     const shellErr = toNum(shellOk) ? 0 : GetLastError()
     const taskmanOk = SetTaskmanWindow(progman)
+    shellHookMessage = RegisterWindowMessageW('SHELLHOOK')
     const hookOk = RegisterShellHookWindow(progman)
     const current = GetShellWindow()
     const match = toNum(current) === toNum(progman)
@@ -180,4 +198,4 @@ function destroy() {
   registered = false
 }
 
-module.exports = { register, destroy }
+module.exports = { register, destroy, onAppCommand }
