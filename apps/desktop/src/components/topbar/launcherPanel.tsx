@@ -5,7 +5,7 @@ import { useBluetooth } from "../../hooks/useBluetooth"
 import { useBluetoothRescan } from "../../hooks/useBluetoothRescan"
 import { canToggleRadio, deviceActionLabel, deviceStatusLabel, displayedRadioOn, isRadioOff, nextDeviceAction, radioEmptyStateTitle } from "../../lib/bluetoothPresentation"
 import { moveSelection, resolveSelection } from "../../lib/listSelection"
-import { brightnessNeedsSubmenu, monitorBrightnessLabel } from "../../lib/brightnessPresentation"
+import { monitorBrightnessLabel } from "../../lib/brightnessPresentation"
 import { useDarkText } from "../themeContext"
 import { useWallpaper } from "../../hooks/useWallpaper"
 import { useSurfaceSuperseded } from "../../hooks/useSurfaceSuperseded"
@@ -249,7 +249,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const [recentEmoji, setRecentEmoji] = useState<string[]>([])
   const currentWallpaper = useWallpaper()
   const { monitors, setBrightness } = useMonitors()
-  const brightnessIsSubmenu = brightnessNeedsSubmenu(monitors)
   const originalPath = useRef<string | null>(null)
   const committed = useRef(false)
   const queryBeforeCommand = useRef("")
@@ -414,15 +413,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   }
 
   function adjustSetting(cmd: SettingsEntry, direction: number) {
-    if (cmd.control.kind === "brightness") {
-      const m = monitors[0]
-      const current = m ? m.brightness : 50
-      const next = Math.max(0, Math.min(100, current + direction * 5))
-      if (next === current) return
-      if (m) setBrightness(m.id, next)
-      else window.shell.system.setBrightness(next)
-      return
-    }
     if (!isSettingsValueEntry(cmd) || cmd.control.kind !== "slider") return
     const c = cmd.control
     const current = typeof settingValues[cmd.id] === "number" ? (settingValues[cmd.id] as number) : c.min
@@ -445,7 +435,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
 
   function activateSetting(cmd: SettingsEntry) {
     const c = cmd.control
-    if (c.kind === "brightness") { if (brightnessIsSubmenu) enterCommand(cmd.id) }
+    if (c.kind === "brightness") { enterCommand(cmd.id) }
     else if (c.kind === "emoji") { emojiInsertRef.current = false; enterCommand(cmd.id) }
     else if (c.kind === "wallpaper" || c.kind === "wifi" || c.kind === "bluetooth" || c.kind === "tiling" || c.kind === "startup" || c.kind === "power" || c.kind === "tray") enterCommand(cmd.id)
     else if (c.kind === "toggle") toggleSetting(cmd)
@@ -834,7 +824,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
         e.preventDefault()
         handleEmojiPick(emojiIndex)
       }
-    } else if (selectedSetting && (selectedSetting.control.kind === "slider" || (selectedSetting.control.kind === "brightness" && !brightnessIsSubmenu)) && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    } else if (selectedSetting && selectedSetting.control.kind === "slider" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       e.preventDefault()
       adjustSetting(selectedSetting, e.key === "ArrowRight" ? 1 : -1)
     } else if (e.key === "ArrowRight" && selectedEntry?.type === "result" && selectedSetting && selectedSetting.control.kind !== "toggle") {
@@ -891,32 +881,6 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     const Icon = s.icon
     const isSel = idx === selected
     const control = s.control
-    if (control.kind === "brightness" && !brightnessIsSubmenu) {
-      const m = monitors[0]
-      const value = m ? m.brightness : 50
-      return (
-        <div
-          key={`setting-${s.id}`}
-          onMouseMove={() => selectRow(idx)}
-          className={`flex items-center gap-3 px-2.5 h-12 rounded-md transition-colors ${isSel ? selectedBg : hoverBg}`}
-        >
-          <Icon size={18} className={`w-7 shrink-0 ${darkText ? "text-black/40" : "text-white/40"}`} />
-          <input
-            type="range"
-            tabIndex={-1}
-            min={0}
-            max={100}
-            step={5}
-            value={value}
-            onChange={(e) => { const v = parseInt(e.target.value, 10); if (m) setBrightness(m.id, v); else window.shell.system.setBrightness(v) }}
-            onMouseUp={() => { rememberPick(result); requestAnimationFrame(() => inputRef.current?.focus()) }}
-            className={`cc-slider animate flex-1 ${darkText ? "cc-slider-light" : ""}`}
-            style={{ "--slider-progress": `${value}%` } as React.CSSProperties}
-          />
-          <span className={`shrink-0 text-[12px] tabular-nums ${dimText}`}>{value}%</span>
-        </div>
-      )
-    }
     if (control.kind === "slider") {
       const value = typeof settingValues[s.id] === "number" ? (settingValues[s.id] as number) : control.min
       return (
@@ -1598,34 +1562,34 @@ function LauncherWifi({ darkText, onBack }: { darkText: boolean; onBack: () => v
   })
 
   return (
-    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto">
+    <div ref={listRef} className={`flex flex-col p-1.5 gap-0.5 max-h-[min(260px,60vh)] overflow-y-auto min-h-0 snap-y snap-proximity cc-scroll ${darkText ? "cc-scroll-light" : ""}`}>
       <button
         data-idx={0}
         onMouseMove={() => setSelected(0)}
         onClick={toggleRadio}
-        className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${selected === 0 ? selectedBg : ""}`}
+        className={`flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${selected === 0 ? selectedBg : ""}`}
       >
         <Wifi size={18} className={`w-7 shrink-0 ${dimText}`} />
         <span className={`flex-1 text-[13px] ${textColor}`}>Wi-Fi</span>
         <SubToggle on={enabled} darkText={darkText} />
       </button>
 
-      {enabled && <div className={`h-px my-1 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
+      {enabled && <div className={`h-px my-1 shrink-0 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
 
       {!enabled ? null : scanning && networks.length === 0 ? (
-        <div className={`flex items-center justify-center py-4 ${dimText}`}><Loader2 size={18} className="animate-spin" /></div>
+        <div className={`flex shrink-0 items-center justify-center py-4 ${dimText}`}><Loader2 size={18} className="animate-spin" /></div>
       ) : networks.length === 0 ? (
-        <div className={`flex items-center gap-2 justify-center py-4 text-[13px] ${dimText}`}><WifiOff size={15} /><span>No networks</span></div>
+        <div className={`flex shrink-0 items-center gap-2 justify-center py-4 text-[13px] ${dimText}`}><WifiOff size={15} /><span>No networks</span></div>
       ) : (
         networks.map((network, i) => {
           const idx = i + 1
           return (
-            <div key={network.ssid}>
+            <div key={network.ssid} className="shrink-0">
               <button
                 data-idx={idx}
                 onMouseMove={() => setSelected(idx)}
                 onClick={() => activateNetwork(network)}
-                className={`w-full flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${idx === selected ? selectedBg : ""}`}
+                className={`w-full flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${idx === selected ? selectedBg : ""}`}
               >
                 <span className="w-7 shrink-0 flex justify-center">
                   <WifiSignalIcon signal={network.signal} color={network.connected ? iconColor : iconDim} size={16} />
@@ -1714,7 +1678,7 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
   })
 
   return (
-    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto">
+    <div ref={listRef} className={`flex flex-col p-1.5 gap-0.5 max-h-[min(260px,60vh)] overflow-y-auto min-h-0 snap-y snap-proximity cc-scroll ${darkText ? "cc-scroll-light" : ""}`}>
       <button
         type="button"
         role="switch"
@@ -1724,7 +1688,7 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
         data-idx={0}
         onMouseMove={() => setSelection({ id: BLUETOOTH_RADIO_ROW, index: 0 })}
         onClick={toggleRadio}
-        className={`flex items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${current.id === BLUETOOTH_RADIO_ROW ? selectedBg : ""}`}
+        className={`flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left cursor-pointer transition-colors ${current.id === BLUETOOTH_RADIO_ROW ? selectedBg : ""}`}
       >
         <Bluetooth size={18} className={`w-7 shrink-0 ${dimText}`} />
         <span className={`flex-1 text-[13px] ${textColor}`}>Bluetooth</span>
@@ -1733,10 +1697,10 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
         </span>
       </button>
 
-      {!radioOff && <div className={`h-px my-1 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
+      {!radioOff && <div className={`h-px my-1 shrink-0 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
 
       {radioOff ? null : notice ? (
-        <div className={`flex items-center gap-2 justify-center py-4 text-[13px] ${dimText}`}><Bluetooth size={15} /><span>{notice}</span></div>
+        <div className={`flex shrink-0 items-center gap-2 justify-center py-4 text-[13px] ${dimText}`}><Bluetooth size={15} /><span>{notice}</span></div>
       ) : (
         state.devices.map((device, i) => {
           const index = i + 1
@@ -1751,7 +1715,7 @@ function LauncherBluetooth({ darkText, onBack }: { darkText: boolean; onBack: ()
               aria-disabled={!actionable}
               onMouseMove={() => setSelection({ id: device.id, index })}
               onClick={() => activate(device.id)}
-              className={`w-full flex items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${actionable ? "cursor-pointer" : "cursor-default"} ${current.id === device.id ? selectedBg : ""}`}
+              className={`w-full flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${actionable ? "cursor-pointer" : "cursor-default"} ${current.id === device.id ? selectedBg : ""}`}
             >
               <span className="w-7 shrink-0 flex justify-center">
                 {busy ? <Loader2 size={15} className={`animate-spin ${dimText}`} /> : device.connected ? <BluetoothConnected color={iconColor} size={15} /> : <Bluetooth color={iconDim} size={15} />}
@@ -1833,13 +1797,13 @@ function LauncherMenu({ items, darkText, onBack, onSelectionChange, emptyText }:
   })
 
   return (
-    <div ref={listRef} className="flex flex-col p-1.5 gap-0.5 max-h-[60vh] overflow-y-auto">
+    <div ref={listRef} className={`flex flex-col p-1.5 gap-0.5 max-h-[min(260px,60vh)] overflow-y-auto min-h-0 snap-y snap-proximity cc-scroll ${darkText ? "cc-scroll-light" : ""}`}>
       {items.length === 0 && emptyText ? (
-        <div className={`px-2.5 py-4 text-[13px] ${dimText}`}>{emptyText}</div>
+        <div className={`px-2.5 py-4 text-[13px] shrink-0 ${dimText}`}>{emptyText}</div>
       ) : items.map((item, idx) => {
         const Icon = item.icon
         const isSel = idx === selected
-        const rowClass = `flex items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${isSel ? selectedBg : ""}`
+        const rowClass = `flex shrink-0 snap-start items-center gap-3 px-2.5 h-12 rounded-md text-left transition-colors ${isSel ? selectedBg : ""}`
         const iconEl = (
           <span className="w-7 shrink-0 flex justify-center">
             {item.iconSrc ? <img src={item.iconSrc} alt="" className="w-[18px] h-[18px] object-contain" draggable={false} /> : Icon ? <Icon size={18} className={dimText} /> : null}
@@ -1879,7 +1843,7 @@ function LauncherMenu({ items, darkText, onBack, onSelectionChange, emptyText }:
         return (
           <Fragment key={item.id}>
             {row}
-            {item.dividerAfter && <div className={`h-px my-1 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
+            {item.dividerAfter && <div className={`h-px my-1 shrink-0 ${darkText ? "bg-black/10" : "bg-white/10"}`} />}
           </Fragment>
         )
       })}

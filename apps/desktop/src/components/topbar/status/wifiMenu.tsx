@@ -117,11 +117,11 @@ export default function WifiMenu({ networks, scanning, enabled, onToggleRadio, o
                     <span>No networks found</span>
                 </div>
             ) : (
-                <div className="flex flex-col gap-0.5 overflow-y-auto">
+                <div className={`flex flex-col gap-0.5 overflow-y-auto min-h-0 max-h-[50vh] snap-y snap-proximity cc-scroll ${darkText ? "cc-scroll-light" : ""}`}>
                     {networks.map((network) => (
-                        <div key={network.ssid}>
+                        <div key={network.ssid} className="shrink-0">
                             <div
-                                className={`flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer ${darkText ? "hover:bg-black/5" : "hover:bg-white/10"} transition-colors`}
+                                className={`flex shrink-0 snap-start items-center justify-between px-2 py-1.5 rounded-md cursor-pointer ${darkText ? "hover:bg-black/5" : "hover:bg-white/10"} transition-colors`}
                                 onClick={() => {
                                     if (connecting) return;
                                     if (network.connected) handleDisconnect();
