@@ -632,7 +632,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   function activateResult(result: LauncherResult) {
     rememberPick(result)
     if (result.kind === "open") {
-      window.alttab.activate(result.app.hwnd)
+      window.shell.windows.activate(result.app.hwnd)
       window.launcher.hide()
     } else if (result.kind === "tab") {
       activateBrowserTab(result.tab)
@@ -654,7 +654,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
 
   function activateBrowserTab(tab: BrowserTab) {
     window.shell.browserTabs.activate(tab).catch(() => {})
-    window.alttab.activate(tab.hwnd)
+    window.shell.windows.activate(tab.hwnd)
     window.launcher.hide()
   }
 

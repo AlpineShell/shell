@@ -10,7 +10,7 @@ const CLOSE_MS = 300
 
 type Shape = { bodyWidth: number; bodyHeight: number }
 
-function WindowEntry({ window, selected, darkText }: { window: AltTabWindow; selected: boolean; darkText: boolean }) {
+function WindowEntry({ window, selected, darkText }: { window: SwitcherWindow; selected: boolean; darkText: boolean }) {
   const [thumbWidth, setThumbWidth] = useState(200)
   const cardWidth = Math.max(100, Math.min(200, thumbWidth))
 
@@ -52,10 +52,10 @@ function WindowEntry({ window, selected, darkText }: { window: AltTabWindow; sel
   )
 }
 
-export default function AltTabPanel() {
+export default function WindowSwitcherPanel() {
   const darkText = useDarkText()
 
-  const [windows, setWindows] = useState<AltTabWindow[]>([])
+  const [windows, setWindows] = useState<SwitcherWindow[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [visible, setVisible] = useState(false)
   const [showId, setShowId] = useState(0)
@@ -69,14 +69,14 @@ export default function AltTabPanel() {
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
-    window.alttab.onShow((data) => {
+    window.windowSwitcher.onShow((data) => {
       clearTimeout(closeTimer.current)
       setWindows(data.windows)
       setSelectedIndex(data.selectedIndex)
       setVisible(true)
       setShowId((n) => n + 1)
     })
-    window.alttab.onHide(() => {
+    window.windowSwitcher.onHide(() => {
       clearChromeSurface(idRef.current)
       closeTimer.current = setTimeout(() => {
         setVisible(false)
@@ -85,8 +85,8 @@ export default function AltTabPanel() {
         setSelectedIndex(0)
       }, CLOSE_MS)
     })
-    window.alttab.onSelectionChanged(setSelectedIndex)
-    window.alttab.onThumbnail(({ hwnd, thumbnail }) => {
+    window.windowSwitcher.onSelectionChanged(setSelectedIndex)
+    window.windowSwitcher.onThumbnail(({ hwnd, thumbnail }) => {
       setWindows((current) => current.map((entry) => (entry.hwnd === hwnd ? { ...entry, thumbnail } : entry)))
     })
   }, [])

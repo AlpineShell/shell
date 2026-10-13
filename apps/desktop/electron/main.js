@@ -115,8 +115,15 @@ try { googleCalendar = require('./modules/googleCalendar') } catch (e) { console
 const appActivator = require('./appActivator')
 let trayHost = null
 try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[main] trayHost load error:', e.message) }
-let altTab = null
-try { altTab = require('./modules/altTab') } catch (e) { console.error('[main] altTab load error:', e.message) }
+const keyboardHook = require('./modules/keyboardHook')
+const shellHotkeys = require('./modules/shellHotkeys')
+const emojiKeyCapture = require('./modules/emojiKeyCapture')
+const displayModeKeyCapture = require('./modules/displayModeKeyCapture')
+const windowSwitcher = require('./modules/windowSwitcher')
+const switcherWindows = require('./modules/switcherWindows')
+const shellSurfaces = require('./modules/shellSurfaces')
+const activeDisplay = require('./modules/activeDisplay')
+const minimizeAll = require('./modules/minimizeAll')
 let screenshot = null
 try { screenshot = require('./modules/screenshot') } catch (e) { console.error('[main] screenshot load error:', e.message) }
 let powerThrottling = null
@@ -298,7 +305,7 @@ function scheduleMenuClose(win, state) {
 }
 
 function hookSurfaceOwnsTopBar(win) {
-  return Boolean(altTab && altTab.isAltTabActive(win)) || displayModePicker.isActive(win)
+  return windowSwitcher.ownsTopBar(win) || displayModePicker.isActive(win)
 }
 
 function evaluateTopBarInteraction(win, state) {
@@ -982,24 +989,23 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, altTab, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, licence)
 
   theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
 
   setup.setShellShutdown(gracefulShutdown)
 
-  launcherHotkey.setAltTabModule(altTab)
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
 
-  if (altTab && altTab.setLauncherCloser) altTab.setLauncherCloser(() => launcher.hideForOverlay())
+  windowSwitcher.setLauncherCloser(() => launcher.hideForOverlay())
   if (launcher.setSwitcherCloser) launcher.setSwitcherCloser(() => {
-    if (altTab && altTab.hideForLauncher) altTab.hideForLauncher()
+    windowSwitcher.hideForLauncher()
     displayModePicker.hide()
   })
   if (launcher.setShellLinkOpener) launcher.setShellLinkOpener((link) => handleDeepLink(link))
-  if (altTab && altTab.setOverlayDisplayProvider) altTab.setOverlayDisplayProvider(() => launcher.getActiveDisplayId())
-  if (altTab && altTab.activeDisplay) launcher.setDisplayProvider(() => altTab.activeDisplay())
+  activeDisplay.setPreferredDisplayProvider(() => launcher.getActiveDisplayId())
+  launcher.setDisplayProvider(() => activeDisplay.currentDisplay())
 
   ipc.handle('setup/test-out', trustedSenders.guardHandler(async () => {
     try {
@@ -1125,6 +1131,38 @@ function openSignInWhenUnlicensed() {
   setTimeout(() => createSetupWindow('signIn'), STARTUP_SIGN_IN_DELAY_MS)
 }
 
+function wireShellHotkeys() {
+  shellHotkeys.on('tile', ({ direction, shift }) => tiling.handleHotkey(direction, shift))
+  shellHotkeys.on('openFileExplorer', () => appActivator.openFileExplorer())
+  shellHotkeys.on('openSettings', () => openSettingsFromHotkey())
+  shellHotkeys.on('openEmojiPicker', () => launcher.showEmoji())
+  shellHotkeys.on('openDisplayModePicker', () => displayModePicker.open())
+  shellHotkeys.on('minimizeAll', () => minimizeAll.minimizeAll())
+  shellHotkeys.on('restoreMinimized', () => minimizeAll.restoreMinimized())
+  if (screenshot) {
+    shellHotkeys.on('takeScreenshot', () => screenshot.showOverlay())
+    shellHotkeys.on('cancelScreenshot', () => screenshot.hideOverlay())
+  }
+}
+
+function wireKeyCaptures() {
+  displayModePicker.setKeyCaptureControl((active) => displayModeKeyCapture.setActive(active))
+  displayModeKeyCapture.onKey((action) => displayModePicker.handleKeyAction(action))
+  launcher.setEmojiCaptureControl((active, hwnd) => emojiKeyCapture.setActive(active, hwnd))
+  emojiKeyCapture.onKey((message) => launcher.forwardEmojiKey(message))
+  emojiKeyCapture.onClose(() => launcher.closeEmoji())
+}
+
+function routeKeyboardInput() {
+  keyboardHook.setKeyHandlers([
+    shellHotkeys.handleWinTap,
+    emojiKeyCapture.handleKey,
+    displayModeKeyCapture.handleKey,
+    shellHotkeys.handleShortcut,
+    windowSwitcher.handleKey,
+  ])
+}
+
 function startShellMode() {
   if (shellModeRunning) return
   shellModeRunning = true
@@ -1139,51 +1177,29 @@ function startShellMode() {
     shellWindow.register()
   }
 
-  if (altTab) altTab.setShells(shells)
-  if (altTab && altTab.setExposedOwnWindows) altTab.setExposedOwnWindows(exposedOwnWindowHandles)
+  shellSurfaces.setShells(shells)
+  switcherWindows.setExposedOwnWindows(exposedOwnWindowHandles)
 
   tiling.setShells(shells)
   tiling.setExposedOwnWindows(exposedOwnWindowHandles)
   winEvents.setExposedOwnWindows(exposedOwnWindowHandles)
   windowCoverage.setExposedOwnWindows(exposedOwnWindowHandles)
   foregroundColor.setRidgeColoredWindows(ridgeColoredWindowHandles)
-  if (altTab && altTab.onTilingKey) {
-    altTab.onTilingKey((direction, shift) => tiling.handleHotkey(direction, shift))
-  }
-  if (altTab && altTab.onExplorerKey) {
-    altTab.onExplorerKey(() => appActivator.openFileExplorer())
-  }
-  if (altTab && altTab.onSettingsKey) {
-    altTab.onSettingsKey(() => openSettingsFromHotkey())
-  }
-  if (altTab && altTab.onEmojiKey) {
-    altTab.onEmojiKey(() => launcher.showEmoji())
-  }
   displayModePicker.setShells(shells)
   displayModePicker.setOtherSurfacesCloser(() => {
     launcher.hideForOverlay()
-    if (altTab && altTab.hideForLauncher) altTab.hideForLauncher()
+    windowSwitcher.hideForLauncher()
   })
-  if (altTab && altTab.onDisplayModeKey) {
-    displayModePicker.setDisplayProvider(() => altTab.activeDisplay())
-    displayModePicker.setKeyCaptureControl((active) => altTab.setDisplayModeCapture(active))
-    altTab.onDisplayModeCaptureKey((action) => displayModePicker.handleKeyAction(action))
-    altTab.onDisplayModeKey(() => displayModePicker.open())
-  }
-  if (altTab && altTab.setEmojiCapture) {
-    launcher.setEmojiCaptureControl((active, hwnd) => altTab.setEmojiCapture(active, hwnd))
-    altTab.onEmojiCaptureKey((message) => launcher.forwardEmojiKey(message))
-    altTab.onEmojiCaptureClose(() => launcher.closeEmoji())
-  }
+  displayModePicker.setDisplayProvider(() => activeDisplay.currentDisplay())
 
   if (screenshot) {
     screenshot.setOverlayWindowFactory(createScreenshotWindow)
     screenshot.prewarmOverlay()
-    altTab.onScreenshot(
-      () => screenshot.showOverlay(),
-      () => screenshot.hideOverlay()
-    )
   }
+
+  wireShellHotkeys()
+  wireKeyCaptures()
+  routeKeyboardInput()
 
   launcher.setShells(shells)
 

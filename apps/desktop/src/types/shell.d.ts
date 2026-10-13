@@ -242,7 +242,7 @@ declare global {
     apps: string[]
   }
 
-  interface AltTabWindow {
+  interface SwitcherWindow {
     hwnd: number
     title: string
     processName: string
@@ -250,12 +250,12 @@ declare global {
     thumbnail: string
   }
 
-  interface AltTabShowPayload {
-    windows: AltTabWindow[]
+  interface SwitcherShowPayload {
+    windows: SwitcherWindow[]
     selectedIndex: number
   }
 
-  interface AltTabThumbnailPayload {
+  interface SwitcherThumbnailPayload {
     hwnd: number
     thumbnail: string
   }
@@ -1737,12 +1737,11 @@ declare global {
       regionSelected: (region: { x: number; y: number; width: number; height: number }) => Promise<void>
       cancel: () => Promise<void>
     }
-    alttab: {
-      onShow: (callback: (data: AltTabShowPayload) => void) => void
+    windowSwitcher: {
+      onShow: (callback: (data: SwitcherShowPayload) => void) => void
       onHide: (callback: () => void) => void
       onSelectionChanged: (callback: (index: number) => void) => void
-      onThumbnail: (callback: (data: AltTabThumbnailPayload) => void) => void
-      activate: (hwnd: number) => Promise<void>
+      onThumbnail: (callback: (data: SwitcherThumbnailPayload) => void) => void
     }
     displayMode: {
       onShow: (callback: (data: DisplayModePickerPayload) => void) => () => void
@@ -1795,6 +1794,7 @@ declare global {
         wallpaperMine: () => Promise<{ name: string; path: string; thumbnail: string; url: string; addedAt: number }[]>
         wallpaperMineDelete: (filePath: string) => Promise<boolean>
         openApps: () => Promise<OpenApp[]>
+        activate: (hwnd: number) => Promise<void>
         onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => () => void
         openSettings: (page?: string) => Promise<void>
         closeSettings: () => Promise<void>

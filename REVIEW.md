@@ -32,7 +32,7 @@ Flag newly introduced violations of CLAUDE.md conventions:
 - A read-only hook that reimplements fetch+subscribe instead of using `useShellState`.
 - A one-shot shell call that spawns PowerShell directly instead of `runPowerShell` from `electron/powershell.js`.
 - File naming not in camelCase, or a hook file not named after its single exported `useXxx`.
-- A renderer hook that calls an **unsubscribe-returning** API but discards the returned function instead of calling it in `useEffect` cleanup. Verify against `preload.js` that the specific method returns `() => …` before flagging: `onStartupChanged`, `onCatalogChanged`, `onConfigChanged`, `onOpenAppsChanged`, `onWifiScanUpdated`, `onBluetoothChanged`, launcher `onCloseMenus`/`onStartClose`/`onHide`, and topbar `onCloseMenus` do return one — but topbar `onColorChanged`/`onForegroundColorChanged` and screenshot/alttab `onHide` return void; do not flag discarding their result.
+- A renderer hook that calls an **unsubscribe-returning** API but discards the returned function instead of calling it in `useEffect` cleanup. Verify against `preload.js` that the specific method returns `() => …` before flagging: `onStartupChanged`, `onCatalogChanged`, `onConfigChanged`, `onOpenAppsChanged`, `onWifiScanUpdated`, `onBluetoothChanged`, launcher `onCloseMenus`/`onStartClose`/`onHide`, and topbar `onCloseMenus` do return one — but topbar `onColorChanged`/`onForegroundColorChanged` and screenshot/windowSwitcher `onHide` return void; do not flag discarding their result.
 
 ## Test suggestions (Nit; Important only for license/security logic)
 
