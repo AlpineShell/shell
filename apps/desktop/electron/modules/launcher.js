@@ -2,7 +2,7 @@ const { app, shell: electronShell, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { execFile, exec } = require('child_process')
-const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow, insertText } = require('./winFocus')
+const { forceForeground, getForegroundWindow, letLaunchedAppComeForward, minimizeWindow, maximizeWindow, closeWindow, insertText } = require('./winFocus')
 const appIcons = require('./appIcons')
 const appManager = require('./appManager')
 const appxPackages = require('./appxPackages')
@@ -422,9 +422,9 @@ function isOwnShellWindow(hwnd) {
 function finishHide(topBar) {
   if (topBar.isDestroyed()) return
   topBar.webContents.send('launcher/hide')
-  topBar.setFocusable(false)
   if (typeof topBar.restorePassiveTopBar === 'function') topBar.restorePassiveTopBar()
   else topBar.setAlwaysOnTop(false)
+  topBar.setFocusable(false)
 }
 
 function endEmojiCapture() {
@@ -605,6 +605,7 @@ function launchItem(item) {
     shellLinkOpener(item.shellLink)
     return { success: true }
   }
+  letLaunchedAppComeForward()
   if (item.lnkPath) {
     electronShell.openPath(item.lnkPath).then((err) => {
       if (err) {
@@ -621,6 +622,7 @@ function launchItem(item) {
 function launchAdminItem(item) {
   if (!item) return { success: false }
   if (item.shellLink) return launchItem(item)
+  letLaunchedAppComeForward()
   if (item.lnkPath) {
     shellExecuteElevated(item.lnkPath).catch(() => {})
   } else if (item.appId) {
