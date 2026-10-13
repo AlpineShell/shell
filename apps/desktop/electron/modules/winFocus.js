@@ -14,9 +14,13 @@ const PostMessageW = user32.func('__stdcall', 'PostMessageW', 'int', ['uintptr_t
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const SendInput = user32.func('__stdcall', 'SendInput', 'uint32', ['uint32', 'void *', 'int'])
 const AllowSetForegroundWindow = user32.func('__stdcall', 'AllowSetForegroundWindow', 'int', ['uint32'])
+const IsIconic = user32.func('__stdcall', 'IsIconic', 'int', ['uintptr_t'])
+const keybd_event = user32.func('__stdcall', 'keybd_event', 'void', ['uint8', 'uint8', 'uint32', 'uintptr_t'])
 
 const SW_MAXIMIZE = 3
 const SW_MINIMIZE = 6
+const SW_RESTORE = 9
+const VK_LMENU = 0xA4
 const WM_CLOSE = 0x0010
 const ASFW_ANY = 0xFFFFFFFF
 
@@ -70,6 +74,14 @@ function forceForeground(hwnd) {
   }
 }
 
+function activateWindow(hwnd) {
+  if (!hwnd || !IsWindow(hwnd)) return
+  if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE)
+  keybd_event(VK_LMENU, 0, 0, 0)
+  SetForegroundWindow(hwnd)
+  keybd_event(VK_LMENU, 0, KEYEVENTF_KEYUP, 0)
+}
+
 function letLaunchedAppComeForward() {
   return AllowSetForegroundWindow(ASFW_ANY) !== 0
 }
@@ -114,4 +126,4 @@ function insertText(hwnd, text) {
   })
 }
 
-module.exports = { forceForeground, getForegroundWindow, letLaunchedAppComeForward, minimizeWindow, maximizeWindow, closeWindow, sendUnicode, insertText }
+module.exports = { activateWindow, forceForeground, getForegroundWindow, letLaunchedAppComeForward, minimizeWindow, maximizeWindow, closeWindow, sendUnicode, insertText }

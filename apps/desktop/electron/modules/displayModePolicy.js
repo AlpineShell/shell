@@ -1,3 +1,21 @@
+const {
+  VK_RETURN,
+  VK_SHIFT,
+  VK_CONTROL,
+  VK_MENU,
+  VK_ESCAPE,
+  VK_SPACE,
+  VK_LEFT,
+  VK_UP,
+  VK_RIGHT,
+  VK_DOWN,
+  VK_P,
+  VK_LWIN,
+  VK_RWIN,
+  VK_LSHIFT,
+  VK_RMENU,
+} = require('./virtualKeys')
+
 const DISPLAY_MODES = ['internal', 'clone', 'extend', 'external']
 
 const TOPOLOGY_ID_BY_MODE = { internal: 0x1, clone: 0x2, extend: 0x4, external: 0x8 }
@@ -7,22 +25,6 @@ const TARGET_ADAPTER_LOW_OFFSET = 20
 const TARGET_ADAPTER_HIGH_OFFSET = 24
 const TARGET_ID_OFFSET = 28
 const TARGET_AVAILABLE_OFFSET = 60
-
-const VK_RETURN = 0x0D
-const VK_SHIFT = 0x10
-const VK_CONTROL = 0x11
-const VK_MENU = 0x12
-const VK_ESCAPE = 0x1B
-const VK_SPACE = 0x20
-const VK_LEFT = 0x25
-const VK_UP = 0x26
-const VK_RIGHT = 0x27
-const VK_DOWN = 0x28
-const VK_P = 0x50
-const VK_LWIN = 0x5B
-const VK_RWIN = 0x5C
-const VK_LSHIFT = 0xA0
-const VK_RMENU = 0xA5
 
 const MODIFIER_KEYS = new Set([VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN])
 

@@ -209,20 +209,19 @@ contextBridge.exposeInMainWorld('screenshot', {
   cancel: () => ipcRenderer.invoke('screenshot/cancel'),
 })
 
-contextBridge.exposeInMainWorld('alttab', {
+contextBridge.exposeInMainWorld('windowSwitcher', {
   onShow: (callback) => {
-    ipcRenderer.on('alttab/show', (_, data) => callback(data))
+    ipcRenderer.on('window-switcher/show', (_, data) => callback(data))
   },
   onHide: (callback) => {
-    ipcRenderer.on('alttab/hide', () => callback())
+    ipcRenderer.on('window-switcher/hide', () => callback())
   },
   onSelectionChanged: (callback) => {
-    ipcRenderer.on('alttab/selection-changed', (_, index) => callback(index))
+    ipcRenderer.on('window-switcher/selection-changed', (_, index) => callback(index))
   },
   onThumbnail: (callback) => {
-    ipcRenderer.on('alttab/thumbnail', (_, data) => callback(data))
+    ipcRenderer.on('window-switcher/thumbnail', (_, data) => callback(data))
   },
-  activate: (hwnd) => ipcRenderer.invoke('alttab/activate', hwnd),
 })
 
 contextBridge.exposeInMainWorld('displayMode', {
@@ -404,6 +403,7 @@ contextBridge.exposeInMainWorld('shell', {
     wallpaperMine: () => ipcRenderer.invoke('windows/wallpaper-mine'),
     wallpaperMineDelete: (filePath) => ipcRenderer.invoke('windows/wallpaper-mine-delete', filePath),
     openApps: () => ipcRenderer.invoke('windows/open-apps'),
+    activate: (hwnd) => ipcRenderer.invoke('windows/activate', hwnd),
     onOpenAppsChanged: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('windows/open-apps-changed', handler)

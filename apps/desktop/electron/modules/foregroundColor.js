@@ -31,8 +31,7 @@ const SRCCOPY = 0x00CC0020
 const POLL_INTERVAL_MS = 300
 const BATTERY_SAVER_POLL_INTERVAL_MS = 1000
 
-let altTab = null
-try { altTab = require('./altTab') } catch (_) {}
+const windowSwitcher = require('./windowSwitcher')
 
 const perDisplay = new Map()
 const pendingDisplay = new Map()
@@ -174,7 +173,7 @@ function setAdaptToApps(value) {
 }
 
 function update(broadcast) {
-  if (altTab && altTab.isSwitcherActive()) return
+  if (windowSwitcher.isActive()) return
   if (!adaptToApps) return
 
   for (const [displayId, trackedHwnd] of [...hwndPerDisplay.entries()]) {

@@ -8,7 +8,7 @@ import MicrophoneStatus from "./status/microphoneStatus";
 import SystemTray from "./systemTray";
 import LauncherTrigger from "./launcherTrigger";
 import LauncherPanel from "./launcherPanel";
-import AltTabPanel from "./altTabPanel";
+import WindowSwitcherPanel from "./windowSwitcherPanel";
 import DisplayModePanel from "./displayModePanel";
 import { warmRenderableEmojis } from "../../lib/emojiRenderable";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
@@ -92,7 +92,7 @@ export default function TopBar() {
             </div>
             {launcherOpen && <LauncherPanel mode={launcherMode} />}
             <NoticeStrip />
-            <AltTabPanel />
+            <WindowSwitcherPanel />
             <DisplayModePanel />
         </ThemeProvider>
     );

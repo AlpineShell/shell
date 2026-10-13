@@ -3,6 +3,7 @@ const koffi = require('koffi')
 const appIcons = require('./appIcons')
 const windowEnum = require('./windowEnum')
 const windowRules = require('./windowRules')
+const winFocus = require('./winFocus')
 const { friendlyAppName } = require('../appNames')
 
 let lastSnapshot = null
@@ -244,6 +245,9 @@ module.exports = {
       const merged = withShellApps(lastApps)
       lastSnapshot = snapshot(merged)
       return merged
+    },
+    'windows/activate': (_event, hwnd) => {
+      winFocus.activateWindow(hwnd)
     },
   },
   start(broadcast) {

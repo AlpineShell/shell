@@ -7,7 +7,6 @@ const STORE_FILE = 'launcher-hotkey.json'
 let storePath = null
 let currentHotkey = DEFAULT_HOTKEY
 let triggerCallback = null
-let altTabModule = null
 let broadcast = null
 
 function getStorePath() {
@@ -40,8 +39,12 @@ function save() {
   }
 }
 
+function shellHotkeys() {
+  return require('./shellHotkeys')
+}
+
 function setWinLauncher(enabled) {
-  if (altTabModule && altTabModule.setWinLauncherEnabled) altTabModule.setWinLauncherEnabled(enabled)
+  shellHotkeys().setWinTapEnabled(enabled)
 }
 
 function clearAll() {
@@ -95,20 +98,9 @@ function setHotkey(hotkey) {
 
 function setTriggerCallback(cb) {
   triggerCallback = cb
-  if (altTabModule && altTabModule.onWinLauncher) {
-    altTabModule.onWinLauncher(() => {
-      if (triggerCallback) triggerCallback()
-    })
-  }
-}
-
-function setAltTabModule(mod) {
-  altTabModule = mod
-  if (triggerCallback && altTabModule && altTabModule.onWinLauncher) {
-    altTabModule.onWinLauncher(() => {
-      if (triggerCallback) triggerCallback()
-    })
-  }
+  shellHotkeys().on('winTap', () => {
+    if (triggerCallback) triggerCallback()
+  })
 }
 
 module.exports = {
@@ -119,7 +111,6 @@ module.exports = {
   },
   rebind,
   setTriggerCallback,
-  setAltTabModule,
   start(b) {
     const { app, globalShortcut } = require('electron')
     broadcast = b
