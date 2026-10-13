@@ -2,11 +2,10 @@ import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTopbarBg } from "../../themeContext";
 import { useSurfaceSuperseded } from "../../../hooks/useSurfaceSuperseded";
-import { SHOULDER, RADIUS, chromeSurfaceBounds, chromeContentBounds, type ChromeAnchor } from "../chrome/chromeShape";
+import { RADIUS, chromeSurfaceBounds, chromeContentBounds, type ChromeAnchor } from "../chrome/chromeShape";
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "../chrome/chromeStore";
+import { placePopup } from "./popupPlacement";
 
-const SCREEN_PAD = 6;
-const EDGE_PAD = 0;
 const BAR_BOTTOM = 24;
 const CLOSE_MS = 300;
 const REGION_SHRINK_DELAY_MS = 260;
@@ -72,19 +71,8 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         const bodyHeight = Math.round(rect.height);
         body.style.width = `${bodyWidth}px`;
         const triggerRect = wrapper.getBoundingClientRect();
-        const center = triggerRect.left + triggerRect.width / 2;
-        const screenW = window.innerWidth;
-        const half = bodyWidth / 2;
-        let anchor: ChromeAnchor = "center";
-        let centerX = Math.round(center);
-        if (center - half - SHOULDER < SCREEN_PAD) {
-            anchor = "left";
-            centerX = Math.round(EDGE_PAD + half);
-        } else if (center + half + SHOULDER > screenW - SCREEN_PAD) {
-            anchor = "right";
-            centerX = Math.round(screenW - EDGE_PAD - half);
-        }
-        return { centerX, bodyWidth, bodyHeight, left: centerX - bodyWidth / 2, anchor };
+        const placement = placePopup(triggerRect.left + triggerRect.width / 2, bodyWidth, window.innerWidth);
+        return { ...placement, bodyWidth, bodyHeight };
     }
 
     useLayoutEffect(() => {
