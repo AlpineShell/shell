@@ -1275,6 +1275,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
   {
     id: 'battery-saver-dimming',
+    hiddenFromLauncher: true,
     label: 'Battery saver dimming',
     description: 'Dims the built-in display while battery saver is on.',
     hint: 'Dim the displays while battery saver is on',
@@ -1293,6 +1294,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
   {
     id: 'battery-saver-dim-amount',
+    hiddenFromLauncher: true,
     label: 'Battery saver dim amount',
     description: 'How much to dim while battery saver is on',
     keywords: ['battery saver dim amount', 'dim by', 'brightness', 'power saving', 'screen'],
@@ -1310,6 +1312,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
   {
     id: 'battery-saver-dim-externals',
+    hiddenFromLauncher: true,
     label: 'Battery saver dims external monitors',
     description:
       'External monitors run on their own power supply, so dimming them saves no battery. Turn this on only if a monitor draws its power from this PC.',
@@ -1586,6 +1589,8 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     control: { kind: 'power' },
   },
 ]
+
+export const LAUNCHER_SETTINGS: SettingsEntry[] = SETTINGS_REGISTRY.filter((entry) => !entry.hiddenFromLauncher)
 
 const ENTRIES_BY_ID = new Map(SETTINGS_REGISTRY.map((entry) => [entry.id, entry]))
 

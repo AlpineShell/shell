@@ -6,7 +6,8 @@ export function useLauncherSurface(
   panelRef: RefObject<HTMLDivElement | null>,
   bodyRef: RefObject<HTMLDivElement | null>,
   width: number,
-  barBottom: number
+  barBottom: number,
+  reservedHeight: number
 ): number {
   const [surfaceId] = useState(nextSurfaceId)
   const firstLayout = useRef(true)
@@ -30,7 +31,7 @@ export function useLauncherSurface(
         anchor: 'center',
         contentEl: panel,
       })
-      window.launcher.reportPanelBottom(barBottom + height)
+      window.launcher.reportPanelBottom(barBottom + Math.max(height, reservedHeight))
     }
 
     register()
@@ -43,7 +44,7 @@ export function useLauncherSurface(
       observer.disconnect()
       window.removeEventListener('resize', register)
     }
-  }, [panelRef, bodyRef, width, barBottom, surfaceId])
+  }, [panelRef, bodyRef, width, barBottom, reservedHeight, surfaceId])
 
   useEffect(() => {
     const offStartClose = window.launcher.onStartClose(() => clearChromeSurface(surfaceId))

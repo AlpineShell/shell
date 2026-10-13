@@ -7,10 +7,11 @@ import { useLauncherSurface } from "../../../hooks/useLauncherSurface"
 import { useLauncherSearch } from "../../../hooks/useLauncherSearch"
 import { useSettingsValues, writeSettingsValue } from "../../../hooks/useSettingsValue"
 import { usePowerConfirm } from "../../../hooks/usePowerConfirm"
-import { SETTINGS_REGISTRY, isSettingsValueEntry } from "../../../settings/registry"
+import { LAUNCHER_SETTINGS, isSettingsValueEntry } from "../../../settings/registry"
 import { flattenRows } from "../../../lib/launcher/launcherQuery"
 import { RADIUS } from "../chrome/chromeShape"
 import { launcherColors } from "./launcherColors"
+import { searchPanelMaxHeight } from "./launcherSizing"
 import { ARM_ACTION_ID, commandLabel, opensView, rowActions } from "./launcherActions"
 import { SearchBar } from "./searchBar"
 import { ResultList } from "./resultList"
@@ -21,10 +22,10 @@ import { WallpaperView } from "./views/wallpaperView"
 import { EmojiView } from "./views/emojiView"
 
 const BAR_BOTTOM = 24
-const DEFAULT_WIDTH = 600
+const DEFAULT_WIDTH = 720
 const UNINSTALL_NOTICE_MS = 1100
 const SEARCH_PLACEHOLDER = "Search apps, windows and settings"
-const VALUE_ENTRIES = SETTINGS_REGISTRY.filter(
+const VALUE_ENTRIES = LAUNCHER_SETTINGS.filter(
   (entry): entry is SettingsValueEntry => isSettingsValueEntry(entry) && (entry.control.kind === "toggle" || entry.control.kind === "slider")
 )
 
@@ -75,7 +76,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const panelRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
-  const surfaceId = useLauncherSurface(panelRef, bodyRef, width, BAR_BOTTOM)
+  const surfaceId = useLauncherSurface(panelRef, bodyRef, width, BAR_BOTTOM, view.kind === "search" ? searchPanelMaxHeight() : 0)
   const superseded = useSurfaceSuperseded(surfaceId)
   const settingValues = useSettingsValues(VALUE_ENTRIES)
   const powerConfirm = usePowerConfirm()
@@ -340,7 +341,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       <div
         ref={panelRef}
         className="absolute"
-        style={{ top: BAR_BOTTOM, left: "50%", width, transform: "translateX(-50%)", outline: "none", overflow: "hidden", borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`, willChange: "clip-path" }}
+        style={{ top: BAR_BOTTOM, left: "50%", width, transform: "translateX(-50%)", outline: "none", overflow: "clip", borderRadius: `0 0 ${RADIUS}px ${RADIUS}px`, willChange: "clip-path" }}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div ref={bodyRef} className="flex flex-col">

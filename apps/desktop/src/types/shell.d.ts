@@ -1168,6 +1168,7 @@ declare global {
     group: string
     order: number
     applies: SettingsApplies
+    hiddenFromLauncher?: boolean
   }
 
   interface SettingsValueEntry extends SettingsEntryBase {

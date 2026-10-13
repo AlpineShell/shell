@@ -5,7 +5,7 @@ import { useBookmarks } from './useBookmarks'
 import { useBrowserTabs } from './useBrowserTabs'
 import { useLauncherShowBookmarks } from './useLauncherShowBookmarks'
 import { useLauncherShowBrowserTabs } from './useLauncherShowBrowserTabs'
-import { SETTINGS_REGISTRY, settingsEntryHint } from '../settings/registry'
+import { LAUNCHER_SETTINGS, settingsEntryHint } from '../settings/registry'
 import { LAUNCHER_COMMANDS } from '../lib/launcher/launcherCommands'
 import {
   appEntries,
@@ -16,7 +16,7 @@ import {
   windowEntries,
 } from '../lib/launcher/launcherEntries'
 
-const SETTING_ENTRIES = settingEntries(SETTINGS_REGISTRY, settingsEntryHint)
+const SETTING_ENTRIES = settingEntries(LAUNCHER_SETTINGS, settingsEntryHint)
 const COMMAND_ENTRIES = commandEntries(LAUNCHER_COMMANDS)
 
 export function useLauncherEntries(): LauncherEntry[] {
