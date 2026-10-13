@@ -5,6 +5,7 @@ const {
   VK_DOWN,
   VK_E,
   VK_I,
+  VK_M,
   VK_P,
   VK_S,
   VK_ESCAPE,
@@ -31,6 +32,8 @@ const SHELL_SHORTCUTS = Object.freeze([
   { action: 'openEmojiPicker', vkCode: VK_OEM_PERIOD, win: true, releasesWinKey: true },
   { action: 'openDisplayModePicker', vkCode: VK_P, win: true },
   { action: 'takeScreenshot', vkCode: VK_S, win: true, shift: true },
+  { action: 'minimizeAll', vkCode: VK_M, win: true, shift: false },
+  { action: 'restoreMinimized', vkCode: VK_M, win: true, shift: true },
   { action: 'cancelScreenshot', vkCode: VK_ESCAPE, inline: true },
 ])
 

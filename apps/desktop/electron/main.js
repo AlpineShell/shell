@@ -123,6 +123,7 @@ const windowSwitcher = require('./modules/windowSwitcher')
 const switcherWindows = require('./modules/switcherWindows')
 const shellSurfaces = require('./modules/shellSurfaces')
 const activeDisplay = require('./modules/activeDisplay')
+const minimizeAll = require('./modules/minimizeAll')
 let screenshot = null
 try { screenshot = require('./modules/screenshot') } catch (e) { console.error('[main] screenshot load error:', e.message) }
 let powerThrottling = null
@@ -1136,6 +1137,8 @@ function wireShellHotkeys() {
   shellHotkeys.on('openSettings', () => openSettingsFromHotkey())
   shellHotkeys.on('openEmojiPicker', () => launcher.showEmoji())
   shellHotkeys.on('openDisplayModePicker', () => displayModePicker.open())
+  shellHotkeys.on('minimizeAll', () => minimizeAll.minimizeAll())
+  shellHotkeys.on('restoreMinimized', () => minimizeAll.restoreMinimized())
   if (screenshot) {
     shellHotkeys.on('takeScreenshot', () => screenshot.showOverlay())
     shellHotkeys.on('cancelScreenshot', () => screenshot.hideOverlay())

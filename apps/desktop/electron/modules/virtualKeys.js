@@ -13,6 +13,7 @@ const VK_RIGHT = 0x27
 const VK_DOWN = 0x28
 const VK_E = 0x45
 const VK_I = 0x49
+const VK_M = 0x4D
 const VK_P = 0x50
 const VK_S = 0x53
 const VK_LWIN = 0x5B
@@ -46,6 +47,7 @@ module.exports = {
   VK_DOWN,
   VK_E,
   VK_I,
+  VK_M,
   VK_P,
   VK_S,
   VK_LWIN,

@@ -3,7 +3,7 @@ import shellHotkeyPolicy from './shellHotkeyPolicy.js'
 import virtualKeys from './virtualKeys.js'
 
 const { SHELL_SHORTCUTS, shortcutForKey, createWinTapTracker } = shellHotkeyPolicy
-const { VK_LEFT, VK_DOWN, VK_E, VK_I, VK_P, VK_S, VK_ESCAPE, VK_OEM_PERIOD, VK_LWIN, VK_RWIN, VK_SHIFT, VK_TAB } = virtualKeys
+const { VK_LEFT, VK_DOWN, VK_E, VK_I, VK_M, VK_P, VK_S, VK_ESCAPE, VK_OEM_PERIOD, VK_LWIN, VK_RWIN, VK_SHIFT, VK_TAB } = virtualKeys
 
 function modifiers({ win = false, shift = false } = {}) {
   return { isWinHeld: () => win, isShiftHeld: () => shift }
@@ -29,6 +29,14 @@ function keyUp(vkCode) {
 const stillHeld = () => true
 
 describe('shortcutForKey', () => {
+  it('minimizes every window on Win+M', () => {
+    expect(actionFor(VK_M, WIN)).toBe('minimizeAll')
+  })
+
+  it('brings the minimized windows back on Win+Shift+M', () => {
+    expect(actionFor(VK_M, WIN_SHIFT)).toBe('restoreMinimized')
+  })
+
   it('opens File Explorer, Settings, emoji and display mode on their Win shortcuts', () => {
     expect(actionFor(VK_E, WIN)).toBe('openFileExplorer')
     expect(actionFor(VK_I, WIN)).toBe('openSettings')
@@ -52,7 +60,7 @@ describe('shortcutForKey', () => {
   })
 
   it('needs Win held for every Win shortcut', () => {
-    for (const vkCode of [VK_E, VK_I, VK_OEM_PERIOD, VK_P, VK_LEFT]) {
+    for (const vkCode of [VK_M, VK_E, VK_I, VK_OEM_PERIOD, VK_P, VK_LEFT]) {
       expect(shortcutForKey(vkCode, NONE)).toBe(null)
     }
     expect(shortcutForKey(VK_S, modifiers({ shift: true }))).toBe(null)
