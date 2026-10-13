@@ -6,6 +6,7 @@ import { canToggleRadio, deviceActionLabel, deviceStatusLabel, displayedRadioOn,
 import { moveSelection, resolveSelection } from "../../../../lib/listSelection"
 import { launcherColors } from "../launcherColors"
 import { MENU_LIST_CLASS, MenuDivider, SubToggle } from "./launcherMenu"
+import { menuListMaxHeight } from "../launcherSizing"
 
 const RADIO_ROW = "radio"
 
@@ -52,7 +53,7 @@ export function BluetoothView({ darkText, onBack }: { darkText: boolean; onBack:
   })
 
   return (
-    <div ref={listRef} className={`${MENU_LIST_CLASS} ${darkText ? "cc-scroll-light" : ""}`}>
+    <div ref={listRef} className={`${MENU_LIST_CLASS} ${darkText ? "cc-scroll-light" : ""}`} style={{ maxHeight: menuListMaxHeight() }}>
       <button
         type="button"
         role="switch"

@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react"
 import { ChevronRight } from "lucide-react"
 import { launcherColors } from "../launcherColors"
+import { menuListMaxHeight } from "../launcherSizing"
 
-export const MENU_LIST_CLASS = "flex flex-col p-1.5 gap-0.5 max-h-[min(260px,60vh)] overflow-y-auto min-h-0 snap-y snap-proximity cc-scroll"
+export const MENU_LIST_CLASS = "flex flex-col p-1.5 gap-0.5 overflow-y-auto min-h-0 snap-y snap-proximity cc-scroll"
 
 export function SubToggle({ on, darkText }: { on: boolean; darkText: boolean }) {
   const track = on ? (darkText ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.9)") : darkText ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.18)"
@@ -81,7 +82,7 @@ export function LauncherMenu({ items, darkText, onBack, onSelectionChange, empty
   })
 
   return (
-    <div ref={listRef} className={`${MENU_LIST_CLASS} ${darkText ? "cc-scroll-light" : ""}`}>
+    <div ref={listRef} className={`${MENU_LIST_CLASS} ${darkText ? "cc-scroll-light" : ""}`} style={{ maxHeight: menuListMaxHeight() }}>
       {items.length === 0 && emptyText ? (
         <div className={`px-2.5 py-4 text-[13px] shrink-0 ${colors.dim}`}>{emptyText}</div>
       ) : items.map((item, index) => {

@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 import {
+  LAUNCHER_SETTINGS,
   SETTINGS_PAGES,
   SETTINGS_REGISTRY,
   SETTINGS_SECTIONS,
@@ -29,9 +30,6 @@ const LAUNCHER_SETTING_IDS = [
   'battery-saver',
   'battery-saver-automatic',
   'battery-saver-threshold',
-  'battery-saver-dimming',
-  'battery-saver-dim-externals',
-  'battery-saver-dim-amount',
   'battery-saver-polling',
   'battery-saver-throttling',
   'wallpaper',
@@ -45,6 +43,8 @@ const LAUNCHER_SETTING_IDS = [
   'system',
   'power',
 ]
+
+const SETTINGS_ONLY_IDS = ['battery-saver-dimming', 'battery-saver-dim-amount', 'battery-saver-dim-externals']
 
 const APPLIES = ['instant', 'confirm', 'restart', 'draft']
 
@@ -321,8 +321,17 @@ describe('settings registry', () => {
   })
 
   it('keeps every setting the launcher exposes today', () => {
+    const launcherIds = new Set(LAUNCHER_SETTINGS.map((entry) => entry.id))
     for (const id of LAUNCHER_SETTING_IDS) {
+      expect(launcherIds.has(id)).toBe(true)
+    }
+  })
+
+  it('keeps settings-only entries in the settings window and out of the launcher', () => {
+    const launcherIds = new Set(LAUNCHER_SETTINGS.map((entry) => entry.id))
+    for (const id of SETTINGS_ONLY_IDS) {
       expect(settingsEntry(id)).not.toBeNull()
+      expect(launcherIds.has(id)).toBe(false)
     }
   })
 

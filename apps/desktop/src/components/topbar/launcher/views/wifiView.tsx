@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Loader2, Lock, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react"
 import { launcherColors } from "../launcherColors"
 import { MENU_LIST_CLASS, MenuDivider, SubToggle } from "./launcherMenu"
+import { menuListMaxHeight } from "../launcherSizing"
 
 function WifiSignalIcon({ signal, color, size }: { signal: number; color: string; size: number }) {
   if (signal >= 70) return <Wifi color={color} size={size} />
@@ -104,7 +105,7 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
   })
 
   return (
-    <div ref={listRef} className={`${MENU_LIST_CLASS} ${darkText ? "cc-scroll-light" : ""}`}>
+    <div ref={listRef} className={`${MENU_LIST_CLASS} ${darkText ? "cc-scroll-light" : ""}`} style={{ maxHeight: menuListMaxHeight() }}>
       <button
         type="button"
         data-idx={0}
