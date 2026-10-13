@@ -98,7 +98,7 @@ describe("rankScore", () => {
   })
 
   it("prefers switching to an open window over an equally matched setting", () => {
-    const open = { kind: "open" as const, key: "c:\\chrome.exe", match: 50_000 }
+    const open = { kind: "window" as const, key: "c:\\chrome.exe", match: 50_000 }
     const setting = { kind: "setting" as const, key: settingResultKey("chrome"), match: 50_000 }
     expect(rankScore(open, EMPTY_LAUNCHER_MEMORY, "chrome")).toBeGreaterThan(rankScore(setting, EMPTY_LAUNCHER_MEMORY, "chrome"))
   })
@@ -106,7 +106,7 @@ describe("rankScore", () => {
   it("keeps the learned pick first even when the result it beat has an open window", () => {
     const youtube = appCandidate("YouTube", YOUTUBE_TARGET, "yt")
     const youtubeMusic = appCandidate("YouTube Music", YOUTUBE_MUSIC_TARGET, "yt")
-    const youtubeWindow = { kind: "open" as const, key: youtube.key, match: youtube.match }
+    const youtubeWindow = { kind: "window" as const, key: youtube.key, match: youtube.match }
     const memory = { usage: {}, queries: { [youtubeMusic.key]: { yt: 1 } } }
     expect(rankScore(youtubeMusic, memory, "yt")).toBeGreaterThan(rankScore(youtubeWindow, memory, "yt"))
   })
@@ -115,16 +115,16 @@ describe("rankScore", () => {
 describe("open windows against installed apps", () => {
   it("switches to the running window instead of launching the app it matches as well as", () => {
     const chrome = appCandidate("Google Chrome", CHROME_TARGET, "chrome")
-    const chromeWindow = { kind: "open" as const, key: chrome.key, match: chrome.match }
+    const chromeWindow = { kind: "window" as const, key: chrome.key, match: chrome.match }
     const ranked = rankEntries([chrome, chromeWindow], EMPTY_LAUNCHER_MEMORY, "chrome")
-    expect(ranked.map((entry) => entry.kind)).toEqual(["open", "app"])
+    expect(ranked.map((entry) => entry.kind)).toEqual(["window", "app"])
   })
 
   it("leaves a clearly better app match on top of an open window", () => {
     const notepad = appCandidate("Notepad", NOTEPAD_TARGET, "note")
-    const chromeWindow = { kind: "open" as const, key: appResultKey(CHROME_TARGET), match: scoreField("note", "Release notes - Google Chrome") }
+    const chromeWindow = { kind: "window" as const, key: appResultKey(CHROME_TARGET), match: scoreField("note", "Release notes - Google Chrome") }
     const ranked = rankEntries([chromeWindow, notepad], EMPTY_LAUNCHER_MEMORY, "note")
-    expect(ranked.map((entry) => entry.kind)).toEqual(["app", "open"])
+    expect(ranked.map((entry) => entry.kind)).toEqual(["app", "window"])
   })
 })
 
@@ -135,12 +135,12 @@ describe("rankEntries", () => {
         { kind: "setting" as const, key: settingResultKey("bluetooth"), match: 40_000 },
         { kind: "app" as const, key: "c:\\none.exe", match: -1 },
         { kind: "tab" as const, key: tabResultKey("youtube.com", "Video"), match: 30_000 },
-        { kind: "open" as const, key: "c:\\bt.exe", match: 40_000 },
+        { kind: "window" as const, key: "c:\\bt.exe", match: 40_000 },
       ],
       EMPTY_LAUNCHER_MEMORY,
       "bt",
     )
-    expect(entries.map((entry) => entry.kind)).toEqual(["open", "setting", "tab"])
+    expect(entries.map((entry) => entry.kind)).toEqual(["window", "setting", "tab"])
   })
 })
 
@@ -155,7 +155,7 @@ describe("result keys", () => {
 })
 
 describe("adoptInstalledAppMatch", () => {
-  const openTeams = { kind: "open" as const, key: "c:\\program files\\windowsapps\\msteams\\ms-teams.exe", match: 10_101 }
+  const openTeams = { kind: "window" as const, key: "c:\\program files\\windowsapps\\msteams\\ms-teams.exe", match: 10_101 }
   const installedTeams = { kind: "app" as const, key: "msteams_8wekyb3d8bbwe!msteams", match: 19_998 }
 
   it("lets a running window stand in for its installed app without losing the app's match or memory", () => {

@@ -44,4 +44,11 @@ function restoreMinimized() {
   if (activate) winFocus.activateWindow(activate)
 }
 
-module.exports = { minimizeAll, restoreMinimized }
+module.exports = {
+  handlers: {
+    'windows/minimize-all': () => minimizeAll(),
+    'windows/restore-minimized': () => restoreMinimized(),
+  },
+  minimizeAll,
+  restoreMinimized,
+}

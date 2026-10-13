@@ -19,7 +19,6 @@ const LAUNCHER_SETTING_IDS = [
   'bluetooth',
   'mute',
   'topbar-search-icon',
-  'recent-apps',
   'browser-bookmarks',
   'browser-tabs',
   'media-visualizer',

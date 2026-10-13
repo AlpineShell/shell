@@ -480,6 +480,7 @@ declare global {
     url?: string
     isBookmark?: boolean
     favicon?: string
+    description?: string
   }
 
   interface Bookmark {
@@ -1598,7 +1599,7 @@ declare global {
     onNavigate: (path: string) => void
   }
 
-  type LauncherResultKind = 'open' | 'app' | 'tab' | 'bookmark' | 'setting' | 'wincmd'
+  type LauncherResultKind = 'window' | 'app' | 'tab' | 'bookmark' | 'setting' | 'command'
 
   interface LauncherMemory {
     usage: Record<string, number>
@@ -1610,6 +1611,140 @@ declare global {
     key: string
     match: number
   }
+
+  interface SemanticModel {
+    dim: number
+    vocab: ReadonlyMap<string, number>
+    scales: Float32Array
+    values: Int8Array
+  }
+
+  interface SemanticIndex {
+    embedQuery(query: string): Float32Array | null
+    similarity(queryVector: Float32Array, text: string): number
+  }
+
+  type LauncherEntrySection = 'windows' | 'apps' | 'commands' | 'settings' | 'bookmarks'
+
+  type LauncherSectionId = 'calculator' | 'run' | LauncherEntrySection | 'web'
+
+  interface LauncherSearchTerm {
+    text: string
+    penalty: number
+    minScore: number
+  }
+
+  type PowerCommandAction = 'shutdown' | 'restart' | 'logout' | 'lock' | 'sleep'
+
+  type LauncherCommandRun =
+    | { kind: 'window-command'; action: 'minimize' | 'maximize' | 'close' }
+    | { kind: 'power'; action: PowerCommandAction; confirm: boolean }
+    | { kind: 'minimize-all' }
+    | { kind: 'restore-minimized' }
+    | { kind: 'screenshot' }
+
+  interface LauncherCommand {
+    id: string
+    rankKey: string
+    label: string
+    keywords: string[]
+    icon: SettingsIcon
+    run: LauncherCommandRun
+  }
+
+  interface LauncherEntryBase {
+    id: string
+    rankKey: string
+    section: LauncherEntrySection
+    title: string
+    subtitle: string
+    fields: import('../lib/launcherSearch').SearchFields | null
+    terms: LauncherSearchTerm[]
+    semanticText: string | null
+  }
+
+  type LauncherEntry = LauncherEntryBase & (
+    | { kind: 'window'; app: OpenApp; launchItem: LauncherItem | null }
+    | { kind: 'tab'; tab: BrowserTab; host: string | null; favicon: string | null; windowIcon: string | null }
+    | { kind: 'app'; item: LauncherItem }
+    | { kind: 'bookmark'; bookmark: Bookmark }
+    | { kind: 'setting'; setting: SettingsEntry }
+    | { kind: 'command'; command: LauncherCommand }
+  )
+
+  type LauncherRow =
+    | { kind: 'entry'; id: string; entry: LauncherEntry; score: number; semantic: boolean }
+    | { kind: 'math'; id: string; value: string }
+    | { kind: 'run'; id: string; query: string; run: RunResult }
+    | { kind: 'web'; id: string; query: string }
+
+  interface LauncherSection {
+    id: LauncherSectionId
+    rows: LauncherRow[]
+  }
+
+  interface LauncherSearchContext {
+    memory: LauncherMemory
+    maxResults: number
+    semantic: SemanticIndex | null
+    run: RunResult | null
+  }
+
+  interface LauncherAction {
+    id: string
+    label: string
+    icon: SettingsIcon
+    shortcut: 'enter' | 'ctrl-enter' | null
+    run(): void
+  }
+
+  interface LauncherColors {
+    text: string
+    dim: string
+    faint: string
+    icon: string
+    hover: string
+    selected: string
+    divider: string
+    softDivider: string
+    placeholder: string
+    chip: string
+    badgeBackground: string
+    iconStroke: string
+    iconStrokeDim: string
+  }
+
+  interface LauncherMenuItemBase {
+    id: string
+    label: string
+    icon?: SettingsIcon
+    iconSrc?: string | null
+    dividerAfter?: boolean
+  }
+
+  type LauncherMenuItem = LauncherMenuItemBase & (
+    | { kind: 'toggle'; value: boolean; onToggle: () => void }
+    | { kind: 'slider'; value: number; min: number; max: number; step: number; unit?: string; onChange: (value: number) => void }
+    | { kind: 'select'; value: string; options: { value: string; label: string }[]; onChange: (value: string) => void }
+    | { kind: 'action'; onRun: () => void }
+    | { kind: 'submenu'; onOpen: () => void }
+  )
+
+  interface LauncherActionContext {
+    query: string
+    settingValues: Record<string, SettingsValue>
+    powerConfirm: boolean
+    armedCommandId: string | null
+    arm(commandId: string): void
+    enterView(view: LauncherView): void
+    uninstall(item: LauncherItem): void
+  }
+
+  type LauncherView =
+    | { kind: 'search' }
+    | { kind: 'setting'; settingId: string; title: string }
+    | { kind: 'wallpaper' }
+    | { kind: 'emoji'; insertIntoForeground: boolean }
 
   interface RootReloadPlan {
     reload: boolean
@@ -1701,7 +1836,6 @@ declare global {
       launchAdmin: (id: number) => Promise<{ success: boolean }>
       uninstall: (id: number) => Promise<{ ok: boolean; mode: 'store' | 'desktop' | 'settings' | 'none' }>
       openLocation: (id: number) => Promise<{ success: boolean }>
-      closeWindow: (hwnd: number) => Promise<{ success: boolean }>
       endTask: (pid: number) => Promise<{ success: boolean }>
       insertText: (text: string) => Promise<{ ok: boolean }>
       recentEmoji: () => Promise<string[]>
@@ -1717,9 +1851,8 @@ declare global {
       scores: () => Promise<LauncherMemory>
       recordSelection: (key: string, query: string) => Promise<boolean>
       onScoresChanged: (callback: (data: LauncherMemory) => void) => () => void
-      recentApps: () => Promise<boolean>
-      setRecentApps: (value: boolean) => Promise<boolean>
-      onRecentAppsChanged: (callback: (value: boolean) => void) => () => void
+      semanticModel: () => Promise<Uint8Array | null>
+      takeScreenshot: () => Promise<void>
       showBookmarks: () => Promise<boolean>
       setShowBookmarks: (value: boolean) => Promise<boolean>
       onShowBookmarksChanged: (callback: (value: boolean) => void) => () => void
@@ -1795,6 +1928,10 @@ declare global {
         wallpaperMineDelete: (filePath: string) => Promise<boolean>
         openApps: () => Promise<OpenApp[]>
         activate: (hwnd: number) => Promise<void>
+        minimize: (hwnd: number) => Promise<void>
+        close: (hwnd: number) => Promise<void>
+        minimizeAll: () => Promise<void>
+        restoreMinimized: () => Promise<void>
         onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => () => void
         openSettings: (page?: string) => Promise<void>
         closeSettings: () => Promise<void>
@@ -1884,7 +2021,7 @@ declare global {
         keepDisplayLayout: () => Promise<{ ok: boolean }>
         revertDisplayLayout: () => Promise<DisplayInfo[]>
         onDisplaysChanged: (callback: (data: DisplayInfo[]) => void) => () => void
-        powerAction: (action: PowerAction) => Promise<void>
+        powerAction: (action: PowerCommandAction) => Promise<void>
         powerConfirm: () => Promise<boolean>
         setPowerConfirm: (value: boolean) => Promise<boolean>
         onPowerConfirmChanged: (callback: (value: boolean) => void) => () => void

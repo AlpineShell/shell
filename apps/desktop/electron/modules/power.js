@@ -17,6 +17,18 @@ function getStorePath() {
   return storePath
 }
 
+function lockWorkstation() {
+  const koffi = require('koffi')
+  const LockWorkStation = koffi.load('user32.dll').func('__stdcall', 'LockWorkStation', 'int', [])
+  if (!LockWorkStation()) console.error('[power] LockWorkStation failed')
+}
+
+function suspendToSleep() {
+  const koffi = require('koffi')
+  const SetSuspendState = koffi.load('powrprof.dll').func('__stdcall', 'SetSuspendState', 'uint8', ['uint8', 'uint8', 'uint8'])
+  if (!SetSuspendState(0, 0, 0)) console.error('[power] SetSuspendState failed')
+}
+
 function powerAction(action) {
   switch (action) {
     case 'shutdown':
@@ -27,6 +39,12 @@ function powerAction(action) {
       break
     case 'logout':
       exec('shutdown /l')
+      break
+    case 'lock':
+      lockWorkstation()
+      break
+    case 'sleep':
+      suspendToSleep()
       break
   }
 }

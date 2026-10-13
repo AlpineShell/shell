@@ -1,36 +1,15 @@
-const { app, shell: electronShell, BrowserWindow } = require('electron')
-const path = require('path')
+const { BrowserWindow } = require('electron')
 const fs = require('fs')
-const { execFile, exec } = require('child_process')
-const { forceForeground, getForegroundWindow, letLaunchedAppComeForward, minimizeWindow, maximizeWindow, closeWindow, insertText } = require('./winFocus')
-const appIcons = require('./appIcons')
-const appManager = require('./appManager')
-const appxPackages = require('./appxPackages')
+const path = require('path')
+const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow, insertText } = require('./winFocus')
 const appActivator = require('../appActivator')
-const { shellExecute, shellExecuteElevated } = require('../shellExecute')
-const { shellLinkInShortcut } = require('../launcherDeepLink')
-const plugins = require('./plugins')
-const pluginBackendHost = require('../pluginBackendHost')
-const notice = require('./shellNotice')
+const appCatalog = require('./appCatalog')
+const appLaunch = require('./appLaunch')
+const shellSurfaces = require('./shellSurfaces')
 
-const PLUGIN_UNINSTALL_TIMEOUT_MS = 300000
+const SEMANTIC_MODEL_PATH = path.join(__dirname, '..', 'assets', 'semanticSearchModel.bin')
+const CLOSE_ANIMATION_MS = 300
 
-const SCAN_DIRS = [
-  path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-  path.join(process.env.PROGRAMDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-  path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-]
-
-let index = []
-let startApps = []
-let startAppsRefreshDebounce = null
-let lastStartAppsRefresh = 0
-let fallbackRefreshTimer = null
-const shortcutInfoCache = new Map()
-const lnkIconCache = new Map()
-const startAppIconCache = new Map()
-let broadcast = null
-let shells = null
 let activeDisplayId = null
 let activeTopBar = null
 let hideTimeout = null
@@ -38,8 +17,8 @@ let hideTimeoutTopBar = null
 let lastUserForeground = 0
 let switcherCloser = null
 let emojiCaptureControl = null
-let shellLinkOpener = null
 let displayProvider = null
+let screenshotStarter = null
 const lastPanelBottom = new Map()
 
 function applyPanelBounds(topBar, displayId) {
@@ -53,370 +32,12 @@ function setEmojiCapture(active, hwnd) {
   }
 }
 
-const LAUNCHER_WIDTH = 600
-const START_APPS_REFRESH_MIN_GAP = 30000
-const START_APPS_FALLBACK_REFRESH_INTERVAL = 1800000
-
-function publishIndex() {
-  if (!broadcast) return
-  broadcast('apps/catalog-changed', index)
-}
-
-function walkShortcuts(dir, out) {
-  let entries
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      walkShortcuts(full, out)
-    } else if (entry.isFile()) {
-      const lower = entry.name.toLowerCase()
-      if (lower.endsWith('.lnk') || lower.endsWith('.url')) out.push(full)
-    }
-  }
-}
-
-function readUrlShortcut(filePath) {
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8')
-    const urlMatch = content.match(/^URL=(.+)$/m)
-    if (!urlMatch) return null
-    const iconMatch = content.match(/^IconFile=(.+)$/m)
-    const indexMatch = content.match(/^IconIndex=(-?\d+)$/m)
-    return {
-      target: urlMatch[1].trim(),
-      icon: iconMatch ? iconMatch[1].trim() : null,
-      iconIndex: indexMatch ? parseInt(indexMatch[1], 10) : 0,
-    }
-  } catch {
-    return null
-  }
-}
-
-function getStartApps() {
-  return new Promise((resolve) => {
-    const script = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-StartApps | Select-Object Name,AppID | ConvertTo-Json -Compress'
-    execFile('powershell', ['-NoProfile', '-Command', script], { maxBuffer: 16 * 1024 * 1024, windowsHide: true, timeout: 15000 }, (err, stdout) => {
-      if (err) {
-        console.error('[launcher] start apps discovery error:', err.message)
-        return resolve([])
-      }
-      let parsed = []
-      try { parsed = JSON.parse(stdout || '[]') } catch {}
-      if (!Array.isArray(parsed)) parsed = [parsed]
-      const apps = []
-      for (const entry of parsed) {
-        if (!entry || !entry.Name || !entry.AppID) continue
-        const name = String(entry.Name).trim()
-        const appId = String(entry.AppID).trim()
-        if (name && appId) apps.push({ name, appId })
-      }
-      resolve(apps)
-    })
-  })
-}
-
-const BLOCKED_NAMES = new Set(['settings'])
-const DOCUMENT_APPID_EXTS = new Set(['.txt', '.chm', '.hlp', '.pdf', '.html', '.htm', '.rtf', '.md', '.ini', '.log', '.url', '.website'])
-
-function isDocumentAppId(appId) {
-  if (!appId.includes('\\')) return false
-  return DOCUMENT_APPID_EXTS.has(path.extname(appId).toLowerCase())
-}
-
-function readShortcutInfoCached(scPath, isUrl) {
-  if (!isUrl) return appIcons.readShortcutLinkCached(scPath)
-  const key = scPath.toLowerCase()
-  let mtimeMs
-  try { mtimeMs = fs.statSync(scPath).mtimeMs } catch { shortcutInfoCache.delete(key); return null }
-  const cached = shortcutInfoCache.get(key)
-  if (cached && cached.mtimeMs === mtimeMs) return cached.info
-  const info = readUrlShortcut(scPath)
-  shortcutInfoCache.set(key, { mtimeMs, info })
-  return info
-}
-
-function dormantPluginFolders() {
-  const folders = new Set()
-  let records = []
-  try {
-    records = plugins.listPlugins()
-  } catch (e) {
-    console.error('[launcher] plugin folder lookup failed:', e && e.message)
-    return folders
-  }
-  for (const record of records) {
-    const contributed = (record.contributes && record.contributes.launcherFolders) || []
-    if (!contributed.length) continue
-    if (record.enabled !== false && record.loadable === true) continue
-    for (const entry of contributed) folders.add(String(entry.startMenuFolder).toLowerCase())
-  }
-  return folders
-}
-
-function pluginFolderOwners() {
-  const owners = new Map()
-  let records = []
-  try {
-    records = plugins.listPlugins()
-  } catch (e) {
-    console.error('[launcher] plugin folder lookup failed:', e && e.message)
-    return owners
-  }
-  for (const record of records) {
-    if (record.enabled === false || record.loadable !== true) continue
-    for (const entry of (record.contributes && record.contributes.launcherFolders) || []) {
-      owners.set(String(entry.startMenuFolder).toLowerCase(), {
-        pluginId: record.id,
-        pluginName: record.name || record.id,
-        badge: entry.badge ? `alpine-plugin://${record.id}/${entry.badge}` : null,
-        uninstallCommand: entry.uninstallCommand || null,
-      })
-    }
-  }
-  return owners
-}
-
-function ownerForShortcut(scPath, owners) {
-  if (owners.size === 0) return null
-  for (const dir of SCAN_DIRS) {
-    if (!dir) continue
-    const relative = path.relative(dir, scPath)
-    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue
-    const segments = relative.split(path.sep)
-    segments.pop()
-    for (const segment of segments) {
-      const owner = owners.get(segment.toLowerCase())
-      if (owner) return owner
-    }
-  }
-  return null
-}
-
-function isInDormantFolder(scPath, dormantFolders) {
-  if (dormantFolders.size === 0) return false
-  for (const dir of SCAN_DIRS) {
-    if (!dir) continue
-    const relative = path.relative(dir, scPath)
-    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue
-    const segments = relative.split(path.sep)
-    segments.pop()
-    if (segments.some((segment) => dormantFolders.has(segment.toLowerCase()))) return true
-  }
-  return false
-}
-
-function collectLnkItems() {
-  const shortcutPaths = []
-  for (const dir of SCAN_DIRS) walkShortcuts(dir, shortcutPaths)
-
-  const dormantFolders = dormantPluginFolders()
-  const owners = pluginFolderOwners()
-  const seenNames = new Set()
-  const items = []
-
-  for (const scPath of shortcutPaths) {
-    const name = path.basename(scPath, path.extname(scPath))
-    const dedupeKey = name.toLowerCase()
-    if (isInDormantFolder(scPath, dormantFolders)) {
-      seenNames.add(dedupeKey)
-      continue
-    }
-
-    const isUrl = scPath.toLowerCase().endsWith('.url')
-    const info = readShortcutInfoCached(scPath, isUrl)
-    if (!info?.target) continue
-    if (info.target.toLowerCase().startsWith('ms-settings:')) continue
-
-    if (BLOCKED_NAMES.has(dedupeKey)) continue
-    if (seenNames.has(dedupeKey)) continue
-    seenNames.add(dedupeKey)
-    const owner = ownerForShortcut(scPath, owners)
-
-    items.push({
-      id: items.length,
-      name,
-      lnkPath: scPath,
-      target: info.target,
-      iconSource: info.icon && info.icon.length > 0 ? info.icon : (isUrl ? null : info.target),
-      iconIndex: info.iconIndex || 0,
-      icon: null,
-      badge: owner ? owner.badge : null,
-      owner,
-      shellLink: shellLinkInShortcut(info),
-      isUrl,
-    })
-  }
-
-  return { items, seenNames }
-}
-
-function mergeStartAppsInto(items, seenNames, generic) {
-  const newItems = []
-  for (const startApp of startApps) {
-    const dedupeKey = startApp.name.toLowerCase()
-    if (BLOCKED_NAMES.has(dedupeKey)) continue
-    if (startApp.appId.toLowerCase().startsWith('windows.immersivecontrolpanel')) continue
-    if (isDocumentAppId(startApp.appId)) continue
-    if (seenNames.has(dedupeKey)) continue
-    seenNames.add(dedupeKey)
-    const cachedIcon = startAppIconCache.get(startApp.appId.toLowerCase())
-    const item = {
-      id: 0,
-      name: startApp.name,
-      lnkPath: null,
-      appId: startApp.appId,
-      target: startApp.appId,
-      icon: cachedIcon || generic,
-    }
-    items.push(item)
-    newItems.push(item)
-  }
-  return newItems
-}
-
-async function resolveStartAppIcons(newItems) {
-  const missing = newItems.filter((i) => !startAppIconCache.has(i.appId.toLowerCase()))
-  if (missing.length === 0) return false
-  const icons = await appIcons.resolveAppIcons(missing.map((i) => i.appId))
-  for (let k = 0; k < missing.length; k++) {
-    const url = icons[k] || null
-    startAppIconCache.set(missing[k].appId.toLowerCase(), url)
-    if (url) missing[k].icon = url
-  }
-  return true
-}
-
-function lnkIconIdentity(source, index) {
-  let stamp = ''
-  try {
-    const stat = fs.statSync(appIcons.expandEnv(source))
-    stamp = `${stat.mtimeMs}|${stat.size}`
-  } catch { void 0 }
-  return { key: `${source.toLowerCase()}|${index}`, stamp }
-}
-
-async function resolveLnkIcons(iconItems, generic) {
-  const uncached = []
-  for (const item of iconItems) {
-    const identity = lnkIconIdentity(item.iconSource, item.iconIndex || 0)
-    const cached = lnkIconCache.get(identity.key)
-    if (cached && cached.stamp === identity.stamp) item.icon = cached.url || generic
-    else uncached.push({ item, identity })
-  }
-  if (uncached.length === 0) return
-  const icons = await appIcons.resolveIcons(uncached.map((u) => ({ path: u.item.iconSource, index: u.item.iconIndex || 0 })))
-  for (let k = 0; k < uncached.length; k++) {
-    const url = icons[k] || null
-    lnkIconCache.set(uncached[k].identity.key, { stamp: uncached[k].identity.stamp, url })
-    uncached[k].item.icon = url || generic
-  }
-}
-
-async function buildIndex() {
-  const { items, seenNames } = collectLnkItems()
-
-  items.sort((a, b) => a.name.localeCompare(b.name))
-  for (let i = 0; i < items.length; i++) items[i].id = i
-  index = items
-  publishIndex()
-
-  const generic = await appIcons.ensureGenericIcon()
-
-  const newStartAppItems = mergeStartAppsInto(items, seenNames, generic)
-  if (newStartAppItems.length > 0) {
-    items.sort((a, b) => a.name.localeCompare(b.name))
-    for (let i = 0; i < items.length; i++) items[i].id = i
-    index = items
-    publishIndex()
-    resolveStartAppIcons(newStartAppItems)
-      .then((changed) => { if (changed) publishIndex() })
-      .catch((e) => console.error('[launcher] start apps icon error:', e.message))
-  }
-
-  const iconItems = items.filter((i) => i.iconSource && i.iconSource.includes('\\'))
-  await resolveLnkIcons(iconItems, generic)
-  for (const item of items) if (!item.icon) item.icon = generic
-  publishIndex()
-}
-
-async function refreshStartApps() {
-  const apps = await getStartApps()
-  if (apps.length > 0) startApps = apps
-  await buildIndex()
-}
-
-let rebuildTimer = null
-function scheduleRebuild() {
-  if (rebuildTimer) clearTimeout(rebuildTimer)
-  rebuildTimer = setTimeout(() => {
-    rebuildTimer = null
-    buildIndex().catch((e) => console.error('[launcher] rebuild error:', e.message))
-  }, 1000)
-}
-
-function scheduleStartAppsRefresh() {
-  if (startAppsRefreshDebounce) clearTimeout(startAppsRefreshDebounce)
-  startAppsRefreshDebounce = setTimeout(() => {
-    startAppsRefreshDebounce = null
-    lastStartAppsRefresh = Date.now()
-    refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
-  }, 1000)
-}
-
-function startFallbackStartAppsRefresh() {
-  if (fallbackRefreshTimer) return
-  fallbackRefreshTimer = setInterval(() => {
-    refreshStartApps().catch((e) => console.error('[launcher] start apps refresh error:', e.message))
-  }, START_APPS_FALLBACK_REFRESH_INTERVAL)
-}
-
-function onInstalledPackagesChanged() {
-  const sinceLastRefresh = Date.now() - lastStartAppsRefresh
-  if (startAppsRefreshDebounce) return
-  if (sinceLastRefresh >= START_APPS_REFRESH_MIN_GAP) {
-    scheduleStartAppsRefresh()
-    return
-  }
-  startAppsRefreshDebounce = setTimeout(() => {
-    startAppsRefreshDebounce = null
-    scheduleStartAppsRefresh()
-  }, START_APPS_REFRESH_MIN_GAP - sinceLastRefresh)
-}
-
-function watchScanDirs() {
-  for (const dir of SCAN_DIRS) {
-    if (!fs.existsSync(dir)) continue
-    try {
-      fs.watch(dir, { recursive: true }, scheduleRebuild)
-    } catch (e) {
-      console.error(`[launcher] watch error for ${dir}:`, e.message)
-    }
-  }
-}
-
-function setShells(s) {
-  shells = s
-}
-
 function isLauncherActive(win) {
   return activeTopBar === win
 }
 
 function getActiveDisplayId() {
   return activeTopBar ? activeDisplayId : null
-}
-
-function isOwnShellWindow(hwnd) {
-  if (!shells) return false
-  for (const shell of shells.values()) {
-    for (const win of [shell.topBar, shell.desktop]) {
-      try {
-        if (win && !win.isDestroyed() && win.getNativeWindowHandle().readUInt32LE(0) === hwnd) return true
-      } catch {}
-    }
-  }
-  return false
 }
 
 function finishHide(topBar) {
@@ -453,7 +74,7 @@ function animatedHide() {
     hideTimeout = null
     hideTimeoutTopBar = null
     finishHide(topBar)
-  }, 300)
+  }, CLOSE_ANIMATION_MS)
 }
 
 function hideForOverlay() {
@@ -475,16 +96,14 @@ function setSwitcherCloser(fn) {
 }
 
 function showLauncher(displayId, mode) {
-  if (!shells) return
-  const shell = shells.get(displayId)
-  if (!shell || shell.topBar.isDestroyed()) return
-  const topBar = shell.topBar
+  const topBar = shellSurfaces.topBarForDisplay(displayId)
+  if (!topBar) return
 
   endEmojiCapture()
 
   try {
     const fg = getForegroundWindow()
-    if (fg && !isOwnShellWindow(fg)) lastUserForeground = fg
+    if (fg && !shellSurfaces.isShellSurface(fg)) lastUserForeground = fg
   } catch {}
 
   flushPendingHide(topBar)
@@ -548,16 +167,14 @@ function showEmoji() {
     animatedHide()
     return
   }
-  if (!shells) return
   const display = pickDisplay()
-  const shell = shells.get(display.id)
-  if (!shell || shell.topBar.isDestroyed()) return
-  const topBar = shell.topBar
+  const topBar = shellSurfaces.topBarForDisplay(display.id)
+  if (!topBar) return
 
   let target = 0
   try {
     const fg = getForegroundWindow()
-    if (fg && !isOwnShellWindow(fg)) { lastUserForeground = fg; target = fg }
+    if (fg && !shellSurfaces.isShellSurface(fg)) { lastUserForeground = fg; target = fg }
   } catch {}
 
   flushPendingHide(topBar)
@@ -586,90 +203,42 @@ function setEmojiCaptureControl(fn) {
   emojiCaptureControl = typeof fn === 'function' ? fn : null
 }
 
-function setShellLinkOpener(fn) {
-  shellLinkOpener = typeof fn === 'function' ? fn : null
-}
-
 function handleBlur(topBar) {
   if (activeTopBar !== topBar) return
   animatedHide()
 }
 
-function findItem(id) {
-  return index.find((i) => i.id === id)
+function setScreenshotStarter(fn) {
+  screenshotStarter = typeof fn === 'function' ? fn : null
 }
 
-function launchItem(item) {
-  if (!item) return { success: false }
-  if (item.shellLink && shellLinkOpener) {
-    shellLinkOpener(item.shellLink)
-    return { success: true }
+function hideThen(action) {
+  animatedHide()
+  return action()
+}
+
+function readSemanticModel() {
+  try {
+    return fs.readFileSync(SEMANTIC_MODEL_PATH)
+  } catch (e) {
+    console.error('[launcher] semantic model unavailable:', e.message)
+    return null
   }
-  letLaunchedAppComeForward()
-  if (item.lnkPath) {
-    electronShell.openPath(item.lnkPath).then((err) => {
-      if (err) {
-        console.error('[launcher] openPath failed for', item.lnkPath, '-', err)
-        shellExecute(item.lnkPath, null).catch(() => {})
-      }
-    })
-  } else if (item.appId) {
-    appActivator.activate(item.appId)
-  }
-  return { success: true }
 }
 
-function launchAdminItem(item) {
-  if (!item) return { success: false }
-  if (item.shellLink) return launchItem(item)
-  letLaunchedAppComeForward()
-  if (item.lnkPath) {
-    shellExecuteElevated(item.lnkPath).catch(() => {})
-  } else if (item.appId) {
-    appActivator.activate(item.appId)
-  }
-  return { success: true }
-}
-
-async function uninstallByOwningPlugin(item) {
-  const owner = item.owner
-  const reply = await pluginBackendHost.sendCommand(
-    owner.pluginId,
-    owner.uninstallCommand,
-    { file: item.lnkPath, name: item.name },
-    { timeoutMs: PLUGIN_UNINSTALL_TIMEOUT_MS },
-  )
-  const value = reply.ok && reply.value && typeof reply.value === 'object' ? reply.value : {}
-  const removed = reply.ok && value.ok !== false
-  notice.show({
-    id: 'launcher-uninstall',
-    title: owner.pluginName,
-    message: value.message || (removed ? `${item.name} was removed.` : `${item.name} could not be removed: ${reply.error || 'the plugin refused'}`),
-    tone: removed ? 'success' : 'error',
-    pill: removed,
-    timeoutMs: removed ? 7000 : 0,
-  })
-  if (removed) scheduleRebuild()
-  return { ok: removed, mode: 'plugin' }
-}
-
-async function uninstallItem(item) {
-  if (!item) return { ok: false, mode: 'none' }
-  if (item.owner && item.owner.uninstallCommand) return uninstallByOwningPlugin(item)
-  const result = await appManager.uninstallByLaunch({ appId: item.appId, target: item.target, name: item.name })
-  scheduleStartAppsRefresh()
-  return result
-}
-
-function openItemLocation(item) {
-  if (!item || !item.lnkPath) return { success: false }
-  electronShell.showItemInFolder(item.lnkPath)
-  return { success: true }
+function runWindowCommand(action) {
+  const hwnd = lastUserForeground
+  animatedHide()
+  if (!hwnd) return { ok: false }
+  if (action === 'minimize') minimizeWindow(hwnd)
+  else if (action === 'maximize') maximizeWindow(hwnd)
+  else if (action === 'close') closeWindow(hwnd)
+  else return { ok: false }
+  return { ok: true }
 }
 
 module.exports = {
   handlers: {
-    'launcher/index': () => index,
     'launcher/show': (event) => {
       const win = BrowserWindow.fromWebContents(event.sender)
       const { screen } = require('electron')
@@ -685,78 +254,52 @@ module.exports = {
       if (typeof activeTopBar.setRaisedBounds === 'function') activeTopBar.setRaisedBounds(bottom)
     },
     'launcher/launch': (_event, id) => {
-      const item = findItem(id)
+      const item = appCatalog.findItem(id)
       if (!item) return { success: false }
-      animatedHide()
-      return launchItem(item)
+      return hideThen(() => appLaunch.launchItem(item))
     },
     'launcher/launch-admin': (_event, id) => {
-      const item = findItem(id)
+      const item = appCatalog.findItem(id)
       if (!item) return { success: false }
-      animatedHide()
-      return launchAdminItem(item)
+      return hideThen(() => appLaunch.launchAdminItem(item))
     },
     'launcher/uninstall': (_event, id) => {
-      const item = findItem(id)
+      const item = appCatalog.findItem(id)
       if (!item) return Promise.resolve({ ok: false, mode: 'none' })
-      return uninstallItem(item)
-    },
-    'launcher/close-window': (_event, hwnd) => {
-      animatedHide()
-      exec(`powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).AppActivate([int]0); Add-Type -Name W -Namespace W -MemberDefinition '[DllImport(\\\"user32.dll\\\")] public static extern int PostMessage(IntPtr h,uint m,int w,int l);'; [W.W]::PostMessage([IntPtr]${hwnd}, 0x0010, 0, 0)"`, { windowsHide: true })
-      return { success: true }
+      return appLaunch.uninstallItem(item)
     },
     'launcher/end-task': (_event, pid) => {
       animatedHide()
       try { process.kill(pid) } catch {}
       return { success: true }
     },
-    'launcher/open-location': (_event, id) => openItemLocation(findItem(id)),
+    'launcher/open-location': (_event, id) => appLaunch.openItemLocation(appCatalog.findItem(id)),
     'launcher/insert-text': async (_event, text) => {
       const hwnd = lastUserForeground
       hideForOverlay()
       if (typeof text !== 'string' || !text) return { ok: false }
       return { ok: await insertText(hwnd, text) }
     },
-    'apps/catalog': () => index,
-    'apps/window-command': (_event, action) => {
-      const hwnd = lastUserForeground
-      animatedHide()
-      if (!hwnd) return { ok: false }
-      if (action === 'minimize') minimizeWindow(hwnd)
-      else if (action === 'maximize') maximizeWindow(hwnd)
-      else if (action === 'close') closeWindow(hwnd)
-      else return { ok: false }
-      return { ok: true }
+    'launcher/semantic-model': () => readSemanticModel(),
+    'launcher/take-screenshot': () => {
+      hideForOverlay()
+      if (screenshotStarter) screenshotStarter()
     },
-    'apps/launch': (_event, id) => launchItem(findItem(id)),
-    'apps/launch-admin': (_event, id) => launchAdminItem(findItem(id)),
-    'apps/app-open-location': (_event, id) => openItemLocation(findItem(id)),
-    'apps/app-uninstall': (_event, id) => uninstallItem(findItem(id)),
+    'apps/window-command': (_event, action) => runWindowCommand(action),
   },
-  setShells,
   showFromHotkey,
   showEmoji,
   forwardEmojiKey,
   setEmojiCaptureControl,
-  setShellLinkOpener,
   setDisplayProvider,
+  setScreenshotStarter,
   closeEmoji: animatedHide,
   hideForOverlay,
   setSwitcherCloser,
   getActiveDisplayId,
   isLauncherActive,
   handleBlur,
-  start(b) {
-    broadcast = b
+  start() {
     appActivator.warm()
-    lastStartAppsRefresh = Date.now()
-    refreshStartApps().catch((e) => console.error('[launcher] start apps error:', e.message))
-    watchScanDirs()
-    plugins.onPluginsChanged(scheduleRebuild)
-    if (!appxPackages.watchPackages(onInstalledPackagesChanged, startFallbackStartAppsRefresh)) {
-      console.error('[launcher] package watch unavailable, falling back to periodic start apps refresh')
-      startFallbackStartAppsRefresh()
-    }
   },
 }

@@ -22,7 +22,7 @@ everything below.
 | Ridge | show tray, show overflow arrow, show on all monitors | `electron/modules/trayLayout.js` → `tray-layout.json` |
 | Ridge | confirm power menu actions | `electron/modules/power.js` → `power-prefs.json` |
 | Ridge | days shown (1/2/3), show Google Tasks | `electron/modules/clockPrefs.js` → `clock-prefs.json` |
-| Search | Search hotkey, show recent apps, show bookmarks, show browser tabs, maximum results | `electron/modules/launcherHotkey.js` → `launcher-hotkey.json`, `electron/modules/launcherPrefs.js` → `launcher-prefs.json` |
+| Search | Search hotkey, show bookmarks, show browser tabs, maximum results | `electron/modules/launcherHotkey.js` → `launcher-hotkey.json`, `electron/modules/launcherPrefs.js` → `launcher-prefs.json` |
 | Window Tiling | enabled, mode, Win+Arrow snapping, drag-to-zone, dynamic layout, split ratios, gap, outer margin, keep-oversized, placement | `electron/modules/tiling.js` → `tiling.json` |
 | Battery | force battery saver, automatic, threshold %, dim displays, dim by %, dim external monitors, reduce background polling, throttle processes | `electron/modules/batterySaver.js` + `batterySaverPolicy.js` → `battery-saver-prefs.json` |
 | Wallpaper | wallpaper source and selection | `electron/modules/wallpaper.js` → `wallpaper.json` |
@@ -449,7 +449,6 @@ test failure too.
 | `calendar-show-tasks` | instant | Adds or removes a section of the hover calendar. |
 | `search` | instant | A page-level entry; its settings declare their own. |
 | `launcher-hotkey` | instant | Instant, but atomic — see above. Binding is attempted before anything is written, and a combination another app owns is refused with the old one left bound, rather than half-applied. Instant is right because the outcome is now either fully applied or fully rejected, and Search stays reachable in both cases. |
-| `recent-apps` | instant | Changes what Search shows before you type. |
 | `browser-bookmarks` | instant | Adds or removes one source of Search results. Nothing outside Alpine changes. |
 | `browser-tabs` | instant | Adds or removes one source of Search results. No tab is touched either way. |
 | `launcher-max-results` | instant | A row count between 3 and 8, visible the next time you search. |

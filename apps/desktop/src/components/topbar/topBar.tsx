@@ -7,7 +7,7 @@ import MediaStatus from "./status/mediaStatus";
 import MicrophoneStatus from "./status/microphoneStatus";
 import SystemTray from "./systemTray";
 import LauncherTrigger from "./launcherTrigger";
-import LauncherPanel from "./launcherPanel";
+import LauncherPanel from "./launcher/launcherPanel";
 import WindowSwitcherPanel from "./windowSwitcherPanel";
 import DisplayModePanel from "./displayModePanel";
 import { warmRenderableEmojis } from "../../lib/emojiRenderable";

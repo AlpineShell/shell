@@ -253,9 +253,10 @@ contextBridge.exposeInMainWorld('launcher', {
   launchAdmin: (id) => ipcRenderer.invoke('launcher/launch-admin', id),
   uninstall: (id) => ipcRenderer.invoke('launcher/uninstall', id),
   openLocation: (id) => ipcRenderer.invoke('launcher/open-location', id),
-  closeWindow: (hwnd) => ipcRenderer.invoke('launcher/close-window', hwnd),
   endTask: (pid) => ipcRenderer.invoke('launcher/end-task', pid),
   insertText: (text) => ipcRenderer.invoke('launcher/insert-text', text),
+  semanticModel: () => ipcRenderer.invoke('launcher/semantic-model'),
+  takeScreenshot: () => ipcRenderer.invoke('launcher/take-screenshot'),
   recentEmoji: () => ipcRenderer.invoke('emoji/recents-get'),
   addRecentEmoji: (char) => ipcRenderer.invoke('emoji/recents-add', char),
   onEmojiKey: (callback) => {
@@ -290,13 +291,6 @@ contextBridge.exposeInMainWorld('launcher', {
     const handler = (_, data) => callback(data)
     ipcRenderer.on('frecency/changed', handler)
     return () => ipcRenderer.removeListener('frecency/changed', handler)
-  },
-  recentApps: () => ipcRenderer.invoke('launcher/recent-apps-get'),
-  setRecentApps: (value) => ipcRenderer.invoke('launcher/recent-apps-set', value),
-  onRecentAppsChanged: (callback) => {
-    const handler = (_, data) => callback(data)
-    ipcRenderer.on('launcher/recent-apps-changed', handler)
-    return () => ipcRenderer.removeListener('launcher/recent-apps-changed', handler)
   },
   showBookmarks: () => ipcRenderer.invoke('launcher/show-bookmarks-get'),
   setShowBookmarks: (value) => ipcRenderer.invoke('launcher/show-bookmarks-set', value),
@@ -404,6 +398,10 @@ contextBridge.exposeInMainWorld('shell', {
     wallpaperMineDelete: (filePath) => ipcRenderer.invoke('windows/wallpaper-mine-delete', filePath),
     openApps: () => ipcRenderer.invoke('windows/open-apps'),
     activate: (hwnd) => ipcRenderer.invoke('windows/activate', hwnd),
+    minimize: (hwnd) => ipcRenderer.invoke('windows/minimize', hwnd),
+    close: (hwnd) => ipcRenderer.invoke('windows/close', hwnd),
+    minimizeAll: () => ipcRenderer.invoke('windows/minimize-all'),
+    restoreMinimized: () => ipcRenderer.invoke('windows/restore-minimized'),
     onOpenAppsChanged: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('windows/open-apps-changed', handler)

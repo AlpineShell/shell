@@ -1,15 +1,15 @@
 import { TIER_GAP, frecencyBoost, frecencyKey } from "./launcherSearch"
 
 const KIND_BIAS: Record<LauncherResultKind, number> = {
-  open: 800,
+  window: 800,
   app: 0,
   tab: -200,
   bookmark: -400,
   setting: -600,
-  wincmd: -600,
+  command: -600,
 }
 
-const KIND_ORDER: LauncherResultKind[] = ["open", "app", "tab", "bookmark", "setting", "wincmd"]
+const KIND_ORDER: LauncherResultKind[] = ["window", "app", "tab", "bookmark", "setting", "command"]
 
 const LEARNED_EXACT_STRENGTH = 3 * TIER_GAP
 const LEARNED_REPEAT_STRENGTH = TIER_GAP

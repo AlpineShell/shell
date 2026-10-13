@@ -8,7 +8,6 @@ const RESULTS_MAX = 8
 const RESULTS_DEFAULT = 8
 
 let storePath = null
-let showRecentApps = false
 let showBookmarks = true
 let showBrowserTabs = true
 let maxResults = RESULTS_DEFAULT
@@ -33,7 +32,6 @@ function load() {
     const file = getStorePath()
     if (fs.existsSync(file)) {
       const data = JSON.parse(fs.readFileSync(file, 'utf8'))
-      if (typeof data.showRecentApps === 'boolean') showRecentApps = data.showRecentApps
       if (typeof data.showBookmarks === 'boolean') showBookmarks = data.showBookmarks
       if (typeof data.showBrowserTabs === 'boolean') showBrowserTabs = data.showBrowserTabs
       if (typeof data.maxResults === 'number') maxResults = clampMaxResults(data.maxResults)
@@ -46,7 +44,7 @@ function load() {
 
 function save() {
   try {
-    fs.writeFileSync(getStorePath(), JSON.stringify({ showRecentApps, showBookmarks, showBrowserTabs, maxResults, recentEmoji }, null, 2))
+    fs.writeFileSync(getStorePath(), JSON.stringify({ showBookmarks, showBrowserTabs, maxResults, recentEmoji }, null, 2))
   } catch (e) {
     console.error('[launcherPrefs] save error:', e.message)
   }
@@ -56,13 +54,6 @@ module.exports = {
   getShowBrowserTabs: () => showBrowserTabs,
   getShowBookmarks: () => showBookmarks,
   handlers: {
-    'launcher/recent-apps-get': () => showRecentApps,
-    'launcher/recent-apps-set': (_event, value) => {
-      showRecentApps = !!value
-      save()
-      if (broadcast) broadcast('launcher/recent-apps-changed', showRecentApps)
-      return showRecentApps
-    },
     'launcher/show-bookmarks-get': () => showBookmarks,
     'launcher/show-bookmarks-set': (_event, value) => {
       showBookmarks = !!value

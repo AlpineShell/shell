@@ -249,6 +249,12 @@ module.exports = {
     'windows/activate': (_event, hwnd) => {
       winFocus.activateWindow(hwnd)
     },
+    'windows/minimize': (_event, hwnd) => {
+      winFocus.minimizeWindow(hwnd)
+    },
+    'windows/close': (_event, hwnd) => {
+      winFocus.closeWindow(hwnd)
+    },
   },
   start(broadcast) {
     broadcastFn = broadcast

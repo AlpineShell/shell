@@ -77,6 +77,8 @@ const battery = require('./modules/battery')
 const batterySaver = require('./modules/batterySaver')
 const systemInfo = require('./modules/systemInfo')
 const launcher = require('./modules/launcher')
+const appCatalog = require('./modules/appCatalog')
+const appLaunch = require('./modules/appLaunch')
 const frecency = require('./modules/frecency')
 const runCommand = require('./modules/runCommand')
 const launcherHotkey = require('./modules/launcherHotkey')
@@ -156,6 +158,7 @@ const GRANTED_PERMISSIONS = new Set(['clipboard-sanitized-write'])
 trustedSenders.setAppLocation(APP_LOCATION)
 
 const UPDATE_READY_TIMEOUT_MS = 10000
+const SCREENSHOT_AFTER_LAUNCHER_MS = 200
 const settledTopBars = new Set()
 let topBarSettleListener = null
 let updateReadySignalled = false
@@ -989,7 +992,7 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, licence)
 
   theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
@@ -1003,7 +1006,7 @@ async function startApp() {
     windowSwitcher.hideForLauncher()
     displayModePicker.hide()
   })
-  if (launcher.setShellLinkOpener) launcher.setShellLinkOpener((link) => handleDeepLink(link))
+  appLaunch.setShellLinkOpener((link) => handleDeepLink(link))
   activeDisplay.setPreferredDisplayProvider(() => launcher.getActiveDisplayId())
   launcher.setDisplayProvider(() => activeDisplay.currentDisplay())
 
@@ -1195,13 +1198,13 @@ function startShellMode() {
   if (screenshot) {
     screenshot.setOverlayWindowFactory(createScreenshotWindow)
     screenshot.prewarmOverlay()
+    launcher.setScreenshotStarter(() => setTimeout(() => screenshot.showOverlay(), SCREENSHOT_AFTER_LAUNCHER_MS))
   }
 
   wireShellHotkeys()
   wireKeyCaptures()
   routeKeyboardInput()
 
-  launcher.setShells(shells)
 
   for (const display of screen.getAllDisplays()) {
     createShellForDisplay(display)

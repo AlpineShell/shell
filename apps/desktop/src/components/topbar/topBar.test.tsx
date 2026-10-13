@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vite
 import { render, waitFor } from '@testing-library/react'
 
 vi.mock('./chrome/ChromeCanvas', () => ({ default: () => null }))
-vi.mock('./launcherPanel', () => ({ default: () => null }))
+vi.mock('./launcher/launcherPanel', () => ({ default: () => null }))
 vi.mock('./windowSwitcherPanel', () => ({ default: () => null }))
 vi.mock('./displayModePanel', () => ({ default: () => null }))
 vi.mock('./noticeStrip', () => ({ default: () => null }))
