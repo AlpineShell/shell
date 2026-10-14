@@ -1,5 +1,7 @@
 const ENSURE_SHELL_REGISTRATION = 'ensure-shell-registration'
 const EXIT_ALPINE = 'exit-alpine'
+const SHOW_SETUP = 'show-setup'
+const START_SHELL = 'start-shell'
 
 const REVERT_BLOCKED_IN_DEVELOPMENT = 'development'
 const REVERT_BLOCKED_BY_UPDATE = 'update-in-progress'
@@ -56,6 +58,21 @@ function planAutostartLaunch(context) {
   return { steps: explorerKeepsTheShell ? [EXIT_ALPINE] : [] }
 }
 
+function exitsWithoutRunningShell({ packaged, launchedForLinkOrFile }) {
+  return Boolean(packaged) && Boolean(launchedForLinkOrFile)
+}
+
+function planShellStartup({ packaged, optedOut, launchedByHand, explorerHoldsDesktop }) {
+  if (!packaged) return { action: START_SHELL }
+  if (optedOut) return { action: launchedByHand ? SHOW_SETUP : EXIT_ALPINE }
+  if (explorerHoldsDesktop === true) return { action: EXIT_ALPINE }
+  return { action: START_SHELL }
+}
+
+function shouldRetireExplorerBesideShell({ explorerHoldsDesktop, updateInProgress }) {
+  return !updateInProgress && explorerHoldsDesktop === true
+}
+
 function shouldProcessAutostart(context) {
   return !context.development
     && !context.updateRestart
@@ -94,6 +111,11 @@ function planMarkerAge({ ageMs, maxAgeMs, systemUptimeMs = null }) {
 module.exports = {
   ENSURE_SHELL_REGISTRATION,
   EXIT_ALPINE,
+  SHOW_SETUP,
+  START_SHELL,
+  exitsWithoutRunningShell,
+  planShellStartup,
+  shouldRetireExplorerBesideShell,
   REVERT_BLOCKED_IN_DEVELOPMENT,
   REVERT_BLOCKED_BY_UPDATE,
   REVERT_BLOCKED_IN_TEST_SESSION,

@@ -595,7 +595,7 @@ describe('claiming the desktop from Explorer at startup', () => {
 
     const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: false }))
 
-    expect(takeover).toEqual({ actingAsShell: true, explorerRetired: true })
+    expect(takeover).toEqual({ actingAsShell: true, explorerRetired: true, explorerHoldsDesktop: false, optedOut: false })
     expect(shellValue()).toBe(INSTALLED_EXE)
     expect(installerMock.restoreExplorerWhenAlpineExits.mock.invocationCallOrder[0])
       .toBeLessThan(explorerShellMock.exitExplorerShell.mock.invocationCallOrder[0])
@@ -608,7 +608,7 @@ describe('claiming the desktop from Explorer at startup', () => {
     const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: true }))
 
     expect(installerMock.clearShellHandoff).toHaveBeenCalled()
-    expect(takeover).toEqual({ actingAsShell: true, explorerRetired: true })
+    expect(takeover).toEqual({ actingAsShell: true, explorerRetired: true, explorerHoldsDesktop: false, optedOut: false })
     expect(shellValue()).toBe(INSTALLED_EXE)
   })
 
@@ -618,7 +618,7 @@ describe('claiming the desktop from Explorer at startup', () => {
 
     const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: false }))
 
-    expect(takeover).toEqual({ actingAsShell: false, explorerRetired: false })
+    expect(takeover).toEqual({ actingAsShell: false, explorerRetired: false, explorerHoldsDesktop: true, optedOut: false })
     expect(installerMock.clearShellHandoff).not.toHaveBeenCalled()
     expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
     expect(shellValue()).toBe('explorer.exe')
@@ -630,7 +630,7 @@ describe('claiming the desktop from Explorer at startup', () => {
 
     const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: false }))
 
-    expect(takeover).toEqual({ actingAsShell: true, explorerRetired: false })
+    expect(takeover).toEqual({ actingAsShell: true, explorerRetired: false, explorerHoldsDesktop: false, optedOut: false })
     expect(installerMock.restoreExplorerWhenAlpineExits).not.toHaveBeenCalled()
     expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
   })
@@ -661,6 +661,66 @@ describe('claiming the desktop from Explorer at startup', () => {
     await settle(setupModule.claimDesktop({ launchedByHand: true }))
 
     expect(setupModule.handlers['setup/test-session'](fromSettingsWindow)).toBe(false)
+  })
+
+  it('reports Explorer still on the desktop when it would not leave', async () => {
+    explorerHoldsDesktopAfterSignIn()
+    explorerShellMock.exitExplorerShell.mockImplementation(() => [])
+
+    const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: true }))
+
+    expect(takeover).toMatchObject({ explorerRetired: false, explorerHoldsDesktop: true })
+  })
+
+  it('refuses a test-out that could not close Explorer and lets it be tried again', async () => {
+    explorerShellMock.exitExplorerShell.mockImplementation(() => [])
+    const setupModule = freshSetup()
+
+    const refused = await settle(setupModule.startTestSession())
+
+    expect(refused.error).toMatch(/did not close/)
+    expect(setupModule.handlers['setup/test-session'](fromSettingsWindow)).toBe(false)
+
+    explorerShellMock.exitExplorerShell.mockImplementation(() => {
+      explorerRunning = false
+      return [EXPLORER_PROCESS_ID]
+    })
+    await expect(settle(setupModule.startTestSession())).resolves.toEqual({ error: null, explorerRetired: true })
+    expect(setupModule.handlers['setup/test-session'](fromSettingsWindow)).toBe(true)
+  })
+
+  it('starts a test-out when Explorer was not on the desktop to begin with', async () => {
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => false)
+    await expect(settle(freshSetup().startTestSession())).resolves.toEqual({ error: null, explorerRetired: false })
+  })
+
+  it('retires Explorer when it shows up beside the running shell', async () => {
+    const guard = await settle(freshSetup().keepExplorerOffDesktop())
+
+    expect(guard).toEqual({ explorerRetired: true, explorerStayed: false })
+    expect(installerMock.restoreExplorerWhenAlpineExits.mock.invocationCallOrder[0])
+      .toBeLessThan(explorerShellMock.exitExplorerShell.mock.invocationCallOrder[0])
+  })
+
+  it('reports Explorer staying beside the running shell so Alpine can exit', async () => {
+    explorerShellMock.exitExplorerShell.mockImplementation(() => [])
+    await expect(settle(freshSetup().keepExplorerOffDesktop())).resolves.toEqual({ explorerRetired: false, explorerStayed: true })
+  })
+
+  it('leaves the desktop alone when Explorer is not on it', async () => {
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => false)
+    await expect(settle(freshSetup().keepExplorerOffDesktop())).resolves.toEqual({ explorerRetired: false, explorerStayed: false })
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+  })
+
+  it('leaves Explorer alone while an update hands the desktop over', async () => {
+    const wasUpdateHandoffActive = installerMock.isUpdateHandoffActive
+    installerMock.isUpdateHandoffActive = () => true
+
+    await expect(settle(freshSetup().keepExplorerOffDesktop())).resolves.toEqual({ explorerRetired: false, explorerStayed: false })
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+
+    installerMock.isUpdateHandoffActive = wasUpdateHandoffActive
   })
 })
 
