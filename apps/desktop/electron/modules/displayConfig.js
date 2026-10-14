@@ -1,6 +1,7 @@
 const { app, screen } = require('electron')
 const koffi = require('koffi')
 const displayModePolicy = require('./displayModePolicy')
+const { planLayoutStaging } = require('./displayLayoutPolicy')
 
 const user32 = koffi.load('user32.dll')
 
@@ -140,7 +141,7 @@ function isPortrait(orientation) {
   return orientation === 90 || orientation === 270
 }
 
-function stageDisplay(entry, offsetX, offsetY, makePrimary) {
+function stageDisplay(entry) {
   const mode = readCurrentMode(entry.id)
   if (!mode) return null
 
@@ -154,34 +155,35 @@ function stageDisplay(entry, offsetX, offsetY, makePrimary) {
   }
 
   mode.writeUInt32LE(dmdoFromOrientation(targetOrientation), DM_ORIENTATION_OFFSET)
-  mode.writeInt32LE(Math.round(entry.x - offsetX), DM_POSITION_X_OFFSET)
-  mode.writeInt32LE(Math.round(entry.y - offsetY), DM_POSITION_Y_OFFSET)
+  mode.writeInt32LE(entry.x, DM_POSITION_X_OFFSET)
+  mode.writeInt32LE(entry.y, DM_POSITION_Y_OFFSET)
 
   const fields = mode.readUInt32LE(DM_FIELDS_OFFSET) | DM_POSITION | DM_DISPLAYORIENTATION | DM_PELSWIDTH | DM_PELSHEIGHT
   mode.writeUInt32LE(fields, DM_FIELDS_OFFSET)
 
   let flags = CDS_UPDATEREGISTRY | CDS_NORESET | CDS_GLOBAL
-  if (makePrimary) flags |= CDS_SET_PRIMARY
+  if (entry.makePrimary) flags |= CDS_SET_PRIMARY
   return toNum(ChangeDisplaySettingsExW(entry.id, mode, 0, flags, null))
 }
 
 function applyLayout(layout) {
-  if (!Array.isArray(layout) || layout.length === 0) return { ok: false, code: null }
-
-  const primaryEntry = layout.find((entry) => entry.primary) || layout[0]
-  const offsetX = primaryEntry.x
-  const offsetY = primaryEntry.y
+  const plan = planLayoutStaging(layout)
+  if (plan.length === 0) return { ok: false, code: null }
 
   let staged = 0
-  for (const entry of layout) {
-    const result = stageDisplay(entry, offsetX, offsetY, entry.id === primaryEntry.id)
+  for (const entry of plan) {
+    const result = stageDisplay(entry)
     if (result === null) continue
-    if (result !== DISP_CHANGE_SUCCESSFUL) return { ok: false, code: result, device: entry.id }
+    if (result !== DISP_CHANGE_SUCCESSFUL) {
+      console.error(`[displayConfig] staging ${entry.id} failed with ${result}`)
+      return { ok: false, code: result, device: entry.id }
+    }
     staged++
   }
   if (staged === 0) return { ok: false, code: null }
 
   const commit = toNum(ChangeDisplaySettingsExW(null, null, 0, 0, null))
+  if (commit !== DISP_CHANGE_SUCCESSFUL) console.error(`[displayConfig] committing the layout failed with ${commit}`)
   return { ok: commit === DISP_CHANGE_SUCCESSFUL, code: commit }
 }
 
