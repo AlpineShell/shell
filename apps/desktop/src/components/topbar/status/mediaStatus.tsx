@@ -17,6 +17,7 @@ export default function MediaStatus() {
 
     return (
         <PopupMenu
+            triggerBackground={false}
             onOpen={() => window.shell.media.session().then(media.update)}
             trigger={<MediaFace title={media.title} appIcon={showAppIcon ? media.appIcon : null} peak={peak} darkText={darkText} />}
         >

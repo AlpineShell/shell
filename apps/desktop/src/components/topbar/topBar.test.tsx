@@ -69,7 +69,7 @@ describe('top bar structure', () => {
       ['notice', 'launcher'],
       ['tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'],
     ])
-    expect(container.querySelector('.z-10')?.children.length).toBe(3)
+    expect(container.querySelectorAll('.z-10 > div')).toHaveLength(3)
   })
 
   it('keeps the notices first in the centre cluster whatever the layout puts there', () => {
