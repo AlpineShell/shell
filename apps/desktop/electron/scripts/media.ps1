@@ -43,7 +43,22 @@ function global:MediaInfoFast() {
         $leaf = ($appId -split '[\\!]' | Select-Object -Last 1)
         if ($leaf -match '\.exe$') { $leaf -replace '\.exe$', '' } else { $leaf }
     } else { $null }
-    return (@{ title = $props.Title; artist = $props.Artist; playing = ($status -eq 4); appName = $appName; appId = $appId } | ConvertTo-Json -Compress)
+    $timeline = $session.GetTimelineProperties()
+    $durationMs = [math]::Round(($timeline.EndTime - $timeline.StartTime).TotalMilliseconds)
+    $positionMs = [math]::Round(($timeline.Position - $timeline.StartTime).TotalMilliseconds)
+    $timelineUpdatedAt = $timeline.LastUpdatedTime.ToUnixTimeMilliseconds()
+    $canSeek = $playback.Controls.IsPlaybackPositionEnabled
+    return (@{ title = $props.Title; artist = $props.Artist; playing = ($status -eq 4); appName = $appName; appId = $appId; positionMs = $positionMs; durationMs = $durationMs; timelineUpdatedAt = $timelineUpdatedAt; canSeek = $canSeek } | ConvertTo-Json -Compress)
+}
+
+function global:MediaSeek([int64]$positionMs) {
+    $session = $global:smtcMgr.GetCurrentSession()
+    if ($null -eq $session) { return '{"success":false}' }
+    $timeline = $session.GetTimelineProperties()
+    $op = $session.TryChangePlaybackPositionAsync($timeline.StartTime.Ticks + $positionMs * 10000)
+    $t = $global:asTaskBool.Invoke($null, @($op))
+    $null = $t.Wait(-1)
+    return (@{ success = $t.Result } | ConvertTo-Json -Compress)
 }
 
 function global:MediaThumbnail() {

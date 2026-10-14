@@ -3,6 +3,7 @@ const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const appIcons = require('./appIcons')
+const { timelineOf, timelineChanged, seekTarget, seekTimeline, settleTimeline } = require('./mediaTimeline')
 
 const iconCache = new Map()
 
@@ -94,6 +95,8 @@ async function runCmd(cmd) {
 let lastThumbnail = null
 let lastThumbnailType = null
 let lastAppIcon = null
+let lastTimeline = null
+let seekBase = null
 
 async function getMediaInfoFast() {
   const raw = await runCmd('MediaInfoFast')
@@ -101,7 +104,7 @@ async function getMediaInfoFast() {
   try {
     const parsed = JSON.parse(raw)
     const appIcon = await getAppIcon(parsed.appId || null)
-    return { title: parsed.title || null, artist: parsed.artist || null, appName: parsed.appName || null, appIcon, playing: !!parsed.playing }
+    return { title: parsed.title || null, artist: parsed.artist || null, appName: parsed.appName || null, appIcon, playing: !!parsed.playing, timeline: timelineOf(parsed) }
   } catch {
     return { title: null, artist: null, appName: null, playing: false }
   }
@@ -145,9 +148,43 @@ async function mediaControl(action) {
 
 let broadcastRef = null
 
+function settle(measured) {
+  const settled = settleTimeline(lastTimeline, measured, seekBase)
+  seekBase = settled.seekBase
+  return settled.timeline
+}
+
+function publishTimeline(measured) {
+  const timeline = settle(measured)
+  if (!timelineChanged(lastTimeline, timeline)) return
+  lastTimeline = timeline
+  broadcastRef?.('media/timeline-changed', timeline)
+}
+
+async function getMediaTimeline() {
+  const current = await getMediaInfoFast()
+  lastTimeline = settle(current.timeline ?? null)
+  return lastTimeline
+}
+
+async function seekMedia(positionMs) {
+  const target = seekTarget(lastTimeline, positionMs)
+  if (target === null) return { success: false }
+  const raw = await runCmd(`MediaSeek ${target}`)
+  let result
+  try { result = JSON.parse(raw) } catch { result = { success: false } }
+  if (result.success && lastTimeline) {
+    seekBase = seekBase ?? lastTimeline.updatedAt
+    lastTimeline = seekTimeline(lastTimeline, target, Date.now())
+    broadcastRef?.('media/timeline-changed', lastTimeline)
+  }
+  return { success: !!result.success }
+}
+
 function broadcastFast() {
   if (!broadcastRef) return
   getMediaInfoFast().then((current) => {
+    publishTimeline(current.timeline ?? null)
     if (current.title !== lastTitle || current.artist !== lastArtist || current.playing !== lastPlaying || current.appIcon !== lastAppIcon) {
       const titleChanged = current.title !== lastTitle
       lastTitle = current.title
@@ -181,6 +218,7 @@ function broadcastFast() {
 function pollUntilDifferent(key, prevValue, attempts) {
   if (attempts <= 0 || !broadcastRef) return
   getMediaInfoFast().then((current) => {
+    publishTimeline(current.timeline ?? null)
     if (current[key] !== prevValue) {
       const titleChanged = current.title !== lastTitle
       lastTitle = current.title
@@ -216,6 +254,8 @@ function pollUntilDifferent(key, prevValue, attempts) {
 module.exports = {
   handlers: {
     'media/session': () => getMediaSession(),
+    'media/timeline': () => getMediaTimeline(),
+    'media/seek': (_event, positionMs) => seekMedia(positionMs),
     'media/control': async (_event, action) => {
       const prevTitle = lastTitle
       const prevPlaying = lastPlaying

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, act } from "@testing-library/react";
 import ChromeCanvas from "./ChromeCanvas";
-import { setChromeSurface, nextSurfaceId, type ChromeSurface } from "./chromeStore";
+import { setChromeSurface, setSurfaceBackdrop, nextSurfaceId, type ChromeSurface } from "./chromeStore";
 
 const painted: string[] = [];
 
@@ -88,5 +88,81 @@ describe("ChromeCanvas", () => {
         });
 
         expect(context.stroke).toHaveBeenCalled();
+    });
+
+    it("lays a registered backdrop over the bar and the surface shape, fading with the surface", () => {
+        let now = 1000;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        render(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />);
+        const content = document.createElement("div");
+        const bar = document.createElement("div");
+        const under = document.createElement("div");
+        setSurfaceBackdrop(content, { bar, surface: under });
+
+        act(() => setChromeSurface({ ...surface(90), centerX: 340, bodyWidth: 320, contentEl: content }));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(bar.style.clipPath).toBe("inset(0 0 calc(100% - 24px) 0)");
+        expect(under.style.clipPath.startsWith('path("M')).toBe(true);
+        expect((under.style.clipPath.match(/A14 14/g) || []).length).toBe(4);
+        for (const layer of [bar, under]) {
+            expect(layer.style.getPropertyValue("--chrome-left")).toBe("180px");
+            expect(layer.style.getPropertyValue("--chrome-width")).toBe("320px");
+            expect(layer.style.getPropertyValue("--chrome-height")).toBe("90px");
+            expect(layer.style.opacity).toBe("1");
+        }
+
+        act(() => setChromeSurface(null));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(bar.style.opacity).toBe("0");
+        expect(under.style.opacity).toBe("0");
+        setSurfaceBackdrop(content, null);
+    });
+
+    it("grows a backdrop with the shape and fades it in when another menu hands the Ridge over", () => {
+        let now = 1000;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        render(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />);
+        act(() => setChromeSurface({ ...surface(400), centerX: 800, bodyWidth: 600 }));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        const content = document.createElement("div");
+        const under = document.createElement("div");
+        setSurfaceBackdrop(content, { bar: null, surface: under });
+        act(() => setChromeSurface({ ...surface(90), centerX: 340, bodyWidth: 320, contentEl: content }));
+        now += 40;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        const midwayOpacity = Number(under.style.opacity);
+        const midwayWidth = parseFloat(under.style.getPropertyValue("--chrome-width"));
+        const midwayHeight = parseFloat(under.style.getPropertyValue("--chrome-height"));
+        expect(midwayOpacity).toBeGreaterThan(0);
+        expect(midwayOpacity).toBeLessThan(1);
+        expect(midwayWidth).toBeGreaterThan(320);
+        expect(midwayWidth).toBeLessThan(600);
+        expect(midwayHeight).toBeGreaterThan(90);
+        expect(midwayHeight).toBeLessThan(400);
+
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(under.style.opacity).toBe("1");
+        expect(under.style.getPropertyValue("--chrome-width")).toBe("320px");
+        expect(under.style.getPropertyValue("--chrome-height")).toBe("90px");
+        setSurfaceBackdrop(content, null);
     });
 });

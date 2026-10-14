@@ -3,6 +3,7 @@ import Clock from "./clock";
 import StatusIndicator from "./status/statusIndicator";
 import SystemMenu from "./systemMenu";
 import { ThemeProvider } from "../themeContext";
+import { RidgeBackdropProvider } from "./ridgeBackdrop";
 import MediaStatus from "./status/mediaStatus";
 import MicrophoneStatus from "./status/microphoneStatus";
 import SystemTray from "./systemTray";
@@ -57,6 +58,7 @@ export default function TopBar() {
     const [hovered, setHovered] = useState(false);
     const [launcherOpen, setLauncherOpen] = useState(false);
     const [launcherMode, setLauncherMode] = useState<string | undefined>(undefined);
+    const [ridgeBackdrop, setRidgeBackdrop] = useState<HTMLSpanElement | null>(null);
 
     useEffect(() => {
         window.launcher.onShow((data) => { setLauncherMode(data?.mode); setLauncherOpen(true); });
@@ -72,28 +74,31 @@ export default function TopBar() {
 
     return (
         <ThemeProvider value={{ darkText, bg, onMenuOpenChange: noop }}>
-            <ChromeCanvas barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} windowCoverage={windowCoverage} />
-            <div
-                className="w-full flex justify-between items-center h-6 relative z-10 transition-colors duration-300"
-                style={{ backgroundColor: bg }}
-                onMouseEnter={() => setHovered(true)}
-                onMouseLeave={() => setHovered(false)}
-            >
-                <div ref={leftCluster} className="flex items-center gap-1 relative z-1 self-stretch min-w-0">
-                    {renderSlot(layout, "left")}
+            <RidgeBackdropProvider value={ridgeBackdrop}>
+                <ChromeCanvas barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} windowCoverage={windowCoverage} />
+                <div
+                    className="w-full flex justify-between items-center h-6 relative z-10 transition-colors duration-300"
+                    style={{ backgroundColor: bg }}
+                    onMouseEnter={() => setHovered(true)}
+                    onMouseLeave={() => setHovered(false)}
+                >
+                    <span ref={setRidgeBackdrop} aria-hidden className="absolute inset-0 pointer-events-none" />
+                    <div ref={leftCluster} className="flex items-center gap-1 relative z-1 self-stretch min-w-0">
+                        {renderSlot(layout, "left")}
+                    </div>
+                    <div ref={centerCluster} className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center gap-1 z-1">
+                        <NoticeStatus />
+                        {renderSlot(layout, "center")}
+                    </div>
+                    <div ref={rightCluster} className="flex items-center gap-1 mr-1 relative z-1 self-stretch">
+                        {renderSlot(layout, "right")}
+                    </div>
                 </div>
-                <div ref={centerCluster} className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center gap-1 z-1">
-                    <NoticeStatus />
-                    {renderSlot(layout, "center")}
-                </div>
-                <div ref={rightCluster} className="flex items-center gap-1 mr-1 relative z-1 self-stretch">
-                    {renderSlot(layout, "right")}
-                </div>
-            </div>
-            {launcherOpen && <LauncherPanel mode={launcherMode} />}
-            <NoticeStrip />
-            <WindowSwitcherPanel />
-            <DisplayModePanel />
+                {launcherOpen && <LauncherPanel mode={launcherMode} />}
+                <NoticeStrip />
+                <WindowSwitcherPanel />
+                <DisplayModePanel />
+            </RidgeBackdropProvider>
         </ThemeProvider>
     );
 }

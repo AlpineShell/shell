@@ -237,6 +237,23 @@ declare global {
     thumbnailType: string | null
   }
 
+  interface MediaTimeline {
+    positionMs: number
+    durationMs: number
+    updatedAt: number
+    playing: boolean
+    canSeek: boolean
+  }
+
+  interface AnimatedIconHandle {
+    startAnimation: () => void
+  }
+
+  interface AnimatedIconProps {
+    ref?: import('react').Ref<AnimatedIconHandle>
+    size?: number
+  }
+
   interface MicrophoneStatus {
     active: boolean
     apps: string[]
@@ -2046,6 +2063,9 @@ declare global {
       media: {
         session: () => Promise<MediaPlayback>
         onSessionChanged: (callback: (data: MediaPlayback) => void) => () => void
+        timeline: () => Promise<MediaTimeline | null>
+        onTimelineChanged: (callback: (data: MediaTimeline | null) => void) => () => void
+        seek: (positionMs: number) => Promise<{ success: boolean }>
         control: (action: 'play' | 'pause' | 'toggle' | 'next' | 'previous') => Promise<{ success: boolean }>
         microphone: () => Promise<MicrophoneStatus>
         onMicrophoneChanged: (callback: (data: MicrophoneStatus) => void) => () => void

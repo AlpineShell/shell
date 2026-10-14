@@ -18,9 +18,10 @@ interface PopupMenuProps {
     trigger: ReactNode;
     children: ReactNode;
     onOpen?: () => void;
+    triggerBackground?: boolean;
 }
 
-export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps) {
+export default function PopupMenu({ trigger, children, onOpen, triggerBackground = true }: PopupMenuProps) {
     const BG = useTopbarBg();
 
     const wrapperRef = useRef<HTMLDivElement>(null);
@@ -189,7 +190,7 @@ export default function PopupMenu({ trigger, children, onOpen }: PopupMenuProps)
         <div
             ref={wrapperRef}
             className="relative flex items-center self-stretch"
-            style={{ backgroundColor: open ? BG : "transparent", transition: "background-color 120ms ease" }}
+            style={{ backgroundColor: open && triggerBackground ? BG : "transparent", transition: "background-color 120ms ease" }}
             onMouseEnter={handleEnter}
         >
             <div className="cursor-pointer">{trigger}</div>

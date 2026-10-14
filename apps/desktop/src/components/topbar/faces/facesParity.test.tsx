@@ -53,6 +53,7 @@ vi.mock('../../../hooks/useVolume', () => ({ useVolume: () => ({ volume: 50, set
 vi.mock('../../../hooks/useMonitors', () => ({ useMonitors: () => ({ monitors: [], setBrightness: () => {} }) }))
 vi.mock('../../../hooks/useMediaSession', () => ({ useMediaSession: () => ({ ...bar.fixture.playback, control: () => {}, update: () => {} }) }))
 vi.mock('../../../hooks/useMediaVisualizer', () => ({ useMediaVisualizer: () => bar.fixture.showVisualizer }))
+vi.mock('../../../hooks/useMediaTimeline', () => ({ useMediaTimeline: () => null }))
 vi.mock('../../../hooks/useAudioPeak', () => ({ useAudioPeak: () => bar.fixture.peak }))
 vi.mock('../../../hooks/useShellNotice', () => ({ useShellNotice: () => bar.fixture.notice }))
 
