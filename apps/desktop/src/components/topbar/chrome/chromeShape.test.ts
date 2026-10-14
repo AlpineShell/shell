@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SHOULDER, surfaceFillPath, barBorderPath, windowCoverageClipPath, chromeSurfaceBounds, chromeContentBounds } from './chromeShape'
+import { SHOULDER, surfaceFillPath, barBorderPath, barWithShouldersPath, windowCoverageClipPath, chromeSurfaceBounds, chromeContentBounds } from './chromeShape'
 
 const surface = {
   centerX: 500,
@@ -114,5 +114,35 @@ describe('chromeContentBounds', () => {
     const path = surfaceFillPath(centered)
     expect(path).toContain(`L${content.right} 26`)
     expect(path).toContain(`L${content.left} 14`)
+  })
+})
+
+describe('barWithShouldersPath', () => {
+  const underBar = { ...surface, barBottom: 24 }
+
+  it('covers the bar and both shoulders, in coordinates from the left edge it is given', () => {
+    expect(barWithShouldersPath(underBar, 360, 640)).toBe(
+      'M0 0 L280 0 L280 24 L254 24 A14 14 0 0 0 240 38 L240 24 L40 24 L40 38 A14 14 0 0 0 26 24 L0 24 Z',
+    )
+  })
+
+  it('curves its shoulders exactly where the surface fill curves them', () => {
+    const fill = surfaceFillPath({ ...underBar, screenWidth: 1000 })
+    const band = barWithShouldersPath(underBar, 0, 1000)
+    expect(band).toContain('L614 24 A14 14 0 0 0 600 38')
+    expect(fill).toContain('L614 24 A14 14 0 0 0 600 38')
+  })
+
+  it('leaves out the shoulder on an anchored edge', () => {
+    expect((barWithShouldersPath({ ...underBar, anchor: 'left' }, 360, 640).match(/A/g) || []).length).toBe(1)
+    expect((barWithShouldersPath({ ...underBar, anchor: 'right' }, 360, 640).match(/A/g) || []).length).toBe(1)
+  })
+
+  it('never reaches below the shoulders', () => {
+    const band = barWithShouldersPath(underBar, 360, 640)
+    const lineDepths = [...band.matchAll(/[ML]\S+ (\S+)/g)].map((match) => Number(match[1]))
+    const arcDepths = [...band.matchAll(/A\S+ \S+ \S+ \S+ \S+ \S+ (\S+)/g)].map((match) => Number(match[1]))
+    const depths = [...lineDepths, ...arcDepths]
+    expect(Math.max(...depths)).toBeLessThanOrEqual(24 + SHOULDER)
   })
 })

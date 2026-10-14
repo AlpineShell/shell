@@ -71,6 +71,19 @@ export function surfaceFillPath(g: ChromeGeometry): string {
     return d + " Z";
 }
 
+export function barWithShouldersPath(g: ChromeSurfaceGeometry, left: number, right: number): string {
+    const s = resolve(g);
+    const x = (value: number) => value - left;
+    let d = `M0 0 L${x(right)} 0 L${x(right)} ${s.top}`;
+    if (s.rightShoulder) {
+        d += ` L${x(s.rightTip)} ${s.top} A${s.shoulder} ${s.shoulder} 0 0 0 ${x(s.bodyRight)} ${s.top + s.shoulder} L${x(s.bodyRight)} ${s.top}`;
+    }
+    if (s.leftShoulder) {
+        d += ` L${x(s.bodyLeft)} ${s.top} L${x(s.bodyLeft)} ${s.top + s.shoulder} A${s.shoulder} ${s.shoulder} 0 0 0 ${x(s.leftTip)} ${s.top}`;
+    }
+    return d + ` L0 ${s.top} Z`;
+}
+
 export function barBorderPath(g: ChromeGeometry, hasSurface: boolean): string {
     const top = g.barBottom;
     if (!hasSurface) {

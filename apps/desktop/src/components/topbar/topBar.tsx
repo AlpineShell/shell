@@ -82,7 +82,7 @@ export default function TopBar() {
                     onMouseEnter={() => setHovered(true)}
                     onMouseLeave={() => setHovered(false)}
                 >
-                    <span ref={setRidgeBackdrop} aria-hidden className="absolute inset-0 overflow-hidden pointer-events-none" />
+                    <span ref={setRidgeBackdrop} aria-hidden className="absolute inset-0 pointer-events-none" />
                     <div ref={leftCluster} className="flex items-center gap-1 relative z-1 self-stretch min-w-0">
                         {renderSlot(layout, "left")}
                     </div>

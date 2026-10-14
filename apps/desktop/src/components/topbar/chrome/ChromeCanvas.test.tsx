@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, act } from "@testing-library/react";
 import ChromeCanvas from "./ChromeCanvas";
-import { setChromeSurface, nextSurfaceId, type ChromeSurface } from "./chromeStore";
+import { setChromeSurface, setSurfaceBackdrop, nextSurfaceId, type ChromeSurface } from "./chromeStore";
 
 const painted: string[] = [];
 
@@ -88,5 +88,34 @@ describe("ChromeCanvas", () => {
         });
 
         expect(context.stroke).toHaveBeenCalled();
+    });
+
+    it("draws a registered backdrop into the bar and its shoulders, fading with the surface", () => {
+        let now = 1000;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        render(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />);
+        const content = document.createElement("div");
+        const backdrop = document.createElement("div");
+        vi.spyOn(backdrop, "getBoundingClientRect").mockReturnValue({ left: 140, right: 540, top: 0, bottom: 0, width: 400, height: 0, x: 140, y: 0, toJSON: () => ({}) } as DOMRect);
+        setSurfaceBackdrop(content, backdrop);
+
+        act(() => setChromeSurface({ ...surface(90), centerX: 340, bodyWidth: 320, contentEl: content }));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(backdrop.style.clipPath.startsWith('path("M0 0')).toBe(true);
+        expect((backdrop.style.clipPath.match(/A14 14/g) || []).length).toBe(2);
+        expect(backdrop.style.opacity).toBe("1");
+
+        act(() => setChromeSurface(null));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(backdrop.style.opacity).toBe("0");
+        setSurfaceBackdrop(content, null);
     });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { surfaceFillPath, barBorderPath, windowCoverageClipPath, RADIUS, type ChromeGeometry, type ChromeAnchor } from "./chromeShape";
-import { getChromeSurface, subscribeChromeSurface, type ChromeSurface } from "./chromeStore";
+import { surfaceFillPath, barBorderPath, barWithShouldersPath, windowCoverageClipPath, RADIUS, type ChromeGeometry, type ChromeAnchor } from "./chromeShape";
+import { getChromeSurface, getSurfaceBackdrop, subscribeChromeSurface, subscribeSurfaceBackdrops, type ChromeSurface } from "./chromeStore";
 
 const OPEN_MS = 460;
 const CLOSE_MS = 300;
@@ -178,6 +178,13 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, w
                 contentEl.style.clipPath = `inset(${slide}px ${rightHidden}px ${vHidden - slide}px ${leftHidden}px round 0 0 ${r}px ${r}px)`;
             }
 
+            const backdropEl = getSurfaceBackdrop(contentEl);
+            if (backdropEl) {
+                const box = backdropEl.getBoundingClientRect();
+                backdropEl.style.clipPath = `path("${barWithShouldersPath(geom, box.left, box.right)}")`;
+                backdropEl.style.opacity = String(openValue);
+            }
+
             return morphFrom !== null || (oStart >= 0 && now() - oStart < oDur);
         };
 
@@ -204,12 +211,14 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, w
         kickRef.current = kick;
         resize();
         const unsubscribe = subscribeChromeSurface(syncSurface);
+        const unsubscribeBackdrops = subscribeSurfaceBackdrops(kick);
         window.addEventListener("resize", resize);
         kick();
 
         return () => {
             cancelAnimationFrame(raf);
             unsubscribe();
+            unsubscribeBackdrops();
             window.removeEventListener("resize", resize);
         };
     }, []);
