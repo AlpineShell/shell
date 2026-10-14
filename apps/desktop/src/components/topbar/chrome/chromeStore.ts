@@ -1,5 +1,10 @@
 import type { ChromeAnchor } from "./chromeShape";
 
+export interface SurfaceBackdrop {
+    bar: HTMLElement | null;
+    surface: HTMLElement | null;
+}
+
 export interface ChromeSurface {
     id: number;
     centerX: number;
@@ -12,7 +17,7 @@ export interface ChromeSurface {
 let current: ChromeSurface | null = null;
 let nextId = 1;
 const listeners = new Set<() => void>();
-const backdrops = new Map<HTMLElement, HTMLElement>();
+const backdrops = new Map<HTMLElement, SurfaceBackdrop>();
 const backdropListeners = new Set<() => void>();
 
 export function nextSurfaceId(): number {
@@ -41,13 +46,13 @@ export function subscribeChromeSurface(listener: () => void): () => void {
     };
 }
 
-export function setSurfaceBackdrop(contentEl: HTMLElement, backdrop: HTMLElement | null): void {
+export function setSurfaceBackdrop(contentEl: HTMLElement, backdrop: SurfaceBackdrop | null): void {
     if (backdrop) backdrops.set(contentEl, backdrop);
     else backdrops.delete(contentEl);
     backdropListeners.forEach((l) => l());
 }
 
-export function getSurfaceBackdrop(contentEl: HTMLElement | null): HTMLElement | null {
+export function getSurfaceBackdrop(contentEl: HTMLElement | null): SurfaceBackdrop | null {
     return contentEl ? backdrops.get(contentEl) ?? null : null;
 }
 

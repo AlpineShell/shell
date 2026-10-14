@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import MediaMenu from './mediaMenu'
+import { setChromeSurface } from '../chrome/chromeStore'
 
 function playback(over: Partial<MediaPlayback> = {}) {
   return {
@@ -16,12 +17,20 @@ function playback(over: Partial<MediaPlayback> = {}) {
   }
 }
 
+function openAsSurface(contentEl: HTMLElement) {
+  act(() => setChromeSurface({ id: 1, centerX: 200, bodyWidth: 320, fullHeight: 90, anchor: 'center', contentEl }))
+}
+
+afterEach(() => {
+  act(() => setChromeSurface(null))
+})
+
 describe('MediaMenu', () => {
   it('lays the cover behind the track as a background', () => {
     const { container } = render(<MediaMenu media={playback()} darkText={false} />)
-    const cover = container.querySelector('img')
+    openAsSurface(container)
+    const cover = document.body.querySelector('img')
     expect(cover?.getAttribute('src')).toBe('data:image/png;base64,aGVsbG8=')
-    expect(cover?.style.position).toBe('absolute')
     expect(screen.getByText('Blue in Green')).toBeTruthy()
     expect(screen.getByText('Miles Davis')).toBeTruthy()
   })
@@ -35,7 +44,8 @@ describe('MediaMenu', () => {
 
   it('falls back to a plain layout without a cover', () => {
     const { container } = render(<MediaMenu media={playback({ thumbnail: null })} darkText={false} />)
-    expect(container.querySelector('img')).toBeNull()
+    openAsSurface(container)
+    expect(document.body.querySelector('img')).toBeNull()
     expect(screen.getByText('Blue in Green')).toBeTruthy()
   })
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { surfaceFillPath, barBorderPath, barWithShouldersPath, windowCoverageClipPath, RADIUS, type ChromeGeometry, type ChromeAnchor } from "./chromeShape";
+import { surfaceFillPath, barBorderPath, windowCoverageClipPath, RADIUS, type ChromeGeometry, type ChromeAnchor } from "./chromeShape";
 import { getChromeSurface, getSurfaceBackdrop, subscribeChromeSurface, subscribeSurfaceBackdrops, type ChromeSurface } from "./chromeStore";
 
 const OPEN_MS = 460;
@@ -123,9 +123,11 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, w
             const barBottom = p.barHeight;
 
             const surface = getChromeSurface();
+            let reveal = 1;
             if (surface && morphFrom) {
                 const mt = Math.min(1, (now() - morphStart) / MORPH_MS);
                 const me = easeOutExpo(mt);
+                reveal = me;
                 cx = morphFrom.cx + (surface.centerX - morphFrom.cx) * me;
                 halfBody = morphFrom.halfBody + (surface.bodyWidth / 2 - morphFrom.halfBody) * me;
                 fullH = morphFrom.fullH + (surface.fullHeight - morphFrom.fullH) * me;
@@ -178,11 +180,21 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, w
                 contentEl.style.clipPath = `inset(${slide}px ${rightHidden}px ${vHidden - slide}px ${leftHidden}px round 0 0 ${r}px ${r}px)`;
             }
 
-            const backdropEl = getSurfaceBackdrop(contentEl);
-            if (backdropEl) {
-                const box = backdropEl.getBoundingClientRect();
-                backdropEl.style.clipPath = `path("${barWithShouldersPath(geom, box.left, box.right)}")`;
-                backdropEl.style.opacity = String(openValue);
+            const backdrop = getSurfaceBackdrop(contentEl);
+            if (backdrop) {
+                for (const layer of [backdrop.bar, backdrop.surface]) {
+                    if (!layer) continue;
+                    layer.style.setProperty("--chrome-left", `${cx - halfBody}px`);
+                    layer.style.setProperty("--chrome-width", `${halfBody * 2}px`);
+                    layer.style.setProperty("--chrome-height", `${fullH}px`);
+                    layer.style.setProperty("--chrome-bar", `${barBottom}px`);
+                    layer.style.opacity = String(openValue * reveal);
+                }
+                if (backdrop.bar) backdrop.bar.style.clipPath = `inset(0 0 calc(100% - ${barBottom}px) 0)`;
+                if (backdrop.surface) {
+                    const layerLeft = backdrop.surface.getBoundingClientRect().left;
+                    backdrop.surface.style.clipPath = `path("${surfaceFillPath({ ...geom, centerX: cx - layerLeft })}")`;
+                }
             }
 
             return morphFrom !== null || (oStart >= 0 && now() - oStart < oDur);
