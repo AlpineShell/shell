@@ -228,12 +228,43 @@ function applyShellRegistration(context) {
   return context.shellRegisteredToAlpine || isShellRegisteredToAlpine()
 }
 
-function takeOverFromExplorer() {
+function activateShell() {
   const context = shellActivationContext()
   const plan = shellExclusivity.planShellActivation(context)
   const registrationVerified = shellExclusivity.requiresShellRegistration(plan) && applyShellRegistration(context)
+  return {
+    actingAsShell: plan.actingAsShell && shellExclusivity.isRegistrationSatisfied(plan, registrationVerified),
+    claimedRegistration: Boolean(registrationVerified) && !context.gpoBlocked,
+  }
+}
 
-  return { actingAsShell: plan.actingAsShell && shellExclusivity.isRegistrationSatisfied(plan, registrationVerified) }
+function takeOverFromExplorer() {
+  return { actingAsShell: activateShell().actingAsShell }
+}
+
+function releaseShellHandoffForHandLaunch(launchedByHand) {
+  if (launchedByHand && electronApp().isPackaged && installer.hasShellHandoff()) installer.clearShellHandoff()
+}
+
+let claimExplorerRetirement = null
+
+function retireExplorerForClaimedShell() {
+  if (!claimExplorerRetirement) {
+    claimExplorerRetirement = retireExplorer().catch((e) => {
+      console.error('[setup] Could not retire Explorer, so Alpine Shell starts beside it:', e.message)
+      return false
+    })
+  }
+  return claimExplorerRetirement
+}
+
+async function claimDesktop({ launchedByHand }) {
+  releaseShellHandoffForHandLaunch(launchedByHand)
+  const activation = activateShell()
+  const explorerRetired = activation.actingAsShell && activation.claimedRegistration
+    ? await retireExplorerForClaimedShell()
+    : false
+  return { actingAsShell: activation.actingAsShell, explorerRetired }
 }
 
 function isAutostartLaunch(argv) {
@@ -529,6 +560,7 @@ module.exports = {
   isAutostartLaunch,
   shouldLeaveShellToExplorer,
   takeOverFromExplorer,
+  claimDesktop,
   beginTestSession,
   setShellShutdown,
 

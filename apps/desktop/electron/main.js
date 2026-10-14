@@ -1041,12 +1041,17 @@ async function startApp() {
     return
   }
 
-  startShellMode()
-
   const startupLink = process.argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
+  const startupFile = fileHandlers.findHandledFile(process.argv)
+  const launchedByHand = !setup.isAutostartLaunch(process.argv) && !isUpdateRestart() && !startupLink && !startupFile
+
+  if (isUpdateRestart()) installer.clearUpdateHandoff()
+  const takeover = await setup.claimDesktop({ launchedByHand })
+  startShellMode(takeover)
+  if (takeover.explorerRetired && trayHost) trayHost.announceTaskbar()
+
   if (startupLink) setTimeout(() => handleDeepLink(startupLink), 500)
 
-  const startupFile = fileHandlers.findHandledFile(process.argv)
   if (startupFile) {
     setTimeout(() => {
       fileHandlers.openFile(startupFile).catch((e) => console.error('[main] file open failed:', e && e.message))
@@ -1166,14 +1171,14 @@ function routeKeyboardInput() {
   ])
 }
 
-function startShellMode() {
+function startShellMode(claimedTakeover = null) {
   if (shellModeRunning) return
   shellModeRunning = true
   openSignInWhenUnlicensed()
 
   if (isUpdateRestart()) installer.clearUpdateHandoff()
 
-  const takeover = setup.takeOverFromExplorer()
+  const takeover = claimedTakeover || setup.takeOverFromExplorer()
 
   if (shellWindow && takeover.actingAsShell) {
     shellWindow.onAppCommand(volume.applyAppCommand)
