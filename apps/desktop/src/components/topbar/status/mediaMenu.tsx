@@ -1,11 +1,16 @@
-import type { CSSProperties } from "react";
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { useRef, type ComponentType, type CSSProperties } from "react";
+import { Pause, Play } from "lucide-react";
+import { SkipBackIcon } from "../../icons/skipBackIcon";
+import { SkipForwardIcon } from "../../icons/skipForwardIcon";
 import MediaCover from "./mediaCover";
+import MediaProgress from "./mediaProgress";
 
 type MediaAction = 'toggle' | 'next' | 'previous';
 
 interface MediaMenuProps {
     media: MediaPlayback & { control: (action: MediaAction) => void };
+    timeline: MediaTimeline | null;
+    onSeek: (positionMs: number) => Promise<boolean>;
     darkText: boolean;
 }
 
@@ -22,28 +27,43 @@ function legibleOnCover(darkText: boolean): { text: CSSProperties; icons: CSSPro
     };
 }
 
-function MediaControls({ media, color, style }: { media: MediaMenuProps["media"]; color: string; style?: CSSProperties }) {
+interface ControlButtonProps {
+    label: string;
+    Icon: ComponentType<AnimatedIconProps>;
+    size: number;
+    onPress: () => void;
+}
+
+function ControlButton({ label, Icon, size, onPress }: ControlButtonProps) {
+    const iconRef = useRef<AnimatedIconHandle>(null);
     return (
-        <div className="flex items-center justify-center gap-7" style={style}>
-            <button aria-label="Previous" onClick={() => media.control('previous')} className="cursor-pointer">
-                <SkipBack color={color} size={16} fill={color} />
-            </button>
+        <button
+            aria-label={label}
+            onClick={() => {
+                iconRef.current?.startAnimation();
+                onPress();
+            }}
+            className="cursor-pointer"
+        >
+            <Icon ref={iconRef} size={size} />
+        </button>
+    );
+}
+
+function MediaControls({ media, darkText, style }: { media: MediaMenuProps["media"]; darkText: boolean; style?: CSSProperties }) {
+    return (
+        <div className={`flex items-center justify-center gap-7 ${darkText ? "text-black" : "text-white"}`} style={style}>
+            <ControlButton label="Previous" Icon={SkipBackIcon} size={18} onPress={() => media.control('previous')} />
             <button aria-label={media.playing ? "Pause" : "Play"} onClick={() => media.control('toggle')} className="cursor-pointer">
-                {media.playing
-                    ? <Pause color={color} size={20} fill={color} />
-                    : <Play color={color} size={20} fill={color} />
-                }
+                {media.playing ? <Pause size={22} /> : <Play size={22} />}
             </button>
-            <button aria-label="Next" onClick={() => media.control('next')} className="cursor-pointer">
-                <SkipForward color={color} size={16} fill={color} />
-            </button>
+            <ControlButton label="Next" Icon={SkipForwardIcon} size={18} onPress={() => media.control('next')} />
         </div>
     );
 }
 
-export default function MediaMenu({ media, darkText }: MediaMenuProps) {
+export default function MediaMenu({ media, timeline, onSeek, darkText }: MediaMenuProps) {
     const cover = coverSource(media);
-    const color = darkText ? "black" : "white";
     const legible = cover ? legibleOnCover(darkText) : null;
 
     return (
@@ -58,7 +78,8 @@ export default function MediaMenu({ media, darkText }: MediaMenuProps) {
                         {media.artist ?? "Unknown Artist"}
                     </span>
                 </div>
-                <MediaControls media={media} color={color} style={legible?.icons} />
+                {timeline && <MediaProgress timeline={timeline} darkText={darkText} onSeek={onSeek} textStyle={legible?.text} barStyle={legible?.icons} />}
+                <MediaControls media={media} darkText={darkText} style={legible?.icons} />
             </div>
         </div>
     );

@@ -540,6 +540,13 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('media/session-changed', handler)
       return () => ipcRenderer.removeListener('media/session-changed', handler)
     },
+    timeline: () => ipcRenderer.invoke('media/timeline'),
+    onTimelineChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('media/timeline-changed', handler)
+      return () => ipcRenderer.removeListener('media/timeline-changed', handler)
+    },
+    seek: (positionMs) => ipcRenderer.invoke('media/seek', positionMs),
     control: (action) => ipcRenderer.invoke('media/control', action),
     microphone: () => ipcRenderer.invoke('media/microphone'),
     onMicrophoneChanged: (callback) => {

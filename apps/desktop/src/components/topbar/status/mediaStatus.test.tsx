@@ -12,6 +12,7 @@ vi.mock('../../../hooks/useMediaSession', () => ({
   useMediaSession: () => ({ ...media.playback, control: () => {}, update: () => {} }),
 }))
 vi.mock('../../../hooks/useMediaVisualizer', () => ({ useMediaVisualizer: () => media.showVisualizer }))
+vi.mock('../../../hooks/useMediaTimeline', () => ({ useMediaTimeline: () => null }))
 vi.mock('../shared/popupMenu', () => ({ default: ({ trigger }: { trigger: ReactNode }) => <>{trigger}</> }))
 
 const APP_ICON = 'iVBORw0KGgo='
