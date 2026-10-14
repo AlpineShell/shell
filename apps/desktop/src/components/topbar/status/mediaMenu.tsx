@@ -70,11 +70,11 @@ export default function MediaMenu({ media, timeline, onSeek, darkText }: MediaMe
         <div className="relative w-80">
             {cover && <MediaCover src={cover} />}
             <div className="relative px-4 pt-2.5 pb-3.5 flex flex-col gap-3">
-                <div className="flex flex-col min-w-0" style={legible?.text}>
-                    <span className={`text-[13px] font-semibold truncate ${darkText ? "text-black" : "text-white"}`}>
+                <div className="flex flex-col items-center min-w-0 text-center" style={legible?.text}>
+                    <span className={`w-full text-center text-[13px] font-semibold truncate ${darkText ? "text-black" : "text-white"}`}>
                         {media.title ?? "Unknown"}
                     </span>
-                    <span className={`text-[12px] font-medium truncate ${darkText ? "text-black/70" : "text-white/75"}`}>
+                    <span className={`w-full text-center text-[12px] font-medium truncate ${darkText ? "text-black/70" : "text-white/75"}`}>
                         {media.artist ?? "Unknown Artist"}
                     </span>
                 </div>
