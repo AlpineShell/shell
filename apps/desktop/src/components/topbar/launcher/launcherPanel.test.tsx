@@ -77,6 +77,8 @@ function stubBridges({ catalog = [] as LauncherItem[], openApps = [] as OpenApp[
     system: {
       powerAction: vi.fn(() => Promise.resolve()),
       powerConfirm: vi.fn(() => Promise.resolve(true)),
+      showHibernate: vi.fn(() => Promise.resolve(true)),
+      onShowHibernateChanged: vi.fn(unsubscribe),
       onPowerConfirmChanged: vi.fn(unsubscribe),
     },
     run: {
@@ -211,6 +213,13 @@ describe("LauncherPanel", () => {
     expect(screen.getByRole("listbox").textContent).toContain("Confirm shut down")
     press(input, "Enter")
     expect(shell.system.powerAction).toHaveBeenCalledWith("shutdown")
+  })
+
+  it("hibernates on Enter", async () => {
+    const input = await openLauncher()
+    await type(input, "hibernate")
+    press(input, "Enter")
+    expect(shell.system.powerAction).toHaveBeenCalledWith("hibernate")
   })
 
   it("moves through results with the arrow keys", async () => {

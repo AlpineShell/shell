@@ -23,6 +23,8 @@ function stubBridges(storedChoice: Promise<boolean>) {
         system: {
             powerAction,
             powerConfirm: () => storedChoice,
+            showHibernate: () => Promise.resolve(false),
+            onShowHibernateChanged: () => () => {},
             onPowerConfirmChanged: (callback: (value: boolean) => void) => {
                 powerConfirmChanged = callback;
                 return () => {
@@ -64,7 +66,7 @@ afterEach(() => {
 
 describe("SystemMenuActions with confirmation on", () => {
     it.each(ENTRIES)("needs a second click to %s", (action, label, question) => {
-        render(<SystemMenuActions darkText={false} confirmRequired />);
+        render(<SystemMenuActions darkText={false} confirmRequired showHibernate={false} />);
 
         fireEvent.click(button(label));
         expect(powerAction).not.toHaveBeenCalled();
@@ -74,7 +76,7 @@ describe("SystemMenuActions with confirmation on", () => {
     });
 
     it("moves the question to whichever action was pressed last", () => {
-        render(<SystemMenuActions darkText={false} confirmRequired />);
+        render(<SystemMenuActions darkText={false} confirmRequired showHibernate={false} />);
 
         fireEvent.click(button("Shut Down"));
         fireEvent.click(button("Restart"));
@@ -88,14 +90,14 @@ describe("SystemMenuActions with confirmation on", () => {
     });
 
     it("keeps room for every question so arming one never reflows the menu", () => {
-        const { container } = render(<SystemMenuActions darkText={false} confirmRequired />);
+        const { container } = render(<SystemMenuActions darkText={false} confirmRequired showHibernate={false} />);
         expect(reservedLabels(container)).toEqual(ENTRIES.map(([, , question]) => question));
     });
 });
 
 describe("SystemMenuActions with confirmation off", () => {
     it.each(ENTRIES)("acts on the first click to %s", (action, label, question) => {
-        render(<SystemMenuActions darkText={false} confirmRequired={false} />);
+        render(<SystemMenuActions darkText={false} confirmRequired={false} showHibernate={false} />);
 
         fireEvent.click(button(label));
 
@@ -104,8 +106,23 @@ describe("SystemMenuActions with confirmation off", () => {
     });
 
     it("reserves no more room than the labels themselves need", () => {
-        const { container } = render(<SystemMenuActions darkText={false} confirmRequired={false} />);
+        const { container } = render(<SystemMenuActions darkText={false} confirmRequired={false} showHibernate={false} />);
         expect(reservedLabels(container)).toEqual(ENTRIES.map(([, label]) => label));
+    });
+});
+
+describe("SystemMenuActions with Hibernate shown", () => {
+    it("hibernates on the first click even while the other actions ask twice", () => {
+        render(<SystemMenuActions darkText={false} confirmRequired showHibernate />);
+
+        fireEvent.click(button("Hibernate"));
+
+        expect(powerAction.mock.calls).toEqual([["hibernate"]]);
+    });
+
+    it("leaves Hibernate out when the setting is off", () => {
+        render(<SystemMenuActions darkText={false} confirmRequired showHibernate={false} />);
+        expect(questionShown("Hibernate")).toBe(false);
     });
 });
 

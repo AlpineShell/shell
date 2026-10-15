@@ -62,7 +62,7 @@ describe('RIDGE_ITEM_DETAILS', () => {
   })
 
   it.each<[TopbarItemId, string[], SettingsPageId[]]>([
-    ['system-menu', ['power-confirm'], []],
+    ['system-menu', ['power-confirm', 'power-show-hibernate'], []],
     ['plugins-left', [], ['plugins']],
     ['launcher', ['launcher-hotkey'], ['search']],
     ['tray', ['tray-all-monitors', 'tray-overflow'], ['tray-icons']],
@@ -145,6 +145,7 @@ describe('ridgeItemSearchEntryId', () => {
 describe('ridgeItemForSetting', () => {
   it.each<[string, TopbarItemId]>([
     ['power-confirm', 'system-menu'],
+    ['power-show-hibernate', 'system-menu'],
     ['launcher-hotkey', 'launcher'],
     ['topbar-search-icon', 'launcher'],
     ['tray-enabled', 'tray'],

@@ -58,6 +58,7 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
       'ridge-item-clock',
       'ridge-layout-reset',
       'power-confirm',
+      'power-show-hibernate',
       'topbar-search-icon',
       'media-visualizer',
       'tray-enabled',

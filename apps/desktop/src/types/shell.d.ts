@@ -832,7 +832,7 @@ declare global {
     right: number
   }
 
-  type PowerAction = 'shutdown' | 'restart' | 'logout'
+  type PowerAction = 'hibernate' | 'shutdown' | 'restart' | 'logout'
 
   type PowerMenuPress = { run: PowerAction } | { armed: PowerAction }
 
@@ -843,6 +843,7 @@ declare global {
   interface SystemMenuActionsProps {
     darkText: boolean
     confirmRequired: boolean
+    showHibernate: boolean
   }
 
   interface NoticeFaceProps {
@@ -1652,7 +1653,7 @@ declare global {
     minScore: number
   }
 
-  type PowerCommandAction = 'shutdown' | 'restart' | 'logout' | 'lock' | 'sleep'
+  type PowerCommandAction = 'shutdown' | 'restart' | 'logout' | 'lock' | 'sleep' | 'hibernate'
 
   type LauncherCommandRun =
     | { kind: 'window-command'; action: 'minimize' | 'maximize' | 'close' }
@@ -2043,6 +2044,9 @@ declare global {
         powerConfirm: () => Promise<boolean>
         setPowerConfirm: (value: boolean) => Promise<boolean>
         onPowerConfirmChanged: (callback: (value: boolean) => void) => () => void
+        showHibernate: () => Promise<boolean>
+        setShowHibernate: (value: boolean) => Promise<boolean>
+        onShowHibernateChanged: (callback: (value: boolean) => void) => () => void
         onResume: (callback: () => void) => () => void
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>
