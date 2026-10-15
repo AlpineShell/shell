@@ -15,6 +15,7 @@ const {
   planMoveWindow,
   renameDesktop,
   forgetClosedWindows,
+  windowShape,
   summarizeDesktops,
 } = require('./virtualDesktopsState')
 
@@ -29,9 +30,11 @@ const SW_SHOWNA = 8
 const DESKTOPS_FILE = 'desktops.json'
 const HIDDEN_WINDOWS_FILE = 'desktops-hidden-windows.json'
 const CHANGED_CHANNEL = 'desktops/changed'
+const SHAPE_WATCH_INTERVAL_MS = 2000
 
 let state = createDesktopsState(null)
 let broadcast = null
+let lastBroadcast = ''
 
 function userDataFile(name) {
   return path.join(require('electron').app.getPath('userData'), name)
@@ -88,15 +91,48 @@ function focusWindow(hwnd) {
   }
 }
 
+function dipRect(physical) {
+  const { screen } = require('electron')
+  const topLeft = screen.screenToDipPoint({ x: physical.left, y: physical.top })
+  const bottomRight = screen.screenToDipPoint({ x: physical.right, y: physical.bottom })
+  return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y }
+}
+
+function shapeOfWindow(hwnd) {
+  try {
+    if (IsIconic(hwnd) !== 0) return null
+    const physical = windowEnum.windowFrameBounds(hwnd)
+    if (!physical) return null
+    const rect = dipRect(physical)
+    return windowShape(rect, require('electron').screen.getDisplayMatching(rect).bounds)
+  } catch {
+    return null
+  }
+}
+
 function summary() {
-  return summarizeDesktops(state, visibleDesktopWindows().length)
+  return summarizeDesktops(state, visibleDesktopWindows(), shapeOfWindow)
+}
+
+function sendSummary(current) {
+  lastBroadcast = JSON.stringify(current)
+  if (broadcast) broadcast(CHANGED_CHANNEL, current)
+}
+
+function sendSummaryIfChanged() {
+  try {
+    const current = summary()
+    if (JSON.stringify(current) !== lastBroadcast) sendSummary(current)
+  } catch (e) {
+    console.error('[virtualDesktops] watch error:', e.message)
+  }
 }
 
 function publish() {
   writeJson(DESKTOPS_FILE, savedDesktops(state))
   writeJson(HIDDEN_WINDOWS_FILE, hiddenWindows(state))
   const current = summary()
-  if (broadcast) broadcast(CHANGED_CHANNEL, current)
+  sendSummary(current)
   return current
 }
 
@@ -169,10 +205,7 @@ function recoverWindowsHiddenByLastRun() {
 module.exports = {
   handlers: {
     'desktops/state': () => summary(),
-    'desktops/refresh': () => {
-      const current = summary()
-      if (broadcast) broadcast(CHANGED_CHANNEL, current)
-    },
+    'desktops/refresh': () => sendSummary(summary()),
     'desktops/switch': (_event, id) => switchTo(id),
     'desktops/create': () => create(),
     'desktops/remove': (_event, id) => remove(id),
@@ -189,5 +222,6 @@ module.exports = {
     state = createDesktopsState(readJson(DESKTOPS_FILE))
     const { app } = require('electron')
     app.on('will-quit', showEveryWindow)
+    setInterval(sendSummaryIfChanged, SHAPE_WATCH_INTERVAL_MS)
   },
 }

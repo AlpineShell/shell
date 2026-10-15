@@ -1189,10 +1189,18 @@ declare global {
 
   type WindowsColorMode = 'light' | 'dark'
 
+  interface DesktopWindowShape {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+
   interface VirtualDesktop {
     id: string
     name: string
     windowCount: number
+    windows: DesktopWindowShape[]
   }
 
   interface VirtualDesktopsState {

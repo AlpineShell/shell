@@ -13,6 +13,7 @@ const {
   planMoveWindow,
   renameDesktop,
   forgetClosedWindows,
+  windowShape,
   summarizeDesktops,
 } = virtualDesktopsState
 
@@ -107,7 +108,7 @@ describe('planCreate', () => {
     let state = createDesktopsState(null)
     while (state.desktops.length < MAX_DESKTOPS) state = planCreate(state).state
     expect(planCreate(state)).toBeNull()
-    expect(summarizeDesktops(state, 0).canCreate).toBe(false)
+    expect(summarizeDesktops(state, []).canCreate).toBe(false)
   })
 })
 
@@ -159,13 +160,44 @@ describe('forgetClosedWindows and summarizeDesktops', () => {
   it('drops windows that no longer exist and counts the rest per desktop', () => {
     const away = planSwitch(twoDesktops(), 'desktop-2', [EDITOR, BROWSER], EDITOR).state
     const pruned = forgetClosedWindows(away, (hwnd) => hwnd !== BROWSER)
-    expect(summarizeDesktops(pruned, 3)).toEqual({
+    expect(summarizeDesktops(pruned, [MUSIC, 104, 105])).toEqual({
       currentId: 'desktop-2',
       canCreate: true,
       desktops: [
-        { id: 'desktop-1', name: 'Desktop 1', windowCount: 1 },
-        { id: 'desktop-2', name: 'Desktop 2', windowCount: 3 },
+        { id: 'desktop-1', name: 'Desktop 1', windowCount: 1, windows: [] },
+        { id: 'desktop-2', name: 'Desktop 2', windowCount: 3, windows: [] },
       ],
     })
+  })
+
+  it('draws up to six windows per desktop, the front window last so it lands on top', () => {
+    const handles = [1, 2, 3, 4, 5, 6, 7]
+    const shapeOf = (hwnd) => ({ x: hwnd / 10, y: 0, width: 0.1, height: 0.1 })
+    const [current] = summarizeDesktops(createDesktopsState(null), handles, shapeOf).desktops
+    expect(current.windowCount).toBe(7)
+    expect(current.windows.map((shape) => shape.x)).toEqual([0.6, 0.5, 0.4, 0.3, 0.2, 0.1])
+  })
+
+  it('leaves out windows it has no shape for', () => {
+    const [current] = summarizeDesktops(createDesktopsState(null), [1, 2], (hwnd) => (hwnd === 1 ? null : { x: 0, y: 0, width: 1, height: 1 })).desktops
+    expect(current.windows).toHaveLength(1)
+    expect(current.windowCount).toBe(2)
+  })
+})
+
+describe('windowShape', () => {
+  const display = { x: 1920, y: 0, width: 1920, height: 1080 }
+
+  it('places a window as fractions of the display it is on', () => {
+    expect(windowShape({ x: 1920 + 480, y: 270, width: 960, height: 540 }, display)).toEqual({ x: 0.25, y: 0.25, width: 0.5, height: 0.5 })
+  })
+
+  it('clips a window that hangs off the display', () => {
+    expect(windowShape({ x: 1920 - 100, y: -50, width: 1200, height: 640 }, display)).toEqual({ x: 0, y: 0, width: 0.573, height: 0.546 })
+  })
+
+  it('has no shape for a window entirely off the display or without a display', () => {
+    expect(windowShape({ x: 0, y: 0, width: 500, height: 500 }, display)).toBeNull()
+    expect(windowShape({ x: 0, y: 0, width: 500, height: 500 }, null)).toBeNull()
   })
 })

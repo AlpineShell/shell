@@ -88,8 +88,8 @@ export function liveRidgePreviewData(): RidgePreviewData {
       currentId: 'desktop-2',
       canCreate: true,
       desktops: [
-        { id: 'desktop-1', name: 'Desktop 1', windowCount: 3 },
-        { id: 'desktop-2', name: 'Work', windowCount: 2 },
+        { id: 'desktop-1', name: 'Desktop 1', windowCount: 1, windows: [{ x: 0.1, y: 0.1, width: 0.6, height: 0.7 }] },
+        { id: 'desktop-2', name: 'Work', windowCount: 2, windows: [{ x: 0, y: 0, width: 0.5, height: 1 }, { x: 0.5, y: 0, width: 0.5, height: 1 }] },
       ],
     },
   }

@@ -1,6 +1,8 @@
 const MAX_DESKTOPS = 9
 const MAX_NAME_LENGTH = 32
 const DEFAULT_NAME_PREFIX = 'Desktop'
+const MAX_WINDOW_SHAPES = 6
+const SHAPE_PRECISION = 1000
 
 const NO_CHANGE = null
 
@@ -140,15 +142,36 @@ function forgetClosedWindows(state, isWindow) {
   return { ...state, assignments }
 }
 
-function summarizeDesktops(state, visibleWindowCount) {
+function toFraction(value) {
+  return Math.round(Math.min(1, Math.max(0, value)) * SHAPE_PRECISION) / SHAPE_PRECISION
+}
+
+function windowShape(rect, display) {
+  if (!rect || !display || display.width <= 0 || display.height <= 0) return null
+  const left = toFraction((rect.x - display.x) / display.width)
+  const top = toFraction((rect.y - display.y) / display.height)
+  const right = toFraction((rect.x + rect.width - display.x) / display.width)
+  const bottom = toFraction((rect.y + rect.height - display.y) / display.height)
+  if (right <= left || bottom <= top) return null
+  return { x: left, y: top, width: toFraction(right - left), height: toFraction(bottom - top) }
+}
+
+function windowShapes(handles, shapeOf) {
+  return handles
+    .map(shapeOf)
+    .filter((shape) => shape !== null)
+    .slice(0, MAX_WINDOW_SHAPES)
+    .reverse()
+}
+
+function summarizeDesktops(state, visibleWindows, shapeOf = () => null) {
   return {
     currentId: state.currentId,
     canCreate: state.desktops.length < MAX_DESKTOPS,
-    desktops: state.desktops.map((desktop) => ({
-      id: desktop.id,
-      name: desktop.name,
-      windowCount: desktop.id === state.currentId ? visibleWindowCount : windowsOn(state.assignments, desktop.id).length,
-    })),
+    desktops: state.desktops.map((desktop) => {
+      const handles = desktop.id === state.currentId ? visibleWindows : windowsOn(state.assignments, desktop.id)
+      return { id: desktop.id, name: desktop.name, windowCount: handles.length, windows: windowShapes(handles, shapeOf) }
+    }),
   }
 }
 
@@ -165,5 +188,6 @@ module.exports = {
   planMoveWindow,
   renameDesktop,
   forgetClosedWindows,
+  windowShape,
   summarizeDesktops,
 }
