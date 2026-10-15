@@ -45,7 +45,7 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
 }
 
 export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
-  'wallpaper': { registryRows: false, renderedByThePage: ['wallpaper'] },
+  'wallpaper': { registryRows: false, renderedByThePage: ['wallpaper', 'windows-color-mode'] },
   'ridge': {
     registryRows: false,
     renderedByThePage: [

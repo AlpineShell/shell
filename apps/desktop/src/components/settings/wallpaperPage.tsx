@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Trash2, Upload } from 'lucide-react'
 import { ConfirmButton, PageHeader, PickerTile, Segmented, type SegmentedOption } from '@alpine/ui'
 import { useWallpaper } from '../../hooks/useWallpaper'
+import { settingsValueEntry } from '../../settings/registry'
+import { ValueRow } from './registryRow'
 
 type Tab = 'mine' | 'presets'
 
@@ -16,6 +18,8 @@ interface WallpaperItem {
   thumbnail: string
   url: string
 }
+
+const COLOR_MODE = settingsValueEntry('windows-color-mode')
 
 const MINE_CACHE = 'alpine.wallpapers.mine'
 const PRESETS_CACHE = 'alpine.wallpapers.presets'
@@ -100,6 +104,8 @@ export default function WallpaperPage() {
       <PageHeader title="Wallpaper">
         <Segmented label="Wallpaper source" options={TABS} value={tab} onChange={setTab} />
       </PageHeader>
+
+      <ValueRow entry={COLOR_MODE} description="" />
 
       {tab === 'mine' && (
         <div className="flex flex-wrap gap-3">

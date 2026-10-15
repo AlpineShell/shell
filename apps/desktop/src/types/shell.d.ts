@@ -1175,6 +1175,8 @@ declare global {
 
   type SettingsValue = boolean | number | string | TopBarColor | null
 
+  type WindowsColorMode = 'light' | 'dark'
+
   interface SettingsEntryBase {
     id: string
     label: string
@@ -1945,6 +1947,9 @@ declare global {
         wallpaperPresets: () => Promise<{ name: string; path: string; thumbnail: string; url: string }[]>
         wallpaperMine: () => Promise<{ name: string; path: string; thumbnail: string; url: string; addedAt: number }[]>
         wallpaperMineDelete: (filePath: string) => Promise<boolean>
+        colorMode: () => Promise<WindowsColorMode>
+        setColorMode: (mode: WindowsColorMode) => Promise<WindowsColorMode>
+        onColorModeChanged: (callback: (mode: WindowsColorMode) => void) => () => void
         openApps: () => Promise<OpenApp[]>
         activate: (hwnd: number) => Promise<void>
         minimize: (hwnd: number) => Promise<void>

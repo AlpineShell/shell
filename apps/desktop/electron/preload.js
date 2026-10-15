@@ -396,6 +396,13 @@ contextBridge.exposeInMainWorld('shell', {
     wallpaperPresets: () => ipcRenderer.invoke('windows/wallpaper-presets'),
     wallpaperMine: () => ipcRenderer.invoke('windows/wallpaper-mine'),
     wallpaperMineDelete: (filePath) => ipcRenderer.invoke('windows/wallpaper-mine-delete', filePath),
+    colorMode: () => ipcRenderer.invoke('windows/color-mode-get'),
+    setColorMode: (mode) => ipcRenderer.invoke('windows/color-mode-set', mode),
+    onColorModeChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('windows/color-mode-changed', handler)
+      return () => ipcRenderer.removeListener('windows/color-mode-changed', handler)
+    },
     openApps: () => ipcRenderer.invoke('windows/open-apps'),
     activate: (hwnd) => ipcRenderer.invoke('windows/activate', hwnd),
     minimize: (hwnd) => ipcRenderer.invoke('windows/minimize', hwnd),
