@@ -739,7 +739,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     group: 'Color',
     order: 2,
     applies: 'instant',
-    defaultValue: null,
+    defaultValue: { r: 32, g: 32, b: 32, darkText: false },
     validate: toTopBarColorOverride,
     read: () => window.topbar.colorOverride(),
     write: (value: TopBarColor | null) =>
@@ -761,7 +761,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     group: 'Color',
     order: 3,
     applies: 'instant',
-    defaultValue: true,
+    defaultValue: false,
     read: () => window.topbar.colorOverride().then((override) => override === null),
     write: (value: boolean) => (value ? window.topbar.setColorOverride(null) : freezeAutomaticTopBarColor()),
     subscribe: (listener: (value: boolean) => void) =>

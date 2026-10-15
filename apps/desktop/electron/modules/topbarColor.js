@@ -3,13 +3,14 @@ const fs = require('fs')
 const path = require('path')
 const { resolveWallpaperPath, onWallpaperPathChange } = require('./wallpaper')
 const { rgbToOklab, oklabToRgb } = require('../oklab')
+const { DEFAULT_TOPBAR_COLOR, storedOverride } = require('./topbarColorDefaults')
 
 const STORE_FILE = 'topbar-color.json'
 
 let lastColor = null
 let lastWallpaperPath = null
 let lastPalette = []
-let userOverride = null
+let userOverride = DEFAULT_TOPBAR_COLOR
 let showSearchIcon = false
 let mediaShowVisualizer = false
 let storePath = null
@@ -26,9 +27,7 @@ function loadOverride() {
     const file = getStorePath()
     if (fs.existsSync(file)) {
       const data = JSON.parse(fs.readFileSync(file, 'utf8'))
-      if (data.color && typeof data.color.r === 'number') {
-        userOverride = data.color
-      }
+      userOverride = storedOverride(data)
       if (typeof data.showSearchIcon === 'boolean') {
         showSearchIcon = data.showSearchIcon
       }
