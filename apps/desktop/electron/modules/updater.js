@@ -23,6 +23,7 @@ const state = {
   availableVersion: null,
   progressPercent: 0,
   error: null,
+  signInRequired: false,
 }
 
 const log = []
@@ -75,6 +76,7 @@ function autoUpdater() {
 
 function setState(partial) {
   Object.assign(state, partial)
+  state.signInRequired = state.status === 'error' && state.error === SIGN_IN_FOR_UPDATES_MESSAGE
   if (broadcastChanged) broadcastChanged('updates/state-changed', state)
 }
 

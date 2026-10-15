@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, AppWindow, CheckCircle2, Download, RefreshCw, RotateCcw } from 'lucide-react'
+import { AlertTriangle, AppWindow, CheckCircle2, Download, LogIn, RefreshCw, RotateCcw } from 'lucide-react'
 import { Button, EmptyState, IconButton, ListRow, PageHeader } from '@alpine/ui'
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
@@ -25,6 +25,10 @@ function formatTime(timestamp: number): string {
 
 function restart() {
   window.shell.system.powerAction('restart')
+}
+
+function openSignIn() {
+  window.shell.windows.openSignIn()
 }
 
 export default function UpdatesPage() {
@@ -82,7 +86,12 @@ export default function UpdatesPage() {
       {errorMessage && (
         <div className="flex items-start gap-2.5 rounded-card border border-danger/30 bg-danger/10 px-4 py-3">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-danger" />
-          <span className="text-dense text-danger">{errorMessage}</span>
+          <span className="flex-1 text-dense text-danger">{errorMessage}</span>
+          {alpine.state.signInRequired && (
+            <Button size="sm" onClick={openSignIn} icon={<LogIn size={14} />}>
+              Sign in
+            </Button>
+          )}
         </div>
       )}
 

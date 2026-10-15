@@ -145,6 +145,7 @@ declare global {
     availableVersion: string | null
     progressPercent: number
     error: string | null
+    signInRequired: boolean
   }
 
   interface UpdateLogEntry {
@@ -2006,6 +2007,7 @@ declare global {
         onOpenAppsChanged: (callback: (data: OpenApp[]) => void) => () => void
         openSettings: (page?: string) => Promise<void>
         closeSettings: () => Promise<void>
+        openSignIn: () => Promise<void>
         setSettingsPage: (name: string) => Promise<void>
         initialPage: string | null
         onSettingsNavigate: (callback: (page: string) => void) => () => void

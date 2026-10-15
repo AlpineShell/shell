@@ -113,15 +113,18 @@ describe('the update feed credentials', () => {
   it('tells a signed-out user why a manual check did nothing', () => {
     setLicence(null)
     const state = updater.handlers['updates/check']()
-    expect(state).toMatchObject({ status: 'error', error: updater.SIGN_IN_FOR_UPDATES_MESSAGE })
+    expect(state).toMatchObject({ status: 'error', error: updater.SIGN_IN_FOR_UPDATES_MESSAGE, signInRequired: true })
     expect(checkCalls).toHaveLength(0)
     expect(updater.handlers['updates/get-log']().at(-1).message).toBe(updater.SIGN_IN_FOR_UPDATES_MESSAGE)
   })
 
   it('checks as soon as a licence becomes usable', () => {
     setLicence(null)
+    updater.handlers['updates/check']()
     setLicence('token-4')
     expect(checkCalls).toEqual([{ Authorization: 'Bearer token-4' }])
+    updaterListeners.get('checking-for-update')()
+    expect(updater.handlers['updates/get-state']().signInRequired).toBe(false)
     setLicence('token-4b')
     expect(checkCalls).toHaveLength(1)
     expect(fakeAutoUpdater.requestHeaders).toEqual({ Authorization: 'Bearer token-4b' })

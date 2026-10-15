@@ -865,6 +865,11 @@ ipc.handle('windows/open-settings', (_event, page) => {
   }
 })
 
+ipc.handle('windows/open-sign-in', () => {
+  if (licence.status().state !== 'unlicensed') return
+  createSetupWindow('signIn')
+})
+
 ipc.handle('windows/close-settings', () => {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.destroy()
