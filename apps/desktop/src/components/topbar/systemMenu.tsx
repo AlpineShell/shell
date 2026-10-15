@@ -8,8 +8,8 @@ import { usePowerConfirm } from "../../hooks/usePowerConfirm";
 import { useShowHibernate } from "../../hooks/useShowHibernate";
 
 const POWER_MENU_ENTRIES = [
-    { action: "hibernate", label: "Hibernate", Icon: Snowflake, confirm: false },
     { action: "logout", label: "Log Out", Icon: LogOut, confirm: true },
+    { action: "hibernate", label: "Hibernate", Icon: Snowflake, confirm: false },
     { action: "restart", label: "Restart", Icon: RotateCcw, confirm: true },
     { action: "shutdown", label: "Shut Down", Icon: Power, confirm: true },
 ] as const;

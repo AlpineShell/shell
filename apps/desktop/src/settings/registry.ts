@@ -681,7 +681,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
   {
     id: 'power-confirm',
-    label: 'Confirm power menu actions',
+    label: 'Confirm actions',
     description: 'Ask again before Log Out, Restart or Shut Down.',
     hint: "Ask a second time before Ridge's power menu acts",
     keywords: ['reassurance dialog', 'confirm shut down', 'confirm restart', 'confirm log out', 'ask before shutting down'],
@@ -698,7 +698,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   },
   {
     id: 'power-show-hibernate',
-    label: 'Hibernate in the power menu',
+    label: 'Hibernate',
     description: 'Show Hibernate in the power menus on Ridge and in Search.',
     hint: 'Offer Hibernate next to Log Out, Restart and Shut Down',
     keywords: ['hibernate', 'hibernation', 'deep sleep', 'suspend to disk', 'power menu'],

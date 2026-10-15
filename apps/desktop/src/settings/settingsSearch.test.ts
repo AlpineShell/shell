@@ -171,7 +171,7 @@ describe('settings search ranking', () => {
   })
 
   it('finds the power menu confirmation by the word the sketch used, as a switch', () => {
-    const match = shown('reassurance').find((candidate) => candidate.target.label === 'Confirm power menu actions')
+    const match = shown('reassurance').find((candidate) => candidate.target.label === 'Confirm actions')
     expect(match?.target.action.kind).toBe('toggle')
   })
 
