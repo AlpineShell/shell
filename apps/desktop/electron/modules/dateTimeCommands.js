@@ -3,6 +3,7 @@ const TIME_SYNC_PARAMETERS_KEY = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\W3
 const AUTO_TIME_ZONE_ON_START = 3
 const AUTO_TIME_ZONE_OFF_START = 4
 const NO_SYNC_TYPE = 'NoSync'
+const REPORT_SUCCESS = 'exit 0'
 
 const READ_STATE_SCRIPT = [
   '$zone = Get-TimeZone',
@@ -56,6 +57,7 @@ function autoTimeZoneScript(on) {
     `Set-ItemProperty -Path '${TIME_ZONE_AUTO_UPDATE_KEY}' -Name Start -Value ${start} -Type DWord`,
   ]
   if (on) lines.push('Start-Service tzautoupdate -ErrorAction SilentlyContinue')
+  lines.push(REPORT_SUCCESS)
   return lines.join('\r\n')
 }
 
@@ -67,6 +69,7 @@ function autoTimeScript(on) {
   ]
   if (on) lines.push('Start-Service w32time', 'w32tm /config /update | Out-Null', 'w32tm /resync /nowait | Out-Null')
   else lines.push("if ((Get-Service w32time).Status -eq 'Running') { w32tm /config /update | Out-Null }")
+  lines.push(REPORT_SUCCESS)
   return lines.join('\r\n')
 }
 

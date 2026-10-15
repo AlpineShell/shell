@@ -69,6 +69,12 @@ describe('elevated scripts', () => {
     expect(autoTimeScript(false)).not.toContain('/resync')
   })
 
+  it('reports success once every step ran, even when a best-effort last step such as starting tzautoupdate failed quietly', () => {
+    for (const script of [autoTimeZoneScript(true), autoTimeZoneScript(false), autoTimeScript(true), autoTimeScript(false)]) {
+      expect(script.split('\r\n').at(-1)).toBe('exit 0')
+    }
+  })
+
   it('stops on the first error so a failed step reports failure', () => {
     for (const script of [autoTimeZoneScript(true), autoTimeScript(true), syncNowScript()]) {
       expect(script.startsWith("$ErrorActionPreference = 'Stop'")).toBe(true)
