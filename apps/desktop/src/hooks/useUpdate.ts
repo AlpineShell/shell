@@ -2,7 +2,7 @@ import { useShellState } from './useShellState'
 
 export function useUpdate() {
   const state = useShellState<UpdateState>(
-    { status: 'idle', currentVersion: '', availableVersion: null, progressPercent: 0, error: null },
+    { status: 'idle', currentVersion: '', availableVersion: null, progressPercent: 0, error: null, signInRequired: false },
     window.shell.updates.getState,
     window.shell.updates.onStateChanged
   )

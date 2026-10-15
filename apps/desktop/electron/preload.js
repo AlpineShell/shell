@@ -442,6 +442,7 @@ contextBridge.exposeInMainWorld('shell', {
     },
     openSettings: (page) => ipcRenderer.invoke('windows/open-settings', page),
     closeSettings: () => ipcRenderer.invoke('windows/close-settings'),
+    openSignIn: () => ipcRenderer.invoke('windows/open-sign-in'),
     setSettingsPage: (name) => ipcRenderer.invoke('windows/set-settings-page', name),
     initialPage: bootSettingsPage,
     onSettingsNavigate: (callback) => {
