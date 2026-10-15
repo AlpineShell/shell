@@ -16,6 +16,15 @@ function getRect(sel: Selection) {
   return { x, y, width, height }
 }
 
+const DIM = 'bg-black/40'
+const SELECTION_OUTLINE = '0 0 0 1px rgba(255, 255, 255, 0.95), 0 0 0 2px rgba(0, 0, 0, 0.6)'
+const SIZE_LABEL_HEIGHT = 28
+
+function sizeLabelTop(rect: { y: number; height: number }, viewportHeight: number) {
+  const below = rect.y + rect.height + 6
+  return below + SIZE_LABEL_HEIGHT <= viewportHeight ? below : Math.max(6, rect.y - SIZE_LABEL_HEIGHT)
+}
+
 export default function ScreenshotOverlay() {
   const { visible, image } = useScreenshot()
   const [selection, setSelection] = useState<Selection | null>(null)
@@ -80,22 +89,22 @@ export default function ScreenshotOverlay() {
         />
       )}
       {!rect || rect.width === 0 || rect.height === 0 ? (
-        <div className="absolute inset-0 bg-white/20" />
+        <div className={`absolute inset-0 ${DIM}`} />
       ) : (
         <>
-          <div className="absolute bg-white/20" style={{ left: 0, top: 0, width: W, height: rect.y }} />
-          <div className="absolute bg-white/20" style={{ left: 0, top: rect.y + rect.height, width: W, height: H - rect.y - rect.height }} />
-          <div className="absolute bg-white/20" style={{ left: 0, top: rect.y, width: rect.x, height: rect.height }} />
-          <div className="absolute bg-white/20" style={{ left: rect.x + rect.width, top: rect.y, width: W - rect.x - rect.width, height: rect.height }} />
+          <div className={`absolute ${DIM}`} style={{ left: 0, top: 0, width: W, height: rect.y }} />
+          <div className={`absolute ${DIM}`} style={{ left: 0, top: rect.y + rect.height, width: W, height: H - rect.y - rect.height }} />
+          <div className={`absolute ${DIM}`} style={{ left: 0, top: rect.y, width: rect.x, height: rect.height }} />
+          <div className={`absolute ${DIM}`} style={{ left: rect.x + rect.width, top: rect.y, width: W - rect.x - rect.width, height: rect.height }} />
 
           <div
-            className="absolute ring-1 ring-white pointer-events-none"
-            style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+            className="absolute pointer-events-none"
+            style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height, boxShadow: SELECTION_OUTLINE }}
           />
 
           <div
             className="absolute bg-black/70 text-white text-xs px-1.5 py-0.5 rounded pointer-events-none"
-            style={{ left: rect.x, top: rect.y + rect.height + 6 }}
+            style={{ left: rect.x, top: sizeLabelTop(rect, H) }}
           >
             {rect.width} × {rect.height}
           </div>
