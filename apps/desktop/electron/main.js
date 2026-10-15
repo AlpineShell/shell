@@ -136,6 +136,7 @@ let shellWindow = null
 try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error('[main] shellWindow load error:', e.message) }
 const gpuPreference = require('./modules/gpuPreference')
 const colorMode = require('./modules/colorMode')
+const dateTime = require('./modules/dateTime')
 const { processAutostart } = require('./modules/autostart')
 const updater = require('./modules/updater')
 const windowsUpdate = require('./modules/windowsUpdate')
@@ -1004,7 +1005,7 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
 
   theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)

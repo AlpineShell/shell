@@ -8,6 +8,7 @@ import {
   Bell,
   Bluetooth,
   Bookmark,
+  CalendarClock,
   CalendarDays,
   ChevronUp,
   ClipboardList,
@@ -15,6 +16,7 @@ import {
   Columns3,
   FileType,
   Frame,
+  Globe,
   Gpu,
   Grid2x2,
   House,
@@ -85,6 +87,8 @@ const INPUT_KEYWORDS = [
   'typing',
   'layout',
 ]
+
+const DATE_TIME_KEYWORDS = ['date', 'time', 'date and time', 'time zone', 'timezone', 'clock', 'utc', 'gmt', 'daylight saving']
 
 const RIDGE_DESCRIPTION = 'Arrange the bar across the top of your screen, and set up each item on it'
 
@@ -181,6 +185,17 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     order: 5,
   },
   {
+    id: 'date-time',
+    route: 'date-time',
+    label: 'Date & time',
+    description: 'Time zone and keeping the clock right',
+    keywords: DATE_TIME_KEYWORDS,
+    icon: CalendarClock,
+    section: 'personalization',
+    kind: 'settings',
+    order: 6,
+  },
+  {
     id: 'tray-icons',
     route: 'ridge/tray-icons',
     label: 'Manage tray icons',
@@ -189,7 +204,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: ArrowUpDown,
     section: 'personalization',
     kind: 'manager',
-    order: 6,
+    order: 7,
   },
   {
     id: 'tiling',
@@ -200,7 +215,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: LayoutDashboard,
     section: 'personalization',
     kind: 'settings',
-    order: 7,
+    order: 8,
   },
   {
     id: 'battery',
@@ -211,7 +226,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: BatteryLow,
     section: 'personalization',
     kind: 'settings',
-    order: 8,
+    order: 9,
   },
   {
     id: 'displays',
@@ -1067,6 +1082,68 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     order: 4,
     applies: 'instant',
     control: { kind: 'navigate', path: 'input' },
+  },
+
+  {
+    id: 'date-time',
+    label: 'Date & time',
+    description: 'Time zone and keeping the clock right',
+    hint: 'Time zone and clock sync',
+    keywords: DATE_TIME_KEYWORDS,
+    icon: CalendarClock,
+    page: 'date-time',
+    group: 'Page',
+    order: 0,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'date-time' },
+  },
+  {
+    id: 'time-zone',
+    label: 'Time zone',
+    description: 'The time zone Windows and every app tell the time in',
+    keywords: ['time zone', 'timezone', 'utc', 'gmt', 'offset', 'region', 'daylight saving'],
+    icon: Globe,
+    page: 'date-time',
+    group: 'Time zone',
+    order: 0,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'date-time' },
+  },
+  {
+    id: 'time-zone-automatic',
+    label: 'Set time zone automatically',
+    description: 'Let Windows pick the time zone from where you are',
+    keywords: ['automatic time zone', 'auto time zone', 'time zone', 'location', 'travel'],
+    icon: Globe,
+    page: 'date-time',
+    group: 'Time zone',
+    order: 1,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'date-time' },
+  },
+  {
+    id: 'time-automatic',
+    label: 'Set time automatically',
+    description: 'Keep the clock in sync with a time server',
+    keywords: ['automatic time', 'auto time', 'ntp', 'time server', 'internet time', 'clock', 'wrong time'],
+    icon: Clock,
+    page: 'date-time',
+    group: 'Clock',
+    order: 1,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'date-time' },
+  },
+  {
+    id: 'time-sync',
+    label: 'Sync now',
+    description: 'Set the clock from the time server right away',
+    keywords: ['sync time', 'synchronize', 'resync', 'time server', 'ntp', 'clock wrong', 'fix time'],
+    icon: RefreshCw,
+    page: 'date-time',
+    group: 'Clock',
+    order: 2,
+    applies: 'instant',
+    control: { kind: 'navigate', path: 'date-time' },
   },
 
   {

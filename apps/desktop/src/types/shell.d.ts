@@ -1092,6 +1092,7 @@ declare global {
     | 'search'
     | 'calendar'
     | 'input'
+    | 'date-time'
     | 'tray-icons'
     | 'tiling'
     | 'battery'
@@ -1186,6 +1187,24 @@ declare global {
   type SettingsValue = boolean | number | string | TopBarColor | null
 
   type WindowsColorMode = 'light' | 'dark'
+
+  interface TimeZoneOption {
+    id: string
+    label: string
+  }
+
+  interface DateTimeState {
+    timeZoneId: string | null
+    timeZones: TimeZoneOption[]
+    autoTimeZone: boolean | null
+    autoTime: boolean | null
+  }
+
+  interface DateTimeChangeResult {
+    ok: boolean
+    declined: boolean
+    state: DateTimeState
+  }
 
   interface SettingsEntryBase {
     id: string
@@ -1958,6 +1977,14 @@ declare global {
         initial: ThemeState
         get: () => Promise<ThemeState>
         onChanged: (callback: (theme: ThemeState) => void) => () => void
+      }
+      dateTime: {
+        state: () => Promise<DateTimeState>
+        setTimeZone: (id: string) => Promise<DateTimeChangeResult>
+        setAutoTimeZone: (on: boolean) => Promise<DateTimeChangeResult>
+        setAutoTime: (on: boolean) => Promise<DateTimeChangeResult>
+        syncNow: () => Promise<DateTimeChangeResult>
+        onChanged: (callback: (state: DateTimeState) => void) => () => void
       }
       windows: {
         wallpaper: () => Promise<string | null>

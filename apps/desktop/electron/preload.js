@@ -398,6 +398,18 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('theme/changed', handler)
     },
   },
+  dateTime: {
+    state: () => ipcRenderer.invoke('date-time/state'),
+    setTimeZone: (id) => ipcRenderer.invoke('date-time/set-time-zone', id),
+    setAutoTimeZone: (on) => ipcRenderer.invoke('date-time/set-auto-time-zone', on),
+    setAutoTime: (on) => ipcRenderer.invoke('date-time/set-auto-time', on),
+    syncNow: () => ipcRenderer.invoke('date-time/sync-now'),
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('date-time/changed', handler)
+      return () => ipcRenderer.removeListener('date-time/changed', handler)
+    },
+  },
   windows: {
     wallpaper: () => ipcRenderer.invoke('windows/wallpaper'),
     onWallpaperChanged: (callback) => {

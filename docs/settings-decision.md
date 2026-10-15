@@ -498,6 +498,11 @@ test failure too.
 | `system` | instant | A page-level entry for a page that only reports what this PC is; it writes nothing. |
 | `volume` | instant | A slider whose result you hear while dragging, and can drag back. |
 | `mute` | instant | One click each way, and you hear which way it went. |
+| `date-time` | instant | A page-level entry for the Date & time page; it writes nothing itself. |
+| `time-zone` | instant | Runs `tzutil /s`, which a standard account may do, and broadcasts `WM_TIMECHANGE` so open clocks move at once; picking the old zone reverses it. Locked while Set time zone automatically is on, as in Windows. |
+| `time-zone-automatic` | instant | Sets the `tzautoupdate` service to start on demand or disabled. It needs an administrator, so the UAC prompt is its confirmation; declining leaves the switch as it was. |
+| `time-automatic` | instant | Sets the W32Time `Type` to `NTP` (`NT5DS` on a domain PC) or `NoSync` and resyncs. Behind a UAC prompt like the switch above. |
+| `time-sync` | instant | Starts W32Time and runs `w32tm /resync /force`. Behind a UAC prompt; it only moves the clock to the right time. |
 | `emoji` | instant | Inserts a character into whatever has focus. Nothing is stored. |
 | `clipboard-history` | instant | Pastes an earlier copy into whatever had focus. The history lives in memory only, so it is gone after a restart, and copies a password manager marks as private are never kept. |
 | `power` | confirm | Shut down, restart, sign out and lock all end the session and can lose unsaved work in every app. The launcher's power submenu already asks a second time before running one. |

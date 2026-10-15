@@ -1,5 +1,5 @@
 const fs = require('fs')
-const { exec, spawn } = require('child_process')
+const { exec, execFile, spawn } = require('child_process')
 
 const POWERSHELL_SINGLE_QUOTES = /['\u2018\u2019\u201A\u201B]/g
 const UTF8_BYTE_ORDER_MARK = '\uFEFF'
@@ -28,6 +28,31 @@ function runPowerShell(command) {
         resolve(stdout.trim())
       }
     )
+  })
+}
+
+const ELEVATION_DECLINED_EXIT_CODE = 1223
+
+function elevatedLauncherCommand(script) {
+  const encoded = Buffer.from(script, 'utf16le').toString('base64')
+  return [
+    'try {',
+    `$elevated = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'`,
+    `} catch { exit ${ELEVATION_DECLINED_EXIT_CODE} }`,
+    'exit $elevated.ExitCode',
+  ].join(' ')
+}
+
+function elevatedOutcome(exitCode) {
+  if (exitCode === 0) return { ok: true, declined: false }
+  return { ok: false, declined: exitCode === ELEVATION_DECLINED_EXIT_CODE }
+}
+
+function runElevatedPowerShell(script) {
+  return new Promise((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', elevatedLauncherCommand(script)], { windowsHide: true }, (err) => {
+      resolve(elevatedOutcome(err ? err.code : 0))
+    })
   })
 }
 
@@ -190,4 +215,4 @@ function createPersistentRunner(spawnWorker = spawnPersistentPowerShell, command
   return { run, warm, dispose }
 }
 
-module.exports = { runPowerShell, runPowerShellFile, createPersistentRunner, escapePowerShellSingleQuoted, quotePowerShellLiteral, writePowerShellScriptFile }
+module.exports = { runPowerShell, runPowerShellFile, runElevatedPowerShell, elevatedLauncherCommand, elevatedOutcome, createPersistentRunner, escapePowerShellSingleQuoted, quotePowerShellLiteral, writePowerShellScriptFile }
