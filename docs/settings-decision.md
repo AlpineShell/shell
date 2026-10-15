@@ -28,7 +28,7 @@ everything below.
 | Wallpaper | wallpaper source and selection | `electron/modules/wallpaper.js` → `wallpaper.json` |
 | Input and language | default input method | Windows, `HKCU\Control Panel\International\User Profile`, through `electron/modules/keyboardLayout.js` |
 | Updates | check for updates | `electron/modules/updater.js` → `update-prefs.json` |
-| — (Search only) | volume, mute, emoji, power | live system state, not a prefs file |
+| — (Search only) | volume, mute, emoji, clipboard history, power | live system state, not a prefs file |
 
 ### B. Device and app managers — lists with actions
 
@@ -499,6 +499,7 @@ test failure too.
 | `volume` | instant | A slider whose result you hear while dragging, and can drag back. |
 | `mute` | instant | One click each way, and you hear which way it went. |
 | `emoji` | instant | Inserts a character into whatever has focus. Nothing is stored. |
+| `clipboard-history` | instant | Pastes an earlier copy into whatever had focus. The history lives in memory only, so it is gone after a restart, and copies a password manager marks as private are never kept. |
 | `power` | confirm | Shut down, restart, sign out and lock all end the session and can lose unsaved work in every app. The launcher's power submenu already asks a second time before running one. |
 | `high-performance-gpu` | restart | Chromium picks its graphics adapter once, when the process starts: the `force_high_performance_gpu` switch and the Windows `UserGpuPreferences` value for the exe are both read then, so a change only takes effect after a restart. Off by default, because Ridge and the desktop always hold a window open, which keeps the discrete GPU of a hybrid-graphics laptop powered all day. Turning it on is for anyone whose animations stutter on the integrated chip, and turning it off again removes the Windows value. |
 

@@ -1,7 +1,7 @@
 const { BrowserWindow } = require('electron')
 const fs = require('fs')
 const path = require('path')
-const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow, insertText } = require('./winFocus')
+const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow, insertText, pasteInto } = require('./winFocus')
 const appActivator = require('../appActivator')
 const appCatalog = require('./appCatalog')
 const appLaunch = require('./appLaunch')
@@ -162,6 +162,14 @@ function showFromHotkey() {
   showLauncher(pickDisplay().id)
 }
 
+function showClipboardHistory() {
+  if (activeTopBar) {
+    animatedHide()
+    return
+  }
+  showLauncher(pickDisplay().id, 'clipboard')
+}
+
 function showEmoji() {
   if (activeTopBar) {
     animatedHide()
@@ -280,6 +288,11 @@ module.exports = {
       if (typeof text !== 'string' || !text) return { ok: false }
       return { ok: await insertText(hwnd, text) }
     },
+    'launcher/paste': async () => {
+      const hwnd = lastUserForeground
+      hideForOverlay()
+      return { ok: await pasteInto(hwnd) }
+    },
     'launcher/semantic-model': () => readSemanticModel(),
     'launcher/take-screenshot': () => {
       hideForOverlay()
@@ -289,6 +302,7 @@ module.exports = {
   },
   showFromHotkey,
   showEmoji,
+  showClipboardHistory,
   forwardEmojiKey,
   setEmojiCaptureControl,
   setDisplayProvider,

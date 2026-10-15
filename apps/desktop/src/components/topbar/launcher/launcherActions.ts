@@ -97,7 +97,7 @@ function openSettingsPageAction(setting: SettingsEntry): LauncherAction | null {
 
 export function opensView(setting: SettingsEntry): boolean {
   const kind = setting.control.kind
-  return VIEW_CONTROL_KINDS.has(kind) || kind === "wallpaper" || kind === "emoji"
+  return VIEW_CONTROL_KINDS.has(kind) || kind === "wallpaper" || kind === "emoji" || kind === "clipboard"
 }
 
 function settingPrimaryAction(setting: SettingsEntry, context: LauncherActionContext): LauncherAction | null {
@@ -111,6 +111,7 @@ function settingPrimaryAction(setting: SettingsEntry, context: LauncherActionCon
   }
   if (control.kind === "wallpaper") return action("open-view", "Choose wallpaper", ChevronRight, () => context.enterView({ kind: "wallpaper" }))
   if (control.kind === "emoji") return action("open-view", "Pick emoji", ChevronRight, () => context.enterView({ kind: "emoji", insertIntoForeground: false }))
+  if (control.kind === "clipboard") return action("open-view", "Open clipboard history", ChevronRight, () => context.enterView({ kind: "clipboard" }))
   if (control.kind === "navigate") {
     return action("open", "Open", Settings2, () => { window.shell.windows.openSettings(control.path); hideLauncher() })
   }

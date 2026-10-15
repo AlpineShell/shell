@@ -20,6 +20,7 @@ import { LauncherFooter } from "./launcherFooter"
 import { SettingView } from "./views/settingView"
 import { WallpaperView } from "./views/wallpaperView"
 import { EmojiView } from "./views/emojiView"
+import { ClipboardView } from "./views/clipboardView"
 
 const BAR_BOTTOM = 24
 const DEFAULT_WIDTH = 720
@@ -53,15 +54,23 @@ function isCtrl(event: KeyboardEvent): boolean {
 
 function placeholderFor(view: LauncherView): string {
   if (view.kind === "emoji") return "Search emoji"
+  if (view.kind === "clipboard") return "Search clipboard history"
   if (view.kind === "wallpaper") return "Filter wallpapers"
   return SEARCH_PLACEHOLDER
+}
+
+function initialView(mode: string | undefined): LauncherView {
+  if (mode === "emoji") return { kind: "emoji", insertIntoForeground: true }
+  if (mode === "clipboard") return { kind: "clipboard" }
+  return { kind: "search" }
 }
 
 export default function LauncherPanel({ mode }: { mode?: string }) {
   const darkText = useDarkText()
   const colors = launcherColors(darkText)
   const emojiCapture = mode === "emoji"
-  const [view, setView] = useState<LauncherView>(() => (emojiCapture ? { kind: "emoji", insertIntoForeground: true } : { kind: "search" }))
+  const openedOnView = emojiCapture || mode === "clipboard"
+  const [view, setView] = useState<LauncherView>(() => initialView(mode))
   const [query, setQuery] = useState("")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [actionsOpen, setActionsOpen] = useState(false)
@@ -262,12 +271,12 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     if (event.key === "Escape") {
       event.preventDefault()
       if (actionsOpen) closeActions()
-      else if (view.kind !== "search" && !emojiCapture) exitView()
+      else if (view.kind !== "search" && !openedOnView) exitView()
       else window.launcher.hide()
       return
     }
     if (view.kind !== "search") {
-      if (event.key === "Backspace" && query === "" && !emojiCapture) {
+      if (event.key === "Backspace" && query === "" && !openedOnView) {
         event.preventDefault()
         exitView()
       } else if (viewKeys.current?.(event)) {
@@ -304,6 +313,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
         />
       )
     }
+    if (view.kind === "clipboard") return <ClipboardView query={query} darkText={darkText} registerKeys={registerViewKeys} />
     if (rows.length === 0) return null
     return (
       <>
@@ -330,7 +340,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
   const content = renderContent()
   const inView = view.kind !== "search"
   const barTitle = view.kind === "setting" ? viewTitle ?? view.title : null
-  const back = actionsOpen ? closeActions : inView && !emojiCapture ? exitView : null
+  const back = actionsOpen ? closeActions : inView && !openedOnView ? exitView : null
 
   return createPortal(
     <div

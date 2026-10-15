@@ -486,6 +486,10 @@ declare global {
     | { kind: 'char'; value: string }
     | { kind: 'backspace' | 'enter' | 'escape' | 'left' | 'right' | 'up' | 'down' }
 
+  type ClipboardHistoryEntry =
+    | { id: string; kind: 'text'; copiedAt: number; text: string }
+    | { id: string; kind: 'image'; copiedAt: number; thumbnail: string; width: number; height: number }
+
   interface LauncherItem {
     id: number
     name: string
@@ -1170,6 +1174,7 @@ declare global {
     | { kind: 'startup' }
     | { kind: 'power' }
     | { kind: 'emoji' }
+    | { kind: 'clipboard' }
 
   type SettingsControl = SettingsValueControl | SettingsPanelControl
 
@@ -1766,6 +1771,7 @@ declare global {
     | { kind: 'setting'; settingId: string; title: string }
     | { kind: 'wallpaper' }
     | { kind: 'emoji'; insertIntoForeground: boolean }
+    | { kind: 'clipboard' }
 
   interface RootReloadPlan {
     reload: boolean
@@ -1848,6 +1854,13 @@ declare global {
       onSignInProgress: (callback: (progress: LicenceSignInProgress) => void) => () => void
       onChanged: (callback: (status: LicenceStatus) => void) => () => void
     }
+    clipboardHistory: {
+      entries: () => Promise<ClipboardHistoryEntry[]>
+      restore: (id: string) => Promise<{ ok: boolean }>
+      remove: (id: string) => Promise<ClipboardHistoryEntry[]>
+      clear: () => Promise<ClipboardHistoryEntry[]>
+      onChanged: (callback: (entries: ClipboardHistoryEntry[]) => void) => () => void
+    }
     launcher: {
       index: () => Promise<LauncherItem[]>
       show: () => Promise<void>
@@ -1859,6 +1872,7 @@ declare global {
       openLocation: (id: number) => Promise<{ success: boolean }>
       endTask: (pid: number) => Promise<{ success: boolean }>
       insertText: (text: string) => Promise<{ ok: boolean }>
+      paste: () => Promise<{ ok: boolean }>
       recentEmoji: () => Promise<string[]>
       addRecentEmoji: (char: string) => Promise<string[]>
       onEmojiKey: (callback: (message: EmojiKeyMessage) => void) => () => void
