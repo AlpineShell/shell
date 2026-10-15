@@ -32,7 +32,7 @@
     "@aws-sdk/lib-storage": "^3.1147.0",
     "@electron/asar": "3.4.1",
     "@electron/fuses": "1.8.0",
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
