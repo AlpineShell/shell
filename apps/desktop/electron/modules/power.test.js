@@ -6,9 +6,31 @@ import { createRequire } from 'module'
 
 const nodeRequire = createRequire(import.meta.url)
 const electronModuleId = nodeRequire.resolve('electron')
+const koffiModuleId = nodeRequire.resolve('koffi')
+const childProcess = nodeRequire('child_process')
 const powerMonitorListeners = new Map()
 
 let userDataDir = ''
+let hibernationEnabled = true
+let adminPromptAccepted = false
+let adminPrompts = 0
+
+nodeRequire.cache[koffiModuleId] = {
+  id: koffiModuleId,
+  filename: koffiModuleId,
+  loaded: true,
+  exports: {
+    load: () => ({
+      func: (_convention, name) => (name === 'IsPwrHibernateAllowed' ? () => (hibernationEnabled ? 1 : 0) : () => 1),
+    }),
+  },
+}
+
+function answerAdminPrompt(_command, _options, callback) {
+  adminPrompts += 1
+  if (adminPromptAccepted) hibernationEnabled = true
+  callback(adminPromptAccepted ? null : new Error('The operation was canceled by the user.'))
+}
 
 nodeRequire.cache[electronModuleId] = {
   id: electronModuleId,
@@ -39,10 +61,15 @@ const setShowHibernate = (power, value) => power.handlers['system/power-show-hib
 
 beforeEach(() => {
   powerMonitorListeners.clear()
+  hibernationEnabled = true
+  adminPromptAccepted = false
+  adminPrompts = 0
+  vi.spyOn(childProcess, 'exec').mockImplementation(answerAdminPrompt)
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-power-prefs-'))
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   fs.rmSync(userDataDir, { recursive: true, force: true })
 })
 
@@ -121,20 +148,18 @@ describe('system/power-confirm-set', () => {
   })
 })
 
-describe('system/power-show-hibernate-set', () => {
-  it('shows Hibernate when nothing has been saved', async () => {
+describe('showing Hibernate', () => {
+  it('shows it when nothing has been saved and Windows has hibernation on', async () => {
     const { power } = await startModule()
     expect(showHibernate(power)).toBe(true)
   })
 
-  it('returns, saves and broadcasts the new choice without touching the confirmation', async () => {
-    writeStore(JSON.stringify({ confirmActions: false }))
-    const { power, broadcasts } = await startModule()
+  it('hides it without asking for admin rights when Windows has hibernation off', async () => {
+    hibernationEnabled = false
+    const { power } = await startModule()
 
-    expect(setShowHibernate(power, false)).toBe(false)
-
-    expect(readStore()).toEqual({ confirmActions: false, showHibernate: false })
-    expect(broadcasts).toEqual([{ channel: 'system/power-show-hibernate-changed', payload: false }])
+    expect(showHibernate(power)).toBe(false)
+    expect(adminPrompts).toBe(0)
   })
 
   it('reads back a choice a previous session saved', async () => {
@@ -143,10 +168,61 @@ describe('system/power-show-hibernate-set', () => {
     expect(showHibernate(power)).toBe(false)
   })
 
+  it('never hibernates while Windows has hibernation off', async () => {
+    hibernationEnabled = false
+    const { power } = await startModule()
+
+    power.handlers['system/power-action'](null, 'hibernate')
+
+    expect(adminPrompts).toBe(0)
+  })
+})
+
+describe('system/power-show-hibernate-set', () => {
+  it('saves and broadcasts turning it off without touching the confirmation', async () => {
+    writeStore(JSON.stringify({ confirmActions: false }))
+    const { power, broadcasts } = await startModule()
+
+    expect(await setShowHibernate(power, false)).toBe(false)
+
+    expect(readStore()).toEqual({ confirmActions: false, showHibernate: false })
+    expect(broadcasts).toEqual([{ channel: 'system/power-show-hibernate-changed', payload: false }])
+  })
+
+  it('turns it on without asking when Windows already has hibernation on', async () => {
+    writeStore(JSON.stringify({ showHibernate: false }))
+    const { power } = await startModule()
+
+    expect(await setShowHibernate(power, true)).toBe(true)
+    expect(adminPrompts).toBe(0)
+  })
+
+  it('asks for admin rights once when turned on while Windows has hibernation off', async () => {
+    hibernationEnabled = false
+    adminPromptAccepted = true
+    const { power, broadcasts } = await startModule()
+
+    expect(await setShowHibernate(power, true)).toBe(true)
+
+    expect(adminPrompts).toBe(1)
+    expect(showHibernate(power)).toBe(true)
+    expect(broadcasts).toEqual([{ channel: 'system/power-show-hibernate-changed', payload: true }])
+  })
+
+  it('stays off when the admin prompt is declined', async () => {
+    hibernationEnabled = false
+    const { power, broadcasts } = await startModule()
+
+    expect(await setShowHibernate(power, true)).toBe(false)
+
+    expect(showHibernate(power)).toBe(false)
+    expect(broadcasts).toEqual([{ channel: 'system/power-show-hibernate-changed', payload: false }])
+  })
+
   it.each([['false'], [0], [null], [undefined]])('refuses %j without saving or broadcasting', async (value) => {
     const { power, broadcasts } = await startModule()
 
-    expect(setShowHibernate(power, value)).toBe(true)
+    expect(await setShowHibernate(power, value)).toBe(true)
 
     expect(fs.existsSync(storeFile())).toBe(false)
     expect(broadcasts).toEqual([])

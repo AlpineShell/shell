@@ -55,9 +55,12 @@ function turnOnHibernation() {
   })
 }
 
-async function hibernate() {
-  if (!isHibernateAllowed()) await turnOnHibernation()
+function hibernate() {
   if (isHibernateAllowed()) suspend({ hibernate: true })
+}
+
+function hibernateShown() {
+  return showHibernate && isHibernateAllowed()
 }
 
 function powerAction(action) {
@@ -78,7 +81,8 @@ function powerAction(action) {
       suspend({ hibernate: false })
       break
     case 'hibernate':
-      return hibernate()
+      hibernate()
+      break
   }
 }
 
@@ -112,9 +116,10 @@ function setConfirmActions(value) {
   return confirmActions
 }
 
-function setShowHibernate(value) {
-  if (typeof value !== 'boolean') return showHibernate
-  showHibernate = value
+async function setShowHibernate(value) {
+  if (typeof value !== 'boolean') return hibernateShown()
+  if (value && !isHibernateAllowed()) await turnOnHibernation()
+  showHibernate = value && isHibernateAllowed()
   save()
   if (broadcastRef) broadcastRef('system/power-show-hibernate-changed', showHibernate)
   return showHibernate
@@ -137,7 +142,7 @@ module.exports = {
     'system/power-action': (_event, action) => powerAction(action),
     'system/power-confirm-get': () => confirmActions,
     'system/power-confirm-set': (_event, value) => setConfirmActions(value),
-    'system/power-show-hibernate-get': () => showHibernate,
+    'system/power-show-hibernate-get': () => hibernateShown(),
     'system/power-show-hibernate-set': (_event, value) => setShowHibernate(value),
   },
 
