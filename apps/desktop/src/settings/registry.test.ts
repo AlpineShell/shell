@@ -81,6 +81,7 @@ const SETTINGS_FOLDED_INTO_RIDGE = [
 const PERSONAL_SIDEBAR: SettingsPageId[] = [
   'wallpaper',
   'ridge',
+  'appearance',
   'search',
   'input',
   'tiling',
@@ -196,9 +197,8 @@ describe('settings pages', () => {
     }
   })
 
-  it('declares no Appearance or Calendar page now that both folded into Ridge', () => {
+  it('declares no Calendar page now that it folded into Ridge', () => {
     const ids = SETTINGS_PAGES.map((page) => page.id)
-    expect(ids).not.toContain('appearance')
     expect(ids).not.toContain('calendar')
   })
 })

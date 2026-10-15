@@ -127,11 +127,20 @@ describe('settings search ranking', () => {
   })
 
   it('finds Ridge by the names of the pages folded into it', () => {
-    for (const query of ['appearance', 'calendar']) {
+    for (const query of ['calendar']) {
       const found = shown(query).some(
         (match) => match.target.action.kind === 'navigate' && match.target.action.route === settingsPageRoute('ridge')
       )
       expect(found, `no result for "${query}" leads to Ridge`).toBe(true)
+    }
+  })
+
+  it('opens the Appearance page for appearance and dark mode', () => {
+    for (const query of ['appearance', 'dark mode']) {
+      const found = shown(query).some(
+        (match) => match.target.action.kind === 'navigate' && match.target.action.route === settingsPageRoute('appearance')
+      )
+      expect(found, `no result for "${query}" leads to Appearance`).toBe(true)
     }
   })
 

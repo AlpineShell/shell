@@ -1,5 +1,6 @@
 import { pluginIdFromSettingsRoute } from '../../plugins/pluginSettingsPages'
 import AboutPage from './aboutPage'
+import AppearancePage from './appearancePage'
 import AppsDefaultsPage from './appsDefaultsPage'
 import AppsHub from './appsHub'
 import AppsInstalledPage from './appsInstalledPage'
@@ -23,7 +24,7 @@ import WifiSettingsPage from './wifiSettingsPage'
 export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'home': (navigate) => <AboutPage onNavigate={navigate} />,
   'home/revert': () => <SystemRevertPage />,
-  'appearance': (navigate) => <RidgePage onNavigate={navigate} />,
+  'appearance': () => <AppearancePage />,
   'wallpaper': () => <WallpaperPage />,
   'ridge': (navigate) => <RidgePage onNavigate={navigate} />,
   'ridge/tray-icons': () => <TrayIconsPage />,
@@ -45,7 +46,8 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
 }
 
 export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
-  'wallpaper': { registryRows: false, renderedByThePage: ['wallpaper', 'windows-color-mode'] },
+  'wallpaper': { registryRows: false, renderedByThePage: ['wallpaper'] },
+  'appearance': { registryRows: true, renderedByThePage: [] },
   'ridge': {
     registryRows: false,
     renderedByThePage: [
