@@ -494,12 +494,18 @@ contextBridge.exposeInMainWorld('shell', {
     },
     powerAction: (action) => ipcRenderer.invoke('system/power-action', action),
     powerConfirm: () => ipcRenderer.invoke('system/power-confirm-get'),
-    hibernateAvailable: () => ipcRenderer.invoke('system/hibernate-available'),
     setPowerConfirm: (value) => ipcRenderer.invoke('system/power-confirm-set', value),
     onPowerConfirmChanged: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('system/power-confirm-changed', handler)
       return () => ipcRenderer.removeListener('system/power-confirm-changed', handler)
+    },
+    showHibernate: () => ipcRenderer.invoke('system/power-show-hibernate-get'),
+    setShowHibernate: (value) => ipcRenderer.invoke('system/power-show-hibernate-set', value),
+    onShowHibernateChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/power-show-hibernate-changed', handler)
+      return () => ipcRenderer.removeListener('system/power-show-hibernate-changed', handler)
     },
     onResume: (callback) => {
       const handler = () => callback()

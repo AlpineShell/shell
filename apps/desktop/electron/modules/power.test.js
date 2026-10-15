@@ -34,6 +34,8 @@ async function startModule() {
 
 const confirmActions = (power) => power.handlers['system/power-confirm-get']()
 const setConfirmActions = (power, value) => power.handlers['system/power-confirm-set'](null, value)
+const showHibernate = (power) => power.handlers['system/power-show-hibernate-get']()
+const setShowHibernate = (power, value) => power.handlers['system/power-show-hibernate-set'](null, value)
 
 beforeEach(() => {
   powerMonitorListeners.clear()
@@ -82,7 +84,7 @@ describe('system/power-confirm-set', () => {
     expect(setConfirmActions(power, false)).toBe(false)
 
     expect(confirmActions(power)).toBe(false)
-    expect(readStore()).toEqual({ confirmActions: false })
+    expect(readStore()).toEqual({ confirmActions: false, showHibernate: true })
     expect(broadcasts).toEqual([{ channel: 'system/power-confirm-changed', payload: false }])
   })
 
@@ -116,6 +118,38 @@ describe('system/power-confirm-set', () => {
 
     expect(setConfirmActions(power, 'true')).toBe(false)
     expect(readStore()).toEqual({ confirmActions: false })
+  })
+})
+
+describe('system/power-show-hibernate-set', () => {
+  it('shows Hibernate when nothing has been saved', async () => {
+    const { power } = await startModule()
+    expect(showHibernate(power)).toBe(true)
+  })
+
+  it('returns, saves and broadcasts the new choice without touching the confirmation', async () => {
+    writeStore(JSON.stringify({ confirmActions: false }))
+    const { power, broadcasts } = await startModule()
+
+    expect(setShowHibernate(power, false)).toBe(false)
+
+    expect(readStore()).toEqual({ confirmActions: false, showHibernate: false })
+    expect(broadcasts).toEqual([{ channel: 'system/power-show-hibernate-changed', payload: false }])
+  })
+
+  it('reads back a choice a previous session saved', async () => {
+    writeStore(JSON.stringify({ confirmActions: true, showHibernate: false }))
+    const { power } = await startModule()
+    expect(showHibernate(power)).toBe(false)
+  })
+
+  it.each([['false'], [0], [null], [undefined]])('refuses %j without saving or broadcasting', async (value) => {
+    const { power, broadcasts } = await startModule()
+
+    expect(setShowHibernate(power, value)).toBe(true)
+
+    expect(fs.existsSync(storeFile())).toBe(false)
+    expect(broadcasts).toEqual([])
   })
 })
 

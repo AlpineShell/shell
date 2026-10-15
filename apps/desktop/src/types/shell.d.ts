@@ -832,7 +832,7 @@ declare global {
     right: number
   }
 
-  type PowerAction = 'shutdown' | 'restart' | 'logout'
+  type PowerAction = 'hibernate' | 'shutdown' | 'restart' | 'logout'
 
   type PowerMenuPress = { run: PowerAction } | { armed: PowerAction }
 
@@ -843,6 +843,7 @@ declare global {
   interface SystemMenuActionsProps {
     darkText: boolean
     confirmRequired: boolean
+    showHibernate: boolean
   }
 
   interface NoticeFaceProps {
@@ -2041,9 +2042,11 @@ declare global {
         onDisplaysChanged: (callback: (data: DisplayInfo[]) => void) => () => void
         powerAction: (action: PowerCommandAction) => Promise<void>
         powerConfirm: () => Promise<boolean>
-        hibernateAvailable: () => Promise<boolean>
         setPowerConfirm: (value: boolean) => Promise<boolean>
         onPowerConfirmChanged: (callback: (value: boolean) => void) => () => void
+        showHibernate: () => Promise<boolean>
+        setShowHibernate: (value: boolean) => Promise<boolean>
+        onShowHibernateChanged: (callback: (value: boolean) => void) => () => void
         onResume: (callback: () => void) => () => void
         info: () => Promise<SystemInfo>
         battery: () => Promise<BatteryStatus>

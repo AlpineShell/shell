@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Lock, LogOut, Moon, Power, RotateCcw, Snowflake } from "lucide-react"
 import { usePowerConfirm } from "../../../../hooks/usePowerConfirm"
-import { useHibernateAvailable } from "../../../../hooks/useHibernateAvailable"
+import { useShowHibernate } from "../../../../hooks/useShowHibernate"
 import { LauncherMenu } from "./launcherMenu"
 
 const POWER_ACTIONS: { id: PowerCommandAction; label: string; icon: SettingsIcon; confirm: boolean }[] = [
@@ -16,14 +16,14 @@ const POWER_ACTIONS: { id: PowerCommandAction; label: string; icon: SettingsIcon
 export function PowerView({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
   const [armed, setArmed] = useState<PowerCommandAction | null>(null)
   const confirmActions = usePowerConfirm()
-  const hibernateAvailable = useHibernateAvailable()
+  const showHibernate = useShowHibernate()
 
   function run(action: PowerCommandAction) {
     window.launcher.hide()
     window.shell.system.powerAction(action)
   }
 
-  const shownActions = POWER_ACTIONS.filter((power) => power.id !== "hibernate" || hibernateAvailable)
+  const shownActions = POWER_ACTIONS.filter((power) => power.id !== "hibernate" || showHibernate)
 
   const items: LauncherMenuItem[] = shownActions.map((power) => ({
     id: power.id,

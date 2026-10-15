@@ -4,8 +4,11 @@ const path = require('path')
 
 const STORE_FILE = 'power-prefs.json'
 const CONFIRM_ACTIONS_BY_DEFAULT = true
+const SHOW_HIBERNATE_BY_DEFAULT = true
+const TURN_ON_HIBERNATION_COMMAND = `powershell -NoProfile -Command "$elevated = Start-Process powercfg -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '/hibernate','on' -ErrorAction Stop; exit $elevated.ExitCode"`
 
 let confirmActions = CONFIRM_ACTIONS_BY_DEFAULT
+let showHibernate = SHOW_HIBERNATE_BY_DEFAULT
 let storePath = null
 let broadcastRef = null
 
@@ -43,6 +46,20 @@ function isHibernateAllowed() {
   }
 }
 
+function turnOnHibernation() {
+  return new Promise((resolve) => {
+    exec(TURN_ON_HIBERNATION_COMMAND, { windowsHide: true }, (err) => {
+      if (err) console.error('[power] turning on hibernation failed:', err.message)
+      resolve()
+    })
+  })
+}
+
+async function hibernate() {
+  if (!isHibernateAllowed()) await turnOnHibernation()
+  if (isHibernateAllowed()) suspend({ hibernate: true })
+}
+
 function powerAction(action) {
   switch (action) {
     case 'shutdown':
@@ -61,8 +78,7 @@ function powerAction(action) {
       suspend({ hibernate: false })
       break
     case 'hibernate':
-      if (isHibernateAllowed()) suspend({ hibernate: true })
-      break
+      return hibernate()
   }
 }
 
@@ -72,6 +88,7 @@ function load() {
     if (!fs.existsSync(file)) return
     const data = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (typeof data?.confirmActions === 'boolean') confirmActions = data.confirmActions
+    if (typeof data?.showHibernate === 'boolean') showHibernate = data.showHibernate
   } catch (e) {
     console.error('[power] load error:', e.message)
   }
@@ -81,7 +98,7 @@ function save() {
   try {
     const dir = path.dirname(getStorePath())
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(getStorePath(), JSON.stringify({ confirmActions }, null, 2))
+    fs.writeFileSync(getStorePath(), JSON.stringify({ confirmActions, showHibernate }, null, 2))
   } catch (e) {
     console.error('[power] save error:', e.message)
   }
@@ -93,6 +110,14 @@ function setConfirmActions(value) {
   save()
   if (broadcastRef) broadcastRef('system/power-confirm-changed', confirmActions)
   return confirmActions
+}
+
+function setShowHibernate(value) {
+  if (typeof value !== 'boolean') return showHibernate
+  showHibernate = value
+  save()
+  if (broadcastRef) broadcastRef('system/power-show-hibernate-changed', showHibernate)
+  return showHibernate
 }
 
 function announceResume(broadcast) {
@@ -111,8 +136,9 @@ module.exports = {
   handlers: {
     'system/power-action': (_event, action) => powerAction(action),
     'system/power-confirm-get': () => confirmActions,
-    'system/hibernate-available': () => isHibernateAllowed(),
     'system/power-confirm-set': (_event, value) => setConfirmActions(value),
+    'system/power-show-hibernate-get': () => showHibernate,
+    'system/power-show-hibernate-set': (_event, value) => setShowHibernate(value),
   },
 
   start(broadcast) {
