@@ -21,6 +21,9 @@ const SW_MAXIMIZE = 3
 const SW_MINIMIZE = 6
 const SW_RESTORE = 9
 const VK_LMENU = 0xA4
+const VK_CONTROL = 0x11
+const VK_V = 0x56
+const FOCUS_SETTLE_MS = 40
 const WM_CLOSE = 0x0010
 const ASFW_ANY = 0xFFFFFFFF
 
@@ -111,19 +114,44 @@ function sendUnicode(text) {
   return sent === expected
 }
 
-function insertText(hwnd, text) {
-  if (!hwnd || !IsWindow(hwnd) || !text) return Promise.resolve(false)
+function writeVirtualKeyInput(buf, offset, vkCode, keyUp) {
+  buf.writeUInt32LE(INPUT_KEYBOARD, offset)
+  buf.writeUInt16LE(vkCode, offset + KEYBDINPUT_OFFSET)
+  buf.writeUInt16LE(0, offset + KEYBDINPUT_OFFSET + 2)
+  buf.writeUInt32LE(keyUp ? KEYEVENTF_KEYUP : 0, offset + KEYBDINPUT_OFFSET + 4)
+}
+
+function sendPasteShortcut() {
+  const strokes = [[VK_CONTROL, false], [VK_V, false], [VK_V, true], [VK_CONTROL, true]]
+  const buf = Buffer.alloc(strokes.length * INPUT_STRUCT_SIZE)
+  strokes.forEach(([vkCode, keyUp], index) => writeVirtualKeyInput(buf, index * INPUT_STRUCT_SIZE, vkCode, keyUp))
+  const sent = Number(SendInput(strokes.length, buf, INPUT_STRUCT_SIZE))
+  if (sent !== strokes.length) console.error('[winFocus] SendInput pasted', sent, 'of', strokes.length, 'events')
+  return sent === strokes.length
+}
+
+function sendToWindowOnceFocused(hwnd, send) {
+  if (!hwnd || !IsWindow(hwnd)) return Promise.resolve(false)
   forceForeground(hwnd)
   return new Promise((resolve) => {
     setTimeout(() => {
       try {
-        resolve(sendUnicode(text))
+        resolve(send())
       } catch (e) {
-        console.error('[winFocus] sendUnicode error:', e.message)
+        console.error('[winFocus] send input error:', e.message)
         resolve(false)
       }
-    }, 40)
+    }, FOCUS_SETTLE_MS)
   })
 }
 
-module.exports = { activateWindow, forceForeground, getForegroundWindow, letLaunchedAppComeForward, minimizeWindow, maximizeWindow, closeWindow, sendUnicode, insertText }
+function insertText(hwnd, text) {
+  if (!text) return Promise.resolve(false)
+  return sendToWindowOnceFocused(hwnd, () => sendUnicode(text))
+}
+
+function pasteInto(hwnd) {
+  return sendToWindowOnceFocused(hwnd, sendPasteShortcut)
+}
+
+module.exports = { activateWindow, forceForeground, getForegroundWindow, letLaunchedAppComeForward, minimizeWindow, maximizeWindow, closeWindow, sendUnicode, insertText, pasteInto }

@@ -121,6 +121,7 @@ try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[mai
 const keyboardHook = require('./modules/keyboardHook')
 const shellHotkeys = require('./modules/shellHotkeys')
 const emojiKeyCapture = require('./modules/emojiKeyCapture')
+const clipboardHistory = require('./modules/clipboardHistory')
 const displayModeKeyCapture = require('./modules/displayModeKeyCapture')
 const windowSwitcher = require('./modules/windowSwitcher')
 const switcherWindows = require('./modules/switcherWindows')
@@ -1003,7 +1004,7 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, licence)
 
   theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
@@ -1173,6 +1174,7 @@ function wireShellHotkeys() {
   shellHotkeys.on('openFileExplorer', () => appActivator.openFileExplorer())
   shellHotkeys.on('openSettings', () => openSettingsFromHotkey())
   shellHotkeys.on('openEmojiPicker', () => launcher.showEmoji())
+  shellHotkeys.on('openClipboardHistory', () => launcher.showClipboardHistory())
   shellHotkeys.on('openDisplayModePicker', () => displayModePicker.open())
   shellHotkeys.on('minimizeAll', () => minimizeAll.minimizeAll())
   shellHotkeys.on('restoreMinimized', () => minimizeAll.restoreMinimized())

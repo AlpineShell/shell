@@ -3,7 +3,7 @@ import shellHotkeyPolicy from './shellHotkeyPolicy.js'
 import virtualKeys from './virtualKeys.js'
 
 const { SHELL_SHORTCUTS, shortcutForKey, createWinTapTracker } = shellHotkeyPolicy
-const { VK_LEFT, VK_DOWN, VK_E, VK_I, VK_M, VK_P, VK_S, VK_ESCAPE, VK_OEM_PERIOD, VK_LWIN, VK_RWIN, VK_SHIFT, VK_TAB } = virtualKeys
+const { VK_LEFT, VK_DOWN, VK_E, VK_I, VK_M, VK_P, VK_S, VK_V, VK_ESCAPE, VK_OEM_PERIOD, VK_LWIN, VK_RWIN, VK_SHIFT, VK_TAB } = virtualKeys
 
 function modifiers({ win = false, shift = false } = {}) {
   return { isWinHeld: () => win, isShiftHeld: () => shift }
@@ -42,6 +42,11 @@ describe('shortcutForKey', () => {
     expect(actionFor(VK_I, WIN)).toBe('openSettings')
     expect(actionFor(VK_OEM_PERIOD, WIN)).toBe('openEmojiPicker')
     expect(actionFor(VK_P, WIN)).toBe('openDisplayModePicker')
+  })
+
+  it('opens clipboard history on Win+V', () => {
+    expect(actionFor(VK_V, WIN)).toBe('openClipboardHistory')
+    expect(actionFor(VK_V, NONE)).toBe(null)
   })
 
   it('keeps those shortcuts working with Shift held too', () => {

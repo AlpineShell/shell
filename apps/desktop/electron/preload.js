@@ -244,6 +244,18 @@ contextBridge.exposeInMainWorld('displayMode', {
   dismiss: () => ipcRenderer.invoke('displaymode/dismiss'),
 })
 
+contextBridge.exposeInMainWorld('clipboardHistory', {
+  entries: () => ipcRenderer.invoke('clipboard/history-get'),
+  restore: (id) => ipcRenderer.invoke('clipboard/history-restore', id),
+  remove: (id) => ipcRenderer.invoke('clipboard/history-remove', id),
+  clear: () => ipcRenderer.invoke('clipboard/history-clear'),
+  onChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('clipboard/history-changed', handler)
+    return () => ipcRenderer.removeListener('clipboard/history-changed', handler)
+  },
+})
+
 contextBridge.exposeInMainWorld('launcher', {
   index: () => ipcRenderer.invoke('launcher/index'),
   show: () => ipcRenderer.invoke('launcher/show'),
@@ -255,6 +267,7 @@ contextBridge.exposeInMainWorld('launcher', {
   openLocation: (id) => ipcRenderer.invoke('launcher/open-location', id),
   endTask: (pid) => ipcRenderer.invoke('launcher/end-task', pid),
   insertText: (text) => ipcRenderer.invoke('launcher/insert-text', text),
+  paste: () => ipcRenderer.invoke('launcher/paste'),
   semanticModel: () => ipcRenderer.invoke('launcher/semantic-model'),
   takeScreenshot: () => ipcRenderer.invoke('launcher/take-screenshot'),
   recentEmoji: () => ipcRenderer.invoke('emoji/recents-get'),
