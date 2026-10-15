@@ -84,6 +84,7 @@ const PERSONAL_SIDEBAR: SettingsPageId[] = [
   'appearance',
   'search',
   'input',
+  'date-time',
   'tiling',
   'battery',
 ]

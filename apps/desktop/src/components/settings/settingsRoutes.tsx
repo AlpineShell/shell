@@ -10,6 +10,7 @@ import BatteryPage from './batteryPage'
 import BluetoothSettingsPage from './bluetoothSettingsPage'
 import DisplaysPage from './displaysPage'
 import InputPage from './inputPage'
+import DateTimePage from './dateTimePage'
 import PluginSettingsPage from './pluginSettingsPage'
 import PluginsPage from './pluginsPage'
 import RidgePage from './ridgePage'
@@ -31,6 +32,7 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'search': () => <SearchPage />,
   'calendar': (navigate) => <RidgePage onNavigate={navigate} initialItem="clock" />,
   'input': () => <InputPage />,
+  'date-time': () => <DateTimePage />,
   'tiling': () => <TilingPage />,
   'battery': () => <BatteryPage />,
   'displays': () => <DisplaysPage />,
@@ -86,6 +88,7 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
       'default-input-method',
     ],
   },
+  'date-time': { registryRows: true, renderedByThePage: ['time-zone', 'time-zone-automatic', 'time-automatic', 'time-sync'] },
   'tiling': { registryRows: true, renderedByThePage: [] },
   'battery': { registryRows: true, renderedByThePage: ['battery-saver'] },
   'displays': { registryRows: false, renderedByThePage: ['brightness'] },
