@@ -9,8 +9,9 @@ const {
   isThumbnailStale,
   isSwitcherWindow,
   switcherKeyAction,
+  selectionAfterMove,
 } = windowSwitcherPolicy
-const { VK_TAB, VK_ESCAPE, VK_LMENU, VK_RMENU, VK_E } = virtualKeys
+const { VK_TAB, VK_ESCAPE, VK_RETURN, VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN, VK_LMENU, VK_RMENU, VK_E } = virtualKeys
 
 const WS_EX_TOOLWINDOW = 0x80
 const HWND = 0x1234
@@ -212,6 +213,28 @@ describe('switcherKeyAction', () => {
     expect(switcherKeyAction(keyUp(VK_TAB), switcherState({ active: true }))).toEqual({ action: null, altIsDown: true, swallow: false })
   })
 
+  it('moves the selection with the arrow keys while the switcher is open', () => {
+    expect(switcherKeyAction(keyDown(VK_LEFT), switcherState({ active: true }))).toEqual({ action: 'move', direction: 'left', altIsDown: true, swallow: true })
+    expect(switcherKeyAction(keyDown(VK_RIGHT), switcherState({ active: true }))).toMatchObject({ action: 'move', direction: 'right' })
+    expect(switcherKeyAction(keyDown(VK_UP), switcherState({ active: true }))).toMatchObject({ action: 'move', direction: 'up' })
+    expect(switcherKeyAction(keyDown(VK_DOWN), switcherState({ active: true }))).toMatchObject({ action: 'move', direction: 'down' })
+  })
+
+  it('queues Left and Right like Shift+Tab and Tab while the list is still being built, and swallows Up and Down', () => {
+    expect(switcherKeyAction(keyDown(VK_RIGHT), switcherState({ building: true }))).toMatchObject({ action: 'queueForward', swallow: true })
+    expect(switcherKeyAction(keyDown(VK_LEFT), switcherState({ building: true }))).toMatchObject({ action: 'queueBackward', swallow: true })
+    expect(switcherKeyAction(keyDown(VK_UP), switcherState({ building: true }))).toEqual({ action: null, altIsDown: true, swallow: true })
+  })
+
+  it('switches to the selected window on Enter while the switcher is open', () => {
+    expect(switcherKeyAction(keyDown(VK_RETURN), switcherState({ active: true }))).toEqual({ action: 'commit', altIsDown: true, swallow: true })
+  })
+
+  it('lets arrows and Enter through to the app when the switcher is closed, even with Alt down', () => {
+    expect(switcherKeyAction(keyDown(VK_LEFT), switcherState())).toEqual({ action: null, altIsDown: true, swallow: false })
+    expect(switcherKeyAction(keyDown(VK_RETURN), switcherState())).toEqual({ action: null, altIsDown: true, swallow: false })
+  })
+
   it('only reads the live key state for a Tab press with Alt down', () => {
     const reads = []
     const state = switcherState({
@@ -223,5 +246,42 @@ describe('switcherKeyAction', () => {
     switcherKeyAction(keyDown(VK_ESCAPE), state)
     switcherKeyAction(keyDown(VK_LMENU), state)
     expect(reads).toEqual([])
+  })
+})
+
+describe('selectionAfterMove', () => {
+  const twoRows = [
+    { x: 100, y: 80 }, { x: 300, y: 80 }, { x: 500, y: 82 },
+    { x: 180, y: 240 }, { x: 420, y: 240 },
+  ]
+
+  it('steps left and right through every window and wraps at the ends', () => {
+    expect(selectionAfterMove(1, 'right', 5, twoRows)).toBe(2)
+    expect(selectionAfterMove(4, 'right', 5, twoRows)).toBe(0)
+    expect(selectionAfterMove(0, 'left', 5, twoRows)).toBe(4)
+  })
+
+  it('moves down to the card nearest below and back up', () => {
+    expect(selectionAfterMove(0, 'down', 5, twoRows)).toBe(3)
+    expect(selectionAfterMove(2, 'down', 5, twoRows)).toBe(4)
+    expect(selectionAfterMove(4, 'up', 5, twoRows)).toBe(2)
+  })
+
+  it('treats cards a few pixels apart vertically as one row', () => {
+    expect(selectionAfterMove(2, 'up', 5, twoRows)).toBe(2)
+  })
+
+  it('stays put at the top and bottom row', () => {
+    expect(selectionAfterMove(1, 'up', 5, twoRows)).toBe(1)
+    expect(selectionAfterMove(3, 'down', 5, twoRows)).toBe(3)
+  })
+
+  it('stays put on Up or Down until the panel has reported a layout for these windows', () => {
+    expect(selectionAfterMove(1, 'down', 5, [])).toBe(1)
+    expect(selectionAfterMove(1, 'down', 5, twoRows.slice(0, 3))).toBe(1)
+  })
+
+  it('returns the first window when there are none to move through', () => {
+    expect(selectionAfterMove(0, 'right', 0, [])).toBe(0)
   })
 })

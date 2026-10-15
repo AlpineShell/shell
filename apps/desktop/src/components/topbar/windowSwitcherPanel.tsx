@@ -10,6 +10,17 @@ const CLOSE_MS = 300
 
 type Shape = { bodyWidth: number; bodyHeight: number }
 
+function cardCenters(cards: HTMLElement): SwitcherCardCenter[] {
+  return (Array.from(cards.children) as HTMLElement[]).map((card) => {
+    const rect = card.getBoundingClientRect()
+    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }
+  })
+}
+
+function reportCardLayout(cards: HTMLElement | null) {
+  if (cards) window.windowSwitcher.reportLayout(cardCenters(cards)).catch(() => {})
+}
+
 function WindowEntry({ window, selected, darkText }: { window: SwitcherWindow; selected: boolean; darkText: boolean }) {
   const [thumbWidth, setThumbWidth] = useState(200)
   const cardWidth = Math.max(100, Math.min(200, thumbWidth))
@@ -139,6 +150,7 @@ export default function WindowSwitcherPanel() {
     const body = bodyRef.current
     if (!body) return
     const observer = new ResizeObserver(() => {
+      reportCardLayout(cardsRef.current)
       const next = measureShape()
       if (!next) return
       setShape((prev) =>
@@ -148,6 +160,7 @@ export default function WindowSwitcherPanel() {
       )
     })
     observer.observe(body)
+    for (const card of Array.from(cardsRef.current?.children ?? [])) observer.observe(card)
     const onResize = () => {
       const next = measureShape()
       if (next) setShape({ ...next })
@@ -157,7 +170,7 @@ export default function WindowSwitcherPanel() {
       observer.disconnect()
       window.removeEventListener("resize", onResize)
     }
-  }, [visible, showId])
+  }, [visible, showId, windows.length])
 
   useEffect(() => () => clearChromeSurface(idRef.current), [])
 

@@ -4,7 +4,7 @@ const activeDisplay = require('./activeDisplay')
 const shellSurfaces = require('./shellSurfaces')
 const switcherWindows = require('./switcherWindows')
 const windowThumbnails = require('./windowThumbnails')
-const { planSwitcherAfterBuild, switcherKeyAction } = require('./windowSwitcherPolicy')
+const { planSwitcherAfterBuild, switcherKeyAction, selectionAfterMove } = require('./windowSwitcherPolicy')
 
 const HIDE_ANIMATION_MS = 300
 const ALT_RELEASE_POLL_MS = 100
@@ -14,6 +14,7 @@ let active = false
 let building = false
 let selectedIndex = 0
 let windows = []
+let cardCenters = []
 let generation = 0
 let pendingSteps = 0
 let activeTopBar = null
@@ -114,6 +115,7 @@ async function open() {
   }
 
   windows = collected
+  cardCenters = []
   selectedIndex = plan.index
   active = true
   startAltReleasePoll()
@@ -129,6 +131,7 @@ function hide() {
   building = false
   active = false
   windows = []
+  cardCenters = []
   stopAltReleasePoll()
   const topBar = activeTopBar
   activeTopBar = null
@@ -159,12 +162,32 @@ function commitIfAltReleased() {
   }
 }
 
-function moveSelection(step) {
-  if (windows.length === 0) return
-  selectedIndex = (selectedIndex + step + windows.length) % windows.length
+function select(index) {
+  if (index === selectedIndex) return
+  selectedIndex = index
   if (activeTopBar && !activeTopBar.isDestroyed()) {
     activeTopBar.webContents.send('window-switcher/selection-changed', selectedIndex)
   }
+}
+
+function moveSelection(step) {
+  if (windows.length === 0) return
+  select((selectedIndex + step + windows.length) % windows.length)
+}
+
+function moveInGrid(direction) {
+  if (windows.length === 0) return
+  select(selectionAfterMove(selectedIndex, direction, windows.length, cardCenters))
+}
+
+function isCardCenter(value) {
+  return value !== null && typeof value === 'object' && Number.isFinite(value.x) && Number.isFinite(value.y)
+}
+
+function acceptCardLayout(event, centers) {
+  if (!activeTopBar || activeTopBar.isDestroyed() || event.sender !== activeTopBar.webContents) return
+  if (!Array.isArray(centers) || centers.length !== windows.length || !centers.every(isCardCenter)) return
+  cardCenters = centers.map(({ x, y }) => ({ x, y }))
 }
 
 function openInBackground() {
@@ -177,6 +200,7 @@ const SWITCHER_ACTIONS = {
   commit: commitSelection,
   cycleForward: () => moveSelection(1),
   cycleBackward: () => moveSelection(-1),
+  move: ({ direction }) => moveInGrid(direction),
   queueForward: () => { pendingSteps += 1 },
   queueBackward: () => { pendingSteps -= 1 },
 }
@@ -190,7 +214,7 @@ function handleSwitcherKey(keyEvent) {
     isShiftHeld: keyState.isShiftHeld,
   })
   altIsDown = decision.altIsDown
-  if (decision.action) SWITCHER_ACTIONS[decision.action]()
+  if (decision.action) SWITCHER_ACTIONS[decision.action](decision)
   return decision.swallow
 }
 
@@ -200,6 +224,9 @@ function hideForLauncher() {
 }
 
 module.exports = {
+  handlers: {
+    'window-switcher/layout': acceptCardLayout,
+  },
   handleKey: handleSwitcherKey,
   hideForLauncher,
 
