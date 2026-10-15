@@ -12,6 +12,7 @@ const { PRIVILEGED_SCHEMES } = require('./privilegedSchemes')
 const crashLog = createCrashLog()
 const BOOT_ATTEMPTS_PATH = bootRecovery.bootAttemptsPath(app.getPath('userData'))
 const HAND_BACK_CONFIRM_DELAY_MS = 1200
+const EXPLORER_GUARD_INTERVAL_MS = 5000
 
 const bypassSingleInstance =
   process.argv.includes('--uninstall') ||
@@ -949,6 +950,15 @@ async function startApp() {
     return
   }
 
+  const startupLink = process.argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
+  const startupFile = fileHandlers.findHandledFile(process.argv)
+  if (shellExclusivity.exitsWithoutRunningShell({ packaged: !isDev, launchedForLinkOrFile: Boolean(startupLink || startupFile) })) {
+    console.log('[main] Alpine Shell is not running, so this link or file launch exits')
+    uncountThisLaunch()
+    app.exit(0)
+    return
+  }
+
   const wallpaperExts = new Set(['.jpg', '.jpeg', '.png', '.bmp', '.webp'])
   protocol.handle('alpine-wallpaper', async (request) => {
     const url = new URL(request.url)
@@ -1018,11 +1028,13 @@ async function startApp() {
       if (e && e.code === 'licence-required') return { error: 'licence-required' }
       throw e
     }
-    const explorerRetired = await setup.beginTestSession()
+    const testSession = await setup.startTestSession()
+    if (testSession.error) return { error: testSession.error }
     if (!setupWin) return { error: null }
     closeSetupWindow()
     startShellMode()
-    if (explorerRetired && trayHost) trayHost.announceTaskbar()
+    if (testSession.explorerRetired && trayHost) trayHost.announceTaskbar()
+    if (!isDev) guardDesktopAgainstExplorer()
     return { error: null }
   }, [trustedSenders.SETUP_WINDOW]))
 
@@ -1042,12 +1054,33 @@ async function startApp() {
     return
   }
 
-  startShellMode()
+  const launchedByHand = !setup.isAutostartLaunch(process.argv) && !isUpdateRestart() && !startupLink && !startupFile
 
-  const startupLink = process.argv.find((a) => typeof a === 'string' && a.startsWith('alpine-shell://'))
+  if (isUpdateRestart()) installer.clearUpdateHandoff()
+  const takeover = await setup.claimDesktop({ launchedByHand })
+  const startup = shellExclusivity.planShellStartup({
+    packaged: !isDev,
+    optedOut: takeover.optedOut,
+    launchedByHand,
+    explorerHoldsDesktop: takeover.explorerHoldsDesktop,
+  })
+  if (startup.action === shellExclusivity.SHOW_SETUP) {
+    forgetBootAttempts()
+    createSetupWindow()
+    return
+  }
+  if (startup.action === shellExclusivity.EXIT_ALPINE) {
+    console.error('[main] Windows Explorer holds the desktop and stays there, so Alpine Shell exits instead of running beside it')
+    uncountThisLaunch()
+    app.exit(0)
+    return
+  }
+  startShellMode(takeover)
+  if (takeover.explorerRetired && trayHost) trayHost.announceTaskbar()
+  if (!isDev) guardDesktopAgainstExplorer()
+
   if (startupLink) setTimeout(() => handleDeepLink(startupLink), 500)
 
-  const startupFile = fileHandlers.findHandledFile(process.argv)
   if (startupFile) {
     setTimeout(() => {
       fileHandlers.openFile(startupFile).catch((e) => console.error('[main] file open failed:', e && e.message))
@@ -1167,14 +1200,14 @@ function routeKeyboardInput() {
   ])
 }
 
-function startShellMode() {
+function startShellMode(claimedTakeover = null) {
   if (shellModeRunning) return
   shellModeRunning = true
   openSignInWhenUnlicensed()
 
   if (isUpdateRestart()) installer.clearUpdateHandoff()
 
-  const takeover = setup.takeOverFromExplorer()
+  const takeover = claimedTakeover || setup.takeOverFromExplorer()
 
   if (shellWindow && takeover.actingAsShell) {
     shellWindow.onAppCommand(volume.applyAppCommand)
@@ -1294,6 +1327,20 @@ function undimDisplays() {
   try { brightness.restoreBatterySaverBrightnessOnShutdown() } catch (e) {
     console.error('[main] battery saver brightness restore failed:', e?.message ?? e)
   }
+}
+
+let explorerGuardTimer = null
+
+function guardDesktopAgainstExplorer() {
+  if (explorerGuardTimer) return
+  explorerGuardTimer = setInterval(async () => {
+    const guard = await setup.keepExplorerOffDesktop()
+    if (guard.explorerRetired && trayHost) trayHost.announceTaskbar()
+    if (!guard.explorerStayed) return
+    console.error('[main] Windows Explorer took the desktop and would not leave, so Alpine Shell exits')
+    clearInterval(explorerGuardTimer)
+    gracefulShutdown()
+  }, EXPLORER_GUARD_INTERVAL_MS)
 }
 
 function gracefulShutdown() {

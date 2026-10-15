@@ -538,6 +538,192 @@ describe('retiring Explorer for a test-out', () => {
   })
 })
 
+describe('claiming the desktop from Explorer at startup', () => {
+  const EXPLORER_PROCESS_ID = 2718
+  const POLICY_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System'
+  const spies = []
+  let explorerRunning = true
+  let handoffActive = false
+  const originalHasShellHandoff = installerMock.hasShellHandoff
+
+  function freshSetup() {
+    delete nodeRequire.cache[nodeRequire.resolve('./setup.js')]
+    return nodeRequire('./setup.js')
+  }
+
+  async function settle(promise) {
+    await vi.advanceTimersByTimeAsync(15000)
+    return promise
+  }
+
+  function explorerHoldsDesktopAfterSignIn() {
+    electronApp.isPackaged = true
+    fs.writeFileSync(setupCompletePath(), 'done')
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+    registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${INSTALLED_EXE}" --autostart`)
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    explorerRunning = true
+    handoffActive = false
+    installerMock.hasShellHandoff = vi.fn(() => handoffActive)
+    installerMock.clearShellHandoff.mockImplementation(() => { handoffActive = false })
+    installerMock.isRevertHelperRunning.mockImplementation((helper) => Boolean(helper && helper.running))
+    explorerShellMock.exitExplorerShell.mockImplementation(() => {
+      explorerRunning = false
+      return [EXPLORER_PROCESS_ID]
+    })
+    spies.push(vi.spyOn(process, 'kill').mockImplementation((processId) => {
+      if (processId === EXPLORER_PROCESS_ID && explorerRunning) return true
+      const error = new Error('kill ESRCH')
+      error.code = 'ESRCH'
+      throw error
+    }))
+    spies.push(vi.spyOn(console, 'error').mockImplementation(() => {}))
+  })
+
+  afterEach(() => {
+    spies.splice(0).forEach((spy) => spy.mockRestore())
+    installerMock.hasShellHandoff = originalHasShellHandoff
+    installerMock.clearShellHandoff.mockImplementation(() => {})
+    vi.useRealTimers()
+  })
+
+  it('takes the shell back and retires Explorer when a sign-in started Explorer instead of Alpine', async () => {
+    explorerHoldsDesktopAfterSignIn()
+
+    const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: false }))
+
+    expect(takeover).toEqual({ actingAsShell: true, explorerRetired: true, explorerHoldsDesktop: false, optedOut: false })
+    expect(shellValue()).toBe(INSTALLED_EXE)
+    expect(installerMock.restoreExplorerWhenAlpineExits.mock.invocationCallOrder[0])
+      .toBeLessThan(explorerShellMock.exitExplorerShell.mock.invocationCallOrder[0])
+  })
+
+  it('ends a revert until next sign-in and retires Explorer when Alpine is started by hand', async () => {
+    explorerHoldsDesktopAfterSignIn()
+    handoffActive = true
+
+    const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: true }))
+
+    expect(installerMock.clearShellHandoff).toHaveBeenCalled()
+    expect(takeover).toEqual({ actingAsShell: true, explorerRetired: true, explorerHoldsDesktop: false, optedOut: false })
+    expect(shellValue()).toBe(INSTALLED_EXE)
+  })
+
+  it('leaves Explorer the shell for the rest of the sign-in when the launch was not by hand', async () => {
+    explorerHoldsDesktopAfterSignIn()
+    handoffActive = true
+
+    const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: false }))
+
+    expect(takeover).toEqual({ actingAsShell: false, explorerRetired: false, explorerHoldsDesktop: true, optedOut: false })
+    expect(installerMock.clearShellHandoff).not.toHaveBeenCalled()
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+    expect(shellValue()).toBe('explorer.exe')
+  })
+
+  it('leaves Explorer alone when it does not hold the desktop', async () => {
+    explorerHoldsDesktopAfterSignIn()
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => false)
+
+    const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: false }))
+
+    expect(takeover).toEqual({ actingAsShell: true, explorerRetired: false, explorerHoldsDesktop: false, optedOut: false })
+    expect(installerMock.restoreExplorerWhenAlpineExits).not.toHaveBeenCalled()
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+  })
+
+  it('leaves Explorer alone when Group Policy sets the shell', async () => {
+    explorerHoldsDesktopAfterSignIn()
+    registry.set(registryKey(POLICY_KEY, 'Shell'), 'explorer.exe')
+
+    await settle(freshSetup().claimDesktop({ launchedByHand: true }))
+
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+  })
+
+  it('leaves Explorer alone in development', async () => {
+    explorerHoldsDesktopAfterSignIn()
+    electronApp.isPackaged = false
+
+    const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: true }))
+
+    expect(takeover.explorerRetired).toBe(false)
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+  })
+
+  it('does not turn the session into a test-out', async () => {
+    explorerHoldsDesktopAfterSignIn()
+    const setupModule = freshSetup()
+
+    await settle(setupModule.claimDesktop({ launchedByHand: true }))
+
+    expect(setupModule.handlers['setup/test-session'](fromSettingsWindow)).toBe(false)
+  })
+
+  it('reports Explorer still on the desktop when it would not leave', async () => {
+    explorerHoldsDesktopAfterSignIn()
+    explorerShellMock.exitExplorerShell.mockImplementation(() => [])
+
+    const takeover = await settle(freshSetup().claimDesktop({ launchedByHand: true }))
+
+    expect(takeover).toMatchObject({ explorerRetired: false, explorerHoldsDesktop: true })
+  })
+
+  it('refuses a test-out that could not close Explorer and lets it be tried again', async () => {
+    explorerShellMock.exitExplorerShell.mockImplementation(() => [])
+    const setupModule = freshSetup()
+
+    const refused = await settle(setupModule.startTestSession())
+
+    expect(refused.error).toMatch(/did not close/)
+    expect(setupModule.handlers['setup/test-session'](fromSettingsWindow)).toBe(false)
+
+    explorerShellMock.exitExplorerShell.mockImplementation(() => {
+      explorerRunning = false
+      return [EXPLORER_PROCESS_ID]
+    })
+    await expect(settle(setupModule.startTestSession())).resolves.toEqual({ error: null, explorerRetired: true })
+    expect(setupModule.handlers['setup/test-session'](fromSettingsWindow)).toBe(true)
+  })
+
+  it('starts a test-out when Explorer was not on the desktop to begin with', async () => {
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => false)
+    await expect(settle(freshSetup().startTestSession())).resolves.toEqual({ error: null, explorerRetired: false })
+  })
+
+  it('retires Explorer when it shows up beside the running shell', async () => {
+    const guard = await settle(freshSetup().keepExplorerOffDesktop())
+
+    expect(guard).toEqual({ explorerRetired: true, explorerStayed: false })
+    expect(installerMock.restoreExplorerWhenAlpineExits.mock.invocationCallOrder[0])
+      .toBeLessThan(explorerShellMock.exitExplorerShell.mock.invocationCallOrder[0])
+  })
+
+  it('reports Explorer staying beside the running shell so Alpine can exit', async () => {
+    explorerShellMock.exitExplorerShell.mockImplementation(() => [])
+    await expect(settle(freshSetup().keepExplorerOffDesktop())).resolves.toEqual({ explorerRetired: false, explorerStayed: true })
+  })
+
+  it('leaves the desktop alone when Explorer is not on it', async () => {
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => false)
+    await expect(settle(freshSetup().keepExplorerOffDesktop())).resolves.toEqual({ explorerRetired: false, explorerStayed: false })
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+  })
+
+  it('leaves Explorer alone while an update hands the desktop over', async () => {
+    const wasUpdateHandoffActive = installerMock.isUpdateHandoffActive
+    installerMock.isUpdateHandoffActive = () => true
+
+    await expect(settle(freshSetup().keepExplorerOffDesktop())).resolves.toEqual({ explorerRetired: false, explorerStayed: false })
+    expect(explorerShellMock.exitExplorerShell).not.toHaveBeenCalled()
+
+    installerMock.isUpdateHandoffActive = wasUpdateHandoffActive
+  })
+})
+
 describe('ending a test-out from settings', () => {
   const shellShutdown = vi.fn()
   const spies = []

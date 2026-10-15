@@ -17,6 +17,7 @@ const REVERT_QUIT_DELAY_MS = 1200
 const EXPLORER_EXIT_TIMEOUT_MS = 10000
 const EXPLORER_EXIT_POLL_MS = 200
 const TEST_SESSION_HAND_BACK_FAILED = 'Windows Explorer could not be brought back, so Alpine Shell stays open.'
+const TEST_OUT_EXPLORER_STAYED = 'Windows Explorer did not close, so the test could not start. Try again.'
 const REVERT_BLOCKED_MESSAGES = {
   [shellExclusivity.REVERT_BLOCKED_IN_DEVELOPMENT]: 'Unavailable in development.',
   [shellExclusivity.REVERT_BLOCKED_BY_UPDATE]: 'An update is in progress. Try again once it has finished.',
@@ -228,12 +229,81 @@ function applyShellRegistration(context) {
   return context.shellRegisteredToAlpine || isShellRegisteredToAlpine()
 }
 
-function takeOverFromExplorer() {
+function activateShell() {
   const context = shellActivationContext()
   const plan = shellExclusivity.planShellActivation(context)
   const registrationVerified = shellExclusivity.requiresShellRegistration(plan) && applyShellRegistration(context)
+  return {
+    actingAsShell: plan.actingAsShell && shellExclusivity.isRegistrationSatisfied(plan, registrationVerified),
+    claimedRegistration: Boolean(registrationVerified) && !context.gpoBlocked,
+  }
+}
 
-  return { actingAsShell: plan.actingAsShell && shellExclusivity.isRegistrationSatisfied(plan, registrationVerified) }
+function takeOverFromExplorer() {
+  return { actingAsShell: activateShell().actingAsShell }
+}
+
+function releaseShellHandoffForHandLaunch(launchedByHand) {
+  if (launchedByHand && electronApp().isPackaged && installer.hasShellHandoff()) installer.clearShellHandoff()
+}
+
+let claimExplorerRetirement = null
+
+function retireExplorerForClaimedShell() {
+  if (!claimExplorerRetirement) {
+    claimExplorerRetirement = retireExplorer().catch((e) => {
+      console.error('[setup] Could not retire Explorer, so Alpine Shell starts beside it:', e.message)
+      return false
+    })
+  }
+  return claimExplorerRetirement
+}
+
+async function claimDesktop({ launchedByHand }) {
+  releaseShellHandoffForHandLaunch(launchedByHand)
+  const activation = activateShell()
+  const explorerRetired = activation.actingAsShell && activation.claimedRegistration
+    ? await retireExplorerForClaimedShell()
+    : false
+  return {
+    actingAsShell: activation.actingAsShell,
+    explorerRetired,
+    explorerHoldsDesktop: explorerRetired ? false : explorerShell.shellHostedByExplorer(),
+    optedOut: installer.isShellOptedOut(),
+  }
+}
+
+async function startTestSession() {
+  const explorerRetired = await beginTestSession()
+  if (!explorerRetired && explorerShell.shellHostedByExplorer() === true) {
+    testSessionExplorerRetirement = null
+    return { error: TEST_OUT_EXPLORER_STAYED, explorerRetired: false }
+  }
+  return { error: null, explorerRetired }
+}
+
+let explorerGuardRun = null
+
+async function retireExplorerBesideShell() {
+  const retireNeeded = shellExclusivity.shouldRetireExplorerBesideShell({
+    explorerHoldsDesktop: explorerShell.shellHostedByExplorer(),
+    updateInProgress: updater.isUpdatePending() || installer.isUpdateHandoffActive(),
+  })
+  if (!retireNeeded) return { explorerRetired: false, explorerStayed: false }
+  const explorerRetired = await retireExplorer()
+  return { explorerRetired, explorerStayed: !explorerRetired && explorerShell.shellHostedByExplorer() === true }
+}
+
+function keepExplorerOffDesktop() {
+  if (!explorerGuardRun) {
+    explorerGuardRun = retireExplorerBesideShell()
+      .catch((e) => {
+        console.error('[setup] Could not check whether Explorer holds the desktop:', e.message)
+        return { explorerRetired: false, explorerStayed: false }
+      })
+      .finally(() => { explorerGuardRun = null })
+  }
+  return explorerGuardRun
 }
 
 function isAutostartLaunch(argv) {
@@ -529,7 +599,10 @@ module.exports = {
   isAutostartLaunch,
   shouldLeaveShellToExplorer,
   takeOverFromExplorer,
+  claimDesktop,
+  keepExplorerOffDesktop,
   beginTestSession,
+  startTestSession,
   setShellShutdown,
 
   start(b) {

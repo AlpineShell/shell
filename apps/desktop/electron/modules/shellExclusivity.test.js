@@ -19,7 +19,73 @@ const {
   planShellRevert,
   settleShellRevert,
   planMarkerAge,
+  SHOW_SETUP,
+  START_SHELL,
+  exitsWithoutRunningShell,
+  planShellStartup,
+  shouldRetireExplorerBesideShell,
 } = shellExclusivity
+
+describe('exitsWithoutRunningShell', () => {
+  it('exits a link or file launch when Alpine Shell is not already running', () => {
+    expect(exitsWithoutRunningShell({ packaged: true, launchedForLinkOrFile: true })).toBe(true)
+  })
+
+  it('keeps a plain launch', () => {
+    expect(exitsWithoutRunningShell({ packaged: true, launchedForLinkOrFile: false })).toBe(false)
+  })
+
+  it('keeps link and file launches in development', () => {
+    expect(exitsWithoutRunningShell({ packaged: false, launchedForLinkOrFile: true })).toBe(false)
+  })
+})
+
+describe('planShellStartup', () => {
+  function startup(overrides = {}) {
+    return planShellStartup({ packaged: true, optedOut: false, launchedByHand: true, explorerHoldsDesktop: false, ...overrides }).action
+  }
+
+  it('starts the shell when Explorer does not hold the desktop', () => {
+    expect(startup()).toBe(START_SHELL)
+  })
+
+  it('starts the shell when it cannot tell who holds the desktop', () => {
+    expect(startup({ explorerHoldsDesktop: null })).toBe(START_SHELL)
+  })
+
+  it('exits instead of running beside Explorer', () => {
+    expect(startup({ explorerHoldsDesktop: true })).toBe(EXIT_ALPINE)
+    expect(startup({ explorerHoldsDesktop: true, launchedByHand: false })).toBe(EXIT_ALPINE)
+  })
+
+  it('shows setup again when someone starts Alpine after a permanent revert', () => {
+    expect(startup({ optedOut: true, explorerHoldsDesktop: true })).toBe(SHOW_SETUP)
+    expect(startup({ optedOut: true, explorerHoldsDesktop: false })).toBe(SHOW_SETUP)
+  })
+
+  it('exits a launch after a permanent revert that nobody started by hand', () => {
+    expect(startup({ optedOut: true, launchedByHand: false })).toBe(EXIT_ALPINE)
+  })
+
+  it('always starts the shell in development', () => {
+    expect(startup({ packaged: false, optedOut: true, explorerHoldsDesktop: true })).toBe(START_SHELL)
+  })
+})
+
+describe('shouldRetireExplorerBesideShell', () => {
+  it('retires Explorer when it takes the desktop beside the running shell', () => {
+    expect(shouldRetireExplorerBesideShell({ explorerHoldsDesktop: true, updateInProgress: false })).toBe(true)
+  })
+
+  it('leaves Explorer alone while an update hands the desktop over', () => {
+    expect(shouldRetireExplorerBesideShell({ explorerHoldsDesktop: true, updateInProgress: true })).toBe(false)
+  })
+
+  it('does nothing when Explorer does not hold the desktop or it cannot tell', () => {
+    expect(shouldRetireExplorerBesideShell({ explorerHoldsDesktop: false, updateInProgress: false })).toBe(false)
+    expect(shouldRetireExplorerBesideShell({ explorerHoldsDesktop: null, updateInProgress: false })).toBe(false)
+  })
+})
 
 function activation(overrides = {}) {
   return planShellActivation({
