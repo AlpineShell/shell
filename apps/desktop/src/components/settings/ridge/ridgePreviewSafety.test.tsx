@@ -34,6 +34,14 @@ const CHANNEL_VALUES: Record<string, unknown> = {
   'shell.tray.icons': TRAY_ICONS,
   'shell.tray.layout': { order: ['onedrive', 'dropbox'], hidden: ['steam'] },
   'shell.tray.settings': { enabled: true, showOverflow: true },
+  'shell.desktops.state': {
+    currentId: 'desktop-2',
+    canCreate: true,
+    desktops: [
+      { id: 'desktop-1', name: 'Desktop 1', windowCount: 3 },
+      { id: 'desktop-2', name: 'Work', windowCount: 2 },
+    ],
+  },
   'plugins.list': [
     ridgePluginRecord({ contributes: { topbarWidgets: [{ slot: 'left', export: 'Forecast' }] } }),
     ridgePluginRecord({ id: 'com.example.notes', name: 'Notes', contributes: { topbarWidgets: [{ slot: 'right' }] } }),
@@ -53,6 +61,7 @@ const CHANNEL_SUBSCRIPTIONS = [
   'shell.tray.onIconsChanged',
   'shell.tray.onLayoutChanged',
   'shell.tray.onSettingsChanged',
+  'shell.desktops.onChanged',
   'plugins.onReload',
 ]
 
@@ -74,6 +83,10 @@ const FORBIDDEN_BRIDGES = [
   'shell.system.setMonitorBrightness',
   'topbar.setActiveRegion',
   'topbar.setInteractiveZones',
+  'shell.desktops.switchTo',
+  'shell.desktops.create',
+  'shell.desktops.remove',
+  'shell.desktops.rename',
 ]
 
 const OTHER_BRIDGES = [

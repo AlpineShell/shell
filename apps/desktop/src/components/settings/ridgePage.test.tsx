@@ -40,6 +40,7 @@ const PREVIEW_READS: Record<string, unknown> = {
   'shell.tray.layout': { order: [], hidden: [] },
   'shell.tray.display': { showOnAllMonitors: false, primaryDisplayId: 1 },
   'shell.system.powerConfirm': true,
+  'shell.desktops.state': LIVE.desktops,
   'launcher.getHotkey': 'Win',
   'plugins.list': [],
 }
@@ -62,6 +63,7 @@ const SUBSCRIPTIONS = [
   'shell.tray.onLayoutChanged',
   'shell.tray.onSettingsChanged',
   'shell.tray.onDisplayChanged',
+  'shell.desktops.onChanged',
   'launcher.onHotkeyChanged',
   'plugins.onReload',
 ]
@@ -92,6 +94,10 @@ const FORBIDDEN_BRIDGES = [
   'shell.system.setMonitorBrightness',
   'topbar.setActiveRegion',
   'topbar.setInteractiveZones',
+  'shell.desktops.switchTo',
+  'shell.desktops.create',
+  'shell.desktops.remove',
+  'shell.desktops.rename',
 ]
 
 function installBridge(path: string, bridge: Mock) {

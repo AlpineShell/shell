@@ -3,14 +3,16 @@ import shellHotkeyPolicy from './shellHotkeyPolicy.js'
 import virtualKeys from './virtualKeys.js'
 
 const { SHELL_SHORTCUTS, shortcutForKey, createWinTapTracker } = shellHotkeyPolicy
-const { VK_LEFT, VK_DOWN, VK_E, VK_I, VK_M, VK_P, VK_S, VK_V, VK_ESCAPE, VK_OEM_PERIOD, VK_LWIN, VK_RWIN, VK_SHIFT, VK_TAB } = virtualKeys
+const { VK_LEFT, VK_RIGHT, VK_DOWN, VK_D, VK_E, VK_F4, VK_I, VK_M, VK_P, VK_S, VK_V, VK_ESCAPE, VK_OEM_PERIOD, VK_LWIN, VK_RWIN, VK_SHIFT, VK_TAB } = virtualKeys
 
-function modifiers({ win = false, shift = false } = {}) {
-  return { isWinHeld: () => win, isShiftHeld: () => shift }
+function modifiers({ win = false, ctrl = false, shift = false } = {}) {
+  return { isWinHeld: () => win, isCtrlHeld: () => ctrl, isShiftHeld: () => shift }
 }
 
 const WIN = modifiers({ win: true })
 const WIN_SHIFT = modifiers({ win: true, shift: true })
+const WIN_CTRL = modifiers({ win: true, ctrl: true })
+const WIN_CTRL_SHIFT = modifiers({ win: true, ctrl: true, shift: true })
 const NONE = modifiers()
 
 function actionFor(vkCode, held) {
@@ -42,6 +44,23 @@ describe('shortcutForKey', () => {
     expect(actionFor(VK_I, WIN)).toBe('openSettings')
     expect(actionFor(VK_OEM_PERIOD, WIN)).toBe('openEmojiPicker')
     expect(actionFor(VK_P, WIN)).toBe('openDisplayModePicker')
+  })
+
+  it('switches desktops on Win+Ctrl+Left and Right instead of tiling', () => {
+    expect(shortcutForKey(VK_LEFT, WIN_CTRL)).toMatchObject({ action: 'switchDesktop', direction: 'previous' })
+    expect(shortcutForKey(VK_RIGHT, WIN_CTRL)).toMatchObject({ action: 'switchDesktop', direction: 'next' })
+    expect(actionFor(VK_LEFT, WIN)).toBe('tile')
+  })
+
+  it('moves the active window to the next desktop on Win+Ctrl+Shift+arrow', () => {
+    expect(shortcutForKey(VK_RIGHT, WIN_CTRL_SHIFT)).toMatchObject({ action: 'moveWindowToDesktop', direction: 'next' })
+    expect(actionFor(VK_LEFT, WIN_SHIFT)).toBe('tile')
+  })
+
+  it('creates a desktop on Win+Ctrl+D and closes it on Win+Ctrl+F4', () => {
+    expect(actionFor(VK_D, WIN_CTRL)).toBe('newDesktop')
+    expect(actionFor(VK_F4, WIN_CTRL)).toBe('closeDesktop')
+    expect(actionFor(VK_D, WIN)).toBe(null)
   })
 
   it('opens clipboard history on Win+V', () => {
@@ -92,10 +111,12 @@ describe('shortcutForKey', () => {
     const combos = new Set()
     for (const shortcut of SHELL_SHORTCUTS) {
       for (const win of shortcut.win === undefined ? [false, true] : [shortcut.win]) {
-        for (const shift of shortcut.shift === undefined ? [false, true] : [shortcut.shift]) {
-          const combo = `${shortcut.vkCode}:${win}:${shift}`
-          expect(combos.has(combo)).toBe(false)
-          combos.add(combo)
+        for (const ctrl of shortcut.ctrl === undefined ? [false, true] : [shortcut.ctrl]) {
+          for (const shift of shortcut.shift === undefined ? [false, true] : [shortcut.shift]) {
+            const combo = `${shortcut.vkCode}:${win}:${ctrl}:${shift}`
+            expect(combos.has(combo), combo).toBe(false)
+            combos.add(combo)
+          }
         }
       }
     }

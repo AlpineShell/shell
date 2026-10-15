@@ -21,6 +21,7 @@ import {
   Grid2x2,
   House,
   Keyboard,
+  Layers,
   Languages,
   LayoutDashboard,
   LayoutGrid,
@@ -443,6 +444,11 @@ const RIDGE_ITEM_SEARCH: Record<
     description: 'Move or hide the power menu on Ridge, and choose whether it asks before it logs out, restarts or shuts down.',
     keywords: ['power menu', 'shut down button', 'restart button', 'log out button'],
     icon: Power,
+  },
+  desktops: {
+    description: 'Move or hide the desktop dots on Ridge, which switch between your desktops and add, rename or close them.',
+    keywords: ['desktops', 'virtual desktops', 'workspaces', 'spaces', 'switch desktop', 'new desktop', 'task view'],
+    icon: Layers,
   },
   'plugins-left': {
     description: 'Move or hide the widgets your plugins put on the left of Ridge.',

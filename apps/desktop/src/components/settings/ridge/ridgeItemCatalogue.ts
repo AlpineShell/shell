@@ -30,6 +30,7 @@ function trayIconCounts(data: RidgePreviewData): string | null {
 
 export const RIDGE_ITEM_DETAILS: Record<TopbarItemId, RidgeItemDetail> = {
   'system-menu': { entries: ['power-confirm', 'power-show-hibernate'], links: [], note: noNote },
+  desktops: { entries: [], links: [], note: noNote },
   'plugins-left': { entries: [], links: [pageLink('plugins')], note: presenceNote('plugins-left') },
   notice: { entries: [], links: [], note: presenceNote('notice') },
   launcher: { entries: ['launcher-hotkey'], links: [pageLink('search')], note: noNote },

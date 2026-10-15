@@ -33,7 +33,7 @@ describe('ridgeSideLabel', () => {
 
 describe('ridgePositionPhrase', () => {
   it('counts from one within the side', () => {
-    expect(ridgePositionPhrase(DEFAULT_ITEMS, 'system-menu')).toBe('position 1 of 2 on the left')
+    expect(ridgePositionPhrase(DEFAULT_ITEMS, 'system-menu')).toBe('position 1 of 3 on the left')
     expect(ridgePositionPhrase(DEFAULT_ITEMS, 'launcher')).toBe('position 1 of 1 in the center')
     expect(ridgePositionPhrase(DEFAULT_ITEMS, 'clock')).toBe('position 6 of 6 on the right')
   })
@@ -70,7 +70,7 @@ describe('Ridge announcements', () => {
 
   it('announces a step past the end of the bar', () => {
     expect(ridgeEdgeAnnouncement(DEFAULT_ITEMS, 'system-menu')).toBe(
-      "Power menu can't move any further, position 1 of 2 on the left."
+      "Power menu can't move any further, position 1 of 3 on the left."
     )
   })
 

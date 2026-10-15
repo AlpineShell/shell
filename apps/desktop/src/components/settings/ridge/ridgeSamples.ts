@@ -46,6 +46,7 @@ export function ridgeMediaTitle(media: RidgeMediaPreviewData): string | null {
 
 const SHOWS_A_SAMPLE: Record<TopbarItemId, (data: RidgePreviewData) => boolean> = {
   'system-menu': () => false,
+  desktops: () => false,
   'plugins-left': (data) => data.plugins.left.length === 0,
   notice: () => true,
   launcher: () => false,

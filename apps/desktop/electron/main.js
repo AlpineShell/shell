@@ -137,6 +137,7 @@ try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error
 const gpuPreference = require('./modules/gpuPreference')
 const colorMode = require('./modules/colorMode')
 const dateTime = require('./modules/dateTime')
+const virtualDesktops = require('./modules/virtualDesktops')
 const { processAutostart } = require('./modules/autostart')
 const updater = require('./modules/updater')
 const windowsUpdate = require('./modules/windowsUpdate')
@@ -1005,7 +1006,7 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, virtualDesktops, licence)
 
   theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
@@ -1178,6 +1179,10 @@ function wireShellHotkeys() {
   shellHotkeys.on('openClipboardHistory', () => launcher.showClipboardHistory())
   shellHotkeys.on('openDisplayModePicker', () => displayModePicker.open())
   shellHotkeys.on('minimizeAll', () => minimizeAll.minimizeAll())
+  shellHotkeys.on('switchDesktop', ({ direction }) => virtualDesktops.switchAdjacent(direction))
+  shellHotkeys.on('moveWindowToDesktop', ({ direction }) => virtualDesktops.moveForegroundWindow(direction))
+  shellHotkeys.on('newDesktop', () => virtualDesktops.create())
+  shellHotkeys.on('closeDesktop', () => virtualDesktops.removeCurrent())
   shellHotkeys.on('restoreMinimized', () => minimizeAll.restoreMinimized())
   if (screenshot) {
     shellHotkeys.on('takeScreenshot', () => screenshot.showOverlay())
@@ -1347,6 +1352,7 @@ function guardDesktopAgainstExplorer() {
 }
 
 function gracefulShutdown() {
+  try { virtualDesktops.showEveryWindow() } catch {}
   try { unregisterAll() } catch {}
   undimDisplays()
   try { if (shellWindow) shellWindow.destroy() } catch {}

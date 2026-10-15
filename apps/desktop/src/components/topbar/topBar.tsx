@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import Clock from "./clock";
 import StatusIndicator from "./status/statusIndicator";
 import SystemMenu from "./systemMenu";
+import DesktopsStatus from "./desktopsStatus";
 import { ThemeProvider } from "../themeContext";
 import { RidgeBackdropProvider } from "./ridgeBackdrop";
 import MediaStatus from "./status/mediaStatus";
@@ -29,6 +30,7 @@ const noop = () => {};
 
 const TOPBAR_ELEMENTS: Record<TopbarItemId, () => ReactNode> = {
     "system-menu": () => <SystemMenu />,
+    desktops: () => <DesktopsStatus />,
     "plugins-left": () => <PluginSlot slot="left" />,
     notice: () => <NoticeStatus />,
     launcher: () => <LauncherTrigger />,

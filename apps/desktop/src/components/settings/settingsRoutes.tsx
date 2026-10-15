@@ -54,6 +54,7 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
     registryRows: false,
     renderedByThePage: [
       'ridge-item-system-menu',
+      'ridge-item-desktops',
       'ridge-item-plugins-left',
       'ridge-item-media',
       'ridge-item-microphone',

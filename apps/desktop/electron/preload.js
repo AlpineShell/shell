@@ -398,6 +398,19 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('theme/changed', handler)
     },
   },
+  desktops: {
+    state: () => ipcRenderer.invoke('desktops/state'),
+    refresh: () => ipcRenderer.invoke('desktops/refresh'),
+    switchTo: (id) => ipcRenderer.invoke('desktops/switch', id),
+    create: () => ipcRenderer.invoke('desktops/create'),
+    remove: (id) => ipcRenderer.invoke('desktops/remove', id),
+    rename: (id, name) => ipcRenderer.invoke('desktops/rename', id, name),
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('desktops/changed', handler)
+      return () => ipcRenderer.removeListener('desktops/changed', handler)
+    },
+  },
   dateTime: {
     state: () => ipcRenderer.invoke('date-time/state'),
     setTimeZone: (id) => ipcRenderer.invoke('date-time/set-time-zone', id),

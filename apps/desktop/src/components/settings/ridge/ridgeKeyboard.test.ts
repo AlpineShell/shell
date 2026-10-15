@@ -12,6 +12,7 @@ import {
 const DEFAULT_ITEMS = resolveTopbarLayout(EMPTY_TOPBAR_LAYOUT)
 const BAR_ORDER: TopbarItemId[] = [
   'system-menu',
+  'desktops',
   'plugins-left',
   'launcher',
   'tray',
@@ -86,7 +87,7 @@ describe('ridgeFocusOrder', () => {
   it('follows an item that moved to another side', () => {
     const clockInCenter = moveTopbarItem(DEFAULT_ITEMS, 'clock', { slot: 'center', index: 1 })
 
-    expect(ridgeFocusOrder(clockInCenter).slice(1, 5)).toEqual(['plugins-left', 'launcher', 'clock', 'tray'])
+    expect(ridgeFocusOrder(clockInCenter).slice(2, 6)).toEqual(['plugins-left', 'launcher', 'clock', 'tray'])
   })
 })
 

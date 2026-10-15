@@ -84,6 +84,14 @@ export function liveRidgePreviewData(): RidgePreviewData {
       showOverflow: true,
     },
     plugins: { left: [ridgePluginWidget('left', 'Weather')], right: [ridgePluginWidget('right', 'Notes')] },
+    desktops: {
+      currentId: 'desktop-2',
+      canCreate: true,
+      desktops: [
+        { id: 'desktop-1', name: 'Desktop 1', windowCount: 3 },
+        { id: 'desktop-2', name: 'Work', windowCount: 2 },
+      ],
+    },
   }
 }
 

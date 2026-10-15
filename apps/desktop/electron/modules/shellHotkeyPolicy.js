@@ -3,6 +3,7 @@ const {
   VK_UP,
   VK_RIGHT,
   VK_DOWN,
+  VK_D,
   VK_E,
   VK_I,
   VK_M,
@@ -10,6 +11,7 @@ const {
   VK_S,
   VK_V,
   VK_ESCAPE,
+  VK_F4,
   VK_OEM_PERIOD,
   isWinKey,
 } = require('./virtualKeys')
@@ -22,11 +24,26 @@ const TILE_DIRECTIONS = [
 ]
 
 const TILE_SHORTCUTS = TILE_DIRECTIONS.flatMap(([vkCode, direction]) => [
-  { action: 'tile', vkCode, win: true, shift: false, direction, inline: true },
-  { action: 'tile', vkCode, win: true, shift: true, direction, inline: true },
+  { action: 'tile', vkCode, win: true, ctrl: false, shift: false, direction, inline: true },
+  { action: 'tile', vkCode, win: true, ctrl: false, shift: true, direction, inline: true },
 ])
 
+const DESKTOP_DIRECTIONS = [
+  [VK_LEFT, 'previous'],
+  [VK_RIGHT, 'next'],
+]
+
+const DESKTOP_SHORTCUTS = [
+  ...DESKTOP_DIRECTIONS.flatMap(([vkCode, direction]) => [
+    { action: 'switchDesktop', vkCode, win: true, ctrl: true, shift: false, direction },
+    { action: 'moveWindowToDesktop', vkCode, win: true, ctrl: true, shift: true, direction },
+  ]),
+  { action: 'newDesktop', vkCode: VK_D, win: true, ctrl: true },
+  { action: 'closeDesktop', vkCode: VK_F4, win: true, ctrl: true },
+]
+
 const SHELL_SHORTCUTS = Object.freeze([
+  ...DESKTOP_SHORTCUTS,
   ...TILE_SHORTCUTS,
   { action: 'openFileExplorer', vkCode: VK_E, win: true },
   { action: 'openSettings', vkCode: VK_I, win: true },
@@ -46,7 +63,9 @@ function modifierMatches(required, isHeld) {
 function shortcutForKey(vkCode, modifiers, shortcuts = SHELL_SHORTCUTS) {
   const candidates = shortcuts.filter((shortcut) => shortcut.vkCode === vkCode)
   return candidates.find((shortcut) =>
-    modifierMatches(shortcut.win, modifiers.isWinHeld) && modifierMatches(shortcut.shift, modifiers.isShiftHeld)
+    modifierMatches(shortcut.win, modifiers.isWinHeld) &&
+    modifierMatches(shortcut.ctrl, modifiers.isCtrlHeld) &&
+    modifierMatches(shortcut.shift, modifiers.isShiftHeld)
   ) ?? null
 }
 

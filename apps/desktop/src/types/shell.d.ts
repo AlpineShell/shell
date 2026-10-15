@@ -768,6 +768,7 @@ declare global {
 
   type TopbarItemId =
     | 'system-menu'
+    | 'desktops'
     | 'plugins-left'
     | 'notice'
     | 'launcher'
@@ -1188,6 +1189,24 @@ declare global {
 
   type WindowsColorMode = 'light' | 'dark'
 
+  interface VirtualDesktop {
+    id: string
+    name: string
+    windowCount: number
+  }
+
+  interface VirtualDesktopsState {
+    currentId: string
+    canCreate: boolean
+    desktops: VirtualDesktop[]
+  }
+
+  interface DesktopsFaceProps {
+    desktops: VirtualDesktop[]
+    currentId: string
+    darkText: boolean
+  }
+
   interface TimeZoneOption {
     id: string
     label: string
@@ -1506,6 +1525,7 @@ declare global {
     microphone: MicrophoneStatus
     tray: RidgeTrayPreviewData
     plugins: Record<RidgePluginSlot, RidgePluginWidget[]>
+    desktops: VirtualDesktopsState
   }
 
   interface RidgeItemPreviewProps {
@@ -1977,6 +1997,15 @@ declare global {
         initial: ThemeState
         get: () => Promise<ThemeState>
         onChanged: (callback: (theme: ThemeState) => void) => () => void
+      }
+      desktops: {
+        state: () => Promise<VirtualDesktopsState>
+        refresh: () => Promise<void>
+        switchTo: (id: string) => Promise<VirtualDesktopsState>
+        create: () => Promise<VirtualDesktopsState>
+        remove: (id: string) => Promise<VirtualDesktopsState>
+        rename: (id: string, name: string) => Promise<VirtualDesktopsState>
+        onChanged: (callback: (state: VirtualDesktopsState) => void) => () => void
       }
       dateTime: {
         state: () => Promise<DateTimeState>

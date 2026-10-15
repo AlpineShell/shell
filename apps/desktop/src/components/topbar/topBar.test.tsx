@@ -7,6 +7,7 @@ vi.mock('./windowSwitcherPanel', () => ({ default: () => null }))
 vi.mock('./displayModePanel', () => ({ default: () => null }))
 vi.mock('./noticeStrip', () => ({ default: () => null }))
 vi.mock('./systemMenu', () => ({ default: () => <i data-el="system-menu" /> }))
+vi.mock('./desktopsStatus', () => ({ default: () => <i data-el="desktops" /> }))
 vi.mock('./noticeStatus', () => ({ default: () => <i data-el="notice" /> }))
 vi.mock('./launcherTrigger', () => ({ default: () => <i data-el="launcher" /> }))
 vi.mock('./systemTray', () => ({ default: () => <i data-el="tray" /> }))
@@ -65,7 +66,7 @@ describe('top bar structure', () => {
       Array.from(row.querySelectorAll('i')).map((el) => el.getAttribute('data-el'))
     )
     expect(rows).toEqual([
-      ['system-menu', 'plugins-left'],
+      ['system-menu', 'desktops', 'plugins-left'],
       ['notice', 'launcher'],
       ['tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'],
     ])

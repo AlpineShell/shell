@@ -432,6 +432,7 @@ test failure too.
 | `windows-color-mode` | instant | Writes `AppsUseLightTheme` and `SystemUsesLightTheme` and broadcasts `ImmersiveColorSet`, so open apps repaint at once; picking the other mode reverses it. |
 | `ridge` | instant | A page-level entry. The Ridge page writes each move as it is made, and every move is undone by moving the item back; the settings in its callouts each declare their own. |
 | `ridge-item-system-menu` | instant | A search entry for the Power menu on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-desktops` | instant | A search entry for the Desktops dots on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-plugins-left` | instant | A search entry for the Left plugins group on Ridge. From settings search it opens the group's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-media` | instant | A search entry for Media on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-microphone` | instant | A search entry for the Microphone on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |

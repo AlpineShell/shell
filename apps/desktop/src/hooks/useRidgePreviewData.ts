@@ -3,6 +3,7 @@ import { composeTray } from '../components/topbar/tray/composeTray'
 import { useBattery } from './useBattery'
 import { useBluetooth } from './useBluetooth'
 import { useClockPrefs } from './useClockPrefs'
+import { useDesktops } from './useDesktops'
 import { useMediaSession } from './useMediaSession'
 import { useMediaVisualizer } from './useMediaVisualizer'
 import { useMicrophone } from './useMicrophone'
@@ -44,6 +45,7 @@ export function useRidgePreviewData(): RidgePreviewData {
   const microphone = useMicrophone()
   const tray = useTrayPreview()
   const plugins = useRidgePluginWidgets()
+  const desktops = useDesktops()
   return useMemo(
     () => ({
       color,
@@ -53,7 +55,8 @@ export function useRidgePreviewData(): RidgePreviewData {
       microphone,
       tray,
       plugins,
+      desktops,
     }),
-    [color, now, prefs, battery, bluetooth, network, playback, showVisualizer, microphone, tray, plugins]
+    [color, now, prefs, battery, bluetooth, network, playback, showVisualizer, microphone, tray, plugins, desktops]
   )
 }
