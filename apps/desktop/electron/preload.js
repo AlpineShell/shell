@@ -222,6 +222,7 @@ contextBridge.exposeInMainWorld('windowSwitcher', {
   onThumbnail: (callback) => {
     ipcRenderer.on('window-switcher/thumbnail', (_, data) => callback(data))
   },
+  reportLayout: (centers) => ipcRenderer.invoke('window-switcher/layout', centers),
 })
 
 contextBridge.exposeInMainWorld('displayMode', {

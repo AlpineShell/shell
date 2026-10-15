@@ -1,7 +1,17 @@
-const { VK_TAB, VK_ESCAPE, isAltKey } = require('./virtualKeys')
+const { VK_TAB, VK_ESCAPE, VK_RETURN, VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN, isAltKey } = require('./virtualKeys')
 
 const THUMBNAIL_STALE_MS = 30000
 const WS_EX_TOOLWINDOW = 0x00000080
+const ROW_TOLERANCE_PX = 8
+
+const ARROW_DIRECTIONS = new Map([
+  [VK_LEFT, 'left'],
+  [VK_RIGHT, 'right'],
+  [VK_UP, 'up'],
+  [VK_DOWN, 'down'],
+])
+
+const QUEUED_STEP_ACTIONS = { left: 'queueBackward', right: 'queueForward' }
 
 function initialSelection(windowCount, pendingSteps) {
   if (windowCount <= 0) return 0
@@ -52,10 +62,49 @@ function escapeKeyAction(state) {
   return { action: 'hide', altIsDown: false, swallow: true }
 }
 
+function arrowKeyAction(direction, state) {
+  if (state.active) return { action: 'move', direction, altIsDown: state.altIsDown, swallow: true }
+  if (state.building) return { action: QUEUED_STEP_ACTIONS[direction] ?? null, altIsDown: state.altIsDown, swallow: true }
+  return passKey(state.altIsDown)
+}
+
+function enterKeyAction(state) {
+  if (!state.active) return passKey(state.altIsDown)
+  return { action: 'commit', altIsDown: state.altIsDown, swallow: true }
+}
+
+function groupIntoRows(cardCenters) {
+  const rows = []
+  cardCenters.forEach((center, index) => {
+    const row = rows.find((candidate) => Math.abs(candidate.y - center.y) <= ROW_TOLERANCE_PX)
+    if (row) row.indices.push(index)
+    else rows.push({ y: center.y, indices: [index] })
+  })
+  return rows.sort((a, b) => a.y - b.y)
+}
+
+function nearestInRow(indices, x, cardCenters) {
+  return indices.reduce((best, index) => (Math.abs(cardCenters[index].x - x) < Math.abs(cardCenters[best].x - x) ? index : best))
+}
+
+function selectionAfterMove(index, direction, windowCount, cardCenters) {
+  if (windowCount <= 0) return 0
+  if (direction === 'left') return (index - 1 + windowCount) % windowCount
+  if (direction === 'right') return (index + 1) % windowCount
+  if (!Array.isArray(cardCenters) || cardCenters.length !== windowCount) return index
+  const rows = groupIntoRows(cardCenters)
+  const rowIndex = rows.findIndex((row) => row.indices.includes(index))
+  const target = rows[rowIndex + (direction === 'down' ? 1 : -1)]
+  return target ? nearestInRow(target.indices, cardCenters[index].x, cardCenters) : index
+}
+
 function switcherKeyAction(keyEvent, state) {
   if (keyEvent.vkCode === VK_TAB && keyEvent.isKeyDown) return tabKeyAction(state)
   if (isAltKey(keyEvent.vkCode)) return altKeyAction(keyEvent, state)
   if (keyEvent.vkCode === VK_ESCAPE && keyEvent.isKeyDown) return escapeKeyAction(state)
+  if (keyEvent.vkCode === VK_RETURN && keyEvent.isKeyDown) return enterKeyAction(state)
+  const direction = ARROW_DIRECTIONS.get(keyEvent.vkCode)
+  if (direction && keyEvent.isKeyDown) return arrowKeyAction(direction, state)
   return passKey(state.altIsDown)
 }
 
@@ -66,4 +115,5 @@ module.exports = {
   isThumbnailStale,
   isSwitcherWindow,
   switcherKeyAction,
+  selectionAfterMove,
 }

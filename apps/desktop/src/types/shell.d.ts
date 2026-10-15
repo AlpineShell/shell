@@ -259,6 +259,11 @@ declare global {
     apps: string[]
   }
 
+  interface SwitcherCardCenter {
+    x: number
+    y: number
+  }
+
   interface SwitcherWindow {
     hwnd: number
     title: string
@@ -1910,6 +1915,7 @@ declare global {
       onHide: (callback: () => void) => void
       onSelectionChanged: (callback: (index: number) => void) => void
       onThumbnail: (callback: (data: SwitcherThumbnailPayload) => void) => void
+      reportLayout: (centers: SwitcherCardCenter[]) => Promise<void>
     }
     displayMode: {
       onShow: (callback: (data: DisplayModePickerPayload) => void) => () => void
