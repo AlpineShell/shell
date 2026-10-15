@@ -11,7 +11,7 @@ import { SETTINGS_SEARCH_TARGETS } from '../../settings/settingsSearch'
 import { SETTINGS_ROUTES, SETTINGS_ROUTE_COVERAGE } from './settingsRoutes'
 import { registryPageRendersEntry } from './registryRowContent'
 
-const ROUTES_FOLDED_INTO_RIDGE = ['appearance', 'calendar']
+const ROUTES_FOLDED_INTO_RIDGE = ['calendar']
 
 const declaredRoutes = SETTINGS_PAGES.map((page) => page.route).filter((route): route is string => route !== null)
 

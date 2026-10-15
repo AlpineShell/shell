@@ -49,6 +49,7 @@ import {
   Snowflake,
   Sparkles,
   Sun,
+  SunMoon,
   Trash2,
   Volume2,
   VolumeX,
@@ -90,7 +91,6 @@ const RIDGE_KEYWORDS = ['ridge', 'top bar', 'topbar', 'menu bar', 'status bar', 
 
 const PAGES_FOLDED_INTO_RIDGE = [
   'system tray',
-  'appearance',
   'color',
   'colour',
   'ridge color',
@@ -147,6 +147,17 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     order: 2,
   },
   {
+    id: 'appearance',
+    route: 'appearance',
+    label: 'Appearance',
+    description: 'Light or dark mode for Windows and your apps',
+    keywords: ['appearance', 'dark mode', 'light mode', 'theme', 'color mode', 'colour mode'],
+    icon: SunMoon,
+    section: 'personalization',
+    kind: 'settings',
+    order: 3,
+  },
+  {
     id: 'search',
     route: 'search',
     label: 'Search',
@@ -155,7 +166,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Search,
     section: 'personalization',
     kind: 'settings',
-    order: 3,
+    order: 4,
   },
   {
     id: 'input',
@@ -367,6 +378,10 @@ function toCalendarDayCount(value: unknown): CalendarDayCount {
   return value === 2 || value === 3 ? value : 1
 }
 
+function toWindowsColorMode(value: unknown): WindowsColorMode {
+  return value === 'dark' ? 'dark' : 'light'
+}
+
 function toTilingMode(value: unknown): TilingMode {
   return value === 'dynamic' ? 'dynamic' : 'snap'
 }
@@ -527,6 +542,29 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     order: 0,
     applies: 'instant',
     control: { kind: 'wallpaper' },
+  },
+  {
+    id: 'windows-color-mode',
+    label: 'Color mode',
+    description: 'Choose whether Windows and your apps use light or dark colors.',
+    keywords: ['dark mode', 'light mode', 'dark theme', 'light theme', 'color mode', 'colour mode', 'night mode', 'windows theme'],
+    icon: SunMoon,
+    page: 'appearance',
+    group: 'Windows',
+    order: 0,
+    applies: 'instant',
+    defaultValue: 'light',
+    validate: toWindowsColorMode,
+    read: () => window.shell.windows.colorMode(),
+    write: (value: string | number) => window.shell.windows.setColorMode(toWindowsColorMode(value)),
+    subscribe: (listener: (value: string | number) => void) => window.shell.windows.onColorModeChanged(listener),
+    control: {
+      kind: 'segmented',
+      options: [
+        { value: 'light', label: 'Light' },
+        { value: 'dark', label: 'Dark' },
+      ],
+    },
   },
 
   {

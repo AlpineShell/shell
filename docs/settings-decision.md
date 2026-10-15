@@ -429,6 +429,7 @@ test failure too.
 | `displays` | draft | The one change that can leave you unable to undo it, because the undo is on a screen that just went black. Edit a draft, press Apply, and a 15-second countdown reverts unless you confirm — `displaysPage.tsx` against `applyDisplayLayout` / `keepDisplayLayout` / `revertDisplayLayout`. This is the model for `draft`. |
 | `brightness` | instant | A slider you can see the effect of while dragging, and drag back. |
 | `wallpaper` | instant | Visible immediately, reversible by picking another. |
+| `windows-color-mode` | instant | Writes `AppsUseLightTheme` and `SystemUsesLightTheme` and broadcasts `ImmersiveColorSet`, so open apps repaint at once; picking the other mode reverses it. |
 | `ridge` | instant | A page-level entry. The Ridge page writes each move as it is made, and every move is undone by moving the item back; the settings in its callouts each declare their own. |
 | `ridge-item-system-menu` | instant | A search entry for the Power menu on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-plugins-left` | instant | A search entry for the Left plugins group on Ridge. From settings search it opens the group's callout; from Search it opens Ridge without one. It writes nothing itself. |
