@@ -494,6 +494,7 @@ contextBridge.exposeInMainWorld('shell', {
     },
     powerAction: (action) => ipcRenderer.invoke('system/power-action', action),
     powerConfirm: () => ipcRenderer.invoke('system/power-confirm-get'),
+    hibernateAvailable: () => ipcRenderer.invoke('system/hibernate-available'),
     setPowerConfirm: (value) => ipcRenderer.invoke('system/power-confirm-set', value),
     onPowerConfirmChanged: (callback) => {
       const handler = (_, data) => callback(data)

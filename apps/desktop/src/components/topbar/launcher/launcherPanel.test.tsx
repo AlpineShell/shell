@@ -27,7 +27,7 @@ let shell: {
 }
 let clipboardWrites: string[]
 
-function stubBridges({ catalog = [] as LauncherItem[], openApps = [] as OpenApp[] } = {}) {
+function stubBridges({ catalog = [] as LauncherItem[], openApps = [] as OpenApp[], hibernateAvailable = false } = {}) {
   const unsubscribe = () => () => {}
   launcher = {
     hide: vi.fn(),
@@ -77,6 +77,7 @@ function stubBridges({ catalog = [] as LauncherItem[], openApps = [] as OpenApp[
     system: {
       powerAction: vi.fn(() => Promise.resolve()),
       powerConfirm: vi.fn(() => Promise.resolve(true)),
+      hibernateAvailable: vi.fn(() => Promise.resolve(hibernateAvailable)),
       onPowerConfirmChanged: vi.fn(unsubscribe),
     },
     run: {
@@ -211,6 +212,20 @@ describe("LauncherPanel", () => {
     expect(screen.getByRole("listbox").textContent).toContain("Confirm shut down")
     press(input, "Enter")
     expect(shell.system.powerAction).toHaveBeenCalledWith("shutdown")
+  })
+
+  it("hibernates on Enter when Windows allows hibernation", async () => {
+    stubBridges({ hibernateAvailable: true })
+    const input = await openLauncher()
+    await type(input, "hibernate")
+    press(input, "Enter")
+    expect(shell.system.powerAction).toHaveBeenCalledWith("hibernate")
+  })
+
+  it("leaves hibernate out when Windows has hibernation turned off", async () => {
+    const input = await openLauncher()
+    await type(input, "hibernate")
+    expect(screen.queryByRole("listbox")?.textContent ?? "").not.toContain("Hibernate")
   })
 
   it("moves through results with the arrow keys", async () => {

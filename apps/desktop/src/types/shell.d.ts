@@ -1652,7 +1652,7 @@ declare global {
     minScore: number
   }
 
-  type PowerCommandAction = 'shutdown' | 'restart' | 'logout' | 'lock' | 'sleep'
+  type PowerCommandAction = 'shutdown' | 'restart' | 'logout' | 'lock' | 'sleep' | 'hibernate'
 
   type LauncherCommandRun =
     | { kind: 'window-command'; action: 'minimize' | 'maximize' | 'close' }
@@ -2041,6 +2041,7 @@ declare global {
         onDisplaysChanged: (callback: (data: DisplayInfo[]) => void) => () => void
         powerAction: (action: PowerCommandAction) => Promise<void>
         powerConfirm: () => Promise<boolean>
+        hibernateAvailable: () => Promise<boolean>
         setPowerConfirm: (value: boolean) => Promise<boolean>
         onPowerConfirmChanged: (callback: (value: boolean) => void) => () => void
         onResume: (callback: () => void) => () => void

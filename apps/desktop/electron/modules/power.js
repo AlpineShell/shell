@@ -23,10 +23,24 @@ function lockWorkstation() {
   if (!LockWorkStation()) console.error('[power] LockWorkStation failed')
 }
 
-function suspendToSleep() {
+function loadPowrprof() {
   const koffi = require('koffi')
-  const SetSuspendState = koffi.load('powrprof.dll').func('__stdcall', 'SetSuspendState', 'uint8', ['uint8', 'uint8', 'uint8'])
-  if (!SetSuspendState(0, 0, 0)) console.error('[power] SetSuspendState failed')
+  return koffi.load('powrprof.dll')
+}
+
+function suspend({ hibernate }) {
+  const SetSuspendState = loadPowrprof().func('__stdcall', 'SetSuspendState', 'uint8', ['uint8', 'uint8', 'uint8'])
+  if (!SetSuspendState(hibernate ? 1 : 0, 0, 0)) console.error('[power] SetSuspendState failed')
+}
+
+function isHibernateAllowed() {
+  try {
+    const IsPwrHibernateAllowed = loadPowrprof().func('__stdcall', 'IsPwrHibernateAllowed', 'uint8', [])
+    return !!IsPwrHibernateAllowed()
+  } catch (e) {
+    console.error('[power] IsPwrHibernateAllowed failed:', e.message)
+    return false
+  }
 }
 
 function powerAction(action) {
@@ -44,7 +58,10 @@ function powerAction(action) {
       lockWorkstation()
       break
     case 'sleep':
-      suspendToSleep()
+      suspend({ hibernate: false })
+      break
+    case 'hibernate':
+      if (isHibernateAllowed()) suspend({ hibernate: true })
       break
   }
 }
@@ -94,6 +111,7 @@ module.exports = {
   handlers: {
     'system/power-action': (_event, action) => powerAction(action),
     'system/power-confirm-get': () => confirmActions,
+    'system/hibernate-available': () => isHibernateAllowed(),
     'system/power-confirm-set': (_event, value) => setConfirmActions(value),
   },
 

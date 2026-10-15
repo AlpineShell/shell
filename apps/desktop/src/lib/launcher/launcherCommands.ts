@@ -1,4 +1,4 @@
-import { Camera, Lock, LogOut, Maximize2, Minimize2, Moon, Power, RotateCcw, SquareStack, Layers, X } from "lucide-react"
+import { Camera, Lock, LogOut, Maximize2, Minimize2, Moon, Power, RotateCcw, Snowflake, SquareStack, Layers, X } from "lucide-react"
 import { windowCommandResultKey } from "../launcherRanking"
 
 function commandKey(id: string): string {
@@ -61,6 +61,14 @@ export const LAUNCHER_COMMANDS: readonly LauncherCommand[] = [
     keywords: ["sleep", "suspend", "standby"],
     icon: Moon,
     run: { kind: "power", action: "sleep", confirm: false },
+  },
+  {
+    id: "hibernate",
+    rankKey: commandKey("hibernate"),
+    label: "Hibernate",
+    keywords: ["hibernate", "hibernation"],
+    icon: Snowflake,
+    run: { kind: "power", action: "hibernate", confirm: false },
   },
   {
     id: "shutdown",
