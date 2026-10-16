@@ -5,7 +5,7 @@ export default function DesktopLinesFace({ desktops, darkText, onSelect, onClose
     const line = darkText ? "bg-black" : "bg-white";
 
     return (
-        <div className="flex items-center h-4.5 px-1">
+        <div className="flex items-center h-4.5">
             {desktopIndexes(desktops.count).map((index) => (
                 <DesktopsFacePart
                     key={index}
