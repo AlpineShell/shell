@@ -260,6 +260,11 @@ declare global {
     apps: string[]
   }
 
+  interface VirtualDesktopsState {
+    count: number
+    current: number
+  }
+
   interface SwitcherCardCenter {
     x: number
     y: number
@@ -770,6 +775,7 @@ declare global {
   type TopbarItemId =
     | 'system-menu'
     | 'plugins-left'
+    | 'desktops'
     | 'notice'
     | 'launcher'
     | 'tray'
@@ -896,6 +902,13 @@ declare global {
   interface MicrophoneFaceProps {
     apps: string[]
     darkText: boolean
+  }
+
+  interface DesktopsFaceProps {
+    desktops: VirtualDesktopsState
+    darkText: boolean
+    onSelect?: (index: number) => void
+    onAdd?: () => void
   }
 
   interface StatusFaceProps {
@@ -1505,6 +1518,7 @@ declare global {
     status: RidgeStatusPreviewData
     media: RidgeMediaPreviewData
     microphone: MicrophoneStatus
+    desktops: VirtualDesktopsState
     tray: RidgeTrayPreviewData
     plugins: Record<RidgePluginSlot, RidgePluginWidget[]>
   }
@@ -1986,6 +2000,13 @@ declare global {
         setAutoTime: (on: boolean) => Promise<DateTimeChangeResult>
         syncNow: () => Promise<DateTimeChangeResult>
         onChanged: (callback: (state: DateTimeState) => void) => () => void
+      }
+      desktops: {
+        state: () => Promise<VirtualDesktopsState>
+        switchTo: (index: number) => Promise<VirtualDesktopsState>
+        add: () => Promise<VirtualDesktopsState>
+        close: () => Promise<VirtualDesktopsState>
+        onChanged: (callback: (data: VirtualDesktopsState) => void) => () => void
       }
       windows: {
         wallpaper: () => Promise<string | null>

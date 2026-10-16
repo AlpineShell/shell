@@ -13,6 +13,7 @@ import { useTopbarColor } from './useTopbarColor'
 import { useTrayIcons } from './useTrayIcons'
 import { useTrayLayout } from './useTrayLayout'
 import { useTraySettings } from './useTraySettings'
+import { useVirtualDesktops } from './useVirtualDesktops'
 
 function useMediaPlayback(): MediaPlayback {
   const { title, artist, appName, appIcon, playing, thumbnail, thumbnailType } = useMediaSession()
@@ -42,6 +43,7 @@ export function useRidgePreviewData(): RidgePreviewData {
   const playback = useMediaPlayback()
   const showVisualizer = useMediaVisualizer()
   const microphone = useMicrophone()
+  const desktops = useVirtualDesktops()
   const tray = useTrayPreview()
   const plugins = useRidgePluginWidgets()
   return useMemo(
@@ -51,9 +53,10 @@ export function useRidgePreviewData(): RidgePreviewData {
       status: { battery, bluetooth, network },
       media: { playback, showVisualizer },
       microphone,
+      desktops,
       tray,
       plugins,
     }),
-    [color, now, prefs, battery, bluetooth, network, playback, showVisualizer, microphone, tray, plugins]
+    [color, now, prefs, battery, bluetooth, network, playback, showVisualizer, microphone, desktops, tray, plugins]
   )
 }

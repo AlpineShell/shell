@@ -22,6 +22,7 @@ import {
   House,
   Keyboard,
   Languages,
+  Layers,
   LayoutDashboard,
   LayoutGrid,
   Leaf,
@@ -448,6 +449,11 @@ const RIDGE_ITEM_SEARCH: Record<
     description: 'Move or hide the widgets your plugins put on the left of Ridge.',
     keywords: ['left plugins', 'plugin widgets', 'widgets'],
     icon: Puzzle,
+  },
+  desktops: {
+    description: 'Move or hide the desktop numbers on Ridge. Win+Ctrl+Left and Right switch desktops, Win+Ctrl+D adds one and Win+Ctrl+F4 closes it.',
+    keywords: ['desktops', 'virtual desktops', 'workspaces', 'desktop switcher', 'spaces'],
+    icon: Layers,
   },
   notice: {
     description: 'Move or hide the place on Ridge where Alpine Shell shows its notices, such as an update that is ready.',

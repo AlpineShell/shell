@@ -19,7 +19,7 @@ const visibleIdsInSlot = (items: TopbarLayoutItem[], slot: TopbarSlot) =>
 describe('default model', () => {
   it('reproduces the shipped bar when nothing is stored', () => {
     const items = resolveTopbarLayout(null)
-    expect(visibleIdsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left'])
+    expect(visibleIdsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left', 'desktops'])
     expect(visibleIdsInSlot(items, 'center')).toEqual(['launcher'])
     expect(visibleIdsInSlot(items, 'right')).toEqual(['tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'])
   })
@@ -62,7 +62,7 @@ describe('ordering', () => {
 
   it('puts an unmentioned item that opens its slot in the catalogue at the front', () => {
     const items = resolveTopbarLayout({ slots: { left: ['plugins-left'], center: [], right: [] }, hidden: [] })
-    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left'])
+    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left', 'desktops'])
   })
 
   it('anchors unmentioned items to the catalogue rather than the end of the slot', () => {
@@ -75,7 +75,7 @@ describe('ordering', () => {
       slots: { left: ['weather', 'plugins-left', 'system-menu'], center: [], right: [] },
       hidden: [],
     })
-    expect(idsInSlot(items, 'left')).toEqual(['plugins-left', 'system-menu'])
+    expect(idsInSlot(items, 'left')).toEqual(['plugins-left', 'desktops', 'system-menu'])
   })
 
   it('keeps the first placement when an id is stored twice', () => {
@@ -94,7 +94,7 @@ describe('ordering', () => {
   it('survives a malformed stored layout', () => {
     const malformed = { slots: { left: 'nope', center: null, right: [7, 'clock'] }, hidden: 'none' }
     const items = resolveTopbarLayout(malformed as unknown as StoredTopbarLayout)
-    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left'])
+    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-left', 'desktops'])
     expect(idsInSlot(items, 'right')).toEqual(['tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'])
     expect(items.every((item) => item.visible)).toBe(true)
   })
@@ -103,7 +103,7 @@ describe('ordering', () => {
 describe('plugin groups', () => {
   it('places a plugin group on whichever side it is stored on', () => {
     const items = resolveTopbarLayout({ slots: { left: ['plugins-right'], center: ['plugins-left'], right: [] }, hidden: [] })
-    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'plugins-right'])
+    expect(idsInSlot(items, 'left')).toEqual(['system-menu', 'desktops', 'plugins-right'])
     expect(idsInSlot(items, 'center')).toEqual(['plugins-left', 'launcher'])
     expect(idsInSlot(items, 'right')).not.toContain('plugins-right')
   })
@@ -145,7 +145,7 @@ describe('serialisation', () => {
 
   it('stores every slot and the hidden set', () => {
     const stored = storeTopbarLayout(resolveTopbarLayout({ slots: { left: [], center: [], right: [] }, hidden: ['plugins-left'] }))
-    expect(stored.slots.left).toEqual(['system-menu', 'plugins-left'])
+    expect(stored.slots.left).toEqual(['system-menu', 'plugins-left', 'desktops'])
     expect(stored.slots.center).toEqual(['launcher'])
     expect(stored.hidden).toEqual(['plugins-left'])
   })

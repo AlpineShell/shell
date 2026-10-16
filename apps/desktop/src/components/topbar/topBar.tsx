@@ -6,6 +6,7 @@ import { ThemeProvider } from "../themeContext";
 import { RidgeBackdropProvider } from "./ridgeBackdrop";
 import MediaStatus from "./status/mediaStatus";
 import MicrophoneStatus from "./status/microphoneStatus";
+import DesktopSwitcher from "./desktopSwitcher";
 import SystemTray from "./systemTray";
 import LauncherTrigger from "./launcherTrigger";
 import LauncherPanel from "./launcher/launcherPanel";
@@ -30,6 +31,7 @@ const noop = () => {};
 const TOPBAR_ELEMENTS: Record<TopbarItemId, () => ReactNode> = {
     "system-menu": () => <SystemMenu />,
     "plugins-left": () => <PluginSlot slot="left" />,
+    desktops: () => <DesktopSwitcher />,
     notice: () => <NoticeStatus />,
     launcher: () => <LauncherTrigger />,
     tray: () => <SystemTray />,

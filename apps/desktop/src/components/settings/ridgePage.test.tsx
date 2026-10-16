@@ -36,6 +36,7 @@ const PREVIEW_READS: Record<string, unknown> = {
   'shell.network.wifiSignal': LIVE.status.network,
   'shell.media.session': LIVE.media.playback,
   'shell.media.microphone': LIVE.microphone,
+  'shell.desktops.state': LIVE.desktops,
   'shell.tray.icons': [...LIVE.tray.visible, ...LIVE.tray.overflow],
   'shell.tray.layout': { order: [], hidden: [] },
   'shell.tray.display': { showOnAllMonitors: false, primaryDisplayId: 1 },
@@ -58,6 +59,7 @@ const SUBSCRIPTIONS = [
   'shell.network.onWifiSignalChanged',
   'shell.media.onSessionChanged',
   'shell.media.onMicrophoneChanged',
+  'shell.desktops.onChanged',
   'shell.tray.onIconsChanged',
   'shell.tray.onLayoutChanged',
   'shell.tray.onSettingsChanged',
@@ -637,6 +639,10 @@ describe('the callout on the Ridge page', () => {
     const callout = await openCallout('Left plugins')
 
     fireEvent.click(within(callout).getByRole('button', { name: 'Move later' }))
+    await settle()
+    expect(lastWrittenLayout(spy('topbar.setLayout')).slots.left).toEqual(['system-menu', 'desktops', 'plugins-left'])
+
+    fireEvent.click(within(calloutFor('Left plugins')).getByRole('button', { name: 'Move later' }))
     await settle()
 
     expect(lastWrittenLayout(spy('topbar.setLayout')).slots.center).toEqual(['launcher', 'plugins-left'])

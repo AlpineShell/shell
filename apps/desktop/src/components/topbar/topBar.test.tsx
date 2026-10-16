@@ -12,6 +12,7 @@ vi.mock('./launcherTrigger', () => ({ default: () => <i data-el="launcher" /> })
 vi.mock('./systemTray', () => ({ default: () => <i data-el="tray" /> }))
 vi.mock('./status/mediaStatus', () => ({ default: () => <i data-el="media" /> }))
 vi.mock('./status/microphoneStatus', () => ({ default: () => <i data-el="microphone" /> }))
+vi.mock('./desktopSwitcher', () => ({ default: () => <i data-el="desktops" /> }))
 vi.mock('./status/statusIndicator', () => ({ default: () => <i data-el="status" /> }))
 vi.mock('./clock', () => ({ default: () => <i data-el="clock" /> }))
 vi.mock('./pluginSlot', () => ({ default: ({ slot }: { slot: string }) => <i data-el={`plugins-${slot}`} /> }))
@@ -65,7 +66,7 @@ describe('top bar structure', () => {
       Array.from(row.querySelectorAll('i')).map((el) => el.getAttribute('data-el'))
     )
     expect(rows).toEqual([
-      ['system-menu', 'plugins-left'],
+      ['system-menu', 'plugins-left', 'desktops'],
       ['notice', 'launcher'],
       ['tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'],
     ])

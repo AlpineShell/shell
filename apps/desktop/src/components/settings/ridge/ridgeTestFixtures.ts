@@ -78,6 +78,7 @@ export function liveRidgePreviewData(): RidgePreviewData {
       showVisualizer: false,
     },
     microphone: { active: true, apps: ['Zoom', 'Teams'] },
+    desktops: { count: 2, current: 0 },
     tray: {
       visible: [ridgeTrayIcon('dropbox'), ridgeTrayIcon('onedrive')],
       overflow: [ridgeTrayIcon('steam')],

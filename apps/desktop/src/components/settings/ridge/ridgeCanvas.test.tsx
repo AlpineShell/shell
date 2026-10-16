@@ -247,6 +247,7 @@ describe('RidgeCanvas from the keyboard', () => {
     pressKey('Power menu', 'ArrowRight')
     pressKey('Power menu', 'ArrowRight')
     pressKey('Power menu', 'ArrowRight')
+    pressKey('Power menu', 'ArrowRight')
     expect(topbar.setLayout).not.toHaveBeenCalled()
     pressSpace('Power menu')
     await settle()
@@ -254,7 +255,7 @@ describe('RidgeCanvas from the keyboard', () => {
     expect(topbar.setLayout).toHaveBeenCalledTimes(1)
     expect(writtenLayout(topbar.setLayout)).toEqual({
       slots: {
-        left: ['plugins-left'],
+        left: ['plugins-left', 'desktops'],
         center: ['launcher'],
         right: ['system-menu', 'tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'],
       },
@@ -269,6 +270,7 @@ describe('RidgeCanvas from the keyboard', () => {
 
     chip('Power menu').focus()
     pressSpace('Power menu')
+    pressKey('Power menu', 'ArrowRight')
     pressKey('Power menu', 'ArrowRight')
     pressKey('Power menu', 'ArrowRight')
 
@@ -302,9 +304,9 @@ describe('RidgeCanvas from the keyboard', () => {
     await settle()
 
     expect(topbar.setLayout).not.toHaveBeenCalled()
-    expect(chipsIn('left')).toEqual(['Power menu', 'Weather'])
+    expect(chipsIn('left')).toEqual(['Power menu', 'Weather', 'Desktops'])
     expect(document.activeElement).toBe(chip('Power menu'))
-    expect(announced()).toBe('Power menu returned to position 1 of 2 on the left.')
+    expect(announced()).toBe('Power menu returned to position 1 of 3 on the left.')
   })
 
   it('hides the Search button on Delete by turning off only its own flag', async () => {
@@ -330,12 +332,13 @@ describe('RidgeCanvas from the keyboard', () => {
 
     pressSpace('Weather')
     pressKey('Weather', 'ArrowRight')
+    pressKey('Weather', 'ArrowRight')
     expect(chipsIn('center')).toEqual(['Weather'])
     pressSpace('Weather')
     await settle()
 
     expect(topbar.setLayout).toHaveBeenCalledTimes(1)
-    expect(writtenLayout(topbar.setLayout).slots.left).toEqual(['system-menu'])
+    expect(writtenLayout(topbar.setLayout).slots.left).toEqual(['system-menu', 'desktops'])
     expect(writtenLayout(topbar.setLayout).slots.center).toEqual(['launcher', 'plugins-left'])
   })
 
@@ -343,8 +346,8 @@ describe('RidgeCanvas from the keyboard', () => {
     installBridges()
     await mount(<CanvasHarness />)
 
-    chip('Weather').focus()
-    pressKey('Weather', 'ArrowRight')
+    chip('Desktops').focus()
+    pressKey('Desktops', 'ArrowRight')
 
     expect(document.activeElement).toBe(chip('System tray'))
     expect(screen.getAllByRole('button').filter((button) => button.tabIndex === 0)).toEqual([chip('System tray')])
@@ -610,11 +613,11 @@ describe('RidgeCanvas layout', () => {
   it('draws a plugin group only while a live widget fills it', async () => {
     installBridges()
     await mount(<CanvasHarness />)
-    expect(chipsIn('left')).toEqual(['Power menu', 'Weather'])
+    expect(chipsIn('left')).toEqual(['Power menu', 'Weather', 'Desktops'])
 
     act(() => pluginRegistry.clearWidgets())
 
-    expect(chipsIn('left')).toEqual(['Power menu'])
+    expect(chipsIn('left')).toEqual(['Power menu', 'Desktops'])
     expect(chipsIn('right')).not.toContain('Notes')
   })
 

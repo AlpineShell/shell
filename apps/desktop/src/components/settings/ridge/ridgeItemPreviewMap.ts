@@ -1,5 +1,6 @@
 import {
   ClockPreview,
+  DesktopsPreview,
   LauncherPreview,
   LeftPluginsPreview,
   MediaPreview,
@@ -14,6 +15,7 @@ import {
 export const RIDGE_ITEM_PREVIEWS: Record<TopbarItemId, RidgeItemPreview> = {
   'system-menu': SystemMenuPreview,
   'plugins-left': LeftPluginsPreview,
+  desktops: DesktopsPreview,
   notice: NoticePreview,
   launcher: LauncherPreview,
   tray: TrayPreview,
