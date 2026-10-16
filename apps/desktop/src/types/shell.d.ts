@@ -776,6 +776,7 @@ declare global {
     | 'system-menu'
     | 'plugins-left'
     | 'desktops'
+    | 'desktop-lines'
     | 'notice'
     | 'launcher'
     | 'tray'
@@ -792,6 +793,7 @@ declare global {
     slot: TopbarSlot
     kind: TopbarItemKind
     label: string
+    hiddenByDefault?: boolean
   }
 
   interface TopbarLayoutItem {
@@ -904,10 +906,19 @@ declare global {
     darkText: boolean
   }
 
+  interface DesktopsFacePartProps {
+    label: string
+    className: string
+    onPress?: () => void
+    onMiddlePress?: () => void
+    children: import('react').ReactNode
+  }
+
   interface DesktopsFaceProps {
     desktops: VirtualDesktopsState
     darkText: boolean
     onSelect?: (index: number) => void
+    onClose?: (index: number) => void
     onAdd?: () => void
   }
 
@@ -2005,7 +2016,10 @@ declare global {
         state: () => Promise<VirtualDesktopsState>
         switchTo: (index: number) => Promise<VirtualDesktopsState>
         add: () => Promise<VirtualDesktopsState>
-        close: () => Promise<VirtualDesktopsState>
+        close: (index?: number) => Promise<VirtualDesktopsState>
+        onlyWithSeveral: () => Promise<boolean>
+        setOnlyWithSeveral: (value: boolean) => Promise<boolean>
+        onOnlyWithSeveralChanged: (callback: (value: boolean) => void) => () => void
         onChanged: (callback: (data: VirtualDesktopsState) => void) => () => void
       }
       windows: {

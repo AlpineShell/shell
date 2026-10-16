@@ -41,9 +41,12 @@ function planAddDesktop(state) {
   return { stashed: [...state.stashed, []], current: state.current }
 }
 
-function planCloseDesktop(state, visibleTopFirst, isAlive) {
-  if (state.stashed.length <= 1) return null
-  const neighbour = state.current > 0 ? state.current - 1 : 1
+function neighbourOf(index) {
+  return index > 0 ? index - 1 : 1
+}
+
+function planCloseCurrentDesktop(state, visibleTopFirst, isAlive) {
+  const neighbour = neighbourOf(state.current)
   const stashed = forgetVisibleAndClosed(state.stashed, visibleTopFirst, isAlive)
   const reveal = stashed[neighbour]
   stashed[neighbour] = []
@@ -54,6 +57,28 @@ function planCloseDesktop(state, visibleTopFirst, isAlive) {
     show: reveal.map((window) => window.hwnd).reverse(),
     activate: visibleTopFirst.length > 0 ? visibleTopFirst[0].hwnd : (reveal.length > 0 ? reveal[0].hwnd : null),
   }
+}
+
+function planCloseOtherDesktop(state, index, visibleTopFirst, isAlive) {
+  const neighbour = neighbourOf(index)
+  const stashed = forgetVisibleAndClosed(state.stashed, visibleTopFirst, isAlive)
+  const leaving = stashed[index]
+  const joinsCurrent = neighbour === state.current
+  if (!joinsCurrent) stashed[neighbour] = [...stashed[neighbour], ...leaving]
+  stashed.splice(index, 1)
+  return {
+    state: { stashed, current: state.current > index ? state.current - 1 : state.current },
+    hide: [],
+    show: joinsCurrent ? leaving.map((window) => window.hwnd).reverse() : [],
+    activate: null,
+  }
+}
+
+function planCloseDesktop(state, index, visibleTopFirst, isAlive) {
+  if (state.stashed.length <= 1) return null
+  if (!Number.isInteger(index) || index < 0 || index >= state.stashed.length) return null
+  if (index === state.current) return planCloseCurrentDesktop(state, visibleTopFirst, isAlive)
+  return planCloseOtherDesktop(state, index, visibleTopFirst, isAlive)
 }
 
 function planMoveWindow(state, moving, direction, visibleTopFirst, isAlive) {

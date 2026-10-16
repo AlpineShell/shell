@@ -24,18 +24,39 @@ const ShowWindowAsync = user32.func('__stdcall', 'ShowWindowAsync', 'int', ['uin
 const SW_HIDE = 0
 const SW_SHOWNA = 8
 const STASH_FILE = 'virtual-desktops-hidden.json'
+const PREFS_FILE = 'virtual-desktops-prefs.json'
 const ACTIVATE_AFTER_SHOW_MS = 50
 
 let state = initialDesktops()
+let onlyWithSeveral = false
 let broadcastRef = null
-let stashPath = null
+
+function userDataFile(name) {
+  const { app } = require('electron')
+  return path.join(app.getPath('userData'), name)
+}
 
 function getStashPath() {
-  if (!stashPath) {
-    const { app } = require('electron')
-    stashPath = path.join(app.getPath('userData'), STASH_FILE)
+  return userDataFile(STASH_FILE)
+}
+
+function loadPrefs() {
+  try {
+    onlyWithSeveral = JSON.parse(fs.readFileSync(userDataFile(PREFS_FILE), 'utf8')).onlyWithSeveral === true
+  } catch {
+    onlyWithSeveral = false
   }
-  return stashPath
+}
+
+function setOnlyWithSeveral(value) {
+  onlyWithSeveral = value === true
+  try {
+    fs.writeFileSync(userDataFile(PREFS_FILE), JSON.stringify({ onlyWithSeveral }))
+  } catch (e) {
+    console.error('[virtualDesktops] prefs save error:', e.message)
+  }
+  if (broadcastRef) broadcastRef('desktops/only-with-several-changed', onlyWithSeveral)
+  return onlyWithSeveral
 }
 
 function windowRecord(hwnd) {
@@ -97,8 +118,8 @@ function addDesktop() {
   return switchTo(state.stashed.length - 1)
 }
 
-function closeDesktop() {
-  return applyPlan(planCloseDesktop(state, visibleWindowsTopFirst(), isAlive))
+function closeDesktop(index = state.current) {
+  return applyPlan(planCloseDesktop(state, index, visibleWindowsTopFirst(), isAlive))
 }
 
 function moveForegroundWindow(direction) {
@@ -135,7 +156,9 @@ module.exports = {
     'desktops/state': () => desktopsSummary(state),
     'desktops/switch': (_event, index) => (isIndex(index) ? switchTo(index) : desktopsSummary(state)),
     'desktops/add': () => addDesktop(),
-    'desktops/close': () => closeDesktop(),
+    'desktops/close': (_event, index) => (isIndex(index) ? closeDesktop(index) : closeDesktop()),
+    'desktops/only-with-several-get': () => onlyWithSeveral,
+    'desktops/only-with-several-set': (_event, value) => setOnlyWithSeveral(value),
   },
   switchAdjacent,
   addDesktop,
@@ -145,6 +168,7 @@ module.exports = {
 
   start(broadcast) {
     broadcastRef = broadcast
+    loadPrefs()
     recoverWindowsLeftHidden()
   },
 }

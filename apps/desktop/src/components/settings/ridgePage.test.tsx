@@ -396,7 +396,7 @@ describe('a search hit for an item Ridge is not showing', () => {
     fireEvent.click(within(notice).getByRole('button', { name: 'Add Clock to Ridge' }))
     await settle()
 
-    expect(lastWrittenLayout(spy('topbar.setLayout')).hidden).toEqual([])
+    expect(lastWrittenLayout(spy('topbar.setLayout')).hidden).toEqual(['desktop-lines'])
     expect(chip('Clock').getAttribute('aria-expanded')).toBe('true')
     expect(document.activeElement).toBe(chip('Clock'))
     expect(calloutFor('Clock').textContent).not.toContain('is hidden from Ridge')
@@ -483,11 +483,11 @@ describe("bringing items back with '+'", () => {
     expect(screen.queryByRole('button', { name: 'Media' })).toBeNull()
 
     fireEvent.click(addButton())
-    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Search button', 'Media'])
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Desktop lines', 'Search button', 'Media'])
     fireEvent.click(screen.getByRole('option', { name: 'Media' }))
     await settle()
 
-    expect(lastWrittenLayout(spy('topbar.setLayout')).hidden).toEqual([])
+    expect(lastWrittenLayout(spy('topbar.setLayout')).hidden).toEqual(['desktop-lines'])
     expect(laneItems('right')).toEqual(['System tray', 'Media', 'Microphone', 'Status icons', 'Right plugins', 'Clock'])
     expect(document.activeElement).toBe(chip('Media'))
     expect(chip('Media').getAttribute('aria-expanded')).toBe('true')
@@ -502,7 +502,7 @@ describe("bringing items back with '+'", () => {
 
     fireEvent.click(addButton())
 
-    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Search button'])
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Desktop lines', 'Search button'])
   })
 
   it('tells assistive technology whether its menu is open, and which menu that is', async () => {
@@ -573,7 +573,7 @@ describe('the callout on the Ridge page', () => {
     fireEvent.click(within(callout).getByRole('button', { name: 'Remove from Ridge' }))
     await settle()
 
-    expect(lastWrittenLayout(spy('topbar.setLayout')).hidden).toEqual(['media'])
+    expect(lastWrittenLayout(spy('topbar.setLayout')).hidden).toEqual(['desktop-lines', 'media'])
     expect(screen.queryByRole('button', { name: 'Media' })).toBeNull()
     expect(document.activeElement).toBe(chip('Microphone'))
     expect(announced()).toBe('Media hidden from Ridge.')
@@ -640,7 +640,7 @@ describe('the callout on the Ridge page', () => {
 
     fireEvent.click(within(callout).getByRole('button', { name: 'Move later' }))
     await settle()
-    expect(lastWrittenLayout(spy('topbar.setLayout')).slots.left).toEqual(['system-menu', 'desktops', 'plugins-left'])
+    expect(lastWrittenLayout(spy('topbar.setLayout')).slots.left).toEqual(['system-menu', 'desktops', 'desktop-lines', 'plugins-left'])
 
     fireEvent.click(within(calloutFor('Left plugins')).getByRole('button', { name: 'Move later' }))
     await settle()
@@ -698,7 +698,7 @@ describe('what the Ridge page reads and calls', () => {
     const { spy } = installBridges({ searchIcon: true })
     await openPage()
 
-    for (const item of TOPBAR_ITEMS) await openCallout(item.label)
+    for (const item of TOPBAR_ITEMS.filter((shipped) => !shipped.hiddenByDefault)) await openCallout(item.label)
 
     for (const path of FORBIDDEN_BRIDGES) expect(spy(path)).not.toHaveBeenCalled()
   })

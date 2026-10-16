@@ -255,11 +255,11 @@ describe('RidgeCanvas from the keyboard', () => {
     expect(topbar.setLayout).toHaveBeenCalledTimes(1)
     expect(writtenLayout(topbar.setLayout)).toEqual({
       slots: {
-        left: ['plugins-left', 'desktops'],
+        left: ['plugins-left', 'desktops', 'desktop-lines'],
         center: ['launcher'],
         right: ['system-menu', 'tray', 'media', 'microphone', 'status', 'plugins-right', 'clock'],
       },
-      hidden: [],
+      hidden: ['desktop-lines'],
     })
     expect(announced()).toBe('Power menu dropped, position 1 of 7 on the right.')
   })
@@ -304,7 +304,7 @@ describe('RidgeCanvas from the keyboard', () => {
     await settle()
 
     expect(topbar.setLayout).not.toHaveBeenCalled()
-    expect(chipsIn('left')).toEqual(['Power menu', 'Weather', 'Desktops'])
+    expect(chipsIn('left')).toEqual(['Power menu', 'Weather', 'Desktop numbers'])
     expect(document.activeElement).toBe(chip('Power menu'))
     expect(announced()).toBe('Power menu returned to position 1 of 3 on the left.')
   })
@@ -338,7 +338,7 @@ describe('RidgeCanvas from the keyboard', () => {
     await settle()
 
     expect(topbar.setLayout).toHaveBeenCalledTimes(1)
-    expect(writtenLayout(topbar.setLayout).slots.left).toEqual(['system-menu', 'desktops'])
+    expect(writtenLayout(topbar.setLayout).slots.left).toEqual(['system-menu', 'desktops', 'desktop-lines'])
     expect(writtenLayout(topbar.setLayout).slots.center).toEqual(['launcher', 'plugins-left'])
   })
 
@@ -346,8 +346,8 @@ describe('RidgeCanvas from the keyboard', () => {
     installBridges()
     await mount(<CanvasHarness />)
 
-    chip('Desktops').focus()
-    pressKey('Desktops', 'ArrowRight')
+    chip('Desktop numbers').focus()
+    pressKey('Desktop numbers', 'ArrowRight')
 
     expect(document.activeElement).toBe(chip('System tray'))
     expect(screen.getAllByRole('button').filter((button) => button.tabIndex === 0)).toEqual([chip('System tray')])
@@ -613,11 +613,11 @@ describe('RidgeCanvas layout', () => {
   it('draws a plugin group only while a live widget fills it', async () => {
     installBridges()
     await mount(<CanvasHarness />)
-    expect(chipsIn('left')).toEqual(['Power menu', 'Weather', 'Desktops'])
+    expect(chipsIn('left')).toEqual(['Power menu', 'Weather', 'Desktop numbers'])
 
     act(() => pluginRegistry.clearWidgets())
 
-    expect(chipsIn('left')).toEqual(['Power menu', 'Desktops'])
+    expect(chipsIn('left')).toEqual(['Power menu', 'Desktop numbers'])
     expect(chipsIn('right')).not.toContain('Notes')
   })
 

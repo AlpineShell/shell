@@ -97,7 +97,7 @@ describe('planAddDesktop', () => {
 
 describe('planCloseDesktop', () => {
   it('moves the windows of the closed desktop onto the one to its left', () => {
-    const plan = planCloseDesktop(desktops([[TERMINAL, MUSIC], []], 1), [EDITOR], alive)
+    const plan = planCloseDesktop(desktops([[TERMINAL, MUSIC], []], 1), 1, [EDITOR], alive)
     expect(plan.hide).toEqual([])
     expect(plan.show).toEqual([MUSIC.hwnd, TERMINAL.hwnd])
     expect(plan.activate).toBe(EDITOR.hwnd)
@@ -105,18 +105,44 @@ describe('planCloseDesktop', () => {
   })
 
   it('moves them onto the next desktop when the first one closes', () => {
-    const plan = planCloseDesktop(desktops([[], [TERMINAL], [MUSIC]], 0), [EDITOR], alive)
+    const plan = planCloseDesktop(desktops([[], [TERMINAL], [MUSIC]], 0), 0, [EDITOR], alive)
     expect(plan.show).toEqual([TERMINAL.hwnd])
     expect(plan.state).toEqual(desktops([[], [MUSIC]], 0))
   })
 
   it('activates the top window of the neighbour when the closed desktop was empty', () => {
-    const plan = planCloseDesktop(desktops([[TERMINAL], []], 1), [], alive)
+    const plan = planCloseDesktop(desktops([[TERMINAL], []], 1), 1, [], alive)
     expect(plan.activate).toBe(TERMINAL.hwnd)
   })
 
   it('never closes the last desktop', () => {
-    expect(planCloseDesktop(desktops([[]], 0), [EDITOR], alive)).toBe(null)
+    expect(planCloseDesktop(desktops([[]], 0), 0, [EDITOR], alive)).toBe(null)
+  })
+
+  it('closes a desktop it is not on and moves its windows onto the one to its left, still hidden', () => {
+    const plan = planCloseDesktop(desktops([[], [TERMINAL], [MUSIC]], 0), 2, [EDITOR], alive)
+    expect(plan.hide).toEqual([])
+    expect(plan.show).toEqual([])
+    expect(plan.activate).toBe(null)
+    expect(plan.state).toEqual(desktops([[], [TERMINAL, MUSIC]], 0))
+  })
+
+  it('shows the windows of a closed desktop when they land on the current one, without taking focus', () => {
+    const plan = planCloseDesktop(desktops([[], [TERMINAL, MUSIC]], 0), 1, [EDITOR], alive)
+    expect(plan.show).toEqual([MUSIC.hwnd, TERMINAL.hwnd])
+    expect(plan.activate).toBe(null)
+    expect(plan.state).toEqual(desktops([[]], 0))
+  })
+
+  it('keeps the current desktop current when one before it closes', () => {
+    const plan = planCloseDesktop(desktops([[TERMINAL], [MUSIC], []], 2), 0, [EDITOR], alive)
+    expect(plan.state).toEqual(desktops([[MUSIC, TERMINAL], []], 1))
+    expect(plan.show).toEqual([])
+  })
+
+  it('does nothing for a desktop that does not exist', () => {
+    expect(planCloseDesktop(desktops([[], []], 0), 2, [EDITOR], alive)).toBe(null)
+    expect(planCloseDesktop(desktops([[], []], 0), 'x', [EDITOR], alive)).toBe(null)
   })
 })
 

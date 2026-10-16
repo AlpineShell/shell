@@ -3,7 +3,8 @@ export const TOPBAR_SLOTS: TopbarSlot[] = ['left', 'center', 'right']
 export const TOPBAR_ITEMS: TopbarItemDefinition[] = [
   { id: 'system-menu', slot: 'left', kind: 'element', label: 'Power menu' },
   { id: 'plugins-left', slot: 'left', kind: 'plugin-group', label: 'Left plugins' },
-  { id: 'desktops', slot: 'left', kind: 'element', label: 'Desktops' },
+  { id: 'desktops', slot: 'left', kind: 'element', label: 'Desktop numbers' },
+  { id: 'desktop-lines', slot: 'left', kind: 'element', label: 'Desktop lines', hiddenByDefault: true },
   { id: 'launcher', slot: 'center', kind: 'element', label: 'Search button' },
   { id: 'tray', slot: 'right', kind: 'element', label: 'System tray' },
   { id: 'media', slot: 'right', kind: 'element', label: 'Media' },
@@ -94,12 +95,20 @@ function placeStoredItems(stored: StoredTopbarLayout | null | undefined): Record
   return bySlot
 }
 
+function neverPlaced(stored: StoredTopbarLayout | null | undefined, id: TopbarItemId): boolean {
+  return TOPBAR_SLOTS.every((slot) => !storedSlotIds(stored, slot).includes(id))
+}
+
+function startsHidden(stored: StoredTopbarLayout | null | undefined, id: TopbarItemId): boolean {
+  return findTopbarItem(id)?.hiddenByDefault === true && neverPlaced(stored, id)
+}
+
 export function resolveTopbarLayout(stored: StoredTopbarLayout | null | undefined): TopbarLayoutItem[] {
   const bySlot = placeStoredItems(stored)
   const hidden = new Set(Array.isArray(stored?.hidden) ? stored.hidden : [])
 
   return TOPBAR_SLOTS.flatMap((slot) =>
-    bySlot[slot].map((id, order) => ({ id, slot, order, visible: !hidden.has(id) }))
+    bySlot[slot].map((id, order) => ({ id, slot, order, visible: !hidden.has(id) && !startsHidden(stored, id) }))
   )
 }
 

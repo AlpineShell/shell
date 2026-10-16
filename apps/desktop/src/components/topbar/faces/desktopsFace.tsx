@@ -1,34 +1,23 @@
-import type { ReactNode } from "react";
 import { Plus } from "lucide-react";
+import DesktopsFacePart from "./desktopsFacePart";
+import { desktopIndexes } from "./desktopIndexes";
 
-function desktopNumbers(count: number): number[] {
-    return Array.from({ length: count }, (_, index) => index);
-}
-
-function DesktopsFacePart({ label, className, onPress, children }: { label: string; className: string; onPress?: () => void; children: ReactNode }) {
-    if (!onPress) return <span className={className}>{children}</span>;
-    return (
-        <button aria-label={label} onClick={onPress} className={`${className} cursor-pointer`}>
-            {children}
-        </button>
-    );
-}
-
-export default function DesktopsFace({ desktops, darkText, onSelect, onAdd }: DesktopsFaceProps) {
+export default function DesktopsFace({ desktops, darkText, onSelect, onClose, onAdd }: DesktopsFaceProps) {
     const text = darkText ? "text-black" : "text-white";
     const hover = darkText ? "hover:bg-black/10" : "hover:bg-white/10";
     const current = darkText ? "bg-black/15" : "bg-white/20";
 
     return (
-        <div className={`flex items-center h-4.5 gap-0.5 text-[12px] leading-none ${text} transition-colors duration-300`}>
-            {desktopNumbers(desktops.count).map((index) => (
+        <div className={`flex items-center h-4.5 gap-0.5 text-[12px] ${text} transition-colors duration-300`}>
+            {desktopIndexes(desktops.count).map((index) => (
                 <DesktopsFacePart
                     key={index}
                     label={`Desktop ${index + 1}`}
                     onPress={onSelect && (() => onSelect(index))}
-                    className={`flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full tabular-nums ${index === desktops.current ? current : hover}`}
+                    onMiddlePress={onClose && (() => onClose(index))}
+                    className={`flex items-center justify-center w-4.5 h-4.5 rounded-full tabular-nums ${index === desktops.current ? current : hover}`}
                 >
-                    {index + 1}
+                    <span className="[text-box:trim-both_cap_alphabetic]">{index + 1}</span>
                 </DesktopsFacePart>
             ))}
             <DesktopsFacePart

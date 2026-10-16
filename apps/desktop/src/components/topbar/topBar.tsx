@@ -31,7 +31,8 @@ const noop = () => {};
 const TOPBAR_ELEMENTS: Record<TopbarItemId, () => ReactNode> = {
     "system-menu": () => <SystemMenu />,
     "plugins-left": () => <PluginSlot slot="left" />,
-    desktops: () => <DesktopSwitcher />,
+    desktops: () => <DesktopSwitcher look="numbers" />,
+    "desktop-lines": () => <DesktopSwitcher look="lines" />,
     notice: () => <NoticeStatus />,
     launcher: () => <LauncherTrigger />,
     tray: () => <SystemTray />,

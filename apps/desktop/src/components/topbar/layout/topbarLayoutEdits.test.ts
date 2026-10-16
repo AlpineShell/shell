@@ -88,7 +88,7 @@ describe('moveTopbarItem', () => {
 
   it('renumbers order from zero in every slot', () => {
     const moved = moveTopbarItem(DEFAULT_ITEMS, 'clock', { slot: 'left', index: 1 })
-    expect(ordersInSlot(moved, 'left')).toEqual([0, 1, 2, 3])
+    expect(ordersInSlot(moved, 'left')).toEqual([0, 1, 2, 3, 4])
     expect(ordersInSlot(moved, 'center')).toEqual([0])
     expect(ordersInSlot(moved, 'right')).toEqual([0, 1, 2, 3, 4])
   })
@@ -109,12 +109,12 @@ describe('moveTopbarItem', () => {
   it('keeps the visibility of the item it moves and of every other item', () => {
     const moved = moveTopbarItem(withHidden('media'), 'media', { slot: 'center', index: 0 })
     expect(itemById(moved, 'media')).toEqual({ id: 'media', slot: 'center', order: 0, visible: false })
-    expect(moved.filter((item) => item.id !== 'media').every((item) => item.visible)).toBe(true)
+    expect(moved.filter((item) => item.id !== 'media' && item.id !== 'desktop-lines').every((item) => item.visible)).toBe(true)
   })
 
   it('moves a plugin group to another side like any element', () => {
     const leftGroupOnTheRight = moveTopbarItem(DEFAULT_ITEMS, 'plugins-left', { slot: 'right', index: 0 })
-    expect(idsInSlot(leftGroupOnTheRight, 'left')).toEqual(['system-menu', 'desktops'])
+    expect(idsInSlot(leftGroupOnTheRight, 'left')).toEqual(['system-menu', 'desktops', 'desktop-lines'])
     expect(idsInSlot(leftGroupOnTheRight, 'right')).toEqual([
       'plugins-left',
       'tray',
@@ -182,7 +182,7 @@ describe('stepTopbarItem', () => {
 
   it('crosses a lane edge into the near end of the next lane', () => {
     const systemMenuLater = [1, 2, 3].reduce((items) => stepTopbarItem(items, 'system-menu', 'later'), DEFAULT_ITEMS)
-    expect(idsInSlot(systemMenuLater, 'left')).toEqual(['plugins-left', 'desktops'])
+    expect(idsInSlot(systemMenuLater, 'left')).toEqual(['plugins-left', 'desktops', 'desktop-lines'])
     expect(idsInSlot(systemMenuLater, 'center')).toEqual(['system-menu', 'launcher'])
 
     const trayEarlier = stepTopbarItem(DEFAULT_ITEMS, 'tray', 'earlier')
@@ -203,7 +203,7 @@ describe('stepTopbarItem', () => {
 
   it('steps a plugin group across a lane edge like any element', () => {
     const leftGroupLater = stepTopbarItem(stepTopbarItem(DEFAULT_ITEMS, 'plugins-left', 'later'), 'plugins-left', 'later')
-    expect(idsInSlot(leftGroupLater, 'left')).toEqual(['system-menu', 'desktops'])
+    expect(idsInSlot(leftGroupLater, 'left')).toEqual(['system-menu', 'desktops', 'desktop-lines'])
     expect(idsInSlot(leftGroupLater, 'center')).toEqual(['plugins-left', 'launcher'])
 
     const rightGroupAtLaneStart = moveTopbarItem(DEFAULT_ITEMS, 'plugins-right', { slot: 'right', index: 0 })
@@ -291,7 +291,7 @@ describe('topbarItemPosition', () => {
 describe('setTopbarItemVisible', () => {
   it('hides an item where it stands', () => {
     const hidden = setTopbarItemVisible(DEFAULT_ITEMS, 'plugins-left', false)
-    expect(idsInSlot(hidden, 'left')).toEqual(['system-menu', 'plugins-left', 'desktops'])
+    expect(idsInSlot(hidden, 'left')).toEqual(['system-menu', 'plugins-left', 'desktops', 'desktop-lines'])
     expect(visibleIdsInSlot(hidden, 'left')).toEqual(['system-menu', 'desktops'])
     expect(itemById(hidden, 'plugins-left')).toEqual({ id: 'plugins-left', slot: 'left', order: 1, visible: false })
   })
