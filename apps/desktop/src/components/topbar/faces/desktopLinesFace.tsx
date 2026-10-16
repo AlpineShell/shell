@@ -16,7 +16,7 @@ export default function DesktopLinesFace({ desktops, darkText, onSelect, onClose
                 >
                     <span
                         data-current={index === desktops.current || undefined}
-                        className={`block h-1.25 rounded-full ${line} transition-all duration-300 ${index === desktops.current ? "w-4.5 opacity-100" : "w-2.5 opacity-40 group-hover:opacity-70"}`}
+                        className={`block h-1.5 rounded-full ${line} transition-all duration-300 ${index === desktops.current ? "w-5 opacity-100" : "w-3 opacity-40 group-hover:opacity-70"}`}
                     />
                 </DesktopsFacePart>
             ))}
