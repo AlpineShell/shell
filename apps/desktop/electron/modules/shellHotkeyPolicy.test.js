@@ -3,14 +3,16 @@ import shellHotkeyPolicy from './shellHotkeyPolicy.js'
 import virtualKeys from './virtualKeys.js'
 
 const { SHELL_SHORTCUTS, shortcutForKey, createWinTapTracker } = shellHotkeyPolicy
-const { VK_LEFT, VK_DOWN, VK_E, VK_I, VK_M, VK_P, VK_S, VK_V, VK_ESCAPE, VK_OEM_PERIOD, VK_LWIN, VK_RWIN, VK_SHIFT, VK_TAB } = virtualKeys
+const { VK_LEFT, VK_RIGHT, VK_DOWN, VK_D, VK_E, VK_F4, VK_I, VK_M, VK_P, VK_S, VK_V, VK_ESCAPE, VK_OEM_PERIOD, VK_LWIN, VK_RWIN, VK_SHIFT, VK_TAB } = virtualKeys
 
-function modifiers({ win = false, shift = false } = {}) {
-  return { isWinHeld: () => win, isShiftHeld: () => shift }
+function modifiers({ win = false, ctrl = false, shift = false } = {}) {
+  return { isWinHeld: () => win, isCtrlHeld: () => ctrl, isShiftHeld: () => shift }
 }
 
 const WIN = modifiers({ win: true })
 const WIN_SHIFT = modifiers({ win: true, shift: true })
+const WIN_CTRL = modifiers({ win: true, ctrl: true })
+const WIN_CTRL_SHIFT = modifiers({ win: true, ctrl: true, shift: true })
 const NONE = modifiers()
 
 function actionFor(vkCode, held) {
@@ -64,6 +66,27 @@ describe('shortcutForKey', () => {
     expect(shortcutForKey(VK_DOWN, WIN_SHIFT)).toMatchObject({ action: 'tile', direction: 'down', shift: true, inline: true })
   })
 
+  it('switches desktops on Win+Ctrl+Left and Right instead of tiling', () => {
+    expect(shortcutForKey(VK_LEFT, WIN_CTRL)).toMatchObject({ action: 'switchDesktop', direction: 'left' })
+    expect(shortcutForKey(VK_RIGHT, WIN_CTRL)).toMatchObject({ action: 'switchDesktop', direction: 'right' })
+  })
+
+  it('carries the focused window to the next desktop on Win+Ctrl+Shift+Left and Right', () => {
+    expect(shortcutForKey(VK_LEFT, WIN_CTRL_SHIFT)).toMatchObject({ action: 'moveWindowToDesktop', direction: 'left' })
+    expect(shortcutForKey(VK_RIGHT, WIN_CTRL_SHIFT)).toMatchObject({ action: 'moveWindowToDesktop', direction: 'right' })
+  })
+
+  it('adds a desktop on Win+Ctrl+D and closes the current one on Win+Ctrl+F4', () => {
+    expect(actionFor(VK_D, WIN_CTRL)).toBe('addDesktop')
+    expect(actionFor(VK_F4, WIN_CTRL)).toBe('closeDesktop')
+    expect(actionFor(VK_D, WIN)).toBe(null)
+    expect(actionFor(VK_F4, WIN)).toBe(null)
+  })
+
+  it('leaves Win+Ctrl+Up and Down alone', () => {
+    expect(shortcutForKey(VK_DOWN, WIN_CTRL)).toBe(null)
+  })
+
   it('needs Win held for every Win shortcut', () => {
     for (const vkCode of [VK_M, VK_E, VK_I, VK_OEM_PERIOD, VK_P, VK_LEFT]) {
       expect(shortcutForKey(vkCode, NONE)).toBe(null)
@@ -92,10 +115,12 @@ describe('shortcutForKey', () => {
     const combos = new Set()
     for (const shortcut of SHELL_SHORTCUTS) {
       for (const win of shortcut.win === undefined ? [false, true] : [shortcut.win]) {
-        for (const shift of shortcut.shift === undefined ? [false, true] : [shortcut.shift]) {
-          const combo = `${shortcut.vkCode}:${win}:${shift}`
-          expect(combos.has(combo)).toBe(false)
-          combos.add(combo)
+        for (const ctrl of shortcut.ctrl === undefined ? [false, true] : [shortcut.ctrl]) {
+          for (const shift of shortcut.shift === undefined ? [false, true] : [shortcut.shift]) {
+            const combo = `${shortcut.vkCode}:${win}:${ctrl}:${shift}`
+            expect(combos.has(combo)).toBe(false)
+            combos.add(combo)
+          }
         }
       }
     }

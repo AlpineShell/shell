@@ -5,6 +5,8 @@ import LauncherFace from '../../topbar/faces/launcherFace'
 import TrayFace from '../../topbar/faces/trayFace'
 import MediaFace from '../../topbar/faces/mediaFace'
 import MicrophoneFace from '../../topbar/faces/microphoneFace'
+import DesktopsFace from '../../topbar/faces/desktopsFace'
+import DesktopLinesFace from '../../topbar/faces/desktopLinesFace'
 import StatusFace from '../../topbar/faces/statusFace'
 import ClockFace from '../../topbar/faces/clockFace'
 import { formatClock, formatClockDate, resolveTimeFormat } from '../../topbar/calendar/calendarLayout'
@@ -37,6 +39,14 @@ export function SystemMenuPreview({ darkText }: RidgeItemPreviewProps) {
 
 export function LeftPluginsPreview({ data, darkText }: RidgeItemPreviewProps) {
   return <RidgeLivePluginWidgets slot="left" data={data} darkText={darkText} />
+}
+
+export function DesktopsPreview({ data, darkText }: RidgeItemPreviewProps) {
+  return <DesktopsFace desktops={data.desktops} darkText={darkText} />
+}
+
+export function DesktopLinesPreview({ data, darkText }: RidgeItemPreviewProps) {
+  return <DesktopLinesFace desktops={data.desktops} darkText={darkText} />
 }
 
 export function NoticePreview({ darkText }: RidgeItemPreviewProps) {

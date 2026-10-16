@@ -410,6 +410,24 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('date-time/changed', handler)
     },
   },
+  desktops: {
+    state: () => ipcRenderer.invoke('desktops/state'),
+    switchTo: (index) => ipcRenderer.invoke('desktops/switch', index),
+    add: () => ipcRenderer.invoke('desktops/add'),
+    close: (index) => ipcRenderer.invoke('desktops/close', index),
+    onlyWithSeveral: () => ipcRenderer.invoke('desktops/only-with-several-get'),
+    setOnlyWithSeveral: (value) => ipcRenderer.invoke('desktops/only-with-several-set', value),
+    onOnlyWithSeveralChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('desktops/only-with-several-changed', handler)
+      return () => ipcRenderer.removeListener('desktops/only-with-several-changed', handler)
+    },
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('desktops/changed', handler)
+      return () => ipcRenderer.removeListener('desktops/changed', handler)
+    },
+  },
   windows: {
     wallpaper: () => ipcRenderer.invoke('windows/wallpaper'),
     onWallpaperChanged: (callback) => {

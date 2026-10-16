@@ -128,6 +128,7 @@ const switcherWindows = require('./modules/switcherWindows')
 const shellSurfaces = require('./modules/shellSurfaces')
 const activeDisplay = require('./modules/activeDisplay')
 const minimizeAll = require('./modules/minimizeAll')
+const virtualDesktops = require('./modules/virtualDesktops')
 let screenshot = null
 try { screenshot = require('./modules/screenshot') } catch (e) { console.error('[main] screenshot load error:', e.message) }
 let powerThrottling = null
@@ -1010,7 +1011,7 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
 
   theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
@@ -1184,6 +1185,10 @@ function wireShellHotkeys() {
   shellHotkeys.on('openDisplayModePicker', () => displayModePicker.open())
   shellHotkeys.on('minimizeAll', () => minimizeAll.minimizeAll())
   shellHotkeys.on('restoreMinimized', () => minimizeAll.restoreMinimized())
+  shellHotkeys.on('switchDesktop', ({ direction }) => virtualDesktops.switchAdjacent(direction))
+  shellHotkeys.on('moveWindowToDesktop', ({ direction }) => virtualDesktops.moveForegroundWindow(direction))
+  shellHotkeys.on('addDesktop', () => virtualDesktops.addDesktop())
+  shellHotkeys.on('closeDesktop', () => virtualDesktops.closeDesktop())
   if (screenshot) {
     shellHotkeys.on('takeScreenshot', () => screenshot.showOverlay())
     shellHotkeys.on('cancelScreenshot', () => screenshot.hideOverlay())
@@ -1327,9 +1332,16 @@ function startShellMode(claimedTakeover = null) {
 
 app.on('will-quit', () => {
   unregisterAll()
+  revealWindowsOnOtherDesktops()
   undimDisplays()
   if (shellWindow) shellWindow.destroy()
 })
+
+function revealWindowsOnOtherDesktops() {
+  try { virtualDesktops.revealAll() } catch (e) {
+    console.error('[main] desktop windows reveal failed:', e?.message ?? e)
+  }
+}
 
 function undimDisplays() {
   try { brightness.restoreBatterySaverBrightnessOnShutdown() } catch (e) {

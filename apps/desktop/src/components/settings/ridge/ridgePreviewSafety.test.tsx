@@ -31,6 +31,7 @@ const CHANNEL_VALUES: Record<string, unknown> = {
     thumbnailType: null,
   },
   'shell.media.microphone': { active: true, apps: ['Zoom', 'Teams'] },
+  'shell.desktops.state': { count: 3, current: 1 },
   'shell.tray.icons': TRAY_ICONS,
   'shell.tray.layout': { order: ['onedrive', 'dropbox'], hidden: ['steam'] },
   'shell.tray.settings': { enabled: true, showOverflow: true },
@@ -50,6 +51,7 @@ const CHANNEL_SUBSCRIPTIONS = [
   'shell.network.onWifiSignalChanged',
   'shell.media.onSessionChanged',
   'shell.media.onMicrophoneChanged',
+  'shell.desktops.onChanged',
   'shell.tray.onIconsChanged',
   'shell.tray.onLayoutChanged',
   'shell.tray.onSettingsChanged',
@@ -74,6 +76,9 @@ const FORBIDDEN_BRIDGES = [
   'shell.system.setMonitorBrightness',
   'topbar.setActiveRegion',
   'topbar.setInteractiveZones',
+  'shell.desktops.switchTo',
+  'shell.desktops.add',
+  'shell.desktops.close',
 ]
 
 const OTHER_BRIDGES = [
@@ -204,6 +209,7 @@ describe('the Ridge previews', () => {
     await renderHarness()
     expect(previewOf('clock').textContent).toBe('21:41 Sep 12')
     expect(previewOf('microphone').textContent).toBe('Zoom, Teams')
+    expect(previewOf('desktops').textContent).toBe('123')
     expect(Array.from(previewOf('tray').querySelectorAll('img')).map((image) => image.getAttribute('src'))).toEqual([
       TRAY_ICONS[1].icon,
       TRAY_ICONS[0].icon,

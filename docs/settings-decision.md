@@ -433,6 +433,8 @@ test failure too.
 | `ridge` | instant | A page-level entry. The Ridge page writes each move as it is made, and every move is undone by moving the item back; the settings in its callouts each declare their own. |
 | `ridge-item-system-menu` | instant | A search entry for the Power menu on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-plugins-left` | instant | A search entry for the Left plugins group on Ridge. From settings search it opens the group's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-desktops` | instant | A search entry for the Desktop numbers on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
+| `ridge-item-desktop-lines` | instant | A search entry for the Desktop lines on Ridge, which start hidden. From settings search it opens the item's callout or offers to add it; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-media` | instant | A search entry for Media on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-microphone` | instant | A search entry for the Microphone on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
 | `ridge-item-status` | instant | A search entry for the Status icons on Ridge. From settings search it opens the item's callout; from Search it opens Ridge without one. It writes nothing itself. |
@@ -445,6 +447,8 @@ test failure too.
 | `topbar-color-automatic` | instant | Freezes or resumes wallpaper-following. Both directions are one click. |
 | `topbar-adapt-to-apps` | instant | Lets Ridge take the colour of a maximized app in front, or stops it. Nothing is lost either way: turning it off hands Ridge back its own colour, and turning it on picks the app up again. |
 | `topbar-search-icon` | instant | Shows or hides the Search button on Ridge, and is its only visibility switch: hiding the button from Ridge writes this and nothing else. The hotkey works either way, so it cannot strand you. |
+| `desktops-only-with-several` | instant | Hides the Desktop numbers and Desktop lines on Ridge while there is one desktop; the switch shows its effect at once and is undone by flipping it back. |
+| `desktop-lines-only-with-several` | instant | The same switch as `desktops-only-with-several`, filed in the Desktop lines callout so whichever look is on Ridge carries it; both rows read and write one value. |
 | `media-visualizer` | instant | Swaps one glyph of the Media item on Ridge for another. |
 | `clock-time-format` | instant | Reformats the clock on Ridge and nothing else. Filed on Ridge rather than Calendar because it governs the bar's clock; its result in settings search opens the Clock callout with the row picked out. |
 | `calendar-days` | instant | Changes how many days the hover calendar draws. |

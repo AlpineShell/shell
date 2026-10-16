@@ -71,11 +71,11 @@ describe('useRidgeEditor', () => {
 
     expect(topbar.setLayout).toHaveBeenCalledWith({
       slots: {
-        left: ['system-menu', 'plugins-left'],
+        left: ['system-menu', 'plugins-left', 'desktops', 'desktop-lines'],
         center: ['launcher', 'clock'],
         right: ['tray', 'media', 'microphone', 'status', 'plugins-right'],
       },
-      hidden: [],
+      hidden: ['desktop-lines'],
     })
   })
 

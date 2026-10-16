@@ -1,5 +1,5 @@
 const koffi = require('koffi')
-const { VK_LWIN, VK_RWIN, VK_SHIFT, VK_MENU } = require('./virtualKeys')
+const { VK_LWIN, VK_RWIN, VK_SHIFT, VK_CONTROL, VK_MENU } = require('./virtualKeys')
 
 const user32 = koffi.load('user32.dll')
 
@@ -21,6 +21,10 @@ function isShiftHeld() {
   return isKeyHeld(VK_SHIFT)
 }
 
+function isCtrlHeld() {
+  return isKeyHeld(VK_CONTROL)
+}
+
 function isAltHeld() {
   return isKeyHeld(VK_MENU)
 }
@@ -30,4 +34,4 @@ function releaseWinKeys() {
   keybd_event(VK_RWIN, 0, KEYEVENTF_KEYUP, 0)
 }
 
-module.exports = { isKeyHeld, isWinHeld, isShiftHeld, isAltHeld, releaseWinKeys }
+module.exports = { isKeyHeld, isWinHeld, isShiftHeld, isCtrlHeld, isAltHeld, releaseWinKeys }

@@ -260,6 +260,11 @@ declare global {
     apps: string[]
   }
 
+  interface VirtualDesktopsState {
+    count: number
+    current: number
+  }
+
   interface SwitcherCardCenter {
     x: number
     y: number
@@ -770,6 +775,8 @@ declare global {
   type TopbarItemId =
     | 'system-menu'
     | 'plugins-left'
+    | 'desktops'
+    | 'desktop-lines'
     | 'notice'
     | 'launcher'
     | 'tray'
@@ -786,6 +793,7 @@ declare global {
     slot: TopbarSlot
     kind: TopbarItemKind
     label: string
+    hiddenByDefault?: boolean
   }
 
   interface TopbarLayoutItem {
@@ -896,6 +904,22 @@ declare global {
   interface MicrophoneFaceProps {
     apps: string[]
     darkText: boolean
+  }
+
+  interface DesktopsFacePartProps {
+    label: string
+    className: string
+    onPress?: () => void
+    onMiddlePress?: () => void
+    children: import('react').ReactNode
+  }
+
+  interface DesktopsFaceProps {
+    desktops: VirtualDesktopsState
+    darkText: boolean
+    onSelect?: (index: number) => void
+    onClose?: (index: number) => void
+    onAdd?: () => void
   }
 
   interface StatusFaceProps {
@@ -1505,6 +1529,7 @@ declare global {
     status: RidgeStatusPreviewData
     media: RidgeMediaPreviewData
     microphone: MicrophoneStatus
+    desktops: VirtualDesktopsState
     tray: RidgeTrayPreviewData
     plugins: Record<RidgePluginSlot, RidgePluginWidget[]>
   }
@@ -1986,6 +2011,16 @@ declare global {
         setAutoTime: (on: boolean) => Promise<DateTimeChangeResult>
         syncNow: () => Promise<DateTimeChangeResult>
         onChanged: (callback: (state: DateTimeState) => void) => () => void
+      }
+      desktops: {
+        state: () => Promise<VirtualDesktopsState>
+        switchTo: (index: number) => Promise<VirtualDesktopsState>
+        add: () => Promise<VirtualDesktopsState>
+        close: (index?: number) => Promise<VirtualDesktopsState>
+        onlyWithSeveral: () => Promise<boolean>
+        setOnlyWithSeveral: (value: boolean) => Promise<boolean>
+        onOnlyWithSeveralChanged: (callback: (value: boolean) => void) => () => void
+        onChanged: (callback: (data: VirtualDesktopsState) => void) => () => void
       }
       windows: {
         wallpaper: () => Promise<string | null>

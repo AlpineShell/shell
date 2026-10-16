@@ -13,6 +13,7 @@ const DEFAULT_ITEMS = resolveTopbarLayout(EMPTY_TOPBAR_LAYOUT)
 const BAR_ORDER: TopbarItemId[] = [
   'system-menu',
   'plugins-left',
+  'desktops',
   'launcher',
   'tray',
   'media',
@@ -86,14 +87,14 @@ describe('ridgeFocusOrder', () => {
   it('follows an item that moved to another side', () => {
     const clockInCenter = moveTopbarItem(DEFAULT_ITEMS, 'clock', { slot: 'center', index: 1 })
 
-    expect(ridgeFocusOrder(clockInCenter).slice(1, 5)).toEqual(['plugins-left', 'launcher', 'clock', 'tray'])
+    expect(ridgeFocusOrder(clockInCenter).slice(1, 6)).toEqual(['plugins-left', 'desktops', 'launcher', 'clock', 'tray'])
   })
 })
 
 describe('nextFocusedItem', () => {
   it('moves one item along, crossing sides', () => {
-    expect(nextFocusedItem(BAR_ORDER, 'plugins-left', 'later')).toBe('launcher')
-    expect(nextFocusedItem(BAR_ORDER, 'launcher', 'earlier')).toBe('plugins-left')
+    expect(nextFocusedItem(BAR_ORDER, 'desktops', 'later')).toBe('launcher')
+    expect(nextFocusedItem(BAR_ORDER, 'launcher', 'earlier')).toBe('desktops')
   })
 
   it('stops at the ends instead of wrapping', () => {

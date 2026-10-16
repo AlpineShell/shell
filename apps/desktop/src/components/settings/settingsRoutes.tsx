@@ -55,6 +55,8 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
     renderedByThePage: [
       'ridge-item-system-menu',
       'ridge-item-plugins-left',
+      'ridge-item-desktops',
+      'ridge-item-desktop-lines',
       'ridge-item-media',
       'ridge-item-microphone',
       'ridge-item-status',
@@ -65,6 +67,8 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
       'power-show-hibernate',
       'topbar-search-icon',
       'media-visualizer',
+      'desktops-only-with-several',
+      'desktop-lines-only-with-several',
       'tray-enabled',
       'tray-overflow',
       'tray-all-monitors',
