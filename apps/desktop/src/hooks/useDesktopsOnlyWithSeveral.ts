@@ -2,7 +2,7 @@ import { useShellState } from './useShellState'
 
 export function useDesktopsOnlyWithSeveral() {
   return useShellState<boolean>(
-    false,
+    true,
     window.shell.desktops.onlyWithSeveral,
     window.shell.desktops.onOnlyWithSeveralChanged
   )

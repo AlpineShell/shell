@@ -83,10 +83,16 @@ describe('DesktopSwitcher', () => {
     expect(screen.getByRole('button', { name: 'Desktop 1' }).className).toContain('bg-white/20')
   })
 
-  it('stays on Ridge with one desktop by default', async () => {
+  it('stays on Ridge with one desktop once only-with-several is turned off', async () => {
     desktopsState = { count: 1, current: 0 }
     await renderSwitcher()
     expect(desktopButtons()).toHaveLength(1)
+  })
+
+  it('leaves Ridge with one desktop before the setting has loaded', () => {
+    desktopsState = { count: 1, current: 0 }
+    render(<DesktopSwitcher look="numbers" />)
+    expect(desktopButtons()).toHaveLength(0)
   })
 
   it('leaves Ridge with one desktop when it shows only with several, and comes back with a second', async () => {

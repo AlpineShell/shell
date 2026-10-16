@@ -28,7 +28,7 @@ const PREFS_FILE = 'virtual-desktops-prefs.json'
 const ACTIVATE_AFTER_SHOW_MS = 50
 
 let state = initialDesktops()
-let onlyWithSeveral = false
+let onlyWithSeveral = true
 let broadcastRef = null
 
 function userDataFile(name) {
@@ -42,14 +42,14 @@ function getStashPath() {
 
 function loadPrefs() {
   try {
-    onlyWithSeveral = JSON.parse(fs.readFileSync(userDataFile(PREFS_FILE), 'utf8')).onlyWithSeveral === true
+    onlyWithSeveral = JSON.parse(fs.readFileSync(userDataFile(PREFS_FILE), 'utf8')).onlyWithSeveral !== false
   } catch {
-    onlyWithSeveral = false
+    onlyWithSeveral = true
   }
 }
 
 function setOnlyWithSeveral(value) {
-  onlyWithSeveral = value === true
+  onlyWithSeveral = value !== false
   try {
     fs.writeFileSync(userDataFile(PREFS_FILE), JSON.stringify({ onlyWithSeveral }))
   } catch (e) {
