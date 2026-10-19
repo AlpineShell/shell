@@ -15,6 +15,22 @@ let showSearchIcon = false
 let mediaShowVisualizer = false
 let storePath = null
 let broadcastRef = null
+const colorChangeListeners = new Set()
+
+function onColorChange(listener) {
+  colorChangeListeners.add(listener)
+  return () => colorChangeListeners.delete(listener)
+}
+
+function notifyColorChange() {
+  for (const listener of colorChangeListeners) {
+    try {
+      listener()
+    } catch (e) {
+      console.error('[topbarColor] change listener error:', e.message)
+    }
+  }
+}
 
 function getStorePath() {
   if (!storePath) storePath = path.join(app.getPath('userData'), STORE_FILE)
@@ -168,6 +184,7 @@ function applyColorForPath(wallpaperPath, broadcast) {
     if (!userOverride) {
       broadcast('topbar/color-changed', color)
     }
+    notifyColorChange()
   }
 }
 
@@ -186,6 +203,7 @@ module.exports = {
           lastColor = result.color
           lastPalette = buildPalette(result.clusters)
           lastWallpaperPath = p
+          notifyColorChange()
         }
         return userOverride || lastColor
       })
@@ -200,6 +218,7 @@ module.exports = {
       saveOverride()
       const effective = getEffectiveColor()
       if (effective && broadcastRef) broadcastRef('topbar/color-changed', effective)
+      notifyColorChange()
       return effective
     },
     'topbar/color-palette': () => lastPalette,
@@ -219,9 +238,13 @@ module.exports = {
     },
   },
 
+  currentColor: getEffectiveColor,
+  onColorChange,
+
   start(broadcast) {
     broadcastRef = broadcast
     loadOverride()
+    notifyColorChange()
     updateColor(broadcast)
     onWallpaperPathChange((wallpaperPath) => applyColorForPath(wallpaperPath, broadcast))
   },

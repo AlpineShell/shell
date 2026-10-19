@@ -707,7 +707,9 @@ function settingsWindowHandles() {
   try { return [settingsWin.getNativeWindowHandle().readUInt32LE(0)] } catch { return [] }
 }
 
-const SETTINGS_TITLE_BAR_HEIGHT = 48
+const SETTINGS_TITLE_BAR_HEIGHT = 40
+const SETTINGS_WIDTH = 1200
+const SETTINGS_MIN_WIDTH = 940
 
 function settingsTitleBarOverlay() {
   return { ...theme.getTitleBarOverlayColors(), height: SETTINGS_TITLE_BAR_HEIGHT }
@@ -726,10 +728,12 @@ function createSettingsWindow() {
   }
   settingsWin = new BrowserWindow({
     title: 'Settings',
-    width: 1280,
-    height: 820,
-    minWidth: 800,
+    width: SETTINGS_WIDTH,
+    height: 800,
+    minWidth: SETTINGS_MIN_WIDTH,
+    maxWidth: SETTINGS_WIDTH,
     minHeight: 560,
+    maximizable: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: settingsTitleBarOverlay(),
     resizable: true,
@@ -1013,6 +1017,7 @@ async function startApp() {
 
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
 
+  theme.followRidgeColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
 
   setup.setShellShutdown(gracefulShutdown)

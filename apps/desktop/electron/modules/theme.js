@@ -1,9 +1,4 @@
-const DEFAULT_THEME = 'dark'
-
-const WINDOW_BACKGROUNDS = {
-  light: '#d6d6d6',
-  dark: '#202020',
-}
+const { DEFAULT_TOPBAR_COLOR } = require('./topbarColorDefaults')
 
 const CAPTION_SYMBOL_COLORS = {
   light: '#000000',
@@ -12,25 +7,28 @@ const CAPTION_SYMBOL_COLORS = {
 
 let broadcast = null
 let lastBroadcast = null
+let ridgeColorSource = null
 const themeChangeListeners = new Set()
 
-function windowBackgroundFor(name) {
-  return WINDOW_BACKGROUNDS[name] ?? WINDOW_BACKGROUNDS[DEFAULT_THEME]
+function hexChannel(value) {
+  return Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0')
 }
 
-function readWindowsThemeName() {
-  try {
-    const { nativeTheme } = require('electron')
-    if (!nativeTheme) return DEFAULT_THEME
-    return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
-  } catch {
-    return DEFAULT_THEME
-  }
+function hexFor(color) {
+  return `#${hexChannel(color.r)}${hexChannel(color.g)}${hexChannel(color.b)}`
+}
+
+function themeFor(color) {
+  return { name: color.darkText ? 'light' : 'dark', background: hexFor(color) }
+}
+
+function currentRidgeColor() {
+  const color = ridgeColorSource ? ridgeColorSource.currentColor() : null
+  return color || DEFAULT_TOPBAR_COLOR
 }
 
 function getTheme() {
-  const name = readWindowsThemeName()
-  return { name, background: windowBackgroundFor(name) }
+  return themeFor(currentRidgeColor())
 }
 
 function getWindowBackground() {
@@ -40,14 +38,6 @@ function getWindowBackground() {
 function getTitleBarOverlayColors() {
   const { name, background } = getTheme()
   return { color: background, symbolColor: CAPTION_SYMBOL_COLORS[name] }
-}
-
-function followWindowsTheme() {
-  try {
-    const { nativeTheme } = require('electron')
-    if (!nativeTheme) return
-    nativeTheme.on('updated', publishIfChanged)
-  } catch {}
 }
 
 function onThemeChange(listener) {
@@ -78,11 +68,18 @@ function publishIfChanged() {
   notifyThemeChange(theme)
 }
 
+function followRidgeColor(source) {
+  ridgeColorSource = source
+  source.onColorChange(publishIfChanged)
+  publishIfChanged()
+}
+
 module.exports = {
-  windowBackgroundFor,
+  themeFor,
   getTheme,
   getWindowBackground,
   getTitleBarOverlayColors,
+  followRidgeColor,
   onThemeChange,
   handlers: {
     'theme/get': () => getTheme(),
@@ -90,7 +87,6 @@ module.exports = {
   start(b) {
     broadcast = b
     const { ipcMain } = require('electron')
-    followWindowsTheme()
     lastBroadcast = getTheme()
     ipcMain.on('theme/init', (event) => {
       event.returnValue = getTheme()
