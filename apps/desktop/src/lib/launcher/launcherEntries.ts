@@ -50,7 +50,7 @@ export function appEntry(item: LauncherItem): LauncherEntry {
   const extraTerms = isAlpineSettingsItem(item) ? ALPINE_SETTINGS_KEYWORDS.map(keywordTerm) : []
   return {
     kind: "app",
-    id: `app:${key}`,
+    id: `app:${appResultKey(item.lnkPath ?? item.target)}`,
     rankKey: key,
     section: "apps",
     title: item.name,
