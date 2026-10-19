@@ -1376,7 +1376,35 @@ declare global {
 
   interface RidgePresetMenuProps {
     color: RidgeRgb | null
+    startColor: RidgeRgb
     onPick: (color: RidgeRgb) => void
+  }
+
+  interface RidgeHsv {
+    h: number
+    s: number
+    v: number
+  }
+
+  interface RidgeColorPickerProps {
+    initial: RidgeRgb
+    onPick: (color: RidgeRgb) => void
+  }
+
+  interface RidgeShadeFieldProps {
+    hsv: RidgeHsv
+    onChange: (hsv: RidgeHsv) => void
+  }
+
+  interface RidgeHueSliderProps {
+    hue: number
+    onChange: (hue: number) => void
+  }
+
+  interface RidgePickerThumbProps {
+    x: number
+    y: number
+    color: string
   }
 
   interface RidgePresetColor {

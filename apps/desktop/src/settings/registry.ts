@@ -830,9 +830,9 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
   {
     id: 'topbar-color',
     label: 'Ridge color',
-    description: 'Pick a preset or use a color from your wallpaper.',
+    description: 'Pick any color, a preset or a color from your wallpaper.',
     hint: 'Override the Ridge color',
-    keywords: ['top bar color', 'topbar colour', 'accent', 'preset', 'swatch', 'palette', 'tint'],
+    keywords: ['top bar color', 'topbar colour', 'accent', 'preset', 'swatch', 'palette', 'tint', 'custom color', 'color picker', 'hex'],
     icon: Palette,
     page: 'ridge',
     group: 'Color',

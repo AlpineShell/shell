@@ -4,6 +4,8 @@ import { Card, Section } from '@alpine/ui'
 import { settingsEntry } from '../../../settings/registry'
 import { useOutsidePointer } from '../../../hooks/useOutsidePointer'
 import { entryRowContent } from '../registryRowContent'
+import RidgeColorPicker from './ridgeColorPicker'
+import { toHex } from './ridgeColorMath'
 
 const SECTION_TITLE = 'Color'
 
@@ -48,10 +50,6 @@ const PRESET_COLORS: RidgePresetColor[] = [
 
 function sameColor(first: RidgeRgb | null, second: RidgeRgb): boolean {
   return first !== null && first.r === second.r && first.g === second.g && first.b === second.b
-}
-
-function toHex({ r, g, b }: RidgeRgb): string {
-  return `#${[r, g, b].map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
 }
 
 function isLight({ r, g, b }: RidgeRgb): boolean {
@@ -99,6 +97,7 @@ export default function RidgeColorSection() {
   }
 
   const chosenElsewhere = override !== null && !palette.some((color) => sameColor(override, color)) ? override : null
+  const pickerStartColor = override ?? palette[0] ?? PRESET_COLORS[0].color
   const adaptToApps = settingsEntry(ADAPT_TO_APPS_SETTING)
 
   return (
@@ -117,7 +116,7 @@ export default function RidgeColorSection() {
               light={color.darkText}
             />
           ))}
-          <PresetMenu color={chosenElsewhere} onPick={choose} />
+          <PresetMenu color={chosenElsewhere} startColor={pickerStartColor} onPick={choose} />
         </div>
       </div>
     </Section>
@@ -140,7 +139,7 @@ function Swatch({ label, selected, onClick, background, light }: RidgeSwatchProp
   )
 }
 
-function PresetMenu({ color, onPick }: RidgePresetMenuProps) {
+function PresetMenu({ color, startColor, onPick }: RidgePresetMenuProps) {
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -183,17 +182,22 @@ function PresetMenu({ color, onPick }: RidgePresetMenuProps) {
       </button>
       {open && (
         <div id={menuId} role="group" aria-label={MORE_COLORS_LABEL} className="absolute top-full left-0 z-40 mt-2 w-max">
-          <Card className="grid grid-cols-6 gap-2 p-3">
-            {PRESET_COLORS.map((preset) => (
-              <Swatch
-                key={preset.name}
-                label={preset.name}
-                selected={sameColor(color, preset.color)}
-                onClick={() => pick(preset.color)}
-                background={toHex(preset.color)}
-                light={isLight(preset.color)}
-              />
-            ))}
+          <Card className="flex flex-col gap-3 p-3">
+            <div className="grid grid-cols-6 gap-2">
+              {PRESET_COLORS.map((preset) => (
+                <Swatch
+                  key={preset.name}
+                  label={preset.name}
+                  selected={sameColor(color, preset.color)}
+                  onClick={() => pick(preset.color)}
+                  background={toHex(preset.color)}
+                  light={isLight(preset.color)}
+                />
+              ))}
+            </div>
+            <div className="border-t border-line-hairline pt-3">
+              <RidgeColorPicker initial={startColor} onPick={onPick} />
+            </div>
           </Card>
         </div>
       )}
