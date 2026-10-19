@@ -231,6 +231,21 @@ describe("LauncherPanel", () => {
     expect(launcher.launch).toHaveBeenCalledWith(1)
   })
 
+  it("moves one row at a time through shortcuts that share a target", async () => {
+    const CMD = "C:\\Windows\\System32\\cmd.exe"
+    stubBridges({
+      catalog: [
+        catalogItem(0, "Command Prompt", CMD, "C:\\Start\\Command Prompt.lnk"),
+        catalogItem(1, "Developer Command Prompt", CMD, "C:\\Start\\Developer Command Prompt.lnk"),
+      ],
+    })
+    const input = await openLauncher()
+    await type(input, "cmd")
+    press(input, "ArrowDown")
+    press(input, "Enter")
+    expect(launcher.launch).toHaveBeenCalledWith(1)
+  })
+
   it("hides on Escape", async () => {
     const input = await openLauncher()
     press(input, "Escape")
