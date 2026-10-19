@@ -1026,7 +1026,6 @@ async function startApp() {
   })
   appLaunch.setShellLinkOpener((link) => handleDeepLink(link))
   activeDisplay.setPreferredDisplayProvider(() => launcher.getActiveDisplayId())
-  launcher.setDisplayProvider(() => activeDisplay.currentDisplay())
 
   ipc.handle('setup/test-out', trustedSenders.guardHandler(async () => {
     try {

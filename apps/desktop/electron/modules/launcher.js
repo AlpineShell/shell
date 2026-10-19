@@ -17,7 +17,6 @@ let hideTimeoutTopBar = null
 let lastUserForeground = 0
 let switcherCloser = null
 let emojiCaptureControl = null
-let displayProvider = null
 let screenshotStarter = null
 const lastPanelBottom = new Map()
 
@@ -137,19 +136,7 @@ function showLauncher(displayId, mode) {
   activeTopBar = topBar
 }
 
-function setDisplayProvider(fn) {
-  displayProvider = typeof fn === 'function' ? fn : null
-}
-
 function pickDisplay() {
-  if (displayProvider) {
-    try {
-      const display = displayProvider()
-      if (display) return display
-    } catch (e) {
-      console.error('[launcher] display provider error:', e.message)
-    }
-  }
   const { screen } = require('electron')
   return screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
 }
@@ -305,7 +292,6 @@ module.exports = {
   showClipboardHistory,
   forwardEmojiKey,
   setEmojiCaptureControl,
-  setDisplayProvider,
   setScreenshotStarter,
   closeEmoji: animatedHide,
   hideForOverlay,
