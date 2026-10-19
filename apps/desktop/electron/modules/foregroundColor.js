@@ -40,7 +40,7 @@ const sampledHwndPerDisplay = new Map()
 let startupIgnoreHwnd = null
 let displayRemovedListener = null
 let stopPolling = null
-let ridgeColoredWindowsProvider = null
+let unsampledWindowsProvider = null
 
 const ADAPT_STORE_FILE = 'foreground-color.json'
 let adaptToApps = true
@@ -195,7 +195,7 @@ function update(broadcast) {
   const displayId = getDisplayIdForWindow(hwnd)
   if (displayId == null) return
 
-  if (isExposedOwnWindow(hwnd, ridgeColoredWindowsProvider)) {
+  if (isExposedOwnWindow(hwnd, unsampledWindowsProvider)) {
     clearDisplay(displayId, broadcast)
     return
   }
@@ -252,8 +252,8 @@ module.exports = {
       return result
     },
   },
-  setRidgeColoredWindows(provider) {
-    ridgeColoredWindowsProvider = typeof provider === 'function' ? provider : null
+  setUnsampledWindows(provider) {
+    unsampledWindowsProvider = typeof provider === 'function' ? provider : null
   },
   start(broadcast) {
     const { app } = require('electron')

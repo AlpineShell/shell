@@ -4,6 +4,7 @@ import { createElement } from 'react'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
 import { EMPTY_TOPBAR_LAYOUT, TOPBAR_ITEMS } from '../topbar/layout/topbarLayout'
 import { liveRidgePreviewData } from './ridge/ridgeTestFixtures'
+import { hsvToRgb } from './ridge/ridgeColorMath'
 
 let RidgePage: typeof import('./ridgePage').default
 let highlightSetting: typeof import('../../hooks/useHighlightedSetting').highlightSetting
@@ -12,6 +13,7 @@ let resizeTo: (width: number) => void
 
 const LIVE = liveRidgePreviewData()
 const WALLPAPER_COLOR: TopBarColor = { r: 12, g: 40, b: 64, darkText: false }
+const SHADE_FIELD_BOUNDS = { left: 0, top: 0, right: 200, bottom: 100, width: 200, height: 100, x: 0, y: 0, toJSON: () => ({}) }
 const LIVE_WIDGETS: [TopbarSlot, string][] = [
   ['left', 'Weather'],
   ['right', 'Notes'],
@@ -196,6 +198,18 @@ function swatch(name: string): HTMLElement {
   return screen.getByRole('button', { name })
 }
 
+function moreColorsMenu() {
+  return within(screen.getByRole('group', { name: 'More colors' }))
+}
+
+function pickerSlider(name: string): HTMLElement {
+  return moreColorsMenu().getByRole('slider', { name })
+}
+
+function typeHex(value: string) {
+  fireEvent.change(moreColorsMenu().getByRole('textbox', { name: 'Hex color' }), { target: { value } })
+}
+
 function chip(name: string): HTMLElement {
   return screen.getByRole('button', { name })
 }
@@ -308,6 +322,59 @@ describe('the Color section on the Ridge page', () => {
     expect(spy('topbar.setColorOverride')).toHaveBeenLastCalledWith({ r: 50, g: 50, b: 60 })
     expect(screen.queryByRole('group', { name: 'More colors' })).toBeNull()
     expect(swatch('Automatic').getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('picks any color typed into the hex field, and keeps the menu open', async () => {
+    const { spy } = installBridges()
+    await openPage()
+
+    fireEvent.click(swatch('More colors'))
+    typeHex('#3a6ea5')
+
+    expect(spy('topbar.setColorOverride')).toHaveBeenLastCalledWith({ r: 58, g: 110, b: 165 })
+    expect(screen.getByRole('group', { name: 'More colors' })).toBeTruthy()
+    expect(swatch('More colors').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('holds a half-typed hex color back from Ridge', async () => {
+    const { spy } = installBridges()
+    await openPage()
+
+    fireEvent.click(swatch('More colors'))
+    typeHex('#3a6e')
+
+    expect(spy('topbar.setColorOverride')).not.toHaveBeenCalled()
+  })
+
+  it('drags a free color out of the shade field', async () => {
+    const { spy } = installBridges()
+    await openPage()
+    fireEvent.click(swatch('More colors'))
+    typeHex('#ff0000')
+    const field = pickerSlider('Saturation and brightness')
+    vi.spyOn(field, 'getBoundingClientRect').mockReturnValue(SHADE_FIELD_BOUNDS)
+
+    fireEvent.pointerDown(field, { button: 0, buttons: 1, pointerId: 1, clientX: 100, clientY: 0 })
+    expect(spy('topbar.setColorOverride')).toHaveBeenLastCalledWith({ r: 255, g: 128, b: 128 })
+
+    fireEvent.pointerMove(field, { buttons: 1, pointerId: 1, clientX: 200, clientY: 100 })
+    expect(spy('topbar.setColorOverride')).toHaveBeenLastCalledWith({ r: 0, g: 0, b: 0 })
+
+    const callsAfterRelease = spy('topbar.setColorOverride').mock.calls.length
+    fireEvent.pointerMove(field, { buttons: 0, pointerId: 1, clientX: 0, clientY: 0 })
+    expect(spy('topbar.setColorOverride')).toHaveBeenCalledTimes(callsAfterRelease)
+  })
+
+  it('turns the hue from the keyboard', async () => {
+    const { spy } = installBridges()
+    await openPage()
+    fireEvent.click(swatch('More colors'))
+    typeHex('#ff0000')
+
+    fireEvent.keyDown(pickerSlider('Hue'), { key: 'ArrowRight', shiftKey: true })
+
+    expect(pickerSlider('Hue').getAttribute('aria-valuenow')).toBe('10')
+    expect(spy('topbar.setColorOverride')).toHaveBeenLastCalledWith(hsvToRgb({ h: 10, s: 1, v: 1 }))
   })
 
   it('turns Adapt to apps off from its switch', async () => {
