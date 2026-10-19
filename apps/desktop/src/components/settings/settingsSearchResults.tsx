@@ -20,7 +20,7 @@ export default function SettingsSearchResults({
       className="flex w-full flex-col gap-stack"
       onMouseDown={(event) => event.preventDefault()}
     >
-      <PageTitle title="Search" />
+      <PageTitle variant="plain" title="Search" />
 
       {matches.length === 0 ? (
         <EmptyState variant="plain" title={`Nothing matches “${query.trim()}”`} />

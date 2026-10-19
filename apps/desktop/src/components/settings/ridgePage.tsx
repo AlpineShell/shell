@@ -187,7 +187,7 @@ export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
   return (
     <div className="relative flex w-full flex-1 flex-col gap-section">
       <div>
-        <PageHeader title={settingsPage('ridge')?.label ?? ''} subtitle={PAGE_SUBTITLE}>
+        <PageHeader variant="plain" title={settingsPage('ridge')?.label ?? ''} subtitle={PAGE_SUBTITLE}>
           <div
             ref={resetAnchor}
             data-setting={RESET_SETTING}

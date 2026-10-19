@@ -1,5 +1,5 @@
 import { Activity, FileType, Package, Power } from 'lucide-react'
-import { NavRow, PageTitle } from '@alpine/ui'
+import { Card, NavRow, PageTitle } from '@alpine/ui'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
 
 const ROWS: { page: SettingsPageId; icon: typeof Package }[] = [
@@ -11,21 +11,22 @@ const ROWS: { page: SettingsPageId; icon: typeof Package }[] = [
 
 export default function AppsHub({ onNavigate }: { onNavigate: (path: string) => void }) {
   return (
-    <div className="w-full flex flex-col gap-4">
-      <PageTitle title={settingsPage('apps')?.label ?? ''} />
-      <div className="flex flex-col gap-2">
+    <div className="w-full flex flex-col gap-section">
+      <PageTitle variant="plain" title={settingsPage('apps')?.label ?? ''} />
+      <Card variant="group">
         {ROWS.map((row) => {
           const Icon = row.icon
           return (
             <NavRow
               key={row.page}
-              icon={<Icon size={18} />}
+              variant="flat"
+              icon={<Icon size={16} />}
               label={settingsPage(row.page)?.label ?? ''}
               onClick={() => onNavigate(settingsPageRoute(row.page) ?? '')}
             />
           )
         })}
-      </div>
+      </Card>
     </div>
   )
 }

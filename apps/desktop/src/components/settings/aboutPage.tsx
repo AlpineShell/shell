@@ -1,17 +1,18 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Bluetooth, Image as ImageIcon, PanelTop, Wifi } from 'lucide-react'
-import { NavRow } from '@alpine/ui'
+import { Card, NavRow } from '@alpine/ui'
 import { useWallpaper } from '../../hooks/useWallpaper'
+import { useNetworkStatus } from '../../hooks/useNetwork'
+import { useBluetooth } from '../../hooks/useBluetooth'
+import { connectedSummary } from '../../lib/bluetoothPresentation'
 import { settingsPage, settingsPageRoute } from '../../settings/registry'
 
 const CACHE_KEY = 'alpine.systemInfo.v2'
 
-const HOME_ROWS: { page: SettingsPageId; icon: ReactNode; description: string }[] = [
-  { page: 'wallpaper', icon: <ImageIcon size={18} />, description: 'Change background image' },
-  { page: 'wifi', icon: <Wifi size={18} />, description: 'Connect to networks' },
-  { page: 'bluetooth', icon: <Bluetooth size={18} />, description: 'Pair and manage Bluetooth devices' },
-  { page: 'ridge', icon: <PanelTop size={18} />, description: 'Arrange Ridge and choose its color' },
-]
+const TB = 1024 ** 4
+const GB = 1024 ** 3
+
+const SIZE_FORMAT = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 })
 
 function readCache(): SystemInfo | null {
   try {
@@ -33,23 +34,31 @@ function writeCache(info: SystemInfo) {
   }
 }
 
-const TB = 1024 ** 4
-const GB = 1024 ** 3
-
 function formatSize(bytes: number): string {
-  if (bytes >= TB) {
-    const tb = bytes / TB
-    return `${tb >= 10 ? tb.toFixed(0) : tb.toFixed(2).replace('.', ',')}TB`
-  }
-  const gb = bytes / GB
-  return `${Math.round(gb)}GB`
+  if (bytes >= TB) return `${SIZE_FORMAT.format(bytes / TB)} TB`
+  return `${Math.round(bytes / GB)} GB`
 }
 
-const DISK_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#ec4899']
-const RAM_COLOR = '#8b5cf6'
+function wallpaperName(url: string | null): string | undefined {
+  if (!url) return undefined
+  try {
+    const file = new URL(url).searchParams.get('p')?.split(/[\\/]/).pop()
+    return file ? file.replace(/\.[^.]+$/, '') : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function networkDetail(status: NetworkStatus): string | undefined {
+  if (!status.connected) return undefined
+  if (status.type === 'ethernet') return 'Ethernet'
+  return status.ssid ?? undefined
+}
 
 export default function AboutPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   const wallpaper = useWallpaper()
+  const network = useNetworkStatus()
+  const bluetooth = useBluetooth().state
   const [info, setInfo] = useState<SystemInfo | null>(() => readCache())
 
   useEffect(() => {
@@ -64,88 +73,75 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
     })
   }, [])
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex gap-6 items-stretch max-w-4xl">
-        <div className="w-72 shrink-0 flex flex-col gap-2">
-          <div
-            className="w-full aspect-video rounded-field bg-surface-3 bg-cover bg-center border border-line-hairline"
-            style={wallpaper ? { backgroundImage: `url('${wallpaper}')` } : undefined}
-          />
+  const rows: { page: SettingsPageId; icon: ReactNode; detail?: string }[] = [
+    { page: 'wallpaper', icon: <ImageIcon size={16} />, detail: wallpaperName(wallpaper) },
+    { page: 'wifi', icon: <Wifi size={16} />, detail: networkDetail(network) },
+    { page: 'bluetooth', icon: <Bluetooth size={16} />, detail: connectedSummary(bluetooth) },
+    { page: 'ridge', icon: <PanelTop size={16} /> },
+  ]
 
-          {info ? (
-            <>
-              {info.disks.map((d, i) => (
-                <UsageRow
-                  key={d.letter}
-                  label={`${d.letter}:`}
-                  used={d.used}
-                  total={d.total}
-                  color={DISK_COLORS[i % DISK_COLORS.length]}
-                />
-              ))}
-              <UsageRow
-                label="RAM"
-                used={info.memory.used}
-                total={info.memory.total}
-                color={RAM_COLOR}
-              />
-            </>
-          ) : (
-            [0, 1, 2].map((i) => (
-              <div key={i} className="w-full h-6 rounded-md bg-surface-3 border border-line-hairline animate-pulse" />
-            ))
-          )}
-        </div>
+  return (
+    <div className="flex flex-col gap-section">
+      <div className="flex items-stretch gap-6">
+        <div
+          className="aspect-video w-72 shrink-0 rounded-card border border-line-hairline bg-surface-3 bg-cover bg-center"
+          style={wallpaper ? { backgroundImage: `url('${wallpaper}')` } : undefined}
+        />
 
         <div
-          className="pt-1 flex flex-col transition-opacity duration-300 min-w-0 flex-1"
+          className="flex min-w-0 flex-1 flex-col pt-1 transition-opacity duration-300"
           style={{ opacity: info ? 1 : 0 }}
         >
-          <div className="flex flex-col gap-1">
-            <h1 className="font-display text-2xl font-normal tracking-tight text-ink-primary truncate">
-              {info?.computerName ?? ''}
-            </h1>
-            <span className="text-sm text-ink-secondary truncate">
-              {info?.os.name ?? ''}
+          <h1 className="truncate text-2xl font-medium tracking-tight text-ink-primary">{info?.computerName ?? ''}</h1>
+          <span className="truncate text-sm text-ink-secondary">{info?.os.name ?? ''}</span>
+          {info?.os.build && (
+            <span className="text-xs text-ink-quiet">
+              Version {info.os.version} · Build {info.os.build}
             </span>
-            {info?.os.build && (
-              <span className="text-xs text-ink-quiet">
-                Version {info.os.version} - Build {info.os.build}
-              </span>
-            )}
-          </div>
+          )}
+          {info && (
+            <div className="mt-auto flex flex-col gap-2.5 pt-4">
+              {info.disks.map((disk) => (
+                <UsageRow key={disk.letter} label={`${disk.letter}:`} used={disk.used} total={disk.total} />
+              ))}
+              <UsageRow label="Memory" used={info.memory.used} total={info.memory.total} />
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {HOME_ROWS.map((row) => (
+      <Card variant="group">
+        {rows.map((row) => (
           <NavRow
             key={row.page}
+            variant="flat"
             icon={row.icon}
             label={settingsPage(row.page)?.label ?? ''}
-            description={row.description}
+            detail={row.detail}
             onClick={() => onNavigate(settingsPageRoute(row.page) ?? '')}
           />
         ))}
-      </div>
+      </Card>
     </div>
   )
 }
 
-function UsageRow({ label, used, total, color }: { label: string; used: number; total: number; color: string }) {
-  const pct = total > 0 ? (used / total) * 100 : 0
+function UsageRow({ label, used, total }: { label: string; used: number; total: number }) {
+  const percent = total > 0 ? Math.round((used / total) * 100) : 0
   return (
-    <div className="relative w-full h-6 rounded-md bg-surface-3 border border-line-hairline overflow-hidden">
-      <div
-        className="absolute left-0 top-0 bottom-0 transition-all"
-        style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
-      />
-      <div className="absolute inset-0 flex items-center justify-between px-2.5 text-[11px] font-medium text-ink-primary">
-        <span>{label}</span>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex justify-between text-xs tabular-nums text-ink-quiet">
+        <span className="font-medium text-ink-primary">{label}</span>
         <span>
-          {formatSize(used)} / {formatSize(total)}
+          {formatSize(used)} of {formatSize(total)}
         </span>
+      </div>
+      <div
+        role="img"
+        aria-label={`${label} ${percent}% used`}
+        className="h-1.5 overflow-hidden rounded-full bg-fill-track"
+      >
+        <div className="h-full rounded-full bg-ink-secondary" style={{ width: `${percent}%` }} />
       </div>
     </div>
   )

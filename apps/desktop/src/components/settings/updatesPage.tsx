@@ -72,7 +72,7 @@ export default function UpdatesPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Updates">
+      <PageHeader variant="plain" title="Updates">
         <IconButton
           label="Check for updates"
           onClick={refresh}

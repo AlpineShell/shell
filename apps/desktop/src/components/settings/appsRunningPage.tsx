@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AppWindow, Boxes, Search, X } from 'lucide-react'
-import { Avatar, ConfirmButton, EmptyState, ListRow, PageHeader, TextField } from '@alpine/ui'
+import { Avatar, Card, ConfirmButton, EmptyState, ListRow, PageHeader, TextField } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useRunningApps } from '../../hooks/useRunningApps'
 import { formatMemory } from './appsShared'
@@ -25,7 +25,7 @@ export default function AppsRunningPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title={settingsPage('apps-running')?.label ?? ''}>
+      <PageHeader variant="plain" title={settingsPage('apps-running')?.label ?? ''}>
         <TextField
           label="Search running apps"
           value={query}
@@ -39,13 +39,14 @@ export default function AppsRunningPage() {
       {running.length === 0 && <PageSpinner label="Looking at what's running" />}
       {running.length > 0 && visible.length === 0 && <EmptyState variant="plain" title="No apps match your search." />}
 
-      <div className="flex flex-col">
+      <Card variant="list">
         {foreground.map((app) => (
           <RunningRow key={app.name} app={app} />
         ))}
+      </Card>
 
-        {background.length > 0 && (
-          <div className="mt-3">
+      {background.length > 0 && (
+        <Card variant="list">
             <ListRow
               variant="plain"
               icon={<Boxes size={16} className="text-ink-faint" />}
@@ -54,11 +55,9 @@ export default function AppsRunningPage() {
               onActivate={() => setBackgroundOpen((v) => !v)}
               expanded={showBackground}
             />
-          </div>
-        )}
-
-        {showBackground && background.map((app) => <RunningRow key={app.name} app={app} />)}
-      </div>
+          {showBackground && background.map((app) => <RunningRow key={app.name} app={app} />)}
+        </Card>
+      )}
     </div>
   )
 }

@@ -141,7 +141,7 @@ export default function DisplaysPage() {
 
   return (
     <div className="flex flex-col gap-8 w-full">
-      <PageTitle title="Displays" />
+      <PageTitle variant="plain" title="Displays" />
 
       {committed.length === 0 ? (
         <p className="text-sm text-ink-quiet">No displays detected.</p>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AppWindow, FolderOpen, Lock, Search, ShieldAlert, Trash2, X } from 'lucide-react'
-import { Avatar, Button, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, TextField, Toggle } from '@alpine/ui'
+import { Avatar, Button, Card, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, TextField, Toggle } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import { useRunningApps } from '../../hooks/useRunningApps'
@@ -40,7 +40,7 @@ export default function AppsStartupPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title={settingsPage('apps-startup')?.label ?? ''}>
+      <PageHeader variant="plain" title={settingsPage('apps-startup')?.label ?? ''}>
         <TextField
           label="Search startup apps"
           value={query}
@@ -72,13 +72,14 @@ export default function AppsStartupPage() {
         <EmptyState variant="plain" title="No apps match your search." />
       )}
 
-      <div className="flex flex-col">
+      <Card variant="list">
         {appEntries.map((entry) => (
           <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} />
         ))}
+      </Card>
 
-        {systemEntries.length > 0 && (
-          <div className="mt-3">
+      {systemEntries.length > 0 && (
+        <Card variant="list">
             <ListRow
               variant="plain"
               icon={<Lock size={15} className="text-ink-faint" />}
@@ -87,11 +88,9 @@ export default function AppsStartupPage() {
               onActivate={() => setSystemOpen(!systemOpen)}
               expanded={systemOpen}
             />
-          </div>
-        )}
-
-        {systemOpen && systemEntries.map((entry) => <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} />)}
-      </div>
+          {systemOpen && systemEntries.map((entry) => <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} />)}
+        </Card>
+      )}
     </div>
   )
 }

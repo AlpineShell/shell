@@ -24,7 +24,7 @@ export default function PluginSettingsPage({ pluginId }: PluginSettingsPageProps
 
   return (
     <div className="flex w-full flex-col gap-section">
-      <PageTitle title={page.label} />
+      <PageTitle variant="plain" title={page.label} />
       {page.settings.length > 0 && (
         <div className="flex flex-col gap-3">
           <PluginSettingRows pluginId={page.pluginId} settings={page.settings} />

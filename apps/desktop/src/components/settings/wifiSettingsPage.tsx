@@ -86,7 +86,7 @@ export default function WifiSettingsPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Wi-Fi">
+      <PageHeader variant="plain" title="Wi-Fi">
         <IconButton onClick={scan} disabled={scanning || !enabled} label="Rescan">
           <RefreshCw size={15} className={scanning ? 'animate-spin' : ''} />
         </IconButton>

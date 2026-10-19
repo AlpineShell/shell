@@ -101,7 +101,7 @@ export default function SystemRevertPage() {
 
   return (
     <div className="flex flex-col gap-6 w-full">
-      <PageTitle title={settingsPage('revert')?.label ?? ''} />
+      <PageTitle variant="plain" title={settingsPage('revert')?.label ?? ''} />
 
       {state.phase === 'done' && (
         <Banner

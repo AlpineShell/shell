@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AppWindow, Boxes, FolderOpen, Search, SquareArrowOutUpRight, Trash2 } from 'lucide-react'
-import { Avatar, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, TextField } from '@alpine/ui'
+import { Avatar, Card, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, TextField } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
 import PageSpinner from './pageSpinner'
@@ -22,7 +22,7 @@ export default function AppsInstalledPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title={settingsPage('apps-installed')?.label ?? ''}>
+      <PageHeader variant="plain" title={settingsPage('apps-installed')?.label ?? ''}>
         <TextField
           label="Search installed apps"
           value={query}
@@ -36,26 +36,27 @@ export default function AppsInstalledPage() {
       {installed.length === 0 && <PageSpinner label="Looking for installed apps" />}
       {installed.length > 0 && apps.length === 0 && <EmptyState variant="plain" title="No apps match your search." />}
 
-      <div className="flex flex-col">
-        {userApps.map((app) => (
-          <InstalledRow key={app.id} app={app} />
-        ))}
+      {userApps.length > 0 && (
+        <Card variant="list">
+          {userApps.map((app) => (
+            <InstalledRow key={app.id} app={app} />
+          ))}
+        </Card>
+      )}
 
-        {components.length > 0 && (
-          <div className="mt-3">
-            <ListRow
-              variant="plain"
-              icon={<Boxes size={16} className="text-ink-faint" />}
-              title={`Components & dependencies · ${components.length}`}
-              muted
-              onActivate={() => setComponentsOpen((v) => !v)}
-              expanded={showComponents}
-            />
-          </div>
-        )}
-
-        {showComponents && components.map((app) => <InstalledRow key={app.id} app={app} />)}
-      </div>
+      {components.length > 0 && (
+        <Card variant="list">
+          <ListRow
+            variant="plain"
+            icon={<Boxes size={16} className="text-ink-faint" />}
+            title={`Components & dependencies · ${components.length}`}
+            muted
+            onActivate={() => setComponentsOpen((v) => !v)}
+            expanded={showComponents}
+          />
+          {showComponents && components.map((app) => <InstalledRow key={app.id} app={app} />)}
+        </Card>
+      )}
     </div>
   )
 }

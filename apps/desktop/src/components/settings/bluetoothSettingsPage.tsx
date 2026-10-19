@@ -23,7 +23,7 @@ export default function BluetoothSettingsPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Bluetooth">
+      <PageHeader variant="plain" title="Bluetooth">
         <IconButton onClick={() => openPairing()} disabled={!radioOn} label="Pair new device">
           <Plus size={16} />
         </IconButton>

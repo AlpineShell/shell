@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, type ReactNode } from 'react'
-import { PageTitle, Section } from '@alpine/ui'
+import { Card, PageTitle, Section } from '@alpine/ui'
 import { SETTINGS_PAGE_GROUP, SETTINGS_REGISTRY, settingsPage } from '../../settings/registry'
 import { useHighlightedSetting } from '../../hooks/useHighlightedSetting'
 import { entryRowContent } from './registryRowContent'
@@ -34,15 +34,15 @@ export default function RegistryPage({
 
   return (
     <div className="flex w-full flex-col gap-section">
-      <PageTitle title={definition?.label ?? ''} />
+      <PageTitle variant="plain" title={definition?.label ?? ''} />
       {lead}
       {groups.map((group) => (
-        <Section key={group.name} title={group.name} subtitle={groupSubtitles[group.name]}>
-          <div className="flex flex-col gap-3">
+        <Section key={group.name} variant="label" title={group.name} subtitle={groupSubtitles[group.name]}>
+          <Card variant="group">
             {group.items.map((item) => (
               <Fragment key={item.key}>{item.content}</Fragment>
             ))}
-          </div>
+          </Card>
         </Section>
       ))}
     </div>
@@ -100,8 +100,8 @@ function HighlightedEntry({ entry, description }: { entry: SettingsEntry; descri
   return (
     <div
       ref={anchor}
-      className={`-mx-2 rounded-field px-2 py-1.5 transition-colors duration-300 ${
-        highlighted ? 'bg-fill-ghost ring-1 ring-line-strong' : ''
+      className={`flex flex-col justify-center transition-colors duration-300 ${
+        highlighted ? 'bg-fill-ghost ring-1 ring-inset ring-line-strong' : ''
       }`}
     >
       {content}

@@ -33,7 +33,7 @@ export default function TrayIconsPage() {
 
   return (
     <div className="flex w-full flex-col gap-section">
-      <PageTitle title={settingsPage('tray-icons')?.label ?? ''} />
+      <PageTitle variant="plain" title={settingsPage('tray-icons')?.label ?? ''} />
 
       {icons.length === 0 && <p className="text-sm text-ink-quiet">No tray icons running.</p>}
 

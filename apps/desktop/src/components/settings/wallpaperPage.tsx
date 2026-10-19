@@ -97,7 +97,7 @@ export default function WallpaperPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Wallpaper">
+      <PageHeader variant="plain" title="Wallpaper">
         <Segmented label="Wallpaper source" options={TABS} value={tab} onChange={setTab} />
       </PageHeader>
 
