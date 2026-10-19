@@ -702,7 +702,7 @@ function exposedOwnWindowHandles() {
   return handles
 }
 
-function ridgeColoredWindowHandles() {
+function settingsWindowHandles() {
   if (!settingsWin || settingsWin.isDestroyed()) return []
   try { return [settingsWin.getNativeWindowHandle().readUInt32LE(0)] } catch { return [] }
 }
@@ -1013,7 +1013,6 @@ async function startApp() {
 
   ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
 
-  theme.followTopbarColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
 
   setup.setShellShutdown(gracefulShutdown)
@@ -1234,7 +1233,7 @@ function startShellMode(claimedTakeover = null) {
   tiling.setExposedOwnWindows(exposedOwnWindowHandles)
   winEvents.setExposedOwnWindows(exposedOwnWindowHandles)
   windowCoverage.setExposedOwnWindows(exposedOwnWindowHandles)
-  foregroundColor.setRidgeColoredWindows(ridgeColoredWindowHandles)
+  foregroundColor.setUnsampledWindows(settingsWindowHandles)
   displayModePicker.setShells(shells)
   displayModePicker.setOtherSurfacesCloser(() => {
     launcher.hideForOverlay()

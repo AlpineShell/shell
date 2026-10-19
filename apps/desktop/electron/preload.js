@@ -58,7 +58,6 @@ function paintThemeEarly() {
     const el = document.documentElement
     if (!el) return
     el.dataset.theme = bootTheme.name
-    el.style.setProperty('--alpine-ground', bootTheme.background)
   }
   apply()
   if (document.readyState === 'loading') {

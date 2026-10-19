@@ -16,10 +16,6 @@ const TILE_WIDTH = 1280
 const TILE_HEIGHT = 820
 const SHEET_WIDTH = 1680
 const THEMES = ['light', 'dark']
-const RIDGE_COLOR_FOR_THEME = {
-  light: { r: 235, g: 235, b: 235 },
-  dark: { r: 30, g: 30, b: 30 },
-}
 
 const ROUTED_PAGES = SETTINGS_PAGES.filter((page) => page.route !== null)
 
@@ -159,8 +155,8 @@ async function setTiling(shell, enabled) {
   await shell.evaluate(`window.shell.tiling.setConfig({ enabled: ${enabled} })`)
 }
 
-async function paintRidge(shell, colorOverride) {
-  await shell.evaluate(`window.topbar.setColorOverride(${JSON.stringify(colorOverride)})`)
+async function showTheme(settings, theme) {
+  await settings.evaluate(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}; true`)
 }
 
 function tileMarkup(tiles) {
@@ -239,7 +235,7 @@ async function composeSheet(settings, theme, tiles) {
 
 async function main() {
   const started = { vite: null, electron: null }
-  const restore = { ridgeColorOverride: undefined, tiling: null }
+  const restore = { tiling: null }
   let shell = null
   let settings = null
 
@@ -253,7 +249,6 @@ async function main() {
     const desktopTarget = await waitFor(() => findTarget('desktop'))
     shell = await openDevtoolsSession(desktopTarget)
 
-    restore.ridgeColorOverride = await shell.evaluate('window.topbar.colorOverride()')
     restore.tiling = await shell.evaluate('window.shell.tiling.config().then((value) => value.enabled)')
 
     await navigate(shell, 'home')
@@ -264,7 +259,7 @@ async function main() {
     const captured = new Map()
 
     for (const theme of THEMES) {
-      await paintRidge(shell, RIDGE_COLOR_FOR_THEME[theme])
+      await showTheme(settings, theme)
       await sleep(800)
       await settings.send('Emulation.setDeviceMetricsOverride', {
         width: TILE_WIDTH,
@@ -295,8 +290,6 @@ async function main() {
       await writeFile(file, Buffer.from(data, 'base64'))
       process.stdout.write(`wrote ${file}\n`)
     }
-
-    if (restore.ridgeColorOverride !== undefined) await paintRidge(shell, restore.ridgeColorOverride)
   } finally {
     settings?.close()
     shell?.close()
