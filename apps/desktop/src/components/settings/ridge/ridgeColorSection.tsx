@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { Check, Plus } from 'lucide-react'
-import { Card, Section } from '@alpine/ui'
+import { Card, Row, Section } from '@alpine/ui'
 import { settingsEntry } from '../../../settings/registry'
 import { useOutsidePointer } from '../../../hooks/useOutsidePointer'
 import { entryRowContent } from '../registryRowContent'
@@ -9,6 +9,8 @@ import { toHex } from './ridgeColorMath'
 
 const SECTION_TITLE = 'Color'
 
+const RIDGE_COLOR_LABEL = 'Ridge color'
+
 const AUTOMATIC_LABEL = 'Automatic'
 
 const MORE_COLORS_LABEL = 'More colors'
@@ -16,8 +18,6 @@ const MORE_COLORS_LABEL = 'More colors'
 const AUTOMATIC_GRADIENT = 'conic-gradient(from 0deg, #f55, #ff5, #5f5, #5ff, #55f, #f5f, #f55)'
 
 const ADAPT_TO_APPS_SETTING = 'topbar-adapt-to-apps'
-
-const NO_DESCRIPTION = ''
 
 const LIGHT_CHANNEL_SUM = 400
 
@@ -61,7 +61,9 @@ function checkClass(light: boolean): string {
 }
 
 function swatchBorder(selected: boolean): string {
-  return selected ? 'border-focus-ring' : 'border-line-hairline hover:border-line-strong'
+  return selected
+    ? 'border-transparent outline-2 outline-offset-2 outline-ink-primary'
+    : 'border-line-strong hover:outline-2 hover:outline-offset-2 hover:outline-line-strong'
 }
 
 export default function RidgeColorSection() {
@@ -101,24 +103,26 @@ export default function RidgeColorSection() {
   const adaptToApps = settingsEntry(ADAPT_TO_APPS_SETTING)
 
   return (
-    <Section title={SECTION_TITLE}>
-      <div className="flex flex-col gap-4">
-        {adaptToApps && entryRowContent(adaptToApps, NO_DESCRIPTION, false, adaptToApps.description)}
-        <div className="flex flex-wrap gap-2">
-          <Swatch label={AUTOMATIC_LABEL} selected={override === null} onClick={() => choose(null)} background={AUTOMATIC_GRADIENT} light={false} />
-          {palette.map((color, index) => (
-            <Swatch
-              key={toHex(color)}
-              label={`Wallpaper color ${index + 1}`}
-              selected={sameColor(override, color)}
-              onClick={() => choose({ r: color.r, g: color.g, b: color.b })}
-              background={toHex(color)}
-              light={color.darkText}
-            />
-          ))}
-          <PresetMenu color={chosenElsewhere} startColor={pickerStartColor} onPick={choose} />
-        </div>
-      </div>
+    <Section variant="label" title={SECTION_TITLE}>
+      <Card variant="group">
+        <Row label={RIDGE_COLOR_LABEL}>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Swatch label={AUTOMATIC_LABEL} selected={override === null} onClick={() => choose(null)} background={AUTOMATIC_GRADIENT} light={false} />
+            {palette.map((color, index) => (
+              <Swatch
+                key={toHex(color)}
+                label={`Wallpaper color ${index + 1}`}
+                selected={sameColor(override, color)}
+                onClick={() => choose({ r: color.r, g: color.g, b: color.b })}
+                background={toHex(color)}
+                light={color.darkText}
+              />
+            ))}
+            <PresetMenu color={chosenElsewhere} startColor={pickerStartColor} onPick={choose} />
+          </div>
+        </Row>
+        {adaptToApps && entryRowContent(adaptToApps, adaptToApps.description)}
+      </Card>
     </Section>
   )
 }
@@ -131,7 +135,7 @@ function Swatch({ label, selected, onClick, background, light }: RidgeSwatchProp
       aria-pressed={selected}
       title={label}
       onClick={onClick}
-      className={`focus-ring flex size-9 cursor-pointer items-center justify-center rounded-field border-2 transition-colors ${swatchBorder(selected)}`}
+      className={`focus-ring flex size-7 cursor-pointer items-center justify-center rounded-full border transition-colors ${swatchBorder(selected)}`}
       style={{ background }}
     >
       {selected && <Check size={14} strokeWidth={3} className={checkClass(light)} />}
@@ -173,17 +177,17 @@ function PresetMenu({ color, startColor, onPick }: RidgePresetMenuProps) {
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={() => setOpen((isOpen) => !isOpen)}
-        className={`focus-ring flex size-9 cursor-pointer items-center justify-center rounded-field border-2 transition-colors ${
-          color ? 'border-focus-ring' : 'border-dashed border-line-strong hover:border-ink-quiet'
+        className={`focus-ring flex size-7 cursor-pointer items-center justify-center rounded-full border transition-colors ${
+          color ? swatchBorder(true) : 'border-dashed border-ink-faint hover:border-ink-quiet'
         }`}
         style={color ? { background: toHex(color) } : undefined}
       >
         {color ? <Check size={14} strokeWidth={3} className={checkClass(isLight(color))} /> : <Plus size={14} className="text-ink-quiet" />}
       </button>
       {open && (
-        <div id={menuId} role="group" aria-label={MORE_COLORS_LABEL} className="absolute top-full left-0 z-40 mt-2 w-max">
+        <div id={menuId} role="group" aria-label={MORE_COLORS_LABEL} className="absolute top-full right-0 z-40 mt-2 w-max">
           <Card className="flex flex-col gap-3 p-3">
-            <div className="grid grid-cols-6 gap-2">
+            <div className="grid grid-cols-6 gap-3 p-1">
               {PRESET_COLORS.map((preset) => (
                 <Swatch
                   key={preset.name}

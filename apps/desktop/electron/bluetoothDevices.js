@@ -12,6 +12,35 @@ const NULL_CONTAINER_IDS = new Set([
 const DEVICE_INSTANCE_PATTERN = /^(BTHENUM|BTHLE)\\DEV_([0-9A-F]{12})(?:\\|$)/i
 const SERVICE_INSTANCE_PATTERN = /^BTHENUM\\\{([0-9A-F]{8})-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\}[^\\]*\\.*&([0-9A-F]{12})_[0-9A-F]+$/i
 const TRANSPORT_BY_ENUMERATOR = { BTHENUM: 'classic', BTHLE: 'le' }
+const MAJOR_CLASS_SHIFT = 8
+const MAJOR_CLASS_MASK = 0x1f
+const MINOR_CLASS_SHIFT = 2
+const MINOR_CLASS_MASK = 0x3f
+const MAJOR_CLASS_COMPUTER = 0x01
+const MAJOR_CLASS_PHONE = 0x02
+const MAJOR_CLASS_AUDIO_VIDEO = 0x04
+const MAJOR_CLASS_PERIPHERAL = 0x05
+const MAJOR_CLASS_WEARABLE = 0x07
+const AUDIO_MINOR_MICROPHONE = 0x04
+const AUDIO_MINOR_GAMING = 0x12
+const AUDIO_MINOR_SPEAKERS = new Set([0x05, 0x07, 0x08, 0x0a, 0x0f])
+const PERIPHERAL_TYPE_MASK = 0x0f
+const PERIPHERAL_GAME_CONTROLLERS = new Set([0x01, 0x02])
+const PERIPHERAL_INPUT_SHIFT = 4
+const PERIPHERAL_KEYBOARD = 0x1
+const PERIPHERAL_POINTING = 0x2
+const PERIPHERAL_COMBO = 0x3
+const MOUSE_CLASS_GUID = '{4d36e96f-e325-11ce-bfc1-08002be10318}'
+const KEYBOARD_CLASS_GUID = '{4d36e96b-e325-11ce-bfc1-08002be10318}'
+const NAME_KINDS = [
+  [/controller|gamepad|xbox|dualsense|dualshock|joy-?con|8bitdo/i, 'gamepad'],
+  [/mouse|mx master|mx anywhere|trackpad|trackball|magic mouse/i, 'mouse'],
+  [/keyboard|keychron|mx keys|magic keyboard/i, 'keyboard'],
+  [/airpods|buds|headphone|headset|earbud|wh-|wf-|quietcomfort|barracuda/i, 'headphones'],
+  [/speaker|soundlink|boom|jbl|sonos|soundcore|flip|charge/i, 'speaker'],
+  [/iphone|galaxy|pixel|phone/i, 'phone'],
+  [/watch|band/i, 'watch'],
+]
 const nameCollator = new Intl.Collator(undefined, { sensitivity: 'base' })
 
 function parseDeviceInstanceId(instanceId) {
@@ -73,6 +102,8 @@ function transportsByContainer(nodes) {
         address: parsed.address,
         name: typeof node.name === 'string' ? node.name.trim() : '',
         connected: isNodeConnected(node),
+        classOfDevice: Number.isInteger(node.classOfDevice) ? node.classOfDevice : null,
+        childClasses: Array.isArray(node.childClasses) ? node.childClasses : [],
       }
     }
     groups.set(key, group)
@@ -87,6 +118,42 @@ function isAudioDisabled(services) {
   return services.every((service) => service.disabled)
 }
 
+function kindFromClassOfDevice(classOfDevice) {
+  if (!classOfDevice) return null
+  const major = (classOfDevice >> MAJOR_CLASS_SHIFT) & MAJOR_CLASS_MASK
+  const minor = (classOfDevice >> MINOR_CLASS_SHIFT) & MINOR_CLASS_MASK
+  if (major === MAJOR_CLASS_COMPUTER) return 'computer'
+  if (major === MAJOR_CLASS_PHONE) return 'phone'
+  if (major === MAJOR_CLASS_WEARABLE) return 'watch'
+  if (major === MAJOR_CLASS_AUDIO_VIDEO) {
+    if (minor === AUDIO_MINOR_MICROPHONE) return 'microphone'
+    if (minor === AUDIO_MINOR_GAMING) return 'gamepad'
+    return AUDIO_MINOR_SPEAKERS.has(minor) ? 'speaker' : 'headphones'
+  }
+  if (major === MAJOR_CLASS_PERIPHERAL) {
+    if (PERIPHERAL_GAME_CONTROLLERS.has(minor & PERIPHERAL_TYPE_MASK)) return 'gamepad'
+    const pointerOrKeyboard = minor >> PERIPHERAL_INPUT_SHIFT
+    if (pointerOrKeyboard === PERIPHERAL_POINTING) return 'mouse'
+    if (pointerOrKeyboard === PERIPHERAL_KEYBOARD || pointerOrKeyboard === PERIPHERAL_COMBO) return 'keyboard'
+  }
+  return null
+}
+
+function kindFromChildClasses(childClasses) {
+  const classes = new Set(childClasses.map((classGuid) => classGuid.toLowerCase()))
+  if (classes.has(KEYBOARD_CLASS_GUID)) return 'keyboard'
+  if (classes.has(MOUSE_CLASS_GUID)) return 'mouse'
+  return null
+}
+
+function kindFromName(name) {
+  return NAME_KINDS.find(([pattern]) => pattern.test(name))?.[1] ?? null
+}
+
+function deviceKind({ classOfDevice, childClasses, name, hasAudio }) {
+  return kindFromClassOfDevice(classOfDevice) ?? kindFromChildClasses(childClasses) ?? kindFromName(name) ?? (hasAudio ? 'headphones' : 'other')
+}
+
 function toDevice(group, servicesByAddress) {
   const { classic, le } = group
   const services = classic ? servicesByAddress.get(classic.address) ?? [] : []
@@ -95,9 +162,16 @@ function toDevice(group, servicesByAddress) {
     .map((service) => service.instanceId)
   const audioDisabled = isAudioDisabled(services)
   const classicConnected = !!classic?.connected
+  const name = classic?.name || le?.name || formatAddress(classic?.address ?? le.address)
   return {
     id: group.id,
-    name: classic?.name || le?.name || formatAddress(classic?.address ?? le.address),
+    name,
+    kind: deviceKind({
+      classOfDevice: classic?.classOfDevice ?? le?.classOfDevice ?? null,
+      childClasses: [...(classic?.childClasses ?? []), ...(le?.childClasses ?? [])],
+      name,
+      hasAudio: services.length > 0,
+    }),
     classicAddress: classic?.address ?? null,
     leAddress: le?.address ?? null,
     classicConnected,
@@ -141,6 +215,7 @@ function reconcileDeviceRead({ previousDevices, previousSignature }, { devices, 
 
 module.exports = {
   buildStackSignature,
+  deviceKind,
   groupDevices,
   inStableOrder,
   isNodeConnected,

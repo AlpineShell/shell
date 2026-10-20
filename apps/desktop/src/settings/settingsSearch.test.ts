@@ -86,8 +86,8 @@ describe('settings search ranking', () => {
     expect(found.join(' ')).not.toContain('eco')
   })
 
-  it('finds Wi-Fi by a word its title does not contain', () => {
-    expect(labels(shown('wireless'))).toContain('Wi-Fi')
+  it('finds Network by a word its title does not contain', () => {
+    expect(labels(shown('wireless'))).toContain('Network')
   })
 
   it('finds the input language setting by keyboard layout, whichever page it is filed under', () => {
@@ -202,7 +202,7 @@ describe('settings search ranking', () => {
   })
 
   it('keeps a page reachable through a target that carries the section it belongs to', () => {
-    const wifi = SETTINGS_SEARCH_TARGETS.find((target) => target.label === 'Wi-Fi')
+    const wifi = SETTINGS_SEARCH_TARGETS.find((target) => target.label === 'Network')
     expect(wifi?.context).toBe('Devices')
     expect(wifi?.icon).toBe(Wifi)
   })

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { liveRidgePreviewData, ridgePluginWidget } from './ridgeTestFixtures'
 
-let RidgeCallout: typeof import('./ridgeCallout').default
+let RidgeItemSettings: typeof import('./ridgeItemSettings').default
 
 const WEATHER = 'com.example.weather'
 
@@ -39,7 +39,7 @@ function installSettingsBridge(stored: Record<string, PluginSettingValues>) {
 
 async function renderPluginCallout(previewData: RidgePreviewData) {
   render(
-    <RidgeCallout
+    <RidgeItemSettings
       item={{ id: 'plugins-right', slot: 'right', order: 0, visible: true }}
       previewData={previewData}
       highlightedSetting={null}
@@ -48,7 +48,6 @@ async function renderPluginCallout(previewData: RidgePreviewData) {
       onStep={vi.fn()}
       onHide={vi.fn()}
       onNavigate={vi.fn()}
-      onClose={vi.fn()}
     />
   )
   await act(async () => {})
@@ -56,7 +55,7 @@ async function renderPluginCallout(previewData: RidgePreviewData) {
 
 beforeEach(async () => {
   vi.resetModules()
-  RidgeCallout = (await import('./ridgeCallout')).default
+  RidgeItemSettings = (await import('./ridgeItemSettings')).default
 })
 
 afterEach(() => {
@@ -71,10 +70,10 @@ describe('the settings a plugin adds to its Ridge callout', () => {
     expect(screen.getByRole('switch', { name: 'Fahrenheit' }).getAttribute('aria-checked')).toBe('true')
   })
 
-  it('keeps the description behind the info icon', async () => {
+  it('shows the description under the setting', async () => {
     installSettingsBridge({ [WEATHER]: { fahrenheit: false } })
     await renderPluginCallout(withRightPlugins([widget('Weather', [FAHRENHEIT])]))
-    expect(screen.getByRole('img', { name: FAHRENHEIT.info })).toBeTruthy()
+    expect(screen.getByText(FAHRENHEIT.info ?? '')).toBeTruthy()
   })
 
   it('writes a change through the plugin settings bridge', async () => {

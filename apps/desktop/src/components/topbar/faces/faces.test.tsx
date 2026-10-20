@@ -28,6 +28,7 @@ const bluetoothState = (radio: BluetoothRadioState, connected: boolean, devicesA
         {
             id: "headphones",
             name: "Headphones",
+            kind: "headphones",
             connected,
             canConnect: !connected,
             canDisconnect: connected,

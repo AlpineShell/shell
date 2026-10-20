@@ -7,7 +7,7 @@ export default function AppsDefaultsPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Default apps" />
+      <PageHeader variant="plain" title="Default apps" />
 
       <div className="flex flex-col gap-1">
         {loading && <EmptyState variant="plain" icon={<Spinner size={14} />} title="Looking for file types…" />}

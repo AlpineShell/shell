@@ -9,7 +9,8 @@ const rowNamed = (pageId: SettingsPageId) => new RegExp(`^${settingsPage(pageId)
 describe('AboutPage', () => {
   beforeEach(() => {
     ;(window as unknown as { shell: unknown }).shell = {
-      system: { info: () => new Promise(() => {}) },
+      system: { info: () => new Promise(() => {}), bluetooth: () => new Promise(() => {}), onBluetoothChanged: () => () => {} },
+      network: { wifiSignal: () => new Promise(() => {}), onWifiSignalChanged: () => () => {} },
       windows: { wallpaper: () => new Promise(() => {}), onWallpaperChanged: () => () => {} },
     }
   })

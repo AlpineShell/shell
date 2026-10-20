@@ -468,6 +468,17 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('windows/settings-navigate', handler)
     },
   },
+  shortcuts: {
+    list: () => ipcRenderer.invoke('shortcuts/list'),
+    record: (id) => ipcRenderer.invoke('shortcuts/record', id),
+    cancelRecord: () => ipcRenderer.invoke('shortcuts/cancel-record'),
+    reset: (id) => ipcRenderer.invoke('shortcuts/reset', id),
+    onChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('shortcuts/changed', handler)
+      return () => ipcRenderer.removeListener('shortcuts/changed', handler)
+    },
+  },
   network: {
     wifiSignal: () => ipcRenderer.invoke('network/wifi-signal'),
     onWifiSignalChanged: (callback) => {
@@ -483,6 +494,12 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('network/wifi-scan-updated', handler)
     },
     wifiConnect: (ssid, password) => ipcRenderer.invoke('network/wifi-connect', { ssid, password }),
+    details: () => ipcRenderer.invoke('network/details'),
+    onDetailsChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('network/details-changed', handler)
+      return () => ipcRenderer.removeListener('network/details-changed', handler)
+    },
     wifiDisconnect: () => ipcRenderer.invoke('network/wifi-disconnect'),
     wifiRadioGet: () => ipcRenderer.invoke('network/wifi-radio-get'),
     wifiRadioSet: (enabled) => ipcRenderer.invoke('network/wifi-radio-set', enabled),

@@ -10,10 +10,14 @@ const {
 } = require('../networkNative')
 const batterySaver = require('./batterySaver')
 const { wifiConnect } = require('./wifiConnect')
+const { readNetworkDetails } = require('./networkDetails')
 
 let lastSignal = undefined
 let lastType = undefined
 let lastSsid = undefined
+let lastConnectionKey = null
+let cachedDetails = undefined
+let detailsReadAt = 0
 let cachedStatus = { signal: null, connected: false, type: 'wifi', ssid: null }
 let cachedNetworks = []
 let cachedRadio = true
@@ -33,6 +37,8 @@ const NETWORK_REFRESH_INTERVAL_MS = 10000
 const BATTERY_SAVER_NETWORK_REFRESH_INTERVAL_MS = 60000
 const WIFI_RESCAN_SETTLE_MS = 3000
 const POST_RADIO_SET_REFRESH_MS = 1500
+const DETAILS_WARMUP_MS = 20000
+const DETAILS_STALE_MS = 30000
 
 function runScript(scriptFile, args = '', options = {}) {
   return new Promise((resolve) => {
@@ -59,7 +65,33 @@ function applyWifiRadioState(enabled) {
   if (broadcastFn) broadcastFn('network/wifi-radio-changed', cachedRadio)
 }
 
+const refreshNetworkDetails = singleFlight(async () => {
+  cachedDetails = await readNetworkDetails()
+  detailsReadAt = Date.now()
+  if (broadcastFn) broadcastFn('network/details-changed', cachedDetails)
+  return cachedDetails
+})
+
+function refreshNetworkDetailsQuietly() {
+  refreshNetworkDetails().catch(logNetworkFailure)
+}
+
+function networkDetails() {
+  if (cachedDetails === undefined) return refreshNetworkDetails()
+  if (Date.now() - detailsReadAt > DETAILS_STALE_MS) refreshNetworkDetailsQuietly()
+  return cachedDetails
+}
+
+function refreshDetailsWhenTheConnectionChanges() {
+  const connectionKey = `${cachedStatus.connected}:${cachedStatus.type}:${cachedStatus.ssid}`
+  if (connectionKey === lastConnectionKey) return
+  const firstReading = lastConnectionKey === null
+  lastConnectionKey = connectionKey
+  if (!firstReading && cachedDetails !== undefined) refreshNetworkDetailsQuietly()
+}
+
 function publishNetworkStatus() {
+  refreshDetailsWhenTheConnectionChanges()
   if (
     cachedStatus.signal === lastSignal &&
     cachedStatus.type === lastType &&
@@ -194,6 +226,7 @@ module.exports = {
     'network/wifi-scan': () => scanWifiNetworks(),
     'network/wifi-connect': (_event, { ssid, password }) => wifiConnect(ssid, password),
     'network/wifi-disconnect': () => wifiDisconnect(),
+    'network/details': () => networkDetails(),
     'network/wifi-radio-get': async () => adoptRadioResult(await readWifiRadio()),
     'network/wifi-radio-set': async (_event, enabled) => {
       const result = adoptRadioResult(await runWifiRadioScript(enabled ? 'on' : 'off'))
@@ -214,7 +247,9 @@ module.exports = {
       NETWORK_REFRESH_INTERVAL_MS,
       BATTERY_SAVER_NETWORK_REFRESH_INTERVAL_MS,
     )
+    const detailsWarmup = setTimeout(refreshNetworkDetailsQuietly, DETAILS_WARMUP_MS)
     app.on('will-quit', () => {
+      clearTimeout(detailsWarmup)
       stopPolling()
       disposeNetworkNative()
     })

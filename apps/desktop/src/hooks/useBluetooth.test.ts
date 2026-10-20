@@ -6,7 +6,7 @@ import { UNKNOWN_BLUETOOTH_STATE } from '../lib/bluetoothPresentation'
 function stateNamed(name: string, overrides: Partial<BluetoothDevice> = {}): BluetoothState {
   return {
     radio: { state: 'on', pending: null, error: null },
-    devices: [{ id: name, name, connected: false, canConnect: true, canDisconnect: false, audioDisabled: false, pending: null, error: null, ...overrides }],
+    devices: [{ id: name, name, kind: 'headphones', connected: false, canConnect: true, canDisconnect: false, audioDisabled: false, pending: null, error: null, ...overrides }],
     devicesAvailable: true,
   }
 }

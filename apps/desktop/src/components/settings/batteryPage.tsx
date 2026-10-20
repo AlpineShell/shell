@@ -1,5 +1,5 @@
-import { BatteryCharging, BatteryLow, Leaf } from 'lucide-react'
-import { Row, Segmented, type SegmentedOption } from '@alpine/ui'
+import { Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, Leaf } from 'lucide-react'
+import { Card, Row, Segmented, type SegmentedOption } from '@alpine/ui'
 import { useBatterySaver } from '../../hooks/useBatterySaver'
 import { settingsValueEntry } from '../../settings/registry'
 import { useSettingsValue } from '../../hooks/useSettingsValue'
@@ -33,9 +33,10 @@ export default function BatteryPage() {
       content: (
         <Row
           label="Battery saver right now"
-          info="On and Off both hold whatever the charge is, and go back to Automatic the next time you plug in."
+          description="On and Off hold until you next plug in, then it goes back to Automatic."
         >
           <Segmented
+            variant="filled"
             label="Battery saver right now"
             options={OVERRIDE_CHOICES}
             value={state.override}
@@ -73,9 +74,7 @@ function statusHeadline(state: BatterySaverState): string {
 }
 
 function statusDetail(state: BatterySaverState, thresholdPercent: number, automaticEnabled: boolean): string {
-  const charge = state.percent == null ? 'Charge unavailable' : `${state.percent}%`
-  const source = state.onAcPower ? (state.charging ? 'charging' : 'plugged in') : 'on battery'
-  const summary = `${charge}, ${source}`
+  const summary = state.onAcPower ? (state.charging ? 'Charging' : 'Plugged in') : 'On battery'
   if (state.reason === 'manual') return `${summary} · on manually`
   if (state.reason === 'threshold') return `${summary} · automatic, below ${thresholdPercent}%`
   if (state.override === 'off') return `${summary} · off until you plug in`
@@ -84,15 +83,31 @@ function statusDetail(state: BatterySaverState, thresholdPercent: number, automa
   return `${summary} · turns on at ${thresholdPercent}%`
 }
 
+const BATTERY_GLYPH = { size: 34, strokeWidth: 1.5, className: 'my-2 shrink-0 text-ink-primary' }
+
+function BatteryGlyph({ state }: { state: BatterySaverState }) {
+  if (state.charging || state.onAcPower) return <BatteryCharging {...BATTERY_GLYPH} />
+  if (state.percent == null) return <Battery {...BATTERY_GLYPH} />
+  if (state.percent >= 80) return <BatteryFull {...BATTERY_GLYPH} />
+  if (state.percent >= 40) return <BatteryMedium {...BATTERY_GLYPH} />
+  return <BatteryLow {...BATTERY_GLYPH} />
+}
+
 function BatteryStatus({ state, thresholdPercent, automaticEnabled }: { state: BatterySaverState; thresholdPercent: number; automaticEnabled: boolean }) {
-  const Icon = state.active ? Leaf : state.onAcPower ? BatteryCharging : BatteryLow
   return (
-    <div className="flex items-center gap-3 rounded-card bg-surface-2 px-4 py-3">
-      <Icon size={18} className={`shrink-0 ${state.active ? 'text-success' : 'text-ink-secondary'}`} />
-      <div className="flex flex-col flex-1 min-w-0 gap-0.5">
-        <span className="text-dense text-ink-primary">{statusHeadline(state)}</span>
-        <span className="text-xs text-ink-quiet">{statusDetail(state, thresholdPercent, automaticEnabled)}</span>
+    <Card variant="group">
+      <div className="flex items-center gap-4">
+        <BatteryGlyph state={state} />
+        <div className="flex min-w-0 flex-col">
+          <span className="text-[28px] leading-8 font-medium tabular-nums text-ink-primary">
+            {state.percent == null ? 'No charge reading' : `${state.percent}%`}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-xs text-ink-quiet">
+            {state.active && <Leaf size={12} className="text-success" />}
+            {statusHeadline(state)} · {statusDetail(state, thresholdPercent, automaticEnabled)}
+          </span>
+        </div>
       </div>
-    </div>
+    </Card>
   )
 }

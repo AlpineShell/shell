@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, AppWindow, CheckCircle2, Download, LogIn, RefreshCw, RotateCcw } from 'lucide-react'
-import { Button, EmptyState, IconButton, ListRow, PageHeader } from '@alpine/ui'
+import { Button, Card, ListRow, PageHeader, Section, Spinner } from '@alpine/ui'
+import { settingsPage } from '../../settings/registry'
 import { useUpdate } from '../../hooks/useUpdate'
 import { useWindowsUpdate } from '../../hooks/useWindowsUpdate'
-import PageSpinner from './pageSpinner'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
@@ -62,89 +62,78 @@ export default function UpdatesPage() {
         ? windows.state.error
         : null
 
-  const hasRows = (!restartRequired && alpineActionable) || windowsRows.length > 0
-  const showEmptyState = !restartRequired && !errorMessage && !hasRows
-
   function refresh() {
     alpine.check()
     windows.check()
   }
 
   return (
-    <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Updates">
-        <IconButton
-          label="Check for updates"
-          onClick={refresh}
+    <div className="flex w-full flex-col gap-section">
+      <PageHeader variant="plain" title={settingsPage('updates')?.label ?? ''}>
+        <Button
+          shape="square"
+          variant="ghost"
+          size="sm"
+          icon={<RefreshCw size={14} />}
           busy={checking}
           disabled={installing || alpineBusy}
+          onClick={refresh}
         >
-          <RefreshCw size={16} />
-        </IconButton>
+          Check for updates
+        </Button>
       </PageHeader>
 
       {errorMessage && (
-        <div className="flex items-start gap-2.5 rounded-card border border-danger/30 bg-danger/10 px-4 py-3">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-danger" />
+        <div role="alert" className="flex items-center gap-2.5 rounded-card bg-danger/10 py-2.5 pr-2.5 pl-4">
+          <AlertTriangle size={16} className="shrink-0 text-danger" />
           <span className="flex-1 text-dense text-danger">{errorMessage}</span>
           {alpine.state.signInRequired && (
-            <Button size="sm" onClick={openSignIn} icon={<LogIn size={14} />}>
+            <Button shape="square" size="sm" onClick={openSignIn} icon={<LogIn size={14} />}>
               Sign in
             </Button>
           )}
         </div>
       )}
 
-      {(restartRequired || hasRows) && (
-        <div className="flex flex-col gap-1">
-          {restartRequired && (
+      <Section variant="label" title="Alpine Shell">
+        <Card variant="list">
+          <ListRow
+            variant="plain"
+            icon={<AppWindow size={16} className="text-ink-secondary" />}
+            title={`Alpine Shell ${alpine.state.currentVersion}`}
+            detail={alpineDetail(alpine.state)}
+            actions={
+              alpineActionable ? (
+                <AlpineAction state={alpine.state} download={alpine.download} install={alpine.install} disabled={installing} />
+              ) : undefined
+            }
+          />
+        </Card>
+      </Section>
+
+      <Section variant="label" title="Windows Update">
+        <Card variant="list">
+          {restartRequired ? (
             <ListRow
-              icon={<AlertTriangle size={20} className="text-warning" />}
+              variant="plain"
+              icon={<AlertTriangle size={16} className="text-warning" />}
               title="Restart required"
               actions={
-                <Button size="sm" onClick={restart} icon={<RotateCcw size={14} />}>
+                <Button shape="square" size="sm" onClick={restart} icon={<RotateCcw size={14} />}>
                   Restart now
                 </Button>
               }
             />
-          )}
-
-          {!restartRequired && alpineActionable && (
-            <ListRow
-              icon={<AppWindow size={20} className="text-ink-secondary" />}
-              title="Alpine Shell"
-              detail={alpineDetail(alpine.state)}
-              actions={
-                <AlpineAction
-                  state={alpine.state}
-                  download={alpine.download}
-                  install={alpine.install}
-                  disabled={installing}
-                />
-              }
-            />
-          )}
-
-          {!restartRequired &&
+          ) : windowsRows.length > 0 ? (
             windowsRows.map((update, i) => {
               const installingThis = installing && windows.state.installingId === update.updateId
               return (
                 <ListRow
+                  variant="plain"
                   key={`${update.updateId || update.kb || update.title}-${i}`}
-                  icon={<Download size={18} className="text-ink-faint" />}
+                  icon={<Download size={16} className="text-ink-quiet" />}
                   title={update.title}
-                  detail={[
-                    update.kb,
-                    update.tier === 'feature'
-                      ? 'Installs separately'
-                      : update.tier === 'enablement'
-                        ? 'Version upgrade'
-                        : update.sizeBytes > 0
-                          ? formatBytes(update.sizeBytes)
-                          : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+                  detail={windowsUpdateDetail(update)}
                   actions={
                     update.tier === 'feature' ? undefined : installingThis ? (
                       <ProgressBar percent={windows.state.progressPercent} />
@@ -154,29 +143,40 @@ export default function UpdatesPage() {
                   }
                 />
               )
-            })}
-        </div>
-      )}
-
-      {showEmptyState && checking && <PageSpinner label="Checking for updates" />}
-      {showEmptyState && !checking && (
-        <EmptyState
-          variant="plain"
-          icon={<CheckCircle2 size={14} className="text-success" />}
-          title="You're up to date"
-          detail={`Alpine Shell ${alpine.state.currentVersion}${
-            windows.state.lastCheckedAt ? ` · Windows checked ${formatTime(windows.state.lastCheckedAt)}` : ''
-          }`}
-        />
-      )}
+            })
+          ) : (
+            <ListRow
+              variant="plain"
+              icon={windows.state.status === 'checking' ? <Spinner size={14} /> : <CheckCircle2 size={16} className="text-success" />}
+              title={windows.state.status === 'checking' ? 'Checking for updates…' : 'Up to date'}
+              detail={windows.state.lastCheckedAt ? `Checked ${formatTime(windows.state.lastCheckedAt)}` : undefined}
+            />
+          )}
+        </Card>
+      </Section>
     </div>
   )
 }
 
+function windowsUpdateDetail(update: WindowsUpdateItem): string {
+  const kind =
+    update.tier === 'feature'
+      ? 'Installs separately'
+      : update.tier === 'enablement'
+        ? 'Version upgrade'
+        : update.sizeBytes > 0
+          ? formatBytes(update.sizeBytes)
+          : null
+  return [update.kb, kind].filter(Boolean).join(' · ')
+}
+
 function alpineDetail(state: UpdateState): string {
-  if (state.status === 'downloading') return `Downloading ${Math.round(state.progressPercent)}%`
+  if (state.status === 'checking') return 'Checking for updates…'
+  if (state.status === 'available') return `Version ${state.availableVersion ?? ''} available`
+  if (state.status === 'downloading') return `Downloading version ${state.availableVersion ?? ''}`
   if (state.status === 'downloaded') return `Version ${state.availableVersion ?? ''} ready to install`
-  return `Version ${state.availableVersion ?? ''} available`
+  if (state.status === 'error') return "Couldn't check for updates"
+  return 'Up to date'
 }
 
 function AlpineAction({
@@ -202,6 +202,7 @@ function AlpineAction({
   if (state.status === 'downloaded') {
     return (
       <Button
+        shape="square"
         size="sm"
         onClick={() => { setPending(true); install() }}
         disabled={disabled}
@@ -215,6 +216,7 @@ function AlpineAction({
 
   return (
     <Button
+      shape="square"
       size="sm"
       onClick={() => { setPending(true); download() }}
       disabled={disabled}
@@ -233,7 +235,8 @@ function WindowsInstallButton({ onClick, disabled }: { onClick: () => void; disa
   }, [disabled])
   return (
     <Button
-      variant="outline"
+      shape="square"
+      variant="soft"
       size="sm"
       onClick={() => { setPending(true); onClick() }}
       disabled={disabled}

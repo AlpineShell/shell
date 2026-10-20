@@ -20,7 +20,7 @@ export default function SettingsSearchResults({
       className="flex w-full flex-col gap-stack"
       onMouseDown={(event) => event.preventDefault()}
     >
-      <PageTitle title="Search" />
+      <PageTitle variant="plain" title="Search" />
 
       {matches.length === 0 ? (
         <EmptyState variant="plain" title={`Nothing matches “${query.trim()}”`} />
@@ -78,7 +78,7 @@ function ToggleResultRow({ entry, ...shell }: ResultRowProps & { entry: Settings
       state={checked ? 'on' : 'off'}
       trailing={
         <span aria-hidden className="pointer-events-none">
-          <Toggle checked={checked} onChange={IGNORE_CHANGE} label={shell.target.label} disabled />
+          <Toggle variant="compact" checked={checked} onChange={IGNORE_CHANGE} label={shell.target.label} disabled />
         </span>
       }
     />

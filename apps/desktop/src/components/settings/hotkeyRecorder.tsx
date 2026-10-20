@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
-import { IconButton } from '@alpine/ui'
+import { Button, IconButton } from '@alpine/ui'
+import KeyCaps from './keyCaps'
 
 const SPECIAL_KEY_MAP: Record<string, string> = {
   ' ': 'Space',
@@ -81,32 +82,39 @@ export default function HotkeyRecorder({ value, fallback, onChange, disabled }: 
     }
   }
 
-  const showReset = !disabled && value !== fallback
-  const display = recording ? (draft ? formatHotkey(draft) : 'Press keys…') : formatHotkey(value)
+  const showReset = !disabled && !recording && value !== fallback
 
   return (
     <div className="flex shrink-0 items-center gap-2">
+      {recording ? (
+        <button
+          ref={recorderRef}
+          type="button"
+          aria-label="Press the new search hotkey"
+          onKeyDown={handleKey}
+          onBlur={stopRecording}
+          className="focus-ring inline-flex h-[22px] items-center rounded-[5px] px-2 text-[11px] text-ink-primary ring-1 ring-ink-quiet"
+        >
+          {draft ? formatHotkey(draft) : 'Press a shortcut'}
+        </button>
+      ) : (
+        <KeyCaps keys={formatHotkey(value).split(' + ')} />
+      )}
       {showReset && (
-        <IconButton label="Reset" onClick={() => onChange(fallback)}>
+        <IconButton label="Restore the default search hotkey" tooltip="topEnd" onClick={() => onChange(fallback)}>
           <RotateCcw size={14} />
         </IconButton>
       )}
-      <button
-        ref={recorderRef}
-        onClick={startRecording}
-        onKeyDown={handleKey}
-        onBlur={stopRecording}
+      <Button
+        shape="square"
+        variant="ghost"
+        size="sm"
         disabled={disabled}
-        className={`focus-ring min-w-15 h-8 px-3 rounded-field border text-[12px] font-medium outline-none transition-colors ${
-          disabled
-            ? 'border-line-hairline bg-fill-subtle text-ink-faint cursor-not-allowed'
-            : recording
-              ? 'border-focus-ring bg-surface-3 text-ink-primary cursor-text'
-              : 'border-line-hairline bg-surface-2 text-ink-primary hover:bg-fill-subtle cursor-pointer'
-        }`}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={recording ? stopRecording : startRecording}
       >
-        {display}
-      </button>
+        {recording ? 'Cancel' : 'Set'}
+      </Button>
     </div>
   )
 }

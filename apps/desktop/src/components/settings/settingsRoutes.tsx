@@ -15,6 +15,7 @@ import PluginSettingsPage from './pluginSettingsPage'
 import PluginsPage from './pluginsPage'
 import RidgePage from './ridgePage'
 import SearchPage from './searchPage'
+import ShortcutsPage from './shortcutsPage'
 import SystemRevertPage from './systemRevertPage'
 import TilingPage from './tilingPage'
 import TrayIconsPage from './trayIconsPage'
@@ -34,6 +35,7 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'input': () => <InputPage />,
   'date-time': () => <DateTimePage />,
   'tiling': () => <TilingPage />,
+  'shortcuts': () => <ShortcutsPage />,
   'battery': () => <BatteryPage />,
   'displays': () => <DisplaysPage />,
   'wifi': () => <WifiSettingsPage />,

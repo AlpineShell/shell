@@ -75,6 +75,7 @@ const CONNECTED_BLUETOOTH: BluetoothState = {
     {
       id: 'wh-1000xm4',
       name: 'WH-1000XM4',
+      kind: 'headphones',
       connected: true,
       canConnect: false,
       canDisconnect: true,

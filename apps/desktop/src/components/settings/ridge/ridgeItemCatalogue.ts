@@ -6,20 +6,11 @@ import {
   isTopbarItemGated,
   topbarItemLabel,
 } from '../../topbar/layout/topbarLayout'
-import { RIDGE_PRESENCE_NOTES, ridgeItemIsSample } from './ridgeSamples'
 
 const RIDGE_ITEM_ENTRY_PREFIX = 'ridge-item-'
 
 function pageLink(page: SettingsPageId, detail?: RidgeItemLink['detail']): RidgeItemLink {
   return { label: settingsPage(page)?.label ?? page, page, ...(detail ? { detail } : {}) }
-}
-
-function noNote(): null {
-  return null
-}
-
-function presenceNote(id: TopbarItemId): RidgeItemDetail['note'] {
-  return (data) => (ridgeItemIsSample(id, data) ? (RIDGE_PRESENCE_NOTES[id] ?? null) : null)
 }
 
 function trayIconCounts(data: RidgePreviewData): string | null {
@@ -29,22 +20,18 @@ function trayIconCounts(data: RidgePreviewData): string | null {
 }
 
 export const RIDGE_ITEM_DETAILS: Record<TopbarItemId, RidgeItemDetail> = {
-  'system-menu': { entries: ['power-confirm', 'power-show-hibernate'], links: [], note: noNote },
-  'plugins-left': { entries: [], links: [pageLink('plugins')], note: presenceNote('plugins-left') },
-  desktops: { entries: ['desktops-only-with-several'], links: [], note: noNote },
-  'desktop-lines': { entries: ['desktop-lines-only-with-several'], links: [], note: noNote },
-  notice: { entries: [], links: [], note: presenceNote('notice') },
-  launcher: { entries: ['launcher-hotkey'], links: [pageLink('search')], note: noNote },
-  tray: {
-    entries: ['tray-all-monitors', 'tray-overflow'],
-    links: [pageLink('tray-icons', trayIconCounts)],
-    note: presenceNote('tray'),
-  },
-  media: { entries: ['media-visualizer'], links: [], note: presenceNote('media') },
-  microphone: { entries: [], links: [], note: presenceNote('microphone') },
-  status: { entries: [], links: [pageLink('wifi'), pageLink('bluetooth'), pageLink('battery')], note: noNote },
-  'plugins-right': { entries: [], links: [pageLink('plugins')], note: presenceNote('plugins-right') },
-  clock: { entries: ['clock-time-format', 'calendar-days', 'calendar-show-tasks'], links: [], note: noNote },
+  'system-menu': { entries: ['power-confirm', 'power-show-hibernate'], links: [] },
+  'plugins-left': { entries: [], links: [pageLink('plugins')] },
+  desktops: { entries: ['desktops-only-with-several'], links: [] },
+  'desktop-lines': { entries: ['desktop-lines-only-with-several'], links: [] },
+  notice: { entries: [], links: [] },
+  launcher: { entries: ['launcher-hotkey'], links: [pageLink('search')] },
+  tray: { entries: ['tray-all-monitors', 'tray-overflow'], links: [pageLink('tray-icons', trayIconCounts)] },
+  media: { entries: ['media-visualizer'], links: [] },
+  microphone: { entries: [], links: [] },
+  status: { entries: [], links: [pageLink('wifi'), pageLink('bluetooth'), pageLink('battery')] },
+  'plugins-right': { entries: [], links: [pageLink('plugins')] },
+  clock: { entries: ['clock-time-format', 'calendar-days', 'calendar-show-tasks'], links: [] },
 }
 
 export function ridgeItemSearchEntryId(id: TopbarItemId): string {

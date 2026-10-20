@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { AppWindow, FolderOpen, Lock, Search, ShieldAlert, Trash2, X } from 'lucide-react'
-import { Avatar, Button, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, TextField, Toggle } from '@alpine/ui'
+import { AppWindow, FolderOpen, Lock, Search, ShieldAlert } from 'lucide-react'
+import { Avatar, Badge, Button, Card, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, TextField, Toggle } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useStartupApps } from '../../hooks/useStartupApps'
 import { useRunningApps } from '../../hooks/useRunningApps'
-import { processKey } from './appsShared'
+import { processKey, startsWithPc } from './appsShared'
 import PageSpinner from './pageSpinner'
 
 export default function AppsStartupPage() {
@@ -40,7 +40,7 @@ export default function AppsStartupPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title={settingsPage('apps-startup')?.label ?? ''}>
+      <PageHeader variant="plain" title={settingsPage('apps-startup')?.label ?? ''}>
         <TextField
           label="Search startup apps"
           value={query}
@@ -52,16 +52,22 @@ export default function AppsStartupPage() {
       </PageHeader>
 
       {pending.length > 0 && (
-        <div className="flex items-center gap-3">
-          <ShieldAlert size={18} className="shrink-0 text-warning" />
+        <div role="status" className="flex items-center gap-3 rounded-card bg-fill-subtle py-2.5 pr-2.5 pl-4">
+          <ShieldAlert size={16} className="shrink-0 text-warning" />
           <div className="flex min-w-0 flex-1 flex-col">
             <span className="text-dense text-ink-primary">{pending.length} system {pending.length === 1 ? 'app change needs' : 'app changes need'} your approval</span>
             {error && <span className="mt-0.5 text-xs text-danger">{error}</span>}
           </div>
-          <IconButton label="Cancel" onClick={() => pending.forEach((e) => window.shell.apps.clearPending(e.id))} disabled={applying}>
-            <X size={14} />
-          </IconButton>
-          <Button size="sm" onClick={applyChanges} busy={applying}>
+          <Button
+            shape="square"
+            variant="ghost"
+            size="sm"
+            disabled={applying}
+            onClick={() => pending.forEach((e) => window.shell.apps.clearPending(e.id))}
+          >
+            Cancel
+          </Button>
+          <Button shape="square" size="sm" onClick={applyChanges} busy={applying}>
             {applying ? 'Approving…' : 'Approve'}
           </Button>
         </div>
@@ -72,40 +78,38 @@ export default function AppsStartupPage() {
         <EmptyState variant="plain" title="No apps match your search." />
       )}
 
-      <div className="flex flex-col">
+      <Card variant="list">
         {appEntries.map((entry) => (
           <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} />
         ))}
+      </Card>
 
-        {systemEntries.length > 0 && (
-          <div className="mt-3">
-            <ListRow
-              variant="plain"
-              icon={<Lock size={15} className="text-ink-faint" />}
-              title={`Part of Windows · ${systemEntries.length}`}
-              muted
-              onActivate={() => setSystemOpen(!systemOpen)}
-              expanded={systemOpen}
-            />
-          </div>
-        )}
-
-        {systemOpen && systemEntries.map((entry) => <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} />)}
-      </div>
+      {systemEntries.length > 0 && (
+        <Card variant="list">
+          <ListRow
+            variant="plain"
+            icon={<Lock size={15} className="text-ink-faint" />}
+            title={`Part of Windows · ${systemEntries.length}`}
+            muted
+            onActivate={() => setSystemOpen(!systemOpen)}
+            expanded={systemOpen}
+          />
+          {systemOpen && systemEntries.map((entry) => <StartupRow key={entry.id} entry={entry} running={matchOf(entry)} />)}
+        </Card>
+      )}
     </div>
   )
 }
 
-function startupDetail(entry: StartupEntry, running?: RunningApp): string | undefined {
+function startupDetail(entry: StartupEntry): string | undefined {
   if (entry.missing) return 'No longer on your PC'
-  const heavy = running?.band === 'heavy' ? 'Heavy' : null
-  return [entry.blurb, heavy].filter(Boolean).join(' · ') || undefined
+  return entry.blurb || undefined
 }
 
 function StartupRow({ entry, running }: { entry: StartupEntry; running?: RunningApp }) {
   const [locating, setLocating] = useState(false)
   const [removing, setRemoving] = useState(false)
-  const effectiveOn = entry.pending ? entry.pending === 'enable' : entry.enabled
+  const effectiveOn = startsWithPc(entry)
 
   async function openLocation() {
     if (locating) return
@@ -125,32 +129,32 @@ function StartupRow({ entry, running }: { entry: StartupEntry; running?: Running
       variant="plain"
       icon={<Avatar src={entry.icon} alt={entry.friendlyName} fallback={<AppWindow size={16} strokeWidth={1.75} />} />}
       title={entry.friendlyName}
+      badges={running?.band === 'heavy' && !entry.missing ? <Badge>Heavy</Badge> : undefined}
       muted={entry.missing}
-      detail={startupDetail(entry, running)}
+      detail={startupDetail(entry)}
       actions={
         entry.missing ? (
           <ConfirmButton
+            shape="square"
+            variant="dangerSoft"
+            confirmVariant="danger"
             label="Remove"
             confirmLabel="Remove"
             onConfirm={remove}
             busy={removing}
-            icon={<Trash2 size={14} />}
-            iconOnly
             confirmOnly
           />
         ) : (
           <>
             {entry.target && (
-              <span className="flex opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
-                <IconButton label="Open file location" onClick={openLocation} busy={locating}>
-                  <FolderOpen size={15} />
-                </IconButton>
-              </span>
+              <IconButton label="Open file location" tooltip="top" onClick={openLocation} busy={locating}>
+                <FolderOpen size={15} />
+              </IconButton>
             )}
             {entry.locked ? (
               <Lock size={15} className="shrink-0 text-ink-faint" />
             ) : (
-              <Toggle label="Opens when you start your PC" checked={effectiveOn} pending={!!entry.pending} onChange={() => window.shell.apps.setStartup(entry.id, !effectiveOn)} />
+              <Toggle variant="compact" label="Opens when you start your PC" checked={effectiveOn} pending={!!entry.pending} onChange={() => window.shell.apps.setStartup(entry.id, !effectiveOn)} />
             )}
           </>
         )

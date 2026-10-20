@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { AppWindow, Boxes, Search, X } from 'lucide-react'
-import { Avatar, ConfirmButton, EmptyState, ListRow, PageHeader, TextField } from '@alpine/ui'
+import { AppWindow, Boxes, Search } from 'lucide-react'
+import { Avatar, Card, ConfirmButton, EmptyState, ListRow, PageHeader, TextField } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useRunningApps } from '../../hooks/useRunningApps'
 import { formatMemory } from './appsShared'
@@ -25,7 +25,7 @@ export default function AppsRunningPage() {
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <PageHeader title={settingsPage('apps-running')?.label ?? ''}>
+      <PageHeader variant="plain" title={settingsPage('apps-running')?.label ?? ''}>
         <TextField
           label="Search running apps"
           value={query}
@@ -39,26 +39,25 @@ export default function AppsRunningPage() {
       {running.length === 0 && <PageSpinner label="Looking at what's running" />}
       {running.length > 0 && visible.length === 0 && <EmptyState variant="plain" title="No apps match your search." />}
 
-      <div className="flex flex-col">
+      <Card variant="list">
         {foreground.map((app) => (
           <RunningRow key={app.name} app={app} />
         ))}
+      </Card>
 
-        {background.length > 0 && (
-          <div className="mt-3">
-            <ListRow
-              variant="plain"
-              icon={<Boxes size={16} className="text-ink-faint" />}
-              title={`In the background · ${background.length}`}
-              muted
-              onActivate={() => setBackgroundOpen((v) => !v)}
-              expanded={showBackground}
-            />
-          </div>
-        )}
-
-        {showBackground && background.map((app) => <RunningRow key={app.name} app={app} />)}
-      </div>
+      {background.length > 0 && (
+        <Card variant="list">
+          <ListRow
+            variant="plain"
+            icon={<Boxes size={16} className="text-ink-faint" />}
+            title={`In the background · ${background.length}`}
+            muted
+            onActivate={() => setBackgroundOpen((v) => !v)}
+            expanded={showBackground}
+          />
+          {showBackground && background.map((app) => <RunningRow key={app.name} app={app} />)}
+        </Card>
+      )}
     </div>
   )
 }
@@ -83,19 +82,18 @@ function RunningRow({ app }: { app: RunningApp }) {
   return (
     <ListRow
       variant="plain"
-      revealActions
       icon={<Avatar src={app.icon} alt={app.friendlyName} fallback={<AppWindow size={16} strokeWidth={1.75} />} />}
       title={app.friendlyName}
       detail={runningDetail(app)}
       actions={
         <ConfirmButton
-          variant="ghost"
+          shape="square"
+          variant="soft"
+          confirmVariant="danger"
           label="Close"
           confirmLabel="Force close"
           onConfirm={close}
           busy={busy}
-          icon={<X size={14} />}
-          iconOnly
           confirmOnly
         />
       }

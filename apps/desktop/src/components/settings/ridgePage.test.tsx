@@ -620,15 +620,17 @@ describe("bringing items back with '+'", () => {
   })
 })
 
-describe('the callout on the Ridge page', () => {
-  it('gives focus back to its item when it closes', async () => {
+describe('the item settings on the Ridge page', () => {
+  it('closes when its item is clicked again, leaving focus on the item', async () => {
     installBridges()
     await openPage()
-    const callout = await openCallout('Clock')
+    await openCallout('Clock')
 
-    fireEvent.click(within(callout).getByRole('button', { name: 'Close' }))
+    act(() => chip('Clock').focus())
+    fireEvent.click(chip('Clock'))
 
     expect(chip('Clock').getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('region', { name: 'Clock settings' })).toBeNull()
     expect(document.activeElement).toBe(chip('Clock'))
   })
 

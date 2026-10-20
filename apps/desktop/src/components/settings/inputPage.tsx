@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { ArrowLeftRight, ChevronDown, ChevronUp, Keyboard, Plus, Trash2 } from 'lucide-react'
-import { Badge, Card, ConfirmButton, EmptyState, IconButton, Row, SearchPicker, Select } from '@alpine/ui'
+import { Badge, Button, Card, ConfirmButton, EmptyState, IconButton, Row, SearchPicker, Select } from '@alpine/ui'
 import { useKeyboardLayout } from '../../hooks/useKeyboardLayout'
 import { useOutsidePointer } from '../../hooks/useOutsidePointer'
 import { scoreField } from '../../lib/launcherSearch'
@@ -71,9 +71,7 @@ function languageOptionLabel(option: KeyboardLanguageOption): string {
   return option.nativeName === option.name ? option.name : `${option.name} — ${option.nativeName}`
 }
 
-function languageCountLabel(count: number): string {
-  return count === 1 ? '1 language' : `${count} languages`
-}
+const REVEALED_CONTROLS = 'opacity-0 transition-opacity group-hover/layout:opacity-100 group-focus-within/layout:opacity-100'
 
 function LanguageList({
   languages,
@@ -103,26 +101,13 @@ function LanguageList({
   onActivate: (tip: string) => void
 }) {
   if (languages.length === 0) {
-    return (
-      <EmptyState variant="plain" title="Windows has not reported your languages yet." />
-    )
+    return <EmptyState variant="plain" title="Windows has not reported your languages yet." />
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <AddLanguageBar
-        languages={languages}
-        availableLanguages={availableLanguages}
-        adding={addingLanguage}
-        onAdd={onAddLanguage}
-      />
-      {languageError && (
-        <p role="alert" className="text-xs text-danger">
-          {languageError}
-        </p>
-      )}
+    <>
       {languages.map((language) => (
-        <LanguageCard
+        <LanguageBlock
           key={language.tag}
           language={language}
           availableLayouts={availableLayouts}
@@ -135,19 +120,28 @@ function LanguageList({
           onActivate={onActivate}
         />
       ))}
-    </div>
+      <AddLanguageRow
+        languages={languages}
+        availableLanguages={availableLanguages}
+        adding={addingLanguage}
+        error={languageError}
+        onAdd={onAddLanguage}
+      />
+    </>
   )
 }
 
-function AddLanguageBar({
+function AddLanguageRow({
   languages,
   availableLanguages,
   adding,
+  error,
   onAdd,
 }: {
   languages: KeyboardLanguage[]
   availableLanguages: KeyboardLanguageOption[]
   adding: boolean
+  error: string | null
   onAdd: (tag: string) => void
 }) {
   const [picking, setPicking] = useState(false)
@@ -162,21 +156,23 @@ function AddLanguageBar({
     .map((option) => ({ value: option.tag, label: languageOptionLabel(option), detail: option.tag }))
 
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-xs text-ink-quiet">
-        {adding ? 'Adding the language…' : languageCountLabel(languages.length)}
-      </span>
+    <div className="flex items-center gap-3">
       <div ref={pickerAnchor} className="relative flex">
-        <IconButton
-          label="Add language"
+        <Button
+          shape="square"
+          variant="ghost"
+          size="sm"
+          icon={<Plus size={14} />}
           aria-expanded={picking}
+          busy={adding}
+          disabled={options.length === 0}
           onClick={() => setPicking((open) => !open)}
-          disabled={adding || options.length === 0}
+          className="-ml-2"
         >
-          <Plus size={15} />
-        </IconButton>
+          {adding ? 'Adding the language…' : 'Add a language'}
+        </Button>
         {picking && (
-          <div className="absolute top-full right-0 z-40 mt-2 w-88">
+          <div className="absolute top-full left-0 z-40 mt-2 w-88">
             <Card className="p-3">
               <SearchPicker
                 label="Add a language"
@@ -194,11 +190,16 @@ function AddLanguageBar({
           </div>
         )}
       </div>
+      {error && (
+        <p role="alert" className="text-xs text-danger">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
 
-function LanguageCard({
+function LanguageBlock({
   language,
   availableLayouts,
   defaultInputMethod,
@@ -241,19 +242,23 @@ function LanguageCard({
   }
 
   return (
-    <Card>
-      <div className="flex items-center justify-between gap-3 border-b border-line-hairline px-3 py-2.5">
-        <div className="min-w-0 truncate text-dense text-ink-primary">{language.autonym}</div>
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 truncate text-sm text-ink-primary">{language.autonym}</div>
         <div className="flex items-center gap-1.5">
           <div ref={pickerAnchor} className="relative flex">
-            <IconButton
-              label="Add layout"
+            <Button
+              shape="square"
+              variant="ghost"
+              size="sm"
+              icon={<Plus size={14} />}
               aria-expanded={picking}
-              onClick={() => setPicking((open) => !open)}
+              aria-label={`Add a layout to ${language.autonym}`}
               disabled={options.length === 0}
+              onClick={() => setPicking((open) => !open)}
             >
-              <Plus size={15} />
-            </IconButton>
+              Add layout
+            </Button>
             {picking && (
               <div className="absolute top-full right-0 z-40 mt-2 w-88">
                 <Card className="p-3">
@@ -275,6 +280,7 @@ function LanguageCard({
           </div>
           {canRemoveLanguage && (
             <ConfirmButton
+              shape="square"
               label="Remove language"
               confirmLabel="Remove language"
               icon={<Trash2 size={15} />}
@@ -287,17 +293,18 @@ function LanguageCard({
       </div>
 
       {language.layouts.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-ink-quiet">
-          This language has no layout. Add one to type in {language.autonym}.
-        </p>
+        <p className="pt-1 text-xs text-ink-quiet">No layout yet; add one to type in {language.autonym}.</p>
       ) : (
-        <ul>
+        <ul className="mt-1.5">
           {language.layouts.map((layout, index) => (
-            <li key={layout.tip} className="border-b border-line-hairline last:border-b-0">
-              <div className="flex items-center gap-1.5 px-3 py-2">
-                <Keyboard size={15} className="mr-1 shrink-0 text-ink-faint" />
-                <span className="min-w-0 flex-1 truncate text-dense text-ink-primary">{layout.name}</span>
-                {layout.tip === defaultInputMethod && <Badge tone="success">Default</Badge>}
+            <li
+              key={layout.tip}
+              className="group/layout flex h-10 items-center gap-1.5 border-t border-line-hairline pl-6"
+            >
+              <Keyboard size={15} className="mr-1.5 shrink-0 text-ink-faint" />
+              <span className="min-w-0 flex-1 truncate text-dense text-ink-primary">{layout.name}</span>
+              {layout.tip === defaultInputMethod && <Badge>Default</Badge>}
+              <div className={`flex items-center gap-0.5 ${REVEALED_CONTROLS}`}>
                 <IconButton
                   label={`Move ${layout.name} up`}
                   onClick={() => move(index, -1)}
@@ -319,6 +326,7 @@ function LanguageCard({
                   <ArrowLeftRight size={15} />
                 </IconButton>
                 <ConfirmButton
+                  shape="square"
                   label={`Remove ${layout.name}`}
                   confirmLabel="Remove layout"
                   icon={<Trash2 size={15} />}
@@ -331,7 +339,7 @@ function LanguageCard({
           ))}
         </ul>
       )}
-    </Card>
+    </div>
   )
 }
 
@@ -355,9 +363,10 @@ function DefaultInputMethodRow({
   return (
     <Row
       label="Default input method"
-      info="Windows types with this layout in new windows, whichever language is first in your list."
+      description="The layout new windows start with, whichever language is first."
     >
       <Select
+        variant="filled"
         label="Default input method"
         options={options}
         value={selected}

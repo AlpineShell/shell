@@ -2,12 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { settingsPageRoute } from '../../../settings/registry'
 import { findTopbarItem } from '../../topbar/layout/topbarLayout'
-import { RIDGE_PRESENCE_NOTES } from './ridgeSamples'
-import { absentRidgePreviewData, liveRidgePreviewData, ridgePluginWidget } from './ridgeTestFixtures'
+import { absentRidgePreviewData, liveRidgePreviewData } from './ridgeTestFixtures'
 
-const NOTES_LOGO = 'alpine-plugin://com.example.notes/logo.png'
-
-let RidgeCallout: typeof import('./ridgeCallout').default
+let RidgeItemSettings: typeof import('./ridgeItemSettings').default
 let ridgeItemEntries: typeof import('./ridgeItemCatalogue').ridgeItemEntries
 
 const BRIDGE_ROOTS = ['shell', 'topbar', 'launcher']
@@ -46,12 +43,12 @@ function installBridges() {
   return { tray, topbar }
 }
 
-function renderCallout(id: TopbarItemId, overrides: Partial<RidgeCalloutProps> = {}) {
+function renderCallout(id: TopbarItemId, overrides: Partial<RidgeItemSettingsProps> = {}) {
   const bridges = installBridges()
-  const handlers = { onStep: vi.fn(), onHide: vi.fn(), onNavigate: vi.fn(), onClose: vi.fn() }
+  const handlers = { onStep: vi.fn(), onHide: vi.fn(), onNavigate: vi.fn() }
   const slot = findTopbarItem(id)?.slot ?? 'right'
   render(
-    <RidgeCallout
+    <RidgeItemSettings
       item={{ id, slot, order: 0, visible: true }}
       previewData={liveRidgePreviewData()}
       highlightedSetting={null}
@@ -74,14 +71,10 @@ function settingRow(id: string): Element {
   return row
 }
 
-function notesWithLogo(): RidgePreviewData {
-  const live = liveRidgePreviewData()
-  return { ...live, plugins: { ...live.plugins, right: [{ ...ridgePluginWidget('right', 'Notes'), pluginIcon: NOTES_LOGO }] } }
-}
 
 beforeEach(async () => {
   vi.resetModules()
-  RidgeCallout = (await import('./ridgeCallout')).default
+  RidgeItemSettings = (await import('./ridgeItemSettings')).default
   ridgeItemEntries = (await import('./ridgeItemCatalogue')).ridgeItemEntries
 })
 
@@ -90,27 +83,18 @@ afterEach(() => {
   for (const root of BRIDGE_ROOTS) delete bridges[root]
 })
 
-describe('the callout header', () => {
-  it('names the callout after the item, as Ridge labels it', async () => {
+describe('the item settings heading', () => {
+  it('names the settings after the item, as Ridge labels it', async () => {
     renderCallout('tray')
     await settle()
     expect(screen.getByRole('region', { name: 'System tray settings' })).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('System tray')
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('System tray')
   })
 
-  it('closes from its Close button and on Escape', async () => {
-    const { onClose } = renderCallout('clock')
+  it('sits on the page like any other settings, with nothing to close', async () => {
+    renderCallout('clock')
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Move later' }), { key: 'Escape' })
-    expect(onClose).toHaveBeenCalledTimes(2)
-  })
-
-  it('leaves other keys to the control that has focus', async () => {
-    const { onClose } = renderCallout('clock')
-    await settle()
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Move later' }), { key: 'Enter' })
-    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
   })
 })
 
@@ -143,7 +127,8 @@ describe('the callout settings', () => {
     renderCallout('launcher')
     await settle()
     expect(screen.getByText('Search hotkey')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Win' })).toBeTruthy()
+    expect(screen.getByLabelText('Win')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Set' })).toBeTruthy()
   })
 
   it('offers the time format as 12-hour or 24-hour, and nothing else', async () => {
@@ -208,7 +193,7 @@ describe('the callout links and notes', () => {
   })
 
   it.each<[string, SettingsPageId]>([
-    ['Wi-Fi', 'wifi'],
+    ['Network', 'wifi'],
     ['Bluetooth', 'bluetooth'],
     ['Battery', 'battery'],
   ])('opens %s from the Status icons callout', async (label, page) => {
@@ -218,17 +203,11 @@ describe('the callout links and notes', () => {
     expect(onNavigate).toHaveBeenCalledWith(settingsPageRoute(page))
   })
 
-  it('explains an item Ridge is only drawing a sample of behind an info icon', async () => {
+  it('heads an item Ridge only draws a sample of with its name alone, with no note under it', async () => {
     renderCallout('microphone', { previewData: absentRidgePreviewData() })
     await settle()
-    expect(screen.getByRole('img', { name: RIDGE_PRESENCE_NOTES.microphone })).toBeTruthy()
-  })
-
-  it('has nothing to explain once the item is live', async () => {
-    renderCallout('microphone')
-    await settle()
-    expect(screen.queryByText(RIDGE_PRESENCE_NOTES.microphone ?? '')).toBeNull()
-    expect(screen.queryByRole('img')).toBeNull()
+    const region = screen.getByRole('region', { name: 'Microphone settings' })
+    expect(region.querySelector('h2 + p')).toBeNull()
   })
 })
 
@@ -271,14 +250,8 @@ describe('a plugin group callout', () => {
     const { onNavigate } = renderCallout('plugins-right')
     await settle()
     expect(screen.getByRole('region', { name: 'Notes settings' })).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('Notes')
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Notes')
     fireEvent.click(screen.getByRole('button', { name: 'Plugins' }))
     expect(onNavigate).toHaveBeenCalledWith(settingsPageRoute('plugins'))
-  })
-
-  it('heads itself with the plugin logo', async () => {
-    renderCallout('plugins-right', { previewData: notesWithLogo() })
-    await settle()
-    expect(screen.getByRole('region', { name: 'Notes settings' }).querySelector('img')?.getAttribute('src')).toBe(NOTES_LOGO)
   })
 })

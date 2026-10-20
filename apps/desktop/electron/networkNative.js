@@ -12,8 +12,24 @@ const CONNECTION_SSID_LENGTH_OFFSET = 520
 const CONNECTION_SSID_OFFSET = 524
 const CONNECTION_SIGNAL_QUALITY_OFFSET = 576
 const CONNECTION_STRUCT_MIN_BYTES = 580
+const CONNECTION_BSSID_OFFSET = 560
+const CONNECTION_PHY_TYPE_OFFSET = 568
+const CONNECTION_RX_RATE_OFFSET = 580
+const CONNECTION_TX_RATE_OFFSET = 584
+const CONNECTION_SECURITY_ENABLED_OFFSET = 588
+const CONNECTION_AUTH_ALGORITHM_OFFSET = 596
+const CONNECTION_STRUCT_BYTES = 604
 const DOT11_SSID_MAX_BYTES = 32
+const DOT11_MAC_ADDRESS_BYTES = 6
 const WLAN_INTERFACE_CONNECTED = 1
+const WLAN_INTF_OPCODE_CHANNEL_NUMBER = 8
+const WLAN_INTF_OPCODE_RSSI = 0x10000102
+const DOT11_BSS_TYPE_ANY = 3
+const BSS_LIST_HEADER_BYTES = 8
+const BSS_ENTRY_BYTES = 360
+const BSS_ENTRY_BSSID_OFFSET = 40
+const BSS_ENTRY_RSSI_OFFSET = 56
+const BSS_ENTRY_CENTER_FREQUENCY_OFFSET = 92
 
 const AF_UNSPEC = 0
 const GAA_FLAG_SKIP_ALL_ADDRESSES = 0xf
@@ -52,6 +68,7 @@ function loadNativeApi() {
       WlanEnumInterfaces: wlanapi.func('__stdcall', 'WlanEnumInterfaces', 'uint32', ['uintptr_t', 'uintptr_t', outVoidPointer]),
       WlanQueryInterface: wlanapi.func('__stdcall', 'WlanQueryInterface', 'uint32', ['uintptr_t', bytePointer, 'int32', 'uintptr_t', koffi.out(koffi.pointer('uint32')), outVoidPointer, 'uintptr_t']),
       WlanFreeMemory: wlanapi.func('__stdcall', 'WlanFreeMemory', 'void', ['void *']),
+      WlanGetNetworkBssList: wlanapi.func('__stdcall', 'WlanGetNetworkBssList', 'uint32', ['uintptr_t', bytePointer, 'uintptr_t', 'int32', 'int32', 'uintptr_t', outVoidPointer]),
       GetAdaptersAddresses: iphlpapi.func('__stdcall', 'GetAdaptersAddresses', 'uint32', ['uint32', 'uint32', 'uintptr_t', 'void *', koffi.inout(koffi.pointer('uint32'))]),
     }
   } catch (e) {
@@ -105,6 +122,40 @@ function decodeConnection(buffer) {
     ssid: decodeSsid(buffer),
     signal: buffer.readUInt32LE(CONNECTION_SIGNAL_QUALITY_OFFSET),
   }
+}
+
+function formatMacAddress(bytes) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(':')
+}
+
+function decodeConnectionDetails(buffer) {
+  if (buffer.length < CONNECTION_STRUCT_BYTES) return null
+  if (buffer.readUInt32LE(CONNECTION_STATE_OFFSET) !== WLAN_INTERFACE_CONNECTED) return null
+  return {
+    ssid: decodeSsid(buffer),
+    bssid: formatMacAddress(buffer.subarray(CONNECTION_BSSID_OFFSET, CONNECTION_BSSID_OFFSET + DOT11_MAC_ADDRESS_BYTES)),
+    phyType: buffer.readUInt32LE(CONNECTION_PHY_TYPE_OFFSET),
+    signalPercent: buffer.readUInt32LE(CONNECTION_SIGNAL_QUALITY_OFFSET),
+    receiveRateKbps: buffer.readUInt32LE(CONNECTION_RX_RATE_OFFSET),
+    transmitRateKbps: buffer.readUInt32LE(CONNECTION_TX_RATE_OFFSET),
+    securityEnabled: buffer.readUInt32LE(CONNECTION_SECURITY_ENABLED_OFFSET) !== 0,
+    authAlgorithm: buffer.readUInt32LE(CONNECTION_AUTH_ALGORITHM_OFFSET),
+  }
+}
+
+function decodeBssEntry(buffer, bssid) {
+  const count = buffer.readUInt32LE(4)
+  for (let index = 0; index < count; index += 1) {
+    const base = BSS_LIST_HEADER_BYTES + index * BSS_ENTRY_BYTES
+    if (base + BSS_ENTRY_BYTES > buffer.length) return null
+    const entryBssid = formatMacAddress(buffer.subarray(base + BSS_ENTRY_BSSID_OFFSET, base + BSS_ENTRY_BSSID_OFFSET + DOT11_MAC_ADDRESS_BYTES))
+    if (entryBssid !== bssid) continue
+    return {
+      rssiDbm: buffer.readInt32LE(base + BSS_ENTRY_RSSI_OFFSET),
+      centerFrequencyKhz: buffer.readUInt32LE(base + BSS_ENTRY_CENTER_FREQUENCY_OFFSET),
+    }
+  }
+  return null
 }
 
 function queryInterface(api, client, interfaceGuid, opCode) {
@@ -187,6 +238,70 @@ async function readWifiConnection() {
   }
 }
 
+async function queryInterfaceBuffer(api, client, interfaceGuid, opCode) {
+  const dataSize = [0]
+  const data = [null]
+  const status = await queryInterfaceOffThread(api, client, interfaceGuid, opCode, dataSize, data)
+  if (status !== ERROR_SUCCESS) return null
+  try {
+    return bytesAt(api, data[0], 0, dataSize[0])
+  } finally {
+    api.WlanFreeMemory(data[0])
+  }
+}
+
+function readBssList(api, client, interfaceGuid) {
+  return new Promise((resolve) => {
+    const list = [null]
+    api.WlanGetNetworkBssList.async(client, interfaceGuid, 0, DOT11_BSS_TYPE_ANY, 0, 0, list, (error, status) => {
+      if (error || status !== ERROR_SUCCESS || !list[0]) return resolve(null)
+      try {
+        const totalSize = bytesAt(api, list[0], 0, 4).readUInt32LE(0)
+        resolve(bytesAt(api, list[0], 0, totalSize))
+      } finally {
+        api.WlanFreeMemory(list[0])
+      }
+    })
+  })
+}
+
+async function readLinkOfInterface(api, client, guid) {
+  const connectionBuffer = await queryInterfaceBuffer(api, client, guid, WLAN_INTF_OPCODE_CURRENT_CONNECTION)
+  const connection = connectionBuffer && decodeConnectionDetails(connectionBuffer)
+  if (!connection) return null
+  const channelBuffer = await queryInterfaceBuffer(api, client, guid, WLAN_INTF_OPCODE_CHANNEL_NUMBER)
+  const rssiBuffer = await queryInterfaceBuffer(api, client, guid, WLAN_INTF_OPCODE_RSSI)
+  const bssList = await readBssList(api, client, guid)
+  const bss = bssList && decodeBssEntry(bssList, connection.bssid)
+  return {
+    ...connection,
+    channel: channelBuffer && channelBuffer.length >= 4 ? channelBuffer.readUInt32LE(0) : null,
+    rssiDbm: rssiBuffer && rssiBuffer.length >= 4 ? rssiBuffer.readInt32LE(0) : (bss?.rssiDbm ?? null),
+    centerFrequencyKhz: bss?.centerFrequencyKhz ?? null,
+  }
+}
+
+async function readWifiLink() {
+  const api = loadNativeApi()
+  if (!api) return null
+  const client = openWlanClient(api)
+  if (!client) return null
+  const interfaceList = [null]
+  if (api.WlanEnumInterfaces(client, 0, interfaceList) !== ERROR_SUCCESS) return null
+  try {
+    const count = bytesAt(api, interfaceList[0], 0, WLAN_INTERFACE_LIST_HEADER_BYTES).readUInt32LE(0)
+    for (let index = 0; index < count; index += 1) {
+      const guidOffset = WLAN_INTERFACE_LIST_HEADER_BYTES + index * WLAN_INTERFACE_INFO_BYTES
+      const guid = bytesAt(api, interfaceList[0], guidOffset, WLAN_INTERFACE_GUID_BYTES)
+      const link = await readLinkOfInterface(api, client, guid)
+      if (link) return link
+    }
+    return null
+  } finally {
+    api.WlanFreeMemory(interfaceList[0])
+  }
+}
+
 function buildInterfaceGeneration(entries) {
   return entries
     .map(({ ifIndex, ifType, operStatus }) => `${ifIndex}:${ifType}:${operStatus}`)
@@ -245,11 +360,14 @@ function disposeNetworkNative() {
 
 module.exports = {
   buildInterfaceGeneration,
+  decodeBssEntry,
   decodeConnection,
+  decodeConnectionDetails,
   decodeRadioState,
   decodeSsid,
   disposeNetworkNative,
   readInterfaceGeneration,
   readWifiConnection,
+  readWifiLink,
   readWifiRadioState,
 }

@@ -1,12 +1,28 @@
-import { Bluetooth, BluetoothConnected, Plus, RefreshCw, Unlink, Wrench } from 'lucide-react'
-import { ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, Spinner, Toggle } from '@alpine/ui'
+import { useState } from 'react'
+import {
+  Bluetooth,
+  BluetoothConnected,
+  Gamepad2,
+  Headphones,
+  Keyboard,
+  Laptop,
+  Mic,
+  Mouse,
+  Plus,
+  RefreshCw,
+  Smartphone,
+  Speaker,
+  Watch,
+  type LucideIcon,
+} from 'lucide-react'
+import { Button, Card, ConfirmButton, EmptyState, ListRow, PageHeader, Row, Section, Spinner, Toggle } from '@alpine/ui'
 import { useBluetooth } from '../../hooks/useBluetooth'
 import { useBluetoothRescan } from '../../hooks/useBluetoothRescan'
+import { settingsPage } from '../../settings/registry'
 import PageSpinner from './pageSpinner'
 import {
   CHECKING_BLUETOOTH,
   canToggleRadio,
-  deviceActionLabel,
   deviceStatusLabel,
   displayedRadioOn,
   nextDeviceAction,
@@ -17,91 +33,142 @@ import {
 export default function BluetoothSettingsPage() {
   const { state, toggleDevice, setRadio, openPairing, removeDevice, repairAudio } = useBluetooth()
   const { refreshing, rescan } = useBluetoothRescan()
+  const [openId, setOpenId] = useState<string | null>(null)
   const radioOn = displayedRadioOn(state)
   const notice = radioEmptyStateTitle(state)
   const radioError = radioErrorLabel(state.radio.error)
 
   return (
-    <div className="flex w-full flex-col gap-5">
-      <PageHeader title="Bluetooth">
-        <IconButton onClick={() => openPairing()} disabled={!radioOn} label="Pair new device">
-          <Plus size={16} />
-        </IconButton>
-        <IconButton onClick={rescan} busy={refreshing} disabled={!radioOn} label="Rescan">
-          <RefreshCw size={15} />
-        </IconButton>
-        <Toggle
-          label="Bluetooth"
-          checked={radioOn}
-          pending={state.radio.pending !== null}
-          disabled={!canToggleRadio(state)}
-          onChange={(on) => setRadio(on)}
-        />
+    <div className="flex w-full flex-col gap-section">
+      <PageHeader variant="plain" title={settingsPage('bluetooth')?.label ?? ''}>
+        {radioOn && (
+          <>
+            <Button shape="square" variant="ghost" size="sm" icon={<RefreshCw size={14} />} busy={refreshing} onClick={rescan}>
+              Rescan
+            </Button>
+            <Button shape="square" variant="soft" size="sm" icon={<Plus size={14} />} onClick={() => openPairing()}>
+              Pair new device
+            </Button>
+          </>
+        )}
       </PageHeader>
 
-      {radioError && <p className="-mt-3 text-xs text-danger">{radioError}</p>}
+      <Card variant="group">
+        <Row label="Bluetooth" description={radioError ? <span className="text-danger">{radioError}</span> : undefined}>
+          <Toggle
+            variant="compact"
+            label="Bluetooth"
+            checked={radioOn}
+            pending={state.radio.pending !== null}
+            disabled={!canToggleRadio(state)}
+            onChange={(on) => setRadio(on)}
+          />
+        </Row>
+      </Card>
 
       {notice === CHECKING_BLUETOOTH || (refreshing && state.devices.length === 0) ? (
         <PageSpinner label={CHECKING_BLUETOOTH} />
       ) : notice ? (
         <EmptyState variant="plain" title={notice} />
       ) : (
-        <div className="flex flex-col gap-1">
-          {state.devices.map((device) => (
-            <DeviceRow
-              key={device.id}
-              device={device}
-              onToggle={() => toggleDevice(device)}
-              onRemove={() => removeDevice(device)}
-              onRepair={() => repairAudio(device)}
-            />
-          ))}
-        </div>
+        <Section variant="label" title="Devices">
+          <Card variant="list">
+            {state.devices.map((device) => (
+              <DeviceRow
+                key={device.id}
+                device={device}
+                open={openId === device.id}
+                onOpen={() => setOpenId(openId === device.id ? null : device.id)}
+                onToggle={() => toggleDevice(device)}
+                onRemove={() => removeDevice(device)}
+                onRepair={() => repairAudio(device)}
+              />
+            ))}
+          </Card>
+        </Section>
       )}
     </div>
   )
 }
 
-function DeviceIcon({ device }: { device: BluetoothDevice }) {
-  if (device.pending) return <Spinner size={16} />
-  if (device.connected) return <BluetoothConnected size={16} className="text-ink-primary" />
-  return <Bluetooth size={16} className="text-ink-quiet" />
+const DEVICE_ICONS: Record<BluetoothDeviceKind, LucideIcon> = {
+  headphones: Headphones,
+  speaker: Speaker,
+  microphone: Mic,
+  mouse: Mouse,
+  keyboard: Keyboard,
+  gamepad: Gamepad2,
+  phone: Smartphone,
+  computer: Laptop,
+  watch: Watch,
+  other: Bluetooth,
 }
 
-function DeviceActions({ device, onRemove, onRepair }: { device: BluetoothDevice; onRemove: () => void; onRepair: () => void }) {
-  if (device.pending) return null
+const DEVICE_ICON_SIZE = 17
+
+function DeviceIcon({ device }: { device: BluetoothDevice }) {
+  if (device.pending) return <Spinner size={16} />
+  const tone = device.connected ? 'text-ink-primary' : 'text-ink-quiet'
+  if (device.kind === 'other' && device.connected) return <BluetoothConnected size={DEVICE_ICON_SIZE} className={tone} />
+  const Icon = DEVICE_ICONS[device.kind] ?? Bluetooth
+  return <Icon size={DEVICE_ICON_SIZE} strokeWidth={1.75} className={tone} />
+}
+
+function DeviceActions({ device, onToggle, onRemove, onRepair }: { device: BluetoothDevice; onToggle: () => void; onRemove: () => void; onRepair: () => void }) {
+  const action = nextDeviceAction(device)
   return (
-    <>
-      {device.audioDisabled && (
-        <IconButton label="Turn audio back on" onClick={onRepair}>
-          <Wrench size={14} />
-        </IconButton>
+    <div className="flex flex-wrap items-center gap-2 pt-1 pr-3.5 pb-3 pl-[54px]">
+      {action && (
+        <Button shape="square" variant={action === 'connect' ? 'primary' : 'soft'} size="sm" onClick={onToggle}>
+          {action === 'connect' ? 'Connect' : 'Disconnect'}
+        </Button>
       )}
-      <span className="flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-        <ConfirmButton
-          label="Remove device"
-          confirmLabel="Forget device"
-          icon={<Unlink size={14} />}
-          iconOnly
-          confirmOnly
-          onConfirm={onRemove}
-        />
-      </span>
-    </>
+      {device.audioDisabled && (
+        <Button shape="square" variant="soft" size="sm" onClick={onRepair}>
+          Turn audio back on
+        </Button>
+      )}
+      <ConfirmButton
+        shape="square"
+        label="Remove device"
+        confirmLabel="Forget device"
+        variant="dangerSoft"
+        confirmVariant="danger"
+        size="sm"
+        onConfirm={onRemove}
+      />
+    </div>
   )
 }
 
-function DeviceRow({ device, onToggle, onRemove, onRepair }: { device: BluetoothDevice; onToggle: () => void; onRemove: () => void; onRepair: () => void }) {
-  const actionable = nextDeviceAction(device) !== null
+function DeviceRow({
+  device,
+  open,
+  onOpen,
+  onToggle,
+  onRemove,
+  onRepair,
+}: {
+  device: BluetoothDevice
+  open: boolean
+  onOpen: () => void
+  onToggle: () => void
+  onRemove: () => void
+  onRepair: () => void
+}) {
+  const expanded = open && device.pending === null
   return (
     <ListRow
+      variant="plain"
       icon={<DeviceIcon device={device} />}
       title={device.name}
       detail={<span className={device.error ? 'text-danger' : ''}>{deviceStatusLabel(device)}</span>}
-      onActivate={actionable ? onToggle : undefined}
-      activateLabel={deviceActionLabel(device)}
+      onActivate={onOpen}
+      activateLabel={device.name}
+      expanded={expanded}
       disabled={device.pending !== null}
-      actions={<DeviceActions device={device} onRemove={onRemove} onRepair={onRepair} />}
-    />
+    >
+      {expanded && <DeviceActions device={device} onToggle={onToggle} onRemove={onRemove} onRepair={onRepair} />}
+    </ListRow>
   )
 }

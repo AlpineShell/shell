@@ -1,14 +1,19 @@
 const keyState = require('./keyState')
-const { shortcutForKey, createWinTapTracker } = require('./shellHotkeyPolicy')
+const { SHELL_SHORTCUTS, shortcutForKey, createWinTapTracker } = require('./shellHotkeyPolicy')
 
 const WIN_TAP = 'winTap'
 
 const actionCallbacks = new Map()
 const winTapTracker = createWinTapTracker()
 let winTapEnabled = false
+let shortcuts = SHELL_SHORTCUTS
 
 function on(action, callback) {
   actionCallbacks.set(action, callback)
+}
+
+function setShortcuts(next) {
+  shortcuts = next
 }
 
 function setWinTapEnabled(enabled) {
@@ -43,7 +48,7 @@ function handleWinTap(keyEvent) {
 
 function handleShortcut(keyEvent) {
   if (!keyEvent.isKeyDown) return false
-  const shortcut = shortcutForKey(keyEvent.vkCode, keyState)
+  const shortcut = shortcutForKey(keyEvent.vkCode, keyState, shortcuts)
   if (!shortcut) return false
   const callback = actionCallbacks.get(shortcut.action)
   if (!callback) return false
@@ -52,4 +57,4 @@ function handleShortcut(keyEvent) {
   return true
 }
 
-module.exports = { on, setWinTapEnabled, handleWinTap, handleShortcut }
+module.exports = { on, setShortcuts, setWinTapEnabled, handleWinTap, handleShortcut }

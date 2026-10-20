@@ -12,7 +12,6 @@ import {
   ridgeItemTitle,
   ridgePluginGroupWidgets,
 } from './ridgeItemCatalogue'
-import { RIDGE_PRESENCE_NOTES } from './ridgeSamples'
 import { absentRidgePreviewData, liveRidgePreviewData, ridgePluginWidget, ridgeTrayIcon } from './ridgeTestFixtures'
 
 const REGISTRY_MODULE = '../../../settings/registry'
@@ -44,11 +43,7 @@ function trayIconsLink(): RidgeItemLink {
 
 function textACalloutReads(id: TopbarItemId, data: RidgePreviewData): string {
   const detail = RIDGE_ITEM_DETAILS[id]
-  return [
-    topbarItemLabel(id),
-    ...detail.links.flatMap((link) => [link.label, link.detail?.(data) ?? '']),
-    detail.note(data) ?? '',
-  ].join(' ')
+  return [topbarItemLabel(id), ...detail.links.flatMap((link) => [link.label, link.detail?.(data) ?? ''])].join(' ')
 }
 
 afterEach(() => {
@@ -93,20 +88,6 @@ describe('RIDGE_ITEM_DETAILS', () => {
     for (const data of [liveRidgePreviewData(), absentRidgePreviewData()]) {
       for (const id of ITEM_IDS) expect(textACalloutReads(id, data)).not.toMatch(/top ?bar/i)
     }
-  })
-})
-
-describe('the presence notes', () => {
-  it('explain nothing while every item has live data', () => {
-    const data = liveRidgePreviewData()
-    expect(ITEM_IDS.filter((id) => RIDGE_ITEM_DETAILS[id].note(data) !== null)).toEqual([])
-  })
-
-  it('explain every item Ridge draws a sample of, in the words the samples use', () => {
-    const data = absentRidgePreviewData()
-    const explained = ITEM_IDS.filter((id) => RIDGE_ITEM_DETAILS[id].note(data) !== null)
-    expect(explained).toEqual(['plugins-left', 'tray', 'media', 'microphone', 'plugins-right'])
-    for (const id of explained) expect(RIDGE_ITEM_DETAILS[id].note(data)).toBe(RIDGE_PRESENCE_NOTES[id])
   })
 })
 

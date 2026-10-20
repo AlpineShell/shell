@@ -53,6 +53,7 @@ export function liveRidgePreviewData(): RidgePreviewData {
           {
             id: 'headphones',
             name: 'Headphones',
+            kind: 'headphones',
             connected: true,
             canConnect: false,
             canDisconnect: true,

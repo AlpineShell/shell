@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { RotateCw, Star, MonitorCheck, X } from 'lucide-react'
-import { Button, IconButton, PageTitle, Row, Section, Slider } from '@alpine/ui'
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { RotateCw, Star, MonitorCheck } from 'lucide-react'
+import { Button, Card, EmptyState, PageTitle, Row, Section, Slider } from '@alpine/ui'
+import { settingsPage } from '../../settings/registry'
 import { useDisplays } from '../../hooks/useDisplays'
 import { useMonitors } from '../../hooks/useMonitors'
 import { useHighlightedSetting } from '../../hooks/useHighlightedSetting'
@@ -140,83 +141,86 @@ export default function DisplaysPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 w-full">
-      <PageTitle title="Displays" />
+    <div className="flex w-full flex-col gap-section">
+      <PageTitle variant="plain" title={settingsPage('displays')?.label ?? ''} />
 
       {committed.length === 0 ? (
-        <p className="text-sm text-ink-quiet">No displays detected.</p>
+        <EmptyState variant="plain" title="No displays detected" />
       ) : (
         <>
           {phase === 'confirming' ? (
-            <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 px-4 py-3">
-              <span className="inline-flex items-center gap-2 text-dense text-ink-primary">
-                <MonitorCheck size={16} className="text-success" />
-                Keep these display changes? Reverting in {secondsLeft}s.
-              </span>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button variant="outline" size="sm" onClick={revertNow} className="font-medium">
-                  Revert
-                </Button>
-                <Button size="sm" onClick={keep} className="font-medium">
-                  Keep changes
-                </Button>
-              </div>
-            </div>
+            <ChangesBanner
+              icon={<MonitorCheck size={16} className="text-success" />}
+              message={`Keep these display changes? Reverting in ${secondsLeft}s.`}
+            >
+              <Button shape="square" variant="ghost" size="sm" onClick={revertNow}>
+                Revert
+              </Button>
+              <Button shape="square" size="sm" onClick={keep}>
+                Keep changes
+              </Button>
+            </ChangesBanner>
           ) : (
             dirty && (
-              <div className="flex items-center justify-between gap-4 rounded-card bg-surface-2 px-4 py-3">
-                <span className="text-dense text-ink-primary">You have unsaved display changes.</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <IconButton label="Discard" onClick={discard}>
-                    <X size={15} />
-                  </IconButton>
-                  <Button size="sm" onClick={apply} disabled={applying} className="font-medium">
-                    {applying ? 'Applying…' : 'Apply'}
-                  </Button>
-                </div>
-              </div>
+              <ChangesBanner message="You have unsaved display changes.">
+                <Button shape="square" variant="ghost" size="sm" onClick={discard}>
+                  Discard
+                </Button>
+                <Button shape="square" size="sm" busy={applying} onClick={apply}>
+                  Apply
+                </Button>
+              </ChangesBanner>
             )
           )}
 
           {error && <p className="text-xs text-danger">{error}</p>}
 
-          <Section title="Arrangement">
+          <Section variant="label" title="Arrangement">
             <DisplayCanvas displays={draft} selectedId={selectedId} onSelect={setSelectedId} onMove={moveDisplay} />
           </Section>
 
           {selected && (
-            <Section title={selected.name}>
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-dense text-ink-primary">
-                    {selected.width} × {selected.height}
-                    {selected.refreshRate ? ` · ${selected.refreshRate} Hz` : ''}
-                  </div>
-                  <div className="text-xs text-ink-quiet mt-0.5">{orientationLabel(selected.orientation)}</div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <IconButton label="Rotate" onClick={rotateSelected}>
-                    <RotateCw size={15} />
-                  </IconButton>
-                  {selected.primary ? (
-                    <span className="inline-flex items-center gap-1.5 h-8 px-3 text-xs text-success">
-                      <Star size={14} />
-                      Primary
-                    </span>
-                  ) : (
-                    <Button variant="outline" size="sm" onClick={setPrimarySelected} className="font-medium">
-                      <Star size={14} />
-                      Set as primary
+            <Section variant="label" title={selected.name}>
+              <Card variant="group">
+                <Row
+                  label={`${selected.width} × ${selected.height}${selected.refreshRate ? ` · ${selected.refreshRate} Hz` : ''}`}
+                  description={orientationLabel(selected.orientation)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Button shape="square" variant="soft" size="sm" icon={<RotateCw size={14} />} onClick={rotateSelected}>
+                      Rotate
                     </Button>
-                  )}
-                </div>
-              </div>
+                    {selected.primary ? (
+                      <span className="inline-flex h-7 items-center gap-1.5 px-2 text-dense text-ink-secondary">
+                        <Star size={14} className="fill-current" />
+                        Primary
+                      </span>
+                    ) : (
+                      <Button shape="square" variant="soft" size="sm" icon={<Star size={14} />} onClick={setPrimarySelected}>
+                        Set as primary
+                      </Button>
+                    )}
+                  </div>
+                </Row>
+              </Card>
             </Section>
           )}
         </>
       )}
 
       <BrightnessSection />
+    </div>
+  )
+}
+
+function ChangesBanner({ icon, message, children }: { icon?: ReactNode; message: string; children: ReactNode }) {
+  return (
+    <div role="status" className="flex items-center justify-between gap-4 rounded-card bg-fill-subtle py-2.5 pr-2.5 pl-4">
+      <span className="inline-flex items-center gap-2 text-dense text-ink-primary">
+        {icon}
+        {message}
+      </span>
+      <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
   )
 }
@@ -231,22 +235,19 @@ function BrightnessSection() {
   }, [highlighted])
 
   return (
-    <Section title="Brightness">
+    <Section variant="label" title="Brightness">
       <div
         ref={anchor}
-        className={`-mx-2 rounded-field px-2 py-1.5 transition-colors duration-300 ${
-          highlighted ? 'bg-fill-ghost ring-1 ring-line-strong' : ''
-        }`}
+        className={`rounded-card transition-shadow duration-300 ${highlighted ? 'ring-1 ring-line-strong' : ''}`}
       >
         {monitors.length === 0 ? (
-          <p className="text-sm text-ink-quiet">
-            No display on this PC reports a brightness control Alpine can drive.
-          </p>
+          <EmptyState variant="plain" title="No display here has a brightness control Alpine can drive" />
         ) : (
-          <div className="flex flex-col gap-3">
+          <Card variant="group">
             {monitors.map((monitor) => (
               <Row key={monitor.id} label={monitor.name} description={monitorStatusNote(monitor)}>
                 <Slider
+                  variant="wide"
                   label={`${monitor.name} brightness`}
                   min={0}
                   max={100}
@@ -257,7 +258,7 @@ function BrightnessSection() {
                 />
               </Row>
             ))}
-          </div>
+          </Card>
         )}
       </div>
     </Section>
@@ -330,17 +331,21 @@ function DisplayCanvas({
       onMouseMove={onMouseMove}
       onMouseUp={endDrag}
       onMouseLeave={endDrag}
-      className="relative h-64 w-full rounded-card bg-surface-2 overflow-hidden select-none"
+      className="relative h-60 w-full rounded-card bg-fill-ghost overflow-hidden select-none"
     >
       {scale > 0 &&
         displays.map((d, index) => {
           const active = d.id === selectedId
           return (
-            <div
+            <button
+              type="button"
               key={d.id}
+              aria-pressed={active}
+              aria-label={`Display ${index + 1}, ${d.name}`}
               onMouseDown={(e) => startDrag(e, d)}
-              className={`absolute flex flex-col items-center justify-center rounded-md border-2 transition-colors cursor-grab active:cursor-grabbing ${
-                active ? 'border-focus-ring bg-fill-ghost text-ink-primary' : 'border-line-strong bg-surface-3 text-ink-secondary hover:border-ink-faint'
+              onClick={() => onSelect(d.id)}
+              className={`focus-ring absolute flex flex-col items-center justify-center rounded-md border-2 transition-colors cursor-grab active:cursor-grabbing ${
+                active ? 'border-ink-primary bg-fill-subtle text-ink-primary' : 'border-line-strong bg-surface-3 text-ink-secondary hover:border-ink-faint'
               }`}
               style={{
                 left: originX + d.x * scale,
@@ -351,8 +356,8 @@ function DisplayCanvas({
             >
               <span className="text-xl font-semibold leading-none">{index + 1}</span>
               <span className="mt-1 text-[10px] opacity-70 truncate max-w-full px-1">{d.name}</span>
-              {d.primary && <Star size={12} className="absolute top-1 right-1 text-success fill-success" />}
-            </div>
+              {d.primary && <Star size={12} className="absolute top-1.5 right-1.5 fill-current" />}
+            </button>
           )
         })}
     </div>

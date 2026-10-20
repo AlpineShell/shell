@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { EmptyState, PageTitle } from '@alpine/ui'
+import { Card, EmptyState, PageTitle } from '@alpine/ui'
 import { ThemeProvider } from '../themeContext'
 import { usePluginComponent } from '../../hooks/usePluginComponent'
 import { usePluginSettingsPages } from '../../hooks/usePluginSettingsPages'
@@ -24,11 +24,11 @@ export default function PluginSettingsPage({ pluginId }: PluginSettingsPageProps
 
   return (
     <div className="flex w-full flex-col gap-section">
-      <PageTitle title={page.label} />
+      <PageTitle variant="plain" title={page.label} />
       {page.settings.length > 0 && (
-        <div className="flex flex-col gap-3">
+        <Card variant="group">
           <PluginSettingRows pluginId={page.pluginId} settings={page.settings} />
-        </div>
+        </Card>
       )}
       {page.exportName !== null && page.enabled && <PluginPageComponent page={page} exportName={page.exportName} />}
     </div>
