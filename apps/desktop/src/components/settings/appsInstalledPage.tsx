@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { AppWindow, Boxes, FolderOpen, Search, SquareArrowOutUpRight, Trash2 } from 'lucide-react'
-import { Avatar, Card, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, TextField } from '@alpine/ui'
+import { Avatar, Button, Card, ConfirmButton, EmptyState, ListRow, PageHeader, TextField } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useInstalledApps } from '../../hooks/useInstalledApps'
+import { ROW_ACTIONS } from './appsShared'
 import PageSpinner from './pageSpinner'
 
 type InstalledAction = 'open' | 'locate' | 'uninstall'
@@ -11,6 +12,11 @@ export default function AppsInstalledPage() {
   const installed = useInstalledApps()
   const [query, setQuery] = useState('')
   const [componentsOpen, setComponentsOpen] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
+
+  function toggleRow(id: string) {
+    setOpenId((current) => (current === id ? null : id))
+  }
 
   const q = query.trim().toLowerCase()
   const apps = q
@@ -39,7 +45,7 @@ export default function AppsInstalledPage() {
       {userApps.length > 0 && (
         <Card variant="list">
           {userApps.map((app) => (
-            <InstalledRow key={app.id} app={app} />
+            <InstalledRow key={app.id} app={app} open={openId === app.id} onToggle={() => toggleRow(app.id)} />
           ))}
         </Card>
       )}
@@ -54,15 +60,23 @@ export default function AppsInstalledPage() {
             onActivate={() => setComponentsOpen((v) => !v)}
             expanded={showComponents}
           />
-          {showComponents && components.map((app) => <InstalledRow key={app.id} app={app} />)}
+          {showComponents &&
+            components.map((app) => (
+              <InstalledRow key={app.id} app={app} open={openId === app.id} onToggle={() => toggleRow(app.id)} />
+            ))}
         </Card>
       )}
     </div>
   )
 }
 
-function InstalledRow({ app }: { app: InstalledApp }) {
+function canActOn(app: InstalledApp): boolean {
+  return app.canOpen || app.canOpenLocation || app.canUninstall
+}
+
+function InstalledRow({ app, open, onToggle }: { app: InstalledApp; open: boolean; onToggle: () => void }) {
   const [pending, setPending] = useState<InstalledAction | null>(null)
+  const actionable = canActOn(app)
 
   async function act(kind: InstalledAction, run: () => Promise<unknown>) {
     if (pending) return
@@ -73,46 +87,56 @@ function InstalledRow({ app }: { app: InstalledApp }) {
   return (
     <ListRow
       variant="plain"
-      revealActions
       icon={<Avatar src={app.icon} alt={app.name} fallback={<AppWindow size={16} strokeWidth={1.75} />} />}
       title={app.name}
       detail={app.publisher || undefined}
-      actions={
-        <>
+      onActivate={actionable ? onToggle : undefined}
+      activateLabel={app.name}
+      expanded={actionable ? open : undefined}
+    >
+      {open && actionable && (
+        <div className={ROW_ACTIONS}>
           {app.canOpen && (
-            <IconButton
-              label="Open"
-              onClick={() => act('open', () => window.shell.apps.openApp(app.id))}
+            <Button
+              shape="square"
+              variant="soft"
+              size="sm"
+              icon={<SquareArrowOutUpRight size={14} />}
               disabled={!!pending}
               busy={pending === 'open'}
+              onClick={() => act('open', () => window.shell.apps.openApp(app.id))}
             >
-              <SquareArrowOutUpRight size={14} />
-            </IconButton>
+              Open
+            </Button>
           )}
           {app.canOpenLocation && (
-            <IconButton
-              label="Open file location"
-              onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))}
+            <Button
+              shape="square"
+              variant="soft"
+              size="sm"
+              icon={<FolderOpen size={14} />}
               disabled={!!pending}
               busy={pending === 'locate'}
+              onClick={() => act('locate', () => window.shell.apps.openAppLocation(app.id))}
             >
-              <FolderOpen size={14} />
-            </IconButton>
+              Open file location
+            </Button>
           )}
           {app.canUninstall && (
             <ConfirmButton
+              shape="square"
+              variant="dangerSoft"
+              confirmVariant="danger"
               label="Uninstall"
               confirmLabel={`Uninstall ${app.name}`}
-              onConfirm={() => act('uninstall', () => window.shell.apps.uninstall(app.id))}
+              icon={<Trash2 size={14} />}
               disabled={!!pending}
               busy={pending === 'uninstall'}
-              icon={<Trash2 size={14} />}
-              iconOnly
-              confirmOnly
+              onConfirm={() => act('uninstall', () => window.shell.apps.uninstall(app.id))}
             />
           )}
-        </>
-      }
-    />
+        </div>
+      )}
+    </ListRow>
   )
 }

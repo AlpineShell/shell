@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { ConfirmButton, PageTitle, Row } from '@alpine/ui'
+import { Card, ConfirmButton, PageTitle, Row } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useTestSession } from '../../hooks/useTestSession'
 
@@ -26,7 +26,7 @@ const ACTIONS: RevertActionSpec[] = [
   {
     id: 'temporary',
     label: 'Revert until next sign-in',
-    description: 'Switch to Windows Explorer now. Alpine Shell takes over again the next time you sign in.',
+    description: 'Windows Explorer now, Alpine Shell again at your next sign-in.',
     actionLabel: 'Revert',
     confirmLabel: 'Revert until sign-in',
     run: () => window.setup.revertTemporary(),
@@ -34,7 +34,7 @@ const ACTIONS: RevertActionSpec[] = [
   {
     id: 'permanent',
     label: 'Revert permanently',
-    description: 'Make Windows Explorer your shell for good. Alpine Shell stays installed — open it from the Start menu to switch back.',
+    description: 'Windows Explorer for good; open Alpine Shell from the Start menu to switch back.',
     actionLabel: 'Revert',
     confirmLabel: 'Revert permanently',
     run: () => window.setup.revertPermanent(),
@@ -42,7 +42,7 @@ const ACTIONS: RevertActionSpec[] = [
   {
     id: 'delete',
     label: 'Delete Alpine Shell',
-    description: 'Revert to Windows Explorer and remove Alpine Shell completely — files, settings, shortcuts and registry entries. This cannot be undone.',
+    description: 'Removes Alpine Shell with all its files and settings. This cannot be undone.',
     actionLabel: 'Delete',
     confirmLabel: 'Delete Alpine Shell',
     danger: true,
@@ -53,7 +53,7 @@ const ACTIONS: RevertActionSpec[] = [
 const END_TEST_ACTION: RevertActionSpec = {
   id: 'endTest',
   label: 'Return to Windows',
-  description: 'End the test and go back to Windows Explorer.',
+  description: 'Ends the test and goes back to Windows Explorer.',
   actionLabel: 'Return',
   confirmLabel: 'Return to Windows',
   run: () => window.setup.endTestSession(),
@@ -100,7 +100,7 @@ export default function SystemRevertPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full">
+    <div className="flex w-full flex-col gap-section">
       <PageTitle variant="plain" title={settingsPage('revert')?.label ?? ''} />
 
       {state.phase === 'done' && (
@@ -114,13 +114,11 @@ export default function SystemRevertPage() {
       {state.phase === 'error' && <Banner title="Couldn't complete that." detail={state.message} danger />}
 
       {isDev && (
-        <div className="text-xs text-ink-quiet">
-          Unavailable in development — run an installed build to revert the shell.
-        </div>
+        <p className="text-xs text-ink-quiet">Unavailable in development; run an installed build to revert the shell.</p>
       )}
 
       {state.phase !== 'done' && testSession !== null && (
-        <div className="flex flex-col gap-4">
+        <Card variant="group">
           {actions.map((spec) => (
             <RevertRow
               key={spec.id}
@@ -134,7 +132,7 @@ export default function SystemRevertPage() {
               onConfirm={() => runAction(spec)}
             />
           ))}
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -153,9 +151,8 @@ function Banner({
 }) {
   return (
     <div
-      className={`rounded-card border px-4 py-3 flex items-start gap-3 ${
-        danger ? 'border-danger/30 bg-danger/10' : 'border-line-hairline bg-surface-2'
-      }`}
+      role="status"
+      className={`flex items-start gap-3 rounded-card px-4 py-3 ${danger ? 'bg-danger/10' : 'bg-fill-subtle'}`}
     >
       <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${danger ? 'text-danger' : 'text-warning'}`} />
       <div className="text-sm">
@@ -187,17 +184,17 @@ function RevertRow({
   onConfirm: () => void
 }) {
   return (
-    <Row label={label} info={description}>
+    <Row label={label} description={description}>
       <ConfirmButton
+        shape="square"
         label={actionLabel}
         confirmLabel={confirmLabel}
         onConfirm={onConfirm}
-        variant={danger ? 'dangerOutline' : 'outline'}
+        variant={danger ? 'dangerSoft' : 'soft'}
         confirmVariant={danger ? 'danger' : 'primary'}
         confirmOnly
         disabled={disabled}
         busy={busy}
-        className="font-medium"
       />
     </Row>
   )

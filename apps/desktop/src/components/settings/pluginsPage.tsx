@@ -12,7 +12,8 @@ import {
   Store,
   Trash2,
 } from 'lucide-react'
-import { Avatar, Badge, Button, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, Segmented, Spinner, Toggle, type SegmentedOption } from '@alpine/ui'
+import { Avatar, Badge, Button, Card, ConfirmButton, EmptyState, IconButton, ListRow, PageHeader, Segmented, Spinner, Toggle, type SegmentedOption } from '@alpine/ui'
+import { settingsPage } from '../../settings/registry'
 import { pluginLogoUrl } from '../../plugins/pluginAssets'
 import { pluginSettingsPage } from '../../plugins/pluginSettingsPages'
 
@@ -58,6 +59,7 @@ function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onU
   return (
     <li>
       <ListRow
+        variant="plain"
         icon={<Avatar src={logo} alt={plugin.name} fallback={<Puzzle size={16} />} />}
         title={plugin.name}
         badges={
@@ -76,6 +78,7 @@ function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onU
             )}
             {!plugin.preset && (
               <ConfirmButton
+                shape="square"
                 iconOnly
                 confirmOnly
                 label="Uninstall"
@@ -85,7 +88,7 @@ function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onU
                 busy={removing}
               />
             )}
-            <Toggle label={`Enable ${plugin.name}`} checked={enabled} onChange={() => onToggle(plugin)} />
+            <Toggle variant="compact" label={`Enable ${plugin.name}`} checked={enabled} onChange={() => onToggle(plugin)} />
           </>
         }
       >
@@ -111,8 +114,9 @@ function BrowseCard({ plugin, installedVersion, installing, requested, failure, 
   }, [requested])
 
   return (
-    <li ref={anchor} className={requested ? 'rounded-card ring-1 ring-line-strong' : undefined}>
+    <li ref={anchor} className={requested ? 'rounded-field ring-1 ring-inset ring-line-strong' : undefined}>
       <ListRow
+        variant="plain"
         icon={<Avatar src={plugin.iconUrl} alt={plugin.name} fallback={<Puzzle size={16} />} />}
         title={plugin.name}
         badges={<Badge>v{plugin.version}</Badge>}
@@ -131,7 +135,7 @@ function BrowseCard({ plugin, installedVersion, installing, requested, failure, 
                 <ShieldCheck size={13} /> Installed
               </Badge>
             ) : (
-              <Button size="sm" onClick={() => onInstall(plugin)} icon={<Download size={13} />}>
+              <Button shape="square" size="sm" onClick={() => onInstall(plugin)} icon={<Download size={13} />}>
                 {installed ? 'Update' : 'Install'}
               </Button>
             )}
@@ -277,47 +281,56 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
   ]
 
   return (
-    <div className="flex w-full flex-col gap-5">
-      <PageHeader variant="plain" title="Plugins" />
+    <div className="flex w-full flex-col gap-section">
+      <PageHeader variant="plain" title={settingsPage('plugins')?.label ?? ''}>
+        {tab === 'installed' ? (
+          <>
+            <Button shape="square" variant="ghost" size="sm" icon={<FolderOpen size={14} />} onClick={() => window.plugins.openFolder()}>
+              Open plugins folder
+            </Button>
+            <Button shape="square" variant="ghost" size="sm" icon={<RotateCw size={14} />} busy={reloading} onClick={reload}>
+              Reload
+            </Button>
+          </>
+        ) : (
+          <Button shape="square" variant="ghost" size="sm" icon={<RefreshCw size={14} />} busy={browse.status === 'loading'} onClick={loadBrowse}>
+            Refresh
+          </Button>
+        )}
+      </PageHeader>
 
-      <div className="flex items-center justify-between gap-3">
-        <Segmented label="Plugin view" options={tabs} value={tab} onChange={setTab} />
-        <div className="flex shrink-0 items-center gap-1">
-          {tab === 'installed' ? (
-            <>
-              <IconButton label="Open plugins folder" onClick={() => window.plugins.openFolder()}>
-                <FolderOpen size={16} />
-              </IconButton>
-              <IconButton label="Reload" onClick={reload} busy={reloading}>
-                <RotateCw size={16} />
-              </IconButton>
-            </>
-          ) : (
-            <IconButton label="Refresh" onClick={loadBrowse} busy={browse.status === 'loading'}>
-              <RefreshCw size={16} />
-            </IconButton>
-          )}
-        </div>
+      <div>
+        <Segmented variant="filled" label="Plugin view" options={tabs} value={tab} onChange={setTab} />
       </div>
 
       {tab === 'installed' ? (
         plugins.length === 0 ? (
-          <EmptyState variant="plain" title="No plugins installed yet." />
+          <EmptyState
+            variant="plain"
+            title="No plugins installed yet"
+            action={
+              <Button shape="square" variant="soft" size="sm" icon={<Store size={14} />} onClick={() => setTab('browse')}>
+                Browse the marketplace
+              </Button>
+            }
+          />
         ) : (
-          <ul className="flex flex-col gap-1.5">
-            {plugins.map((plugin) => (
-              <InstalledCard
-                key={plugin.id}
-                plugin={plugin}
-                settingsRoute={pluginSettingsPage(plugin)?.route ?? null}
-                removing={removingId === plugin.id}
-                failure={failures[plugin.id] ?? null}
-                onToggle={toggle}
-                onUninstall={uninstall}
-                onNavigate={onNavigate}
-              />
-            ))}
-          </ul>
+          <Card variant="list">
+            <ul className="divide-y divide-line-hairline">
+              {plugins.map((plugin) => (
+                <InstalledCard
+                  key={plugin.id}
+                  plugin={plugin}
+                  settingsRoute={pluginSettingsPage(plugin)?.route ?? null}
+                  removing={removingId === plugin.id}
+                  failure={failures[plugin.id] ?? null}
+                  onToggle={toggle}
+                  onUninstall={uninstall}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </ul>
+          </Card>
         )
       ) : browse.status === 'loading' ? (
         <EmptyState variant="plain" icon={<Spinner size={14} />} title="Loading marketplace…" />
@@ -325,25 +338,32 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
         <EmptyState
           variant="plain"
           icon={<AlertTriangle size={14} className="text-warning" />}
-          title="Couldn't reach the marketplace."
+          title="Couldn't reach the marketplace"
           detail={browse.base && <span className="font-mono break-all">{browse.base}</span>}
+          action={
+            <Button shape="square" variant="soft" size="sm" icon={<RefreshCw size={14} />} onClick={loadBrowse}>
+              Try again
+            </Button>
+          }
         />
       ) : browsePlugins.length === 0 ? (
-        <EmptyState variant="plain" title="No plugins published yet." />
+        <EmptyState variant="plain" title="No plugins published yet" />
       ) : (
-        <ul className="flex flex-col gap-1.5">
-          {browsePlugins.map((plugin) => (
-            <BrowseCard
-              key={plugin.id}
-              plugin={plugin}
-              installedVersion={installedById.get(plugin.id)?.version ?? null}
-              installing={installingId === plugin.id}
-              requested={requested?.id === plugin.id}
-              failure={failures[plugin.id] ?? null}
-              onInstall={install}
-            />
-          ))}
-        </ul>
+        <Card variant="list">
+          <ul className="divide-y divide-line-hairline">
+            {browsePlugins.map((plugin) => (
+              <BrowseCard
+                key={plugin.id}
+                plugin={plugin}
+                installedVersion={installedById.get(plugin.id)?.version ?? null}
+                installing={installingId === plugin.id}
+                requested={requested?.id === plugin.id}
+                failure={failures[plugin.id] ?? null}
+                onInstall={install}
+              />
+            ))}
+          </ul>
+        </Card>
       )}
     </div>
   )

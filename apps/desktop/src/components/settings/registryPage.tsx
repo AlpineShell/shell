@@ -84,8 +84,6 @@ function groupItems(items: PlacedItem[]): PlacedGroup[] {
     .sort((a, b) => a.order - b.order)
 }
 
-const NO_DESCRIPTION = ''
-
 function HighlightedEntry({ entry, description }: { entry: SettingsEntry; description: string }) {
   const highlighted = useHighlightedSetting(entry.id)
   const anchor = useRef<HTMLDivElement>(null)
@@ -94,7 +92,7 @@ function HighlightedEntry({ entry, description }: { entry: SettingsEntry; descri
     if (highlighted) anchor.current?.scrollIntoView({ block: 'center' })
   }, [highlighted])
 
-  const content = entryRowContent(entry, NO_DESCRIPTION, false, description)
+  const content = entryRowContent(entry, description)
   if (content === null) return null
 
   return (

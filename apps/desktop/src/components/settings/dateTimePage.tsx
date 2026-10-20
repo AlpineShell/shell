@@ -10,8 +10,12 @@ const TIME_ZONE_GROUP = 'Time zone'
 const CLOCK_GROUP = 'Clock'
 const CLOCK_TICK_MS = 1000
 
-function formatCurrentTime(now: Date): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'medium' }).format(now)
+function formatClockTime(now: Date): string {
+  return new Intl.DateTimeFormat(undefined, { timeStyle: 'medium' }).format(now)
+}
+
+function formatLongDate(now: Date): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(now)
 }
 
 export default function DateTimePage() {
@@ -38,6 +42,7 @@ export default function DateTimePage() {
       content: state.autoTimeZone !== null && (
         <Row label="Set time zone automatically">
           <Toggle
+            variant="compact"
             label="Set time zone automatically"
             checked={state.autoTimeZone}
             pending={busy === 'auto-time-zone'}
@@ -49,16 +54,12 @@ export default function DateTimePage() {
     },
     {
       group: CLOCK_GROUP,
-      order: 0,
-      content: <CurrentTimeRow timeZoneId={state.timeZoneId} />,
-    },
-    {
-      group: CLOCK_GROUP,
       order: 1,
       replaces: ['time-automatic'],
       content: state.autoTime !== null && (
         <Row label="Set time automatically">
           <Toggle
+            variant="compact"
             label="Set time automatically"
             checked={state.autoTime}
             pending={busy === 'auto-time'}
@@ -74,7 +75,7 @@ export default function DateTimePage() {
       replaces: ['time-sync'],
       content: (
         <Row label="Sync now" description={synced ? 'The clock matches the time server.' : undefined}>
-          <Button size="sm" variant="outline" icon={<RefreshCw size={14} />} busy={busy === 'sync'} disabled={busy !== null} onClick={syncNow}>
+          <Button shape="square" size="sm" variant="soft" icon={<RefreshCw size={14} />} busy={busy === 'sync'} disabled={busy !== null} onClick={syncNow}>
             Sync
           </Button>
         </Row>
@@ -86,7 +87,12 @@ export default function DateTimePage() {
     <RegistryPage
       page="date-time"
       slots={slots}
-      lead={failure && <p role="alert" className="-mt-3 text-xs text-danger">{failure}</p>}
+      lead={
+        <>
+          {failure && <p role="alert" className="-mt-3 text-xs text-danger">{failure}</p>}
+          <CurrentTime timeZoneId={state.timeZoneId} />
+        </>
+      }
     />
   )
 }
@@ -105,12 +111,13 @@ function TimeZoneRow({ state, busy, locked, onChange }: { state: DateTimeState; 
     <Row
       label="Time zone"
       disabled={locked}
-      info={locked ? 'Turn off Set time zone automatically to pick one yourself.' : undefined}
+      description={locked ? 'Turn off Set time zone automatically to pick one yourself.' : undefined}
     >
       <div ref={pickerAnchor} className="relative flex">
         <Button
+          shape="square"
           size="sm"
-          variant="outline"
+          variant="soft"
           aria-expanded={picking}
           busy={busy}
           disabled={locked || options.length === 0}
@@ -142,7 +149,7 @@ function TimeZoneRow({ state, busy, locked, onChange }: { state: DateTimeState; 
   )
 }
 
-function CurrentTimeRow({ timeZoneId }: { timeZoneId: string | null }) {
+function CurrentTime({ timeZoneId }: { timeZoneId: string | null }) {
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -151,8 +158,11 @@ function CurrentTimeRow({ timeZoneId }: { timeZoneId: string | null }) {
   }, [timeZoneId])
 
   return (
-    <Row label="Current time">
-      <span className="text-sm tabular-nums text-ink-quiet">{formatCurrentTime(now)}</span>
-    </Row>
+    <Card variant="group">
+      <div role="timer" aria-label="Current time" className="flex flex-col py-2">
+        <span className="text-[34px] leading-10 font-normal tracking-tight tabular-nums text-ink-primary">{formatClockTime(now)}</span>
+        <span className="text-dense text-ink-quiet">{formatLongDate(now)}</span>
+      </div>
+    </Card>
   )
 }

@@ -127,7 +127,7 @@ function CanvasHarness({
       openItem={openItem}
       onOpenItemChange={setOpenItem}
       onNothingLeftToFocus={onNothingLeftToFocus}
-      renderCallout={(id) => <p>Settings for {id}</p>}
+      renderItemSettings={(id) => <p>Settings for {id}</p>}
       measure={measure}
       scrollContainer={scrollContainer ?? (() => null)}
     />
@@ -175,11 +175,6 @@ function strip(): HTMLElement {
 
 function stripScale(): string {
   return strip().parentElement?.style.transform ?? ''
-}
-
-function isStripArea(element: Element): boolean {
-  const stage = element.parentElement
-  return stage !== null && stage.hasAttribute('data-layout-mode') && stage.children[1] === element
 }
 
 function precedesStrip(element: Element): boolean {
@@ -632,30 +627,12 @@ describe('RidgeCanvas layout', () => {
     for (const slot of TOPBAR_SLOTS) expect(laneOf(slot).className.split(' ')).toContain('outline-dashed')
   })
 
-  it('opens the callout below Ridge while there is room for it there', async () => {
+  it('shows the settings of the item under Ridge, in the flow of the page', async () => {
     installBridges()
     await mount(<CanvasHarness />)
 
     act(() => chip('Clock').click())
 
     expect(precedesStrip(screen.getByText('Settings for clock'))).toBe(false)
-  })
-
-  it('opens the callout above Ridge when only the room above holds it', async () => {
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(200)
-    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      if (this.hasAttribute('data-layout-mode')) return domRect(box(0, 0, 1000, 700))
-      if (isStripArea(this)) return domRect(box(0, 500, 1000, 540))
-      return domRect(box(0, 0, 0, 0))
-    })
-    const scroller = document.createElement('div')
-    scroller.getBoundingClientRect = () => domRect(box(0, 0, 1000, 600))
-    installBridges()
-    await mount(<CanvasHarness scrollContainer={() => scroller} />)
-
-    act(() => chip('Clock').click())
-
-    expect(chip('Clock').getAttribute('aria-expanded')).toBe('true')
-    expect(precedesStrip(screen.getByText('Settings for clock'))).toBe(true)
   })
 })

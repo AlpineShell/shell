@@ -61,9 +61,14 @@ describe('shortcutForKey', () => {
     expect(actionFor(VK_S, WIN)).toBe(null)
   })
 
-  it('tiles on Win+arrow and carries the direction and whether Shift moves it to the next display', () => {
-    expect(shortcutForKey(VK_LEFT, WIN)).toMatchObject({ action: 'tile', direction: 'left', shift: false, inline: true })
-    expect(shortcutForKey(VK_DOWN, WIN_SHIFT)).toMatchObject({ action: 'tile', direction: 'down', shift: true, inline: true })
+  it('tiles on Win+arrow and moves the window to the next display on Win+Shift+Left and Right', () => {
+    expect(shortcutForKey(VK_LEFT, WIN)).toMatchObject({ action: 'tile', direction: 'left', crossDisplay: false, inline: true })
+    expect(shortcutForKey(VK_DOWN, WIN)).toMatchObject({ action: 'tile', direction: 'down', crossDisplay: false, inline: true })
+    expect(shortcutForKey(VK_LEFT, WIN_SHIFT)).toMatchObject({ action: 'tile', direction: 'left', crossDisplay: true, inline: true })
+  })
+
+  it('leaves Win+Shift+Up and Down to Windows, since no display lies above or below', () => {
+    expect(shortcutForKey(VK_DOWN, WIN_SHIFT)).toBe(null)
   })
 
   it('switches desktops on Win+Ctrl+Left and Right instead of tiling', () => {

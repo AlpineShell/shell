@@ -1,19 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import {
-  calloutOffset,
   caretBox,
   edgeScrollDelta,
   insertionIndexInLane,
-  leaderPath,
   resolveDropTarget,
-  ridgeBoxWithin,
-  ridgeCalloutPlacement,
   ridgeFitScale,
   ridgeLayoutMode,
 } from './ridgeGeometry'
 
 const MINIMUM_CANVAS_WIDTH = 525
-const CALLOUT_WIDTH = 352
 
 const box = (left: number, top: number, right: number, bottom: number): RidgeBox => ({ left, top, right, bottom })
 const chip = (id: TopbarItemId, left: number, right: number, top = 100, bottom = 132): RidgeChipBox => ({
@@ -176,53 +171,6 @@ describe('caretBox', () => {
   })
 })
 
-describe('calloutOffset', () => {
-  it('centers the callout under its chip', () => {
-    expect(calloutOffset(box(400, 4, 440, 36), box(0, 0, 1015, 400), CALLOUT_WIDTH)).toBe(244)
-  })
-
-  it('keeps the callout inside the 525px canvas at the minimum window size', () => {
-    const stage = box(0, 0, MINIMUM_CANVAS_WIDTH, 400)
-
-    expect(calloutOffset(box(480, 100, 520, 132), stage, CALLOUT_WIDTH)).toBe(173)
-    expect(calloutOffset(box(4, 4, 36, 36), stage, CALLOUT_WIDTH)).toBe(0)
-  })
-
-  it('measures from the stage, not from the window', () => {
-    const stage = box(240, 0, 765, 400)
-
-    expect(calloutOffset(box(700, 100, 740, 132), stage, CALLOUT_WIDTH)).toBe(173)
-    expect(calloutOffset(box(300, 4, 340, 36), stage, CALLOUT_WIDTH)).toBe(0)
-    expect(calloutOffset(box(480, 100, 520, 132), stage, CALLOUT_WIDTH)).toBe(84)
-  })
-
-  it('pins a callout wider than the stage to its start', () => {
-    expect(calloutOffset(box(400, 4, 440, 36), box(0, 0, MINIMUM_CANVAS_WIDTH, 400), 600)).toBe(0)
-  })
-})
-
-describe('leaderPath', () => {
-  it('drops straight down when the chip sits over the callout', () => {
-    expect(leaderPath(box(400, 4, 440, 36), box(244, 200, 596, 400))).toBe('M 420 36 V 200')
-  })
-
-  it('bends just above the callout when the chip is outside its span', () => {
-    expect(leaderPath(box(0, 100, 40, 132), box(60, 200, 412, 400))).toBe('M 20 132 V 188 H 76 V 200')
-  })
-
-  it('lands clear of the corner when the callout is clamped to the canvas edge', () => {
-    expect(leaderPath(box(500, 100, 530, 132), box(173, 200, 525, 400))).toBe('M 515 132 V 188 H 509 V 200')
-  })
-
-  it('never bends above the chip', () => {
-    expect(leaderPath(box(0, 160, 40, 195), box(60, 200, 412, 400))).toBe('M 20 195 V 195 H 76 V 200')
-  })
-
-  it('draws on whole pixels', () => {
-    expect(leaderPath(box(400.2, 4.4, 440.2, 36.4), box(244, 200.6, 596, 400))).toBe('M 420 36 V 201')
-  })
-})
-
 describe('edgeScrollDelta', () => {
   it.each([
     [380, 0],
@@ -257,26 +205,5 @@ describe('ridgeFitScale', () => {
 
   it('leaves Ridge at full size before it has been measured', () => {
     expect(ridgeFitScale(400, 0)).toBe(1)
-  })
-})
-
-describe('ridgeCalloutPlacement', () => {
-  it('opens the callout below Ridge while it fits there', () => {
-    expect(ridgeCalloutPlacement(200, 200, 500)).toBe('below')
-  })
-
-  it('opens the callout above Ridge when only the room above holds it', () => {
-    expect(ridgeCalloutPlacement(200, 120, 300)).toBe('above')
-  })
-
-  it('takes the roomier side when neither holds the callout', () => {
-    expect(ridgeCalloutPlacement(400, 120, 300)).toBe('above')
-    expect(ridgeCalloutPlacement(400, 300, 120)).toBe('below')
-  })
-})
-
-describe('ridgeBoxWithin', () => {
-  it('expresses a box relative to the frame that holds it', () => {
-    expect(ridgeBoxWithin(box(250, 130, 290, 162), SCROLLER)).toEqual(box(10, 30, 50, 62))
   })
 })

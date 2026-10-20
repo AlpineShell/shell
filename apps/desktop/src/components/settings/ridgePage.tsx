@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { CirclePlus, RotateCcw } from 'lucide-react'
-import { ConfirmButton, IconButton, PageHeader } from '@alpine/ui'
+import { Plus, RotateCcw } from 'lucide-react'
+import { Button, ConfirmButton, PageHeader } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { highlightedSetting, onHighlightedSetting } from '../../hooks/useHighlightedSetting'
 import { useRidgeEditor } from '../../hooks/useRidgeEditor'
@@ -15,7 +15,7 @@ import { ridgeHighlightRing } from './ridge/ridgeHighlight'
 import { ridgeCanAddItem, ridgeDrawsItem, ridgeItemForSetting } from './ridge/ridgeItemCatalogue'
 import { nextFocusedItem, ridgeFocusOrder } from './ridge/ridgeKeyboard'
 import RidgeAddMenu from './ridge/ridgeAddMenu'
-import RidgeCallout from './ridge/ridgeCallout'
+import RidgeItemSettings from './ridge/ridgeItemSettings'
 import RidgeCanvas from './ridge/ridgeCanvas'
 import RidgeColorSection from './ridge/ridgeColorSection'
 import RidgeHiddenItemNotice from './ridge/ridgeHiddenItemNotice'
@@ -112,11 +112,6 @@ export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
     canvas.current?.announce(message)
   }
 
-  function closeCallout(id: TopbarItemId) {
-    setOpenItem(null)
-    canvas.current?.focusItem(id)
-  }
-
   function stepFromCallout(id: TopbarItemId, direction: TopbarStepDirection) {
     abandonCanvasGrab()
     editor.step(id, direction, isDrawn)
@@ -166,11 +161,11 @@ export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
     })
   }
 
-  function renderCallout(id: TopbarItemId) {
+  function renderItemSettings(id: TopbarItemId) {
     const item = editor.items.find((candidate) => candidate.id === id)
     if (!item) return null
     return (
-      <RidgeCallout
+      <RidgeItemSettings
         item={item}
         previewData={previewData}
         highlightedSetting={highlight}
@@ -179,13 +174,12 @@ export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
         onStep={(direction) => stepFromCallout(id, direction)}
         onHide={() => hideFromCallout(id)}
         onNavigate={onNavigate}
-        onClose={() => closeCallout(id)}
       />
     )
   }
 
   return (
-    <div className="relative flex w-full flex-1 flex-col gap-section">
+    <div className="relative flex w-full flex-col gap-section">
       <div>
         <PageHeader variant="plain" title={settingsPage('ridge')?.label ?? ''} subtitle={PAGE_SUBTITLE}>
           <div
@@ -194,25 +188,29 @@ export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
             className={`flex rounded-field transition-colors duration-300 ${ridgeHighlightRing(highlight === RESET_SETTING)}`}
           >
             <ConfirmButton
-              iconOnly
+              shape="square"
               confirmOnly
+              variant="ghost"
               label={RESET_LABEL}
               confirmLabel={RESET_CONFIRM_LABEL}
-              icon={<RotateCcw size={16} />}
+              icon={<RotateCcw size={14} />}
               busy={resetting}
               disabled={editor.isDefault}
               onConfirm={resetRidge}
             />
           </div>
           <div ref={addAnchor} className="relative flex">
-            <IconButton
-              label={ADD_LABEL}
+            <Button
+              shape="square"
+              variant="soft"
+              size="sm"
+              icon={<Plus size={14} />}
               aria-expanded={adding}
               aria-controls={adding ? addMenuId : undefined}
               onClick={() => setAdding((open) => !open)}
             >
-              <CirclePlus size={16} />
-            </IconButton>
+              {ADD_LABEL}
+            </Button>
             {adding && (
               <div className="absolute top-full right-0 z-40 mt-2 w-88">
                 <RidgeAddMenu id={addMenuId} items={addableItems} previewData={previewData} onSelect={addItem} onDismiss={dismissAddMenu} />
@@ -221,21 +219,19 @@ export default function RidgePage({ onNavigate, initialItem }: RidgePageProps) {
           </div>
         </PageHeader>
       </div>
-      <div className="flex flex-col">
-        <RidgeCanvas
-          ref={canvas}
-          editor={editor}
-          previewData={previewData}
-          openItem={openItem}
-          onOpenItemChange={setOpenItem}
-          onNothingLeftToFocus={focusAddButton}
-          renderCallout={renderCallout}
-        />
-      </div>
-      <RidgeColorSection />
+      <RidgeCanvas
+        ref={canvas}
+        editor={editor}
+        previewData={previewData}
+        openItem={openItem}
+        onOpenItemChange={setOpenItem}
+        onNothingLeftToFocus={focusAddButton}
+        renderItemSettings={renderItemSettings}
+      />
       {hiddenItem !== null && (
         <RidgeHiddenItemNotice item={hiddenItem} onAdd={() => addItem(hiddenItem)} onClose={closeHiddenItemNotice} />
       )}
+      <RidgeColorSection />
       {editor.error && (
         <p role="alert" className="text-xs text-danger">
           {editor.error}

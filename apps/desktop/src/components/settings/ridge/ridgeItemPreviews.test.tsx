@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { TOPBAR_ITEMS } from '../../topbar/layout/topbarLayout'
 import { clearWidgets, registerContribution } from '../../../plugins/pluginRegistry'
 import { RIDGE_ITEM_PREVIEWS } from './ridgeItemPreviewMap'
-import { RIDGE_PRESENCE_NOTES, ridgeItemIsSample } from './ridgeSamples'
+import { ridgeItemIsSample } from './ridgeSamples'
 import { absentRidgePreviewData, liveRidgePreviewData, ridgeTrayIcon } from './ridgeTestFixtures'
 
 const ITEM_IDS = TOPBAR_ITEMS.map((item) => item.id)
@@ -90,16 +90,6 @@ describe('ridgeItemIsSample', () => {
       'microphone',
       'plugins-right',
     ])
-  })
-})
-
-describe('RIDGE_PRESENCE_NOTES', () => {
-  it('says when each item that can be absent shows, without calling the bar the top bar', () => {
-    const data = absentRidgePreviewData()
-    for (const id of ITEM_IDS.filter((item) => ridgeItemIsSample(item, data))) {
-      expect(RIDGE_PRESENCE_NOTES[id]).toBeTruthy()
-      expect(RIDGE_PRESENCE_NOTES[id]).not.toMatch(/top ?bar/i)
-    }
   })
 })
 

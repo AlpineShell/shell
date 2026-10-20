@@ -1,5 +1,5 @@
 import { LogOut } from 'lucide-react'
-import { Button, IconButton, Row } from '@alpine/ui'
+import { Button, Row } from '@alpine/ui'
 import { useCalendar } from '../../../hooks/useCalendar'
 
 const ACCOUNT_LABEL = 'Google Calendar'
@@ -20,22 +20,18 @@ export default function RidgeCalendarAccount() {
 
   if (state.connected) {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-card bg-surface-3 px-3 py-2.5">
-        <div className="flex min-w-0 flex-col">
-          <span className="text-dense text-ink-primary">{ACCOUNT_LABEL}</span>
-          <span className="truncate text-xs text-ink-quiet">{state.email ?? FALLBACK_ACCOUNT_NAME}</span>
-        </div>
-        <IconButton label="Disconnect" onClick={disconnect}>
-          <LogOut size={15} />
-        </IconButton>
-      </div>
+      <Row label={ACCOUNT_LABEL} description={state.email ?? FALLBACK_ACCOUNT_NAME}>
+        <Button shape="square" variant="ghost" size="sm" icon={<LogOut size={14} />} onClick={disconnect}>
+          Disconnect
+        </Button>
+      </Row>
     )
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <Row label={ACCOUNT_LABEL} info={ACCOUNT_INFO}>
-        <Button size="sm" busy={state.connecting} disabled={state.connecting} onClick={connect}>
+      <Row label={ACCOUNT_LABEL} description={ACCOUNT_INFO}>
+        <Button shape="square" size="sm" busy={state.connecting} disabled={state.connecting} onClick={connect}>
           {state.connecting ? 'Waiting…' : 'Connect'}
         </Button>
       </Row>

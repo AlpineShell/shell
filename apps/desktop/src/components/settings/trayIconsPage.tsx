@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react'
-import { IconButton, PageTitle, Section } from '@alpine/ui'
+import type { ReactNode } from 'react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
+import { Button, Card, EmptyState, IconButton, ListRow, PageTitle, Section } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useTrayIcons } from '../../hooks/useTrayIcons'
 import { useTrayLayout } from '../../hooks/useTrayLayout'
@@ -35,51 +36,64 @@ export default function TrayIconsPage() {
     <div className="flex w-full flex-col gap-section">
       <PageTitle variant="plain" title={settingsPage('tray-icons')?.label ?? ''} />
 
-      {icons.length === 0 && <p className="text-sm text-ink-quiet">No tray icons running.</p>}
+      {icons.length === 0 ? (
+        <EmptyState variant="plain" title="No tray icons running" />
+      ) : (
+        <>
+          <Section variant="label" title="Shown">
+            <TrayList empty="No shown icons">
+              {visible.map((icon, i) => (
+                <TrayRow key={icon.id} icon={icon}>
+                  <IconButton label={`Move ${icon.tooltip} up`} disabled={i === 0} onClick={() => move(icon.id, -1)}>
+                    <ArrowUp size={14} />
+                  </IconButton>
+                  <IconButton
+                    label={`Move ${icon.tooltip} down`}
+                    disabled={i === visible.length - 1}
+                    onClick={() => move(icon.id, 1)}
+                  >
+                    <ArrowDown size={14} />
+                  </IconButton>
+                  <Button shape="square" variant="soft" size="sm" onClick={() => hide(icon.id)}>
+                    Hide
+                  </Button>
+                </TrayRow>
+              ))}
+            </TrayList>
+          </Section>
 
-      {visible.length > 0 && (
-        <Section title="Shown">
-          <div className="flex flex-col gap-1">
-            {visible.map((icon, i) => (
-              <Row key={icon.id} icon={icon}>
-                <IconButton label="Move up" disabled={i === 0} onClick={() => move(icon.id, -1)}>
-                  <ChevronUp size={15} />
-                </IconButton>
-                <IconButton label="Move down" disabled={i === visible.length - 1} onClick={() => move(icon.id, 1)}>
-                  <ChevronDown size={15} />
-                </IconButton>
-                <IconButton label="Hide" onClick={() => hide(icon.id)}>
-                  <EyeOff size={15} />
-                </IconButton>
-              </Row>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {overflow.length > 0 && (
-        <Section title="Hidden">
-          <div className="flex flex-col gap-1">
-            {overflow.map((icon) => (
-              <Row key={icon.id} icon={icon}>
-                <IconButton label="Show" onClick={() => show(icon.id)}>
-                  <Eye size={15} />
-                </IconButton>
-              </Row>
-            ))}
-          </div>
-        </Section>
+          <Section variant="label" title="Hidden">
+            <TrayList empty="No hidden icons">
+              {overflow.map((icon) => (
+                <TrayRow key={icon.id} icon={icon}>
+                  <Button shape="square" variant="soft" size="sm" onClick={() => show(icon.id)}>
+                    Show
+                  </Button>
+                </TrayRow>
+              ))}
+            </TrayList>
+          </Section>
+        </>
       )}
     </div>
   )
 }
 
-function Row({ icon, children }: { icon: TrayIcon; children: React.ReactNode }) {
+function TrayList({ empty, children }: { empty: string; children: ReactNode[] }) {
   return (
-    <div className="flex h-11 items-center gap-3">
-      {icon.icon && <img src={icon.icon} alt="" className="h-5 w-5 shrink-0" draggable={false} />}
-      <span className="min-w-0 flex-1 truncate text-dense text-ink-primary">{icon.tooltip}</span>
-      <div className="flex shrink-0 items-center gap-1">{children}</div>
-    </div>
+    <Card variant="list">
+      {children.length > 0 ? children : <p className="px-3 py-3 text-dense text-ink-quiet">{empty}</p>}
+    </Card>
+  )
+}
+
+function TrayRow({ icon, children }: { icon: TrayIcon; children: ReactNode }) {
+  return (
+    <ListRow
+      variant="plain"
+      icon={icon.icon ? <img src={icon.icon} alt="" className="h-5 w-5" draggable={false} /> : undefined}
+      title={icon.tooltip}
+      actions={children}
+    />
   )
 }

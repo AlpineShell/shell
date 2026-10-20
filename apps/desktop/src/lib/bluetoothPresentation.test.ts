@@ -17,6 +17,7 @@ function device(overrides: Partial<BluetoothDevice> = {}): BluetoothDevice {
   return {
     id: 'headset',
     name: 'Headset',
+    kind: 'headphones',
     connected: false,
     canConnect: true,
     canDisconnect: false,

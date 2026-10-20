@@ -9,20 +9,18 @@ const ACTION_ICON_SIZE = 16
 export function ActionRow({
   entry,
   description,
-  info,
   actionLabel,
   actionIcon: ActionIcon,
   run,
 }: {
   entry: SettingsEntry
   description: string
-  info?: string
   actionLabel: string
   actionIcon: SettingsIcon
   run: () => Promise<unknown>
 }) {
   return (
-    <Row label={entry.label} info={info} description={description}>
+    <Row label={entry.label} description={description}>
       <IconButton label={actionLabel} onClick={() => { run().catch(() => {}) }}>
         <ActionIcon size={ACTION_ICON_SIZE} />
       </IconButton>
@@ -36,7 +34,7 @@ function controlTakesItsOwnLine(entry: SettingsValueEntry): boolean {
   return WIDE_CONTROLS.has(entry.control.kind)
 }
 
-export function ValueRow({ entry, description, info, wideControlStacked = false }: ValueRowProps) {
+export function ValueRow({ entry, description, wideControlStacked = false }: ValueRowProps) {
   const { value, staged, restartRequired, error, write, confirm, cancel } = useSettingsValue(entry)
   const proposed = staged !== undefined
   const stacked = wideControlStacked && controlTakesItsOwnLine(entry)
@@ -52,10 +50,10 @@ export function ValueRow({ entry, description, info, wideControlStacked = false 
 
   return (
     <div ref={holder} className="flex flex-col gap-2" onKeyDown={cancelOnEscape}>
-      <Row label={entry.label} info={info} description={description} stacked={stacked}>
+      <Row label={entry.label} description={description} stacked={stacked}>
         <div className="flex items-center gap-2">
           {proposed && (
-            <Button variant="primary" size="sm" aria-label={`Apply ${entry.label.toLowerCase()}`} onClick={confirm}>
+            <Button shape="square" variant="primary" size="sm" aria-label={`Apply ${entry.label.toLowerCase()}`} onClick={confirm}>
               Apply
             </Button>
           )}
@@ -88,12 +86,13 @@ function EntryControl({
   const control = entry.control
 
   if (control.kind === 'toggle') {
-    return <Toggle label={entry.label} checked={value === true} pending={pending} onChange={onChange} />
+    return <Toggle variant="compact" label={entry.label} checked={value === true} pending={pending} onChange={onChange} />
   }
 
   if (control.kind === 'slider') {
     return (
       <Slider
+        variant="wide"
         label={entry.label}
         min={control.min}
         max={control.max}
@@ -108,6 +107,7 @@ function EntryControl({
   if (control.kind === 'select') {
     return (
       <Select
+        variant="filled"
         label={entry.label}
         options={[...control.options]}
         value={typeof value === 'string' ? value : String(entry.defaultValue)}
@@ -119,6 +119,7 @@ function EntryControl({
   if (control.kind === 'segmented') {
     return (
       <Segmented
+        variant="filled"
         label={entry.label}
         options={[...control.options]}
         value={typeof value === 'string' || typeof value === 'number' ? value : (entry.defaultValue as string | number)}

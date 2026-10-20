@@ -5,8 +5,6 @@ const EDGE_SCROLL_BAND = 40
 const EDGE_SCROLL_MAX_STEP = 12
 const CARET_WIDTH = 2
 const CARET_GAP = 2
-const LEADER_INSET = 16
-const LEADER_BEND_NEAR_CALLOUT = 12
 
 const EMPTY_LANE_CARET_X: Record<TopbarSlot, (lane: RidgeBox) => number> = {
   left: (lane) => lane.left + CARET_GAP,
@@ -39,14 +37,6 @@ export function ridgeFitScale(available: number, natural: number): number {
   return available / natural
 }
 
-export function ridgeBoxWithin(box: RidgeBox, frame: RidgeBox): RidgeBox {
-  return {
-    left: box.left - frame.left,
-    top: box.top - frame.top,
-    right: box.right - frame.left,
-    bottom: box.bottom - frame.top,
-  }
-}
 
 function otherChips(lane: RidgeLaneBox, id: TopbarItemId): RidgeChipBox[] {
   return lane.chips.filter((chip) => chip.id !== id)
@@ -126,40 +116,6 @@ export function caretBox(lane: RidgeLaneBox, index: number, id: TopbarItemId): R
   const x = clamp(caretX(lane, chips, at), lane.left + halfWidth, lane.right - halfWidth)
   const row = caretRow(lane, chips, at)
   return { left: x - halfWidth, top: row.top, right: x + halfWidth, bottom: row.bottom }
-}
-
-export function calloutOffset(chip: RidgeBox, stage: RidgeBox, calloutWidth: number): number {
-  const room = Math.max(stage.right - stage.left - calloutWidth, 0)
-  return Math.round(clamp(middleX(chip) - stage.left - calloutWidth / 2, 0, room))
-}
-
-function leaderLandingX(x: number, callout: RidgeBox): number {
-  const inset = Math.min(LEADER_INSET, (callout.right - callout.left) / 2)
-  return clamp(x, callout.left + inset, callout.right - inset)
-}
-
-function calloutSitsAbove(chip: RidgeBox, callout: RidgeBox): boolean {
-  return callout.bottom <= chip.top
-}
-
-function leaderBendY(startY: number, endY: number, above: boolean): number {
-  return above ? Math.min(startY, endY + LEADER_BEND_NEAR_CALLOUT) : Math.max(startY, endY - LEADER_BEND_NEAR_CALLOUT)
-}
-
-export function leaderPath(chip: RidgeBox, callout: RidgeBox): string {
-  const above = calloutSitsAbove(chip, callout)
-  const startX = Math.round(middleX(chip))
-  const startY = Math.round(above ? chip.top : chip.bottom)
-  const endX = Math.round(leaderLandingX(startX, callout))
-  const endY = Math.round(above ? callout.bottom : callout.top)
-  if (startX === endX) return `M ${startX} ${startY} V ${endY}`
-  return `M ${startX} ${startY} V ${leaderBendY(startY, endY, above)} H ${endX} V ${endY}`
-}
-
-export function ridgeCalloutPlacement(calloutHeight: number, spaceBelow: number, spaceAbove: number): RidgeCalloutPlacement {
-  if (calloutHeight <= spaceBelow) return 'below'
-  if (calloutHeight <= spaceAbove) return 'above'
-  return spaceAbove > spaceBelow ? 'above' : 'below'
 }
 
 function edgeScrollStep(distanceFromEdge: number): number {

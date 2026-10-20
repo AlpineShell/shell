@@ -83,7 +83,7 @@ const PERSONAL_SIDEBAR: SettingsPageId[] = ['wallpaper', 'ridge', 'appearance']
 const SECTION_PAGE_LISTS: Record<SettingsSectionId, SettingsPageId[]> = {
   home: ['home', 'revert'],
   personalization: PERSONAL_SIDEBAR,
-  desktop: ['search', 'tiling'],
+  desktop: ['search', 'tiling', 'shortcuts'],
   devices: ['displays', 'wifi', 'bluetooth', 'battery', 'input'],
   system: ['apps', 'date-time', 'plugins', 'updates'],
 }

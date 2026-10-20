@@ -11,9 +11,11 @@ const VK_LEFT = 0x25
 const VK_UP = 0x26
 const VK_RIGHT = 0x27
 const VK_DOWN = 0x28
+const VK_DELETE = 0x2E
 const VK_D = 0x44
 const VK_E = 0x45
 const VK_I = 0x49
+const VK_L = 0x4C
 const VK_M = 0x4D
 const VK_P = 0x50
 const VK_S = 0x53
@@ -22,6 +24,9 @@ const VK_LWIN = 0x5B
 const VK_RWIN = 0x5C
 const VK_F4 = 0x73
 const VK_LSHIFT = 0xA0
+const VK_RSHIFT = 0xA1
+const VK_LCONTROL = 0xA2
+const VK_RCONTROL = 0xA3
 const VK_LMENU = 0xA4
 const VK_RMENU = 0xA5
 const VK_OEM_PERIOD = 0xBE
@@ -48,9 +53,11 @@ module.exports = {
   VK_UP,
   VK_RIGHT,
   VK_DOWN,
+  VK_DELETE,
   VK_D,
   VK_E,
   VK_I,
+  VK_L,
   VK_M,
   VK_P,
   VK_S,
@@ -59,6 +66,9 @@ module.exports = {
   VK_RWIN,
   VK_F4,
   VK_LSHIFT,
+  VK_RSHIFT,
+  VK_LCONTROL,
+  VK_RCONTROL,
   VK_LMENU,
   VK_RMENU,
   VK_OEM_PERIOD,

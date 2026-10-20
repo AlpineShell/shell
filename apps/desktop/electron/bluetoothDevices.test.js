@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildStackSignature,
+  deviceKind,
   groupDevices,
   inStableOrder,
   isNodeConnected,
@@ -255,5 +256,71 @@ describe('reconcileDeviceRead', () => {
     const read = reconcileDeviceRead({ previousDevices: [], previousSignature: '' }, { devices, stackIds: [] })
 
     expect(read).toMatchObject({ devices, confirmed: true })
+  })
+})
+
+const MOUSE_CLASS = '{4d36e96f-e325-11ce-bfc1-08002be10318}'
+const KEYBOARD_CLASS = '{4d36e96b-e325-11ce-bfc1-08002be10318}'
+const HID_CLASS = '{745a17a0-74d3-11d0-b6fe-00a0c90f57da}'
+
+function kindOf(fields) {
+  return deviceKind({ classOfDevice: null, childClasses: [], name: '', hasAudio: false, ...fields })
+}
+
+describe('deviceKind', () => {
+  it('reads headphones and headsets from the Classic class of device', () => {
+    expect(kindOf({ classOfDevice: 0x240404 })).toBe('headphones')
+    expect(kindOf({ classOfDevice: 0x240418 })).toBe('headphones')
+  })
+
+  it('tells a loudspeaker and a microphone from headphones', () => {
+    expect(kindOf({ classOfDevice: 0x240414 })).toBe('speaker')
+    expect(kindOf({ classOfDevice: 0x240410 })).toBe('microphone')
+  })
+
+  it('reads keyboards, mice and game controllers from the peripheral class', () => {
+    expect(kindOf({ classOfDevice: 0x2540 })).toBe('keyboard')
+    expect(kindOf({ classOfDevice: 0x2580 })).toBe('mouse')
+    expect(kindOf({ classOfDevice: 0x25c0 })).toBe('keyboard')
+    expect(kindOf({ classOfDevice: 0x2508 })).toBe('gamepad')
+  })
+
+  it('reads phones, computers and watches from their major class', () => {
+    expect(kindOf({ classOfDevice: 0x5a020c })).toBe('phone')
+    expect(kindOf({ classOfDevice: 0x10010c })).toBe('computer')
+    expect(kindOf({ classOfDevice: 0x000704 })).toBe('watch')
+  })
+
+  it('reads an LE mouse or keyboard from the input device Windows set up under it', () => {
+    expect(kindOf({ childClasses: [HID_CLASS, MOUSE_CLASS] })).toBe('mouse')
+    expect(kindOf({ childClasses: [HID_CLASS, KEYBOARD_CLASS.toUpperCase()] })).toBe('keyboard')
+    expect(kindOf({ childClasses: [MOUSE_CLASS, KEYBOARD_CLASS] })).toBe('keyboard')
+  })
+
+  it('falls back to the name when Windows says nothing about the device', () => {
+    expect(kindOf({ name: 'MX Master 3S' })).toBe('mouse')
+    expect(kindOf({ name: 'Xbox Wireless Controller' })).toBe('gamepad')
+    expect(kindOf({ name: 'Galaxy Buds2 Pro' })).toBe('headphones')
+  })
+
+  it('takes the class of device over the name', () => {
+    expect(kindOf({ classOfDevice: 0x2540, name: 'Headset Keyboard' })).toBe('keyboard')
+  })
+
+  it('calls an unknown device with audio profiles headphones, and anything else other', () => {
+    expect(kindOf({ name: 'BT-1234', hasAudio: true })).toBe('headphones')
+    expect(kindOf({ name: 'BT-1234' })).toBe('other')
+  })
+})
+
+describe('the kind of a grouped device', () => {
+  it('reads the kind from the Classic node and the input devices under the LE node', () => {
+    const address = '00aabbccddee'
+    const [device] = groupDevices({
+      nodes: [classicNode(address, { classOfDevice: 0x240418 }), leNode(address, { childClasses: [MOUSE_CLASS] })],
+    })
+    expect(device.kind).toBe('headphones')
+    const [mouse] = groupDevices({ nodes: [leNode('001122334455', { name: 'Desk pointer', childClasses: [MOUSE_CLASS] })] })
+    expect(mouse.kind).toBe('mouse')
   })
 })

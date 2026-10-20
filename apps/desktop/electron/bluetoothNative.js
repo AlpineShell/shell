@@ -43,6 +43,10 @@ const KSCATEGORY_AUDIO = '{6994ad04-93ef-11d0-a3cc-00a0c9223196}'
 const GUID_BTHPORT_DEVICE_INTERFACE = '{0850302a-b344-4fda-9be9-90576b8d46f0}'
 const DEVPKEY_DEVICE_FRIENDLY_NAME = { guid: '{a45c254e-df1c-4efd-8020-67d146a850e0}', pid: 14 }
 const DEVPKEY_DEVICE_CONTAINER_ID = { guid: '{8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c}', pid: 2 }
+const DEVPKEY_DEVICE_CLASS_GUID = { guid: '{a45c254e-df1c-4efd-8020-67d146a850e0}', pid: 10 }
+const DEVPKEY_BLUETOOTH_CLASS_OF_DEVICE = { guid: '{2bd67d8b-8beb-48d5-87e0-6cda3428040a}', pid: 10 }
+const DEVPROP_TYPE_UINT32 = 0x07
+const DESCENDANT_CLASS_DEPTH = 3
 
 function controlCode(deviceType, functionCode, method, access) {
   return ((deviceType << 16) | (access << 14) | (functionCode << 2) | method) >>> 0
@@ -103,6 +107,8 @@ function encodeBthAddress(address) {
 
 const FRIENDLY_NAME_KEY = propertyKeyBuffer(DEVPKEY_DEVICE_FRIENDLY_NAME)
 const CONTAINER_ID_KEY = propertyKeyBuffer(DEVPKEY_DEVICE_CONTAINER_ID)
+const CLASS_GUID_KEY = propertyKeyBuffer(DEVPKEY_DEVICE_CLASS_GUID)
+const CLASS_OF_DEVICE_KEY = propertyKeyBuffer(DEVPKEY_BLUETOOTH_CLASS_OF_DEVICE)
 const KSCATEGORY_AUDIO_GUID = encodeGuid(KSCATEGORY_AUDIO)
 const BTHPORT_INTERFACE_GUID = encodeGuid(GUID_BTHPORT_DEVICE_INTERFACE)
 
@@ -192,6 +198,38 @@ function readGuidProperty(api, devInst, key) {
   return property?.type === DEVPROP_TYPE_GUID ? decodeGuid(property.bytes) : null
 }
 
+function readUint32Property(api, devInst, key) {
+  const property = readPropertyBytes(api, devInst, key)
+  return property?.type === DEVPROP_TYPE_UINT32 && property.bytes.length >= 4 ? property.bytes.readUInt32LE(0) : null
+}
+
+function childDevInsts(api, devInst) {
+  const children = []
+  const child = [0]
+  if (api.CM_Get_Child(child, devInst, 0) !== CR_SUCCESS) return children
+  let current = child[0]
+  for (let guard = 0; current && guard < MAX_CHILD_NODES; guard += 1) {
+    children.push(current)
+    const sibling = [0]
+    if (api.CM_Get_Sibling(sibling, current, 0) !== CR_SUCCESS) break
+    current = sibling[0]
+  }
+  return children
+}
+
+function descendantClassGuids(api, devInst) {
+  const classes = new Set()
+  let generation = [devInst]
+  for (let depth = 0; depth < DESCENDANT_CLASS_DEPTH && generation.length > 0; depth += 1) {
+    generation = generation.flatMap((parent) => childDevInsts(api, parent))
+    for (const descendant of generation) {
+      const classGuid = readGuidProperty(api, descendant, CLASS_GUID_KEY)
+      if (classGuid) classes.add(classGuid.toLowerCase())
+    }
+  }
+  return [...classes]
+}
+
 function readNode(api, instanceId) {
   const devInst = locateDevNode(api, instanceId)
   if (devInst === null) return null
@@ -203,6 +241,8 @@ function readNode(api, instanceId) {
     ...status,
     name: readStringProperty(api, devInst, FRIENDLY_NAME_KEY),
     containerId: readGuidProperty(api, devInst, CONTAINER_ID_KEY),
+    classOfDevice: readUint32Property(api, devInst, CLASS_OF_DEVICE_KEY),
+    childClasses: descendantClassGuids(api, devInst),
   }
 }
 

@@ -208,6 +208,7 @@ function publicDevice(device, session) {
   return {
     id: device.id,
     name: device.name,
+    kind: device.kind ?? 'other',
     connected: device.connected,
     canConnect: device.canConnect && !device.classicConnected,
     canDisconnect: device.classicConnected,

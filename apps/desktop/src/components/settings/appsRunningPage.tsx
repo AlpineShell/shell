@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AppWindow, Boxes, Search, X } from 'lucide-react'
+import { AppWindow, Boxes, Search } from 'lucide-react'
 import { Avatar, Card, ConfirmButton, EmptyState, ListRow, PageHeader, TextField } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useRunningApps } from '../../hooks/useRunningApps'
@@ -47,14 +47,14 @@ export default function AppsRunningPage() {
 
       {background.length > 0 && (
         <Card variant="list">
-            <ListRow
-              variant="plain"
-              icon={<Boxes size={16} className="text-ink-faint" />}
-              title={`In the background · ${background.length}`}
-              muted
-              onActivate={() => setBackgroundOpen((v) => !v)}
-              expanded={showBackground}
-            />
+          <ListRow
+            variant="plain"
+            icon={<Boxes size={16} className="text-ink-faint" />}
+            title={`In the background · ${background.length}`}
+            muted
+            onActivate={() => setBackgroundOpen((v) => !v)}
+            expanded={showBackground}
+          />
           {showBackground && background.map((app) => <RunningRow key={app.name} app={app} />)}
         </Card>
       )}
@@ -82,19 +82,18 @@ function RunningRow({ app }: { app: RunningApp }) {
   return (
     <ListRow
       variant="plain"
-      revealActions
       icon={<Avatar src={app.icon} alt={app.friendlyName} fallback={<AppWindow size={16} strokeWidth={1.75} />} />}
       title={app.friendlyName}
       detail={runningDetail(app)}
       actions={
         <ConfirmButton
-          variant="ghost"
+          shape="square"
+          variant="soft"
+          confirmVariant="danger"
           label="Close"
           confirmLabel="Force close"
           onConfirm={close}
           busy={busy}
-          icon={<X size={14} />}
-          iconOnly
           confirmOnly
         />
       }

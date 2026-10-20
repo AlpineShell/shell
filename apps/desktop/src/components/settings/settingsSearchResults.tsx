@@ -78,7 +78,7 @@ function ToggleResultRow({ entry, ...shell }: ResultRowProps & { entry: Settings
       state={checked ? 'on' : 'off'}
       trailing={
         <span aria-hidden className="pointer-events-none">
-          <Toggle checked={checked} onChange={IGNORE_CHANGE} label={shell.target.label} disabled />
+          <Toggle variant="compact" checked={checked} onChange={IGNORE_CHANGE} label={shell.target.label} disabled />
         </span>
       }
     />

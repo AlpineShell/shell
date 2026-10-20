@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildInterfaceGeneration, decodeRadioState, decodeSsid } from './networkNative.js'
+import { buildInterfaceGeneration, decodeBssEntry, decodeConnectionDetails, decodeRadioState, decodeSsid } from './networkNative.js'
 
 const CONNECTION_SSID_LENGTH_OFFSET = 520
 const CONNECTION_SSID_OFFSET = 524
@@ -95,5 +95,69 @@ describe('buildInterfaceGeneration', () => {
       { ifIndex: 1, ifType: 24, operStatus: 1 },
     ])
     expect(reversed).toBe(forward)
+  })
+})
+
+function connectedBufferFor(fields) {
+  const buffer = connectionBufferFor('HomeNet')
+  buffer.writeUInt32LE(1, 0)
+  Buffer.from([0xaa, 0xbb, 0xcc, 0x0d, 0x0e, 0x0f]).copy(buffer, 560)
+  buffer.writeUInt32LE(fields.phyType, 568)
+  buffer.writeUInt32LE(fields.signal, 576)
+  buffer.writeUInt32LE(fields.receiveKbps, 580)
+  buffer.writeUInt32LE(fields.transmitKbps, 584)
+  buffer.writeUInt32LE(fields.securityEnabled ? 1 : 0, 588)
+  buffer.writeUInt32LE(fields.authAlgorithm, 596)
+  return buffer
+}
+
+function bssListFor(entries) {
+  const buffer = Buffer.alloc(8 + entries.length * 360)
+  buffer.writeUInt32LE(buffer.length, 0)
+  buffer.writeUInt32LE(entries.length, 4)
+  entries.forEach(({ bssid, rssi, frequencyKhz }, index) => {
+    const base = 8 + index * 360
+    Buffer.from(bssid).copy(buffer, base + 40)
+    buffer.writeInt32LE(rssi, base + 56)
+    buffer.writeUInt32LE(frequencyKhz, base + 92)
+  })
+  return buffer
+}
+
+describe('decodeConnectionDetails', () => {
+  it('reads the link fields of a connected interface', () => {
+    const buffer = connectedBufferFor({ phyType: 10, signal: 92, receiveKbps: 866700, transmitKbps: 780000, securityEnabled: true, authAlgorithm: 9 })
+    expect(decodeConnectionDetails(buffer)).toEqual({
+      ssid: 'HomeNet',
+      bssid: 'AA:BB:CC:0D:0E:0F',
+      phyType: 10,
+      signalPercent: 92,
+      receiveRateKbps: 866700,
+      transmitRateKbps: 780000,
+      securityEnabled: true,
+      authAlgorithm: 9,
+    })
+  })
+
+  it('reads nothing from an interface that is not connected', () => {
+    expect(decodeConnectionDetails(connectionBufferFor('HomeNet'))).toBeNull()
+  })
+
+  it('reads nothing from a buffer shorter than the whole struct', () => {
+    expect(decodeConnectionDetails(Buffer.alloc(590))).toBeNull()
+  })
+})
+
+describe('decodeBssEntry', () => {
+  it('finds the entry of the connected access point', () => {
+    const list = bssListFor([
+      { bssid: [1, 2, 3, 4, 5, 6], rssi: -80, frequencyKhz: 2412000 },
+      { bssid: [0xaa, 0xbb, 0xcc, 0x0d, 0x0e, 0x0f], rssi: -48, frequencyKhz: 5220000 },
+    ])
+    expect(decodeBssEntry(list, 'AA:BB:CC:0D:0E:0F')).toEqual({ rssiDbm: -48, centerFrequencyKhz: 5220000 })
+  })
+
+  it('finds nothing when the access point is not in the list', () => {
+    expect(decodeBssEntry(bssListFor([{ bssid: [1, 2, 3, 4, 5, 6], rssi: -80, frequencyKhz: 2412000 }]), 'AA:BB:CC:0D:0E:0F')).toBeNull()
   })
 })

@@ -120,6 +120,7 @@ let trayHost = null
 try { trayHost = require('./modules/trayHost') } catch (e) { console.error('[main] trayHost load error:', e.message) }
 const keyboardHook = require('./modules/keyboardHook')
 const shellHotkeys = require('./modules/shellHotkeys')
+const shellShortcuts = require('./modules/shellShortcuts')
 const emojiKeyCapture = require('./modules/emojiKeyCapture')
 const clipboardHistory = require('./modules/clipboardHistory')
 const displayModeKeyCapture = require('./modules/displayModeKeyCapture')
@@ -1015,7 +1016,7 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, shellShortcuts, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
 
   theme.followRidgeColor(topbarColor)
   theme.onThemeChange(repaintSettingsChrome)
@@ -1180,7 +1181,7 @@ function openSignInWhenUnlicensed() {
 }
 
 function wireShellHotkeys() {
-  shellHotkeys.on('tile', ({ direction, shift }) => tiling.handleHotkey(direction, shift))
+  shellHotkeys.on('tile', ({ direction, crossDisplay }) => tiling.handleHotkey(direction, crossDisplay))
   shellHotkeys.on('openFileExplorer', () => appActivator.openFileExplorer())
   shellHotkeys.on('openSettings', () => openSettingsFromHotkey())
   shellHotkeys.on('openEmojiPicker', () => launcher.showEmoji())
@@ -1208,6 +1209,7 @@ function wireKeyCaptures() {
 
 function routeKeyboardInput() {
   keyboardHook.setKeyHandlers([
+    shellShortcuts.handleRecordingKey,
     shellHotkeys.handleWinTap,
     emojiKeyCapture.handleKey,
     displayModeKeyCapture.handleKey,

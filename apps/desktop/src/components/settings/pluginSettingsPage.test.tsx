@@ -87,10 +87,10 @@ describe('a plugin settings page', () => {
     expect(screen.getByRole('switch', { name: 'Show wind' }).getAttribute('aria-checked')).toBe('true')
   })
 
-  it('keeps each description behind the info icon', async () => {
+  it('shows each description under its setting', async () => {
     installBridges([weather()])
     await openPage()
-    expect(screen.getByRole('img', { name: WIND.info })).toBeTruthy()
+    expect(screen.getByText(WIND.info ?? '')).toBeTruthy()
   })
 
   it('writes a change through the plugin settings bridge', async () => {

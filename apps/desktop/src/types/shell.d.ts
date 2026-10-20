@@ -11,7 +11,6 @@ declare global {
   interface ValueRowProps {
     entry: SettingsValueEntry
     description: string
-    info?: string
     wideControlStacked?: boolean
   }
 
@@ -86,6 +85,83 @@ interface NetworkStatus {
   connected: boolean
   type: 'wifi' | 'ethernet'
   ssid: string | null
+}
+
+interface WifiLinkDetails {
+  ssid: string | null
+  band: string | null
+  channel: number | null
+  signalPercent: number
+  rssiDbm: number | null
+  security: string
+  standard: string | null
+  receiveMbps: number | null
+  transmitMbps: number | null
+}
+
+interface NetworkDetails {
+  type: 'wifi' | 'ethernet'
+  adapter: string | null
+  macAddress: string | null
+  ipv4Address: string | null
+  subnetMask: string | null
+  ipv6Address: string | null
+  addressSource: 'dhcp' | 'manual'
+  gateway: string | null
+  dnsServers: string[]
+  online: boolean
+  linkSpeedMbps: number | null
+  wifi: WifiLinkDetails | null
+}
+
+type NetworkMapNode = 'pc' | 'router' | 'internet' | 'dns'
+
+type DnsPlacement = 'router' | 'local' | 'internet'
+
+interface NetworkFact {
+  label: string
+  value: string
+}
+
+type ShortcutBindingId =
+  | 'snapWindow'
+  | 'moveToOtherDisplay'
+  | 'switchDesktop'
+  | 'moveWindowToDesktop'
+  | 'addDesktop'
+  | 'closeDesktop'
+  | 'openFileExplorer'
+  | 'openSettings'
+  | 'openEmojiPicker'
+  | 'openClipboardHistory'
+  | 'openDisplayModePicker'
+  | 'takeScreenshot'
+  | 'minimizeAll'
+  | 'restoreMinimized'
+
+interface ShortcutBinding {
+  id: ShortcutBindingId
+  keys: string[]
+  custom: boolean
+}
+
+type ShortcutRefusal = 'cancelled' | 'timeout' | 'needs-modifier' | 'needs-arrow' | 'reserved' | 'taken' | 'unknown'
+
+interface ShortcutRecordResult {
+  ok: boolean
+  reason?: ShortcutRefusal
+  takenBy?: ShortcutBindingId
+}
+
+interface ShortcutListing {
+  label: string
+  binding?: ShortcutBindingId
+  keys?: string[]
+}
+
+interface ShortcutGroup {
+  title: string
+  shortcuts: ShortcutListing[]
 }
 
 type BluetoothRadioState = 'on' | 'off' | 'unavailable' | 'unknown'
@@ -201,9 +277,12 @@ declare global {
 
   type BluetoothDeviceAction = 'connect' | 'disconnect'
 
+  type BluetoothDeviceKind = 'headphones' | 'speaker' | 'microphone' | 'mouse' | 'keyboard' | 'gamepad' | 'phone' | 'computer' | 'watch' | 'other'
+
   interface BluetoothDevice {
     id: string
     name: string
+    kind: BluetoothDeviceKind
     connected: boolean
     canConnect: boolean
     canDisconnect: boolean
@@ -1133,6 +1212,7 @@ declare global {
     | 'date-time'
     | 'tray-icons'
     | 'tiling'
+    | 'shortcuts'
     | 'battery'
     | 'displays'
     | 'wifi'
@@ -1354,14 +1434,6 @@ declare global {
   }
 
   type RidgeLayoutMode = 'strip' | 'stacked'
-
-  type RidgeCalloutPlacement = 'below' | 'above'
-
-  interface RidgeCalloutPlacementFor {
-    id: TopbarItemId
-    placement: RidgeCalloutPlacement
-  }
-
 
   interface RidgeFitProps {
     children: import('react').ReactNode
@@ -1596,7 +1668,6 @@ declare global {
   interface RidgeItemDetail {
     entries: string[]
     links: RidgeItemLink[]
-    note(data: RidgePreviewData): string | null
   }
 
   interface RidgeCanvasHandle {
@@ -1611,7 +1682,7 @@ declare global {
     openItem: TopbarItemId | null
     onOpenItemChange: (id: TopbarItemId | null) => void
     onNothingLeftToFocus: () => void
-    renderCallout: (id: TopbarItemId) => import('react').ReactNode
+    renderItemSettings: (id: TopbarItemId) => import('react').ReactNode
     measure?: () => RidgeDragGeometry
     scrollContainer?: () => HTMLElement | null
     ref?: import('react').Ref<RidgeCanvasHandle>
@@ -1673,15 +1744,7 @@ declare global {
     message: string
   }
 
-  interface RidgeCalloutFrameProps {
-    id: string
-    mode: RidgeLayoutMode
-    children: import('react').ReactNode
-    ref?: import('react').Ref<HTMLDivElement>
-    leaderRef?: import('react').Ref<SVGPathElement>
-  }
-
-  interface RidgeCalloutProps {
+  interface RidgeItemSettingsProps {
     item: TopbarLayoutItem
     previewData: RidgePreviewData
     highlightedSetting: string | null
@@ -1690,7 +1753,6 @@ declare global {
     onStep: (direction: TopbarStepDirection) => void
     onHide: () => void
     onNavigate: (path: string) => void
-    onClose: () => void
   }
 
   interface RidgeAddMenuProps {
@@ -2129,6 +2191,13 @@ declare global {
         onChanged: (callback: (data: BrowserTab[]) => void) => () => void
         activate: (tab: BrowserTab) => Promise<{ ok: boolean }>
       }
+      shortcuts: {
+        list: () => Promise<ShortcutBinding[]>
+        record: (id: ShortcutBindingId) => Promise<ShortcutRecordResult>
+        cancelRecord: () => Promise<void>
+        reset: (id: ShortcutBindingId) => Promise<ShortcutBinding[]>
+        onChanged: (callback: (bindings: ShortcutBinding[]) => void) => () => void
+      }
       network: {
         wifiSignal: () => Promise<NetworkStatus>
         onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => () => void
@@ -2136,6 +2205,8 @@ declare global {
         wifiNetworks: () => Promise<WifiNetwork[]>
         onWifiScanUpdated: (callback: (data: WifiNetwork[]) => void) => () => void
         wifiConnect: (ssid: string, password?: string) => Promise<{ success: boolean; needsPassword?: boolean }>
+        details: () => Promise<NetworkDetails | null>
+        onDetailsChanged: (callback: (details: NetworkDetails | null) => void) => () => void
         wifiDisconnect: () => Promise<{ success: boolean }>
         wifiRadioGet: () => Promise<{ success: boolean; state: string }>
         wifiRadioSet: (enabled: boolean) => Promise<{ success: boolean; state: string }>

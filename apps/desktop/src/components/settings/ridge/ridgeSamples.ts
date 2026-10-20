@@ -11,15 +11,6 @@ export const RIDGE_SAMPLE_NOTICE: NoticeFaceProps['notice'] = {
   busy: false,
 }
 
-export const RIDGE_PRESENCE_NOTES: Partial<Record<TopbarItemId, string>> = {
-  'plugins-left': 'Plugin widgets show here.',
-  notice: 'Shows while there is a notice.',
-  tray: 'Shows once apps add tray icons.',
-  media: 'Shows while something plays.',
-  microphone: 'Shows while an app uses the mic.',
-  'plugins-right': 'Plugin widgets show here.',
-}
-
 const SAMPLE_TRAY_ICON_IDS = ['sample-tray-first', 'sample-tray-second', 'sample-tray-third']
 
 function sampleTraySquareFill(darkText: boolean): string {
