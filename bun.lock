@@ -17,7 +17,7 @@
         "zustand": "^5",
       },
       "devDependencies": {
-        "@alpine/ui": "file:vendor/alpine-ui-0.9.0.tgz",
+        "@alpine/ui": "file:vendor/alpine-ui-0.10.0.tgz",
         "@aws-sdk/client-s3": "^3.1147.0",
         "@aws-sdk/lib-storage": "^3.1147.0",
         "@electron/asar": "3.4.1",
@@ -78,7 +78,7 @@
   "packages": {
     "@alpine/plugin-sdk": ["@alpine/plugin-sdk@workspace:packages/plugin-sdk"],
 
-    "@alpine/ui": ["@alpine/ui@vendor/alpine-ui-0.9.0.tgz", { "dependencies": { "lucide-react": "^0.575.0" }, "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" } }, "sha512-eshWBvXtbu4Rs8spLJz1AXncFjtStK179lC0bUqk+nq+/oY0+JON3OJJmRc4jsQmuN5OMAY8U38ny7yf7gFbGQ=="],
+    "@alpine/ui": ["@alpine/ui@vendor/alpine-ui-0.10.0.tgz", { "dependencies": { "lucide-react": "^0.575.0" }, "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" } }, "sha512-D7AZsciEFaKD5zCKsJ13mUYH0nbRc7J5DZ4ItBAeLYjYYa/UE0CEP2caWRJw/kSVevT+0+6CDOMn9ksDfVwfRw=="],
 
     "@aws-sdk/checksums": ["@aws-sdk/checksums@3.1001.3", "", { "dependencies": { "@aws-sdk/core": "^3.978.3", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.2", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-CcAkVyEUKGngbEqJdVdSc53Iy52+XzVL5NIcTen2BlK8UByNC1DThVtf5VKSrNzyA+SqyTvs+3S+knVBbOUizQ=="],
 
