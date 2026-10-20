@@ -30,7 +30,7 @@
     "@alpine/ui": "file:vendor/alpine-ui-0.10.0.tgz",
     "@aws-sdk/client-s3": "^3.1147.0",
     "@aws-sdk/lib-storage": "^3.1147.0",
-    "@electron/asar": "3.4.1",
+    "@electron/asar": "4.3.1",
     "@electron/fuses": "1.8.0",
     "@eslint/js": "^9.39.1",
     "@tailwindcss/vite": "^4.3.3",
