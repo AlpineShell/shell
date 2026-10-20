@@ -68,8 +68,9 @@ export const SETTINGS_PAGE_GROUP = 'Page'
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'home', label: 'Home', icon: House, order: 0 },
   { id: 'personalization', label: 'Personal', icon: Paintbrush, order: 1 },
-  { id: 'devices', label: 'Devices', icon: Plug, order: 2 },
-  { id: 'system', label: 'System', icon: MonitorCog, order: 3 },
+  { id: 'desktop', label: 'Desktop', icon: Layers, order: 2 },
+  { id: 'devices', label: 'Devices', icon: Plug, order: 3 },
+  { id: 'system', label: 'System', icon: MonitorCog, order: 4 },
 ]
 
 const INPUT_KEYWORDS = [
@@ -121,7 +122,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   },
   {
     id: 'revert',
-    route: 'home/revert',
+    route: 'revert',
     label: 'Revert to Windows',
     description: 'Switch back to Windows Explorer',
     keywords: ['revert', 'uninstall shell', 'delete', 'remove', 'explorer', 'windows'],
@@ -170,9 +171,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: 'The Search hotkey and what Search puts in its results',
     keywords: ['search', 'launcher', 'hotkeys', 'shortcuts', 'keyboard', 'spotlight'],
     icon: Search,
-    section: 'personalization',
+    section: 'desktop',
     kind: 'settings',
-    order: 4,
+    order: 0,
   },
   {
     id: 'input',
@@ -181,9 +182,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: 'Your languages, the keyboard layouts attached to them, and the default input method',
     keywords: INPUT_KEYWORDS,
     icon: Keyboard,
-    section: 'personalization',
+    section: 'devices',
     kind: 'settings',
-    order: 5,
+    order: 4,
   },
   {
     id: 'date-time',
@@ -192,9 +193,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: 'Time zone and keeping the clock right',
     keywords: DATE_TIME_KEYWORDS,
     icon: CalendarClock,
-    section: 'personalization',
+    section: 'system',
     kind: 'settings',
-    order: 6,
+    order: 5,
   },
   {
     id: 'tray-icons',
@@ -214,9 +215,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: 'Mode, gaps, snapping and layout',
     keywords: ['tiling', 'snap', 'window management', 'tile', 'gap', 'layout'],
     icon: LayoutDashboard,
-    section: 'personalization',
+    section: 'desktop',
     kind: 'settings',
-    order: 8,
+    order: 1,
   },
   {
     id: 'battery',
@@ -225,9 +226,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: 'Battery saver and what it does while it is on',
     keywords: ['battery', 'battery saver', 'power saving', 'energy saver', 'eco'],
     icon: BatteryLow,
-    section: 'personalization',
+    section: 'devices',
     kind: 'settings',
-    order: 9,
+    order: 3,
   },
   {
     id: 'displays',
@@ -326,7 +327,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Puzzle,
     section: 'system',
     kind: 'manager',
-    order: 5,
+    order: 6,
   },
   {
     id: 'updates',
@@ -337,7 +338,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: RefreshCw,
     section: 'system',
     kind: 'manager',
-    order: 6,
+    order: 7,
   },
   {
     id: 'quick-actions',
@@ -1685,7 +1686,7 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     group: 'Page',
     order: 0,
     applies: 'confirm',
-    control: { kind: 'navigate', path: 'home/revert' },
+    control: { kind: 'navigate', path: 'revert' },
   },
   {
     id: 'system',

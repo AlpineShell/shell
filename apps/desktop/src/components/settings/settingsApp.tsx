@@ -1,9 +1,10 @@
 import { Component, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, Puzzle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChevronLeft, Puzzle } from 'lucide-react'
 import { SearchField } from '@alpine/ui'
 import { SETTINGS_PAGES, SETTINGS_SECTIONS, settingsPageByRoute } from '../../settings/registry'
 import { SETTINGS_SEARCH_LIMIT, searchSettings } from '../../settings/settingsSearch'
-import { settingsRouteView } from './settingsRoutes'
+import { pluginIdFromSettingsRoute } from '../../plugins/pluginSettingsPages'
+import { SETTINGS_ROUTE_PAGES, settingsRouteView } from './settingsRoutes'
 import SettingsSearchResults from './settingsSearchResults'
 import { highlightSetting } from '../../hooks/useHighlightedSetting'
 import { toggleSettingsValue } from '../../hooks/useSettingsValue'
@@ -12,11 +13,15 @@ import { useTheme } from '../../hooks/useTheme'
 
 const dragRegion = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDragRegion = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
-const nativeTitleBarHeight = { height: 'env(titlebar-area-height, 3rem)' }
+const titleBarArea = { height: 'env(titlebar-area-height, 40px)', width: 'env(titlebar-area-width, 100%)' }
 
 const NO_PLUGIN_PAGES: PluginSettingsPageEntry[] = []
 
 const PLUGIN_NAV_LABEL = 'Plugins'
+
+const PLUGIN_PAGES_SECTION: SettingsSectionId = 'system'
+
+const FALLBACK_SECTION: SettingsSectionId = 'home'
 
 interface NavSection {
   id: SettingsSectionId
@@ -41,6 +46,22 @@ function routeLabel(route: string, pluginPages: PluginSettingsPageEntry[]): stri
   return settingsPageByRoute(route)?.label ?? pluginPages.find((page) => page.route === route)?.label ?? route
 }
 
+function pageShownAt(path: string): SettingsPage | null {
+  const aliased = SETTINGS_ROUTE_PAGES[path]
+  return settingsPageByRoute(aliased ?? path) ?? settingsPageByRoute(path.split('/')[0])
+}
+
+function sectionOfPath(path: string): SettingsSectionId {
+  const section = pageShownAt(path)?.section
+  if (section) return section
+  return pluginIdFromSettingsRoute(path) === null ? FALLBACK_SECTION : PLUGIN_PAGES_SECTION
+}
+
+function parentPath(path: string): string | null {
+  const segments = path.split('/')
+  return segments.length > 1 ? segments.slice(0, -1).join('/') : null
+}
+
 export default function SettingsApp() {
   useTheme()
 
@@ -52,13 +73,17 @@ export default function SettingsApp() {
   const [historyIndex, setHistoryIndex] = useState(() => history.length - 1)
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
+  const lastPathInSection = useRef<Partial<Record<SettingsSectionId, string>>>({})
 
   const currentPath = history[historyIndex]
   const topSegment = currentPath.split('/')[0]
+  const activeSectionId = sectionOfPath(currentPath)
   const canBack = historyIndex > 0
   const canForward = historyIndex < history.length - 1
   const sections = navSections()
+  const activeSection = sections.find((section) => section.id === activeSectionId) ?? sections[0]
   const sidebarPluginPages = pluginPages.filter((page) => page.topLevel)
+  const pagePluginList = activeSectionId === PLUGIN_PAGES_SECTION ? sidebarPluginPages : NO_PLUGIN_PAGES
 
   const ranked = useMemo(() => searchSettings(query), [query])
   const matches = useMemo(() => ranked.slice(0, SETTINGS_SEARCH_LIMIT), [ranked])
@@ -72,6 +97,10 @@ export default function SettingsApp() {
   const rowBase = useId()
   const rowId = (index: number) => `${rowBase}-${index}`
 
+  useEffect(() => {
+    lastPathInSection.current[activeSectionId] = currentPath
+  }, [activeSectionId, currentPath])
+
   function clearSearch() {
     setQuery('')
     setActiveIndex(0)
@@ -84,6 +113,10 @@ export default function SettingsApp() {
     next.push(path)
     setHistory(next)
     setHistoryIndex(next.length - 1)
+  }
+
+  function openSection(section: NavSection) {
+    navigate(lastPathInSection.current[section.id] ?? (section.pages[0].route as string))
   }
 
   function back() {
@@ -164,12 +197,27 @@ export default function SettingsApp() {
   }, [selected, matches])
 
   return (
-    <div className="settings-scope flex h-screen w-screen overflow-hidden bg-surface-1 text-ink-primary">
-      <aside className="flex w-56 shrink-0 flex-col bg-surface-0" style={dragRegion}>
-        <div className="flex items-center px-5 shrink-0" style={nativeTitleBarHeight}>
-          <span className="font-display text-base font-normal tracking-tight text-ink-primary">Settings</span>
+    <div className="settings-scope flex h-screen w-screen flex-col overflow-hidden bg-surface-0 text-ink-primary">
+      <header className="flex shrink-0 items-center gap-1 pl-3" style={{ ...dragRegion, ...titleBarArea }}>
+        <div className="flex items-center gap-1" style={noDragRegion}>
+          <HistoryButton label="Back" enabled={canBack} onClick={back}>
+            <ArrowLeft size={15} />
+          </HistoryButton>
+          <HistoryButton label="Forward" enabled={canForward} onClick={forward}>
+            <ArrowRight size={15} />
+          </HistoryButton>
         </div>
-        <div className="px-2 pb-1 shrink-0" style={noDragRegion}>
+        <nav aria-label="Sections" className="ml-2 flex items-center gap-0.5" style={noDragRegion}>
+          {sections.map((section) => (
+            <SectionTab
+              key={section.id}
+              label={section.label}
+              active={!searching && section.id === activeSection.id}
+              onClick={() => openSection(section)}
+            />
+          ))}
+        </nav>
+        <div className="ml-auto mr-2 w-64 min-w-0 shrink" style={noDragRegion}>
           <SearchField
             ref={searchRef}
             value={query}
@@ -185,68 +233,32 @@ export default function SettingsApp() {
             activeDescendant={selected >= 0 ? rowId(selected) : undefined}
           />
         </div>
-        <nav className="flex-1 px-2 pb-3 flex flex-col gap-0.5 overflow-auto" style={noDragRegion}>
-          {sections.map((section) => (
-            <div key={section.id} className="flex flex-col gap-0.5">
-              {section.pages.length > 1 && (
-                <span className="px-3 pt-3 pb-1 text-eyebrow uppercase text-ink-faint select-none">{section.label}</span>
-              )}
-              {section.pages.map((page) => {
-                const Icon = page.icon
-                const active = page.route === topSegment && !searching && !pluginPageActive
-                return (
-                  <SettingsNavButton
-                    key={page.id}
-                    label={page.label}
-                    active={active}
-                    icon={<Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />}
-                    onClick={() => navigate(page.route as string)}
-                  />
-                )
-              })}
-            </div>
-          ))}
-          <PluginPagesNav pages={sidebarPluginPages} activeRoute={searching ? null : currentPath} onNavigate={navigate} />
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        <nav aria-label={activeSection.label} className="flex w-56 shrink-0 flex-col gap-0.5 overflow-auto px-2 pt-1 pb-3">
+          {activeSection.pages.map((page) => {
+            const Icon = page.icon
+            const active = page.route === topSegment && !searching && !pluginPageActive
+            return (
+              <SettingsNavButton
+                key={page.id}
+                label={page.label}
+                active={active}
+                icon={<Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />}
+                onClick={() => navigate(page.route as string)}
+              />
+            )
+          })}
+          <PluginPagesNav pages={pagePluginList} activeRoute={searching ? null : currentPath} onNavigate={navigate} />
         </nav>
-      </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col bg-surface-0">
-        <div className="flex shrink-0 items-center bg-surface-0" style={{ ...dragRegion, ...nativeTitleBarHeight }}>
-          <header className="w-full h-10 flex items-center gap-3 pl-3 pr-3">
-            <div className="flex items-center gap-1" style={noDragRegion}>
-              <button
-                onClick={back}
-                disabled={!canBack}
-                className={`focus-ring flex h-7 w-7 items-center justify-center rounded-field transition-colors ${
-                  canBack ? 'cursor-pointer text-ink-primary hover:bg-fill-ghost' : 'cursor-not-allowed text-ink-faint'
-                }`}
-                aria-label="Back"
-              >
-                <ArrowLeft size={15} />
-              </button>
-              <button
-                onClick={forward}
-                disabled={!canForward}
-                className={`focus-ring flex h-7 w-7 items-center justify-center rounded-field transition-colors ${
-                  canForward ? 'cursor-pointer text-ink-primary hover:bg-fill-ghost' : 'cursor-not-allowed text-ink-faint'
-                }`}
-                aria-label="Forward"
-              >
-                <ArrowRight size={15} />
-              </button>
-            </div>
-
-            <div style={noDragRegion}>
-              <Breadcrumb path={currentPath} pluginPages={pluginPages} onNavigate={navigate} />
-            </div>
-          </header>
-        </div>
-
-        <div
+        <main
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable] rounded-tl-card border-t border-l border-line-hairline bg-surface-1 px-gutter pt-gutter pb-6"
+          className="min-h-0 min-w-0 flex-1 overflow-auto [scrollbar-gutter:stable] rounded-tl-card border-t border-l border-line-hairline bg-surface-1 px-gutter pt-gutter pb-6"
         >
           <div className={searching ? 'hidden' : 'flex min-h-full flex-col'}>
+            <ParentLink path={currentPath} pluginPages={pluginPages} onNavigate={navigate} />
             <PageErrorBoundary key={currentPath}>
               <PageRouter path={currentPath} navigate={navigate} />
             </PageErrorBoundary>
@@ -263,9 +275,38 @@ export default function SettingsApp() {
               onActivate={activateMatch}
             />
           )}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
+  )
+}
+
+function HistoryButton({ label, enabled, onClick, children }: SettingsHistoryButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={!enabled}
+      className={`focus-ring flex h-7 w-7 items-center justify-center rounded-field transition-colors ${
+        enabled ? 'cursor-pointer text-ink-primary hover:bg-fill-ghost' : 'cursor-not-allowed text-ink-faint'
+      }`}
+      aria-label={label}
+    >
+      {children}
+    </button>
+  )
+}
+
+function SectionTab({ label, active, onClick }: SettingsSectionTabProps) {
+  return (
+    <button
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={`focus-ring h-7 cursor-pointer rounded-field px-3 text-dense transition-colors ${
+        active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
+      }`}
+    >
+      {label}
+    </button>
   )
 }
 
@@ -273,7 +314,8 @@ function SettingsNavButton({ label, active, icon, onClick }: SettingsNavButtonPr
   return (
     <button
       onClick={onClick}
-      className={`focus-ring flex h-9 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
+      aria-current={active ? 'page' : undefined}
+      className={`focus-ring flex h-9 shrink-0 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
         active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
       }`}
     >
@@ -310,6 +352,20 @@ function PluginPageIcon({ page, active }: PluginPageIconProps) {
   return <Puzzle size={15} className={opacity} />
 }
 
+function ParentLink({ path, pluginPages, onNavigate }: SettingsParentLinkProps) {
+  const parent = parentPath(path)
+  if (parent === null) return null
+  return (
+    <button
+      onClick={() => onNavigate(parent)}
+      className="focus-ring mb-3 inline-flex cursor-pointer items-center gap-0.5 self-start rounded-field pr-1.5 text-dense text-ink-quiet transition-colors hover:text-ink-primary"
+    >
+      <ChevronLeft size={14} />
+      {routeLabel(parent, pluginPages)}
+    </button>
+  )
+}
+
 class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
   static getDerivedStateFromError() {
@@ -328,35 +384,4 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { failed: boo
 
 function PageRouter({ path, navigate }: { path: string; navigate: (p: string) => void }) {
   return <>{settingsRouteView(path)?.(navigate) ?? null}</>
-}
-
-function breadcrumbTrail(path: string): string[] {
-  const segments = path.split('/')
-  return segments.map((_, index) => segments.slice(0, index + 1).join('/'))
-}
-
-function Breadcrumb({ path, pluginPages, onNavigate }: SettingsBreadcrumbProps) {
-  const trail = breadcrumbTrail(path)
-  return (
-    <div className="flex items-center gap-1 select-none">
-      {trail.map((subpath, index) => {
-        const isLast = index === trail.length - 1
-        return (
-          <span key={subpath} className="flex items-center gap-1">
-            {index > 0 && <span className="text-dense text-ink-faint">/</span>}
-            {isLast ? (
-              <span className="text-dense text-ink-primary underline decoration-line-strong underline-offset-4">{routeLabel(subpath, pluginPages)}</span>
-            ) : (
-              <button
-                onClick={() => onNavigate(subpath)}
-                className="focus-ring cursor-pointer text-dense text-ink-quiet underline-offset-4 decoration-line-strong hover:text-ink-primary hover:underline"
-              >
-                {routeLabel(subpath, pluginPages)}
-              </button>
-            )}
-          </span>
-        )
-      })}
-    </div>
-  )
 }

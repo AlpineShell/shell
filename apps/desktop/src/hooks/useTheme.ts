@@ -12,5 +12,9 @@ export function useTheme(): ThemeState {
     document.documentElement.dataset.theme = theme.name
   }, [theme.name])
 
+  useEffect(() => {
+    document.documentElement.style.setProperty('--alpine-ground', theme.background)
+  }, [theme.background])
+
   return theme
 }

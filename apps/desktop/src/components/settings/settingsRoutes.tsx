@@ -24,7 +24,7 @@ import WifiSettingsPage from './wifiSettingsPage'
 
 export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'home': (navigate) => <AboutPage onNavigate={navigate} />,
-  'home/revert': () => <SystemRevertPage />,
+  'revert': () => <SystemRevertPage />,
   'appearance': () => <AppearancePage />,
   'wallpaper': () => <WallpaperPage />,
   'ridge': (navigate) => <RidgePage onNavigate={navigate} />,
@@ -45,6 +45,10 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'apps/defaults': () => <AppsDefaultsPage />,
   'plugins': (navigate) => <PluginsPage onNavigate={navigate} />,
   'updates': () => <UpdatesPage />,
+}
+
+export const SETTINGS_ROUTE_PAGES: Record<string, string> = {
+  'calendar': 'ridge',
 }
 
 export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {

@@ -78,16 +78,21 @@ const SETTINGS_FOLDED_INTO_RIDGE = [
   'calendar-show-tasks',
 ]
 
-const PERSONAL_SIDEBAR: SettingsPageId[] = [
-  'wallpaper',
-  'ridge',
-  'appearance',
-  'search',
-  'input',
-  'date-time',
-  'tiling',
-  'battery',
-]
+const PERSONAL_SIDEBAR: SettingsPageId[] = ['wallpaper', 'ridge', 'appearance']
+
+const SECTION_PAGE_LISTS: Record<SettingsSectionId, SettingsPageId[]> = {
+  home: ['home', 'revert'],
+  personalization: PERSONAL_SIDEBAR,
+  desktop: ['search', 'tiling'],
+  devices: ['displays', 'wifi', 'bluetooth', 'battery', 'input'],
+  system: ['apps', 'date-time', 'plugins', 'updates'],
+}
+
+function pageList(section: SettingsSectionId): SettingsPageId[] {
+  return SETTINGS_PAGES.filter((page) => page.section === section && page.route !== null && !page.route.includes('/'))
+    .sort((a, b) => a.order - b.order)
+    .map((page) => page.id)
+}
 
 const OLD_BAR_NAME = /top ?bar/i
 
@@ -173,15 +178,26 @@ describe('settings pages', () => {
 
   it('resolves pages by the route the settings window navigates to', () => {
     expect(settingsPageByRoute('ridge/tray-icons')?.id).toBe('tray-icons')
-    expect(settingsPageByRoute('home/revert')?.label).toBe('Revert to Windows')
+    expect(settingsPageByRoute('revert')?.label).toBe('Revert to Windows')
     expect(settingsPageByRoute('nowhere')).toBeNull()
   })
 
-  it('lists the Personal pages in the sidebar with Ridge after Wallpaper and no System tray page', () => {
-    const sidebar = SETTINGS_PAGES.filter(
-      (page) => page.section === 'personalization' && page.route !== null && !page.route.includes('/')
-    ).sort((a, b) => a.order - b.order)
-    expect(sidebar.map((page) => page.id)).toEqual(PERSONAL_SIDEBAR)
+  it('lists the Personal pages with Ridge after Wallpaper and no System tray page', () => {
+    expect(pageList('personalization')).toEqual(PERSONAL_SIDEBAR)
+  })
+
+  it('lists each section in the order the section bar shows it', () => {
+    expect([...SETTINGS_SECTIONS].sort((a, b) => a.order - b.order).map((section) => section.id)).toEqual([
+      'home',
+      'personalization',
+      'desktop',
+      'devices',
+      'system',
+    ])
+  })
+
+  it('lists every section with its own pages, Revert to Windows under Home', () => {
+    for (const section of SETTINGS_SECTIONS) expect(pageList(section.id), section.id).toEqual(SECTION_PAGE_LISTS[section.id])
   })
 
   it('gives no two pages in a section the same place', () => {

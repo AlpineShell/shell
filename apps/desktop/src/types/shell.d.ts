@@ -720,10 +720,23 @@ declare global {
     active: boolean
   }
 
-  interface SettingsBreadcrumbProps {
+  interface SettingsParentLinkProps {
     path: string
     pluginPages: PluginSettingsPageEntry[]
     onNavigate: (path: string) => void
+  }
+
+  interface SettingsHistoryButtonProps {
+    label: string
+    enabled: boolean
+    onClick: () => void
+    children: import('react').ReactNode
+  }
+
+  interface SettingsSectionTabProps {
+    label: string
+    active: boolean
+    onClick: () => void
   }
 
   interface MarketplacePlugin {
@@ -1106,7 +1119,7 @@ declare global {
 
   type SettingsApplies = 'instant' | 'confirm' | 'restart' | 'draft'
 
-  type SettingsSectionId = 'home' | 'personalization' | 'devices' | 'system'
+  type SettingsSectionId = 'home' | 'personalization' | 'desktop' | 'devices' | 'system'
 
   type SettingsPageId =
     | 'home'
