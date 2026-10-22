@@ -49,3 +49,10 @@ describe('writeColorModeCommand', () => {
     expect(writeColorModeCommand('dark')).not.toContain('"')
   })
 })
+
+describe('currentColorMode', () => {
+  it('answers the Windows default before the mode has been read', () => {
+    const { currentColorMode } = nodeRequire('./colorMode.js')
+    expect(currentColorMode()).toBe('light')
+  })
+})

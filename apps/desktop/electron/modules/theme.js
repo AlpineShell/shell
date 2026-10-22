@@ -1,4 +1,7 @@
-const { DEFAULT_TOPBAR_COLOR } = require('./topbarColorDefaults')
+const GROUND_COLORS = {
+  light: '#d6d6d6',
+  dark: '#1f2020',
+}
 
 const CAPTION_SYMBOL_COLORS = {
   light: '#000000',
@@ -7,28 +10,20 @@ const CAPTION_SYMBOL_COLORS = {
 
 let broadcast = null
 let lastBroadcast = null
-let ridgeColorSource = null
+let colorModeSource = null
 const themeChangeListeners = new Set()
 
-function hexChannel(value) {
-  return Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0')
+function themeFor(colorMode) {
+  const name = colorMode === 'light' ? 'light' : 'dark'
+  return { name, background: GROUND_COLORS[name] }
 }
 
-function hexFor(color) {
-  return `#${hexChannel(color.r)}${hexChannel(color.g)}${hexChannel(color.b)}`
-}
-
-function themeFor(color) {
-  return { name: color.darkText ? 'light' : 'dark', background: hexFor(color) }
-}
-
-function currentRidgeColor() {
-  const color = ridgeColorSource ? ridgeColorSource.currentColor() : null
-  return color || DEFAULT_TOPBAR_COLOR
+function currentColorMode() {
+  return colorModeSource ? colorModeSource.currentColorMode() : 'dark'
 }
 
 function getTheme() {
-  return themeFor(currentRidgeColor())
+  return themeFor(currentColorMode())
 }
 
 function getWindowBackground() {
@@ -68,9 +63,9 @@ function publishIfChanged() {
   notifyThemeChange(theme)
 }
 
-function followRidgeColor(source) {
-  ridgeColorSource = source
-  source.onColorChange(publishIfChanged)
+function followColorMode(source) {
+  colorModeSource = source
+  source.onColorModeChange(publishIfChanged)
   publishIfChanged()
 }
 
@@ -79,7 +74,7 @@ module.exports = {
   getTheme,
   getWindowBackground,
   getTitleBarOverlayColors,
-  followRidgeColor,
+  followColorMode,
   onThemeChange,
   handlers: {
     'theme/get': () => getTheme(),

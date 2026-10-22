@@ -233,7 +233,7 @@ describe('the settings folded into Ridge', () => {
     expect(isSettingsValueEntry(adaptToApps) && adaptToApps.defaultValue).toBe(true)
   })
 
-  it('has no theme setting, because the settings window always follows Ridge', () => {
+  it('has no theme setting of its own, because the settings window follows the Windows color mode', () => {
     expect(settingsEntry('theme')).toBeNull()
   })
 })

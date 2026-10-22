@@ -11,6 +11,8 @@ const SETTING_CHANGE_TIMEOUT_MS = 200
 const IMMERSIVE_COLOR_SET = 'ImmersiveColorSet'
 
 let broadcast = null
+let knownColorMode = null
+const colorModeListeners = new Set()
 
 function toColorMode(value) {
   return value === 'light' || value === 'dark' ? value : null
@@ -51,25 +53,69 @@ async function readColorMode() {
   return colorModeFromLightThemeFlag(await runPowerShell(readColorModeCommand()))
 }
 
+function currentColorMode() {
+  return knownColorMode || WINDOWS_DEFAULT_COLOR_MODE
+}
+
+function onColorModeChange(listener) {
+  colorModeListeners.add(listener)
+  return () => colorModeListeners.delete(listener)
+}
+
+function notifyColorModeChange(mode) {
+  for (const listener of colorModeListeners) {
+    try {
+      listener(mode)
+    } catch (e) {
+      console.error('[colorMode] change listener error:', e.message)
+    }
+  }
+}
+
+function adoptColorMode(mode) {
+  if (mode === knownColorMode) return
+  knownColorMode = mode
+  if (broadcast) broadcast('windows/color-mode-changed', mode)
+  notifyColorModeChange(mode)
+}
+
+async function refreshColorMode() {
+  const mode = await readColorMode()
+  adoptColorMode(mode)
+  return mode
+}
+
 async function setColorMode(value) {
   const mode = toColorMode(value)
   if (!mode) return readColorMode()
   await runPowerShell(writeColorModeCommand(mode))
   announceColorSetChange()
-  const applied = await readColorMode()
-  if (broadcast) broadcast('windows/color-mode-changed', applied)
-  return applied
+  return refreshColorMode()
+}
+
+function refreshColorModeQuietly() {
+  refreshColorMode().catch((e) => console.error('[colorMode] read failed:', e.message))
+}
+
+function followWindowsColorChanges() {
+  const { nativeTheme } = require('electron')
+  knownColorMode = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+  nativeTheme.on('updated', refreshColorModeQuietly)
+  refreshColorModeQuietly()
 }
 
 module.exports = {
   toColorMode,
   colorModeFromLightThemeFlag,
   writeColorModeCommand,
+  currentColorMode,
+  onColorModeChange,
   handlers: {
     'windows/color-mode-get': () => readColorMode(),
     'windows/color-mode-set': (_event, mode) => setColorMode(mode),
   },
   start(b) {
     broadcast = b
+    followWindowsColorChanges()
   },
 }
