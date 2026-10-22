@@ -93,6 +93,7 @@ const openWithPlacement = require('./modules/openWithPlacement')
 const windowCoverage = require('./modules/windowCoverage')
 const windowSystemMenu = require('./modules/windowSystemMenu')
 const winEvents = require('./modules/winEvents')
+const { EVENT_OBJECT_SHOW } = require('./modules/winEventDispatch')
 const plugins = require('./modules/plugins')
 const pluginSettings = require('./modules/pluginSettings')
 const pluginBackendHost = require('./pluginBackendHost')
@@ -405,6 +406,12 @@ function placeDesktopWindow(shell) {
   }
   const { x, y, width, height } = shell.display.bounds
   shell.desktop.setBounds({ x, y, width, height })
+}
+
+function keepLiveWallpapersAboveDesktopWindows() {
+  winEvents.subscribe('liveWallpaper', [EVENT_OBJECT_SHOW], (hwnd) => {
+    if (shellWindow.isLiveWallpaperWindow(hwnd)) shellWindow.sendHostedDesktopWindowsToBottom()
+  })
 }
 
 function fitShellWindowToScreens() {
@@ -1266,6 +1273,7 @@ function startShellMode(claimedTakeover = null) {
   if (shellWindow && takeover.actingAsShell) {
     shellWindow.onAppCommand(volume.applyAppCommand)
     shellWindow.register()
+    keepLiveWallpapersAboveDesktopWindows()
   }
 
   shellSurfaces.setShells(shells)

@@ -42,6 +42,7 @@ const RegisterWindowMessageW = user32.func('__stdcall', 'RegisterWindowMessageW'
 const GetShellWindow = user32.func('__stdcall', 'GetShellWindow', 'uintptr_t', [])
 const SetParent = user32.func('__stdcall', 'SetParent', 'uintptr_t', ['uintptr_t', 'uintptr_t'])
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
+const GetAncestor = user32.func('__stdcall', 'GetAncestor', 'uintptr_t', ['uintptr_t', 'uint32'])
 const GetWindowLongPtrW = user32.func('__stdcall', 'GetWindowLongPtrW', 'intptr_t', ['uintptr_t', 'int'])
 const SetWindowLongPtrW = user32.func('__stdcall', 'SetWindowLongPtrW', 'intptr_t', ['uintptr_t', 'int', 'intptr_t'])
 const MonitorFromRect = user32.func('__stdcall', 'MonitorFromRect', 'uintptr_t', ['void *', 'uint32'])
@@ -76,6 +77,7 @@ const SWP_NOMOVE = 0x0002
 const SWP_NOACTIVATE = 0x0010
 const SWP_SHOWWINDOW = 0x0040
 const GWL_STYLE = -16
+const GA_PARENT = 1
 const MONITOR_DEFAULTTONEAREST = 0x02
 const MONITOR_INFO_SIZE = 40
 const MONITOR_BOUNDS_OFFSET = 4
@@ -273,6 +275,25 @@ function hostDesktopWindow(hwnd, screenPoint) {
   }
 }
 
+function isLiveWallpaperWindow(hwnd) {
+  if (!toNum(workerw) || hostedDesktopWindows.has(hwnd)) return false
+  try {
+    return toNum(GetAncestor(hwnd, GA_PARENT)) === toNum(workerw)
+  } catch {
+    return false
+  }
+}
+
+function sendHostedDesktopWindowsToBottom() {
+  for (const hwnd of hostedDesktopWindows) {
+    try {
+      SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+    } catch (e) {
+      console.error('[shellWindow] sendHostedDesktopWindowsToBottom error:', e.message)
+    }
+  }
+}
+
 function forgetHostedDesktopWindow(hwnd) {
   hostedDesktopWindows.delete(hwnd)
 }
@@ -303,4 +324,4 @@ function destroy() {
   registered = false
 }
 
-module.exports = { register, destroy, onAppCommand, fitToVirtualScreen, hostDesktopWindow, placeHostedDesktopWindow, forgetHostedDesktopWindow }
+module.exports = { register, destroy, onAppCommand, fitToVirtualScreen, hostDesktopWindow, placeHostedDesktopWindow, forgetHostedDesktopWindow, isLiveWallpaperWindow, sendHostedDesktopWindowsToBottom }
