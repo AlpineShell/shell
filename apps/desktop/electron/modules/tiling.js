@@ -45,6 +45,7 @@ const SMTO_ABORTIFHUNG = 0x0002
 const SW_MINIMIZE = 6
 const SW_MAXIMIZE = 3
 const SW_RESTORE = 9
+const SW_SHOWNOACTIVATE = 4
 const SWP_NOZORDER = 0x0004
 const SWP_NOACTIVATE = 0x0010
 const SWP_FRAMECHANGED = 0x0020
@@ -409,7 +410,7 @@ function positionPhysical(hwnd, dipRect) {
 
 function placeFloating(hwnd, display) {
   if (!hwnd || !IsWindow(hwnd)) return
-  if (IsZoomed(hwnd) || IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE)
+  if (IsZoomed(hwnd) || IsIconic(hwnd)) ShowWindow(hwnd, SW_SHOWNOACTIVATE)
   const wa = display.workArea
   const min = minSizeByHwnd.get(hwnd)
   let widthDip = min && min.w ? min.w : Math.round(wa.width * 0.6)
@@ -524,7 +525,7 @@ function zoneRectDip(display, normRect) {
 
 function tileWindow(hwnd, normRect, display) {
   if (!hwnd || !IsWindow(hwnd)) return false
-  if (IsZoomed(hwnd) || IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE)
+  if (IsZoomed(hwnd) || IsIconic(hwnd)) ShowWindow(hwnd, SW_SHOWNOACTIVATE)
 
   const dipRect = zoneRectDip(display, normRect)
   let physical
