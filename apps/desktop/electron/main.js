@@ -136,7 +136,7 @@ let powerThrottling = null
 try { powerThrottling = require('./modules/powerThrottling') } catch (e) { console.error('[main] powerThrottling load error:', e.message) }
 let shellWindow = null
 try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error('[main] shellWindow load error:', e.message) }
-const { createLiveWallpaperWatch } = require('./modules/liveWallpaperWatch')
+const { displayCenter } = require('./modules/desktopHostGeometry')
 const gpuPreference = require('./modules/gpuPreference')
 const colorMode = require('./modules/colorMode')
 const dateTime = require('./modules/dateTime')
@@ -384,22 +384,35 @@ function startCursorTracking() {
   scheduleCursorTracking(CURSOR_POLL_FAST_MS)
 }
 
-const liveWallpaper = createLiveWallpaperWatch({
-  isAttached: () => Boolean(shellWindow && shellWindow.hasLiveWallpaper()),
-  onChange: showDesktopWallpaperWindows,
-})
+function desktopWindowHandle(win) {
+  return win.getNativeWindowHandle().readUInt32LE(0)
+}
 
-function showDesktopWallpaperWindows(liveWallpaperAttached) {
-  console.log(`[main] live wallpaper ${liveWallpaperAttached ? 'attached; hiding' : 'detached; showing'} the desktop wallpaper windows`)
-  for (const shell of shells.values()) {
-    if (shell.desktop.isDestroyed()) continue
-    if (liveWallpaperAttached) shell.desktop.hide()
-    else shell.desktop.showInactive()
+function desktopScreenCenter(display) {
+  return screen.dipToScreenPoint(displayCenter(display.bounds))
+}
+
+function hostDesktopInShellWindow(shell) {
+  if (!shellWindow || shell.desktop.isDestroyed()) return
+  shell.desktopHosted = shellWindow.hostDesktopWindow(desktopWindowHandle(shell.desktop), desktopScreenCenter(shell.display))
+}
+
+function placeDesktopWindow(shell) {
+  if (shell.desktop.isDestroyed()) return
+  if (shell.desktopHosted) {
+    shellWindow.placeHostedDesktopWindow(desktopWindowHandle(shell.desktop), desktopScreenCenter(shell.display))
+    return
   }
+  const { x, y, width, height } = shell.display.bounds
+  shell.desktop.setBounds({ x, y, width, height })
 }
 
 function fitShellWindowToScreens() {
-  if (shellWindow) shellWindow.fitToVirtualScreen()
+  if (!shellWindow) return
+  shellWindow.fitToVirtualScreen()
+  for (const shell of shells.values()) {
+    if (shell.desktopHosted) placeDesktopWindow(shell)
+  }
 }
 
 function createDesktopWindow(display) {
@@ -407,7 +420,6 @@ function createDesktopWindow(display) {
 
   const win = new BrowserWindow({
     x, y, width, height,
-    show: !liveWallpaper.isAttached(),
     frame: false,
     resizable: false,
     movable: false,
@@ -435,7 +447,7 @@ function createDesktopWindow(display) {
 function forceShellBounds(shell) {
   if (!shell) return
   const { x, y, width, height } = shell.display.bounds
-  if (!shell.desktop.isDestroyed()) shell.desktop.setBounds({ x, y, width, height })
+  placeDesktopWindow(shell)
   if (!shell.topBar.isDestroyed()) {
     shell.topBar.setBounds({ x, y, width, height })
     if (shell.topBar.refreshBarBounds) shell.topBar.refreshBarBounds()
@@ -581,7 +593,9 @@ function createShellForDisplay(display) {
   const desktop = createDesktopWindow(display)
   const topBar = createTopBarWindow(display)
 
-  shells.set(display.id, { desktop, topBar, display, topBarState: topBar.topBarState })
+  const shell = { desktop, topBar, display, topBarState: topBar.topBarState, desktopHosted: false }
+  shells.set(display.id, shell)
+  hostDesktopInShellWindow(shell)
   return { desktop, topBar }
 }
 
@@ -593,7 +607,10 @@ function destroyShellForDisplay(displayId) {
 
   try { unregisterAppBar(shell.topBar) } catch (e) { /* ignore */ }
   if (!shell.topBar.isDestroyed()) shell.topBar.destroy()
-  if (!shell.desktop.isDestroyed()) shell.desktop.destroy()
+  if (!shell.desktop.isDestroyed()) {
+    if (shell.desktopHosted) shellWindow.forgetHostedDesktopWindow(desktopWindowHandle(shell.desktop))
+    shell.desktop.destroy()
+  }
 
   shells.delete(displayId)
   reviewTopBarsSettled()
@@ -607,7 +624,8 @@ function repositionShell(display) {
 
   const { x, y, width, height } = display.bounds
 
-  shell.desktop.setBounds({ x, y, width, height })
+  shell.display = display
+  placeDesktopWindow(shell)
   shell.topBar.setBounds({ x, y, width, height })
   if (shell.topBar.refreshBarBounds) shell.topBar.refreshBarBounds()
 
@@ -618,8 +636,6 @@ function repositionShell(display) {
   }
 
   setTimeout(() => forceShellBounds(shell), 300)
-
-  shell.display = display
 }
 
 
@@ -1250,7 +1266,6 @@ function startShellMode(claimedTakeover = null) {
   if (shellWindow && takeover.actingAsShell) {
     shellWindow.onAppCommand(volume.applyAppCommand)
     shellWindow.register()
-    liveWallpaper.start()
   }
 
   shellSurfaces.setShells(shells)
@@ -1363,7 +1378,6 @@ app.on('will-quit', () => {
   unregisterAll()
   revealWindowsOnOtherDesktops()
   undimDisplays()
-  liveWallpaper.stop()
   if (shellWindow) shellWindow.destroy()
 })
 
