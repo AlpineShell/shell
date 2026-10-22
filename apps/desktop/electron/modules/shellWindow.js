@@ -39,6 +39,9 @@ const SetTaskmanWindow = user32.func('__stdcall', 'SetTaskmanWindow', 'int', ['u
 const RegisterShellHookWindow = user32.func('__stdcall', 'RegisterShellHookWindow', 'int', ['uintptr_t'])
 const RegisterWindowMessageW = user32.func('__stdcall', 'RegisterWindowMessageW', 'uint32', ['str16'])
 const GetShellWindow = user32.func('__stdcall', 'GetShellWindow', 'uintptr_t', [])
+const GetWindow = user32.func('__stdcall', 'GetWindow', 'uintptr_t', ['uintptr_t', 'uint32'])
+const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
+const MoveWindow = user32.func('__stdcall', 'MoveWindow', 'int', ['uintptr_t', 'int', 'int', 'int', 'int', 'int'])
 const GetModuleHandleW = kernel32.func('__stdcall', 'GetModuleHandleW', 'uintptr_t', ['str16'])
 const GetLastError = kernel32.func('__stdcall', 'GetLastError', 'uint32', [])
 const GetStockObject = gdi32.func('__stdcall', 'GetStockObject', 'uintptr_t', ['int'])
@@ -66,6 +69,10 @@ const SWP_NOSIZE = 0x0001
 const SWP_NOMOVE = 0x0002
 const SWP_NOACTIVATE = 0x0010
 const ICC_LISTVIEW_CLASSES = 0x00000001
+const GW_HWNDNEXT = 2
+const GW_CHILD = 5
+const WM_MOUSEACTIVATE = 0x0021
+const MA_NOACTIVATE = 3
 
 const PROGMAN_STYLE = (WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) >>> 0
 const CHILD_STYLE = (WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS) >>> 0
@@ -92,6 +99,7 @@ function dispatchAppCommand(hookCode, lParam) {
 }
 
 function shellWndProc(h, msg, wParam, lParam) {
+  if (msg === WM_MOUSEACTIVATE) return MA_NOACTIVATE
   if (shellHookMessage && msg === shellHookMessage) dispatchAppCommand(wParam, lParam)
   return DefWindowProcW(h, msg, wParam, lParam)
 }
@@ -118,15 +126,21 @@ function registerClass(name, hInstance) {
   return RegisterClassExW(wc) !== 0
 }
 
+function virtualScreenBounds() {
+  return {
+    x: GetSystemMetrics(SM_XVIRTUALSCREEN),
+    y: GetSystemMetrics(SM_YVIRTUALSCREEN),
+    cx: GetSystemMetrics(SM_CXVIRTUALSCREEN),
+    cy: GetSystemMetrics(SM_CYVIRTUALSCREEN),
+  }
+}
+
 function create() {
   if (toNum(progman)) return progman
   const hInstance = GetModuleHandleW(null)
   wndProcPtr = koffi.register(shellWndProc, koffi.pointer(WNDPROC))
 
-  const x = GetSystemMetrics(SM_XVIRTUALSCREEN)
-  const y = GetSystemMetrics(SM_YVIRTUALSCREEN)
-  const cx = GetSystemMetrics(SM_CXVIRTUALSCREEN)
-  const cy = GetSystemMetrics(SM_CYVIRTUALSCREEN)
+  const { x, y, cx, cy } = virtualScreenBounds()
 
   if (!registerClass('Progman', hInstance)) {
     console.error('[shellWindow] RegisterClassExW(Progman) failed')
@@ -185,6 +199,29 @@ function register() {
   }
 }
 
+function fitToVirtualScreen() {
+  if (!toNum(progman)) return
+  try {
+    const { x, y, cx, cy } = virtualScreenBounds()
+    SetWindowPos(progman, HWND_BOTTOM, x, y, cx, cy, SWP_NOACTIVATE)
+    for (const child of [workerw, defview, listview]) {
+      if (toNum(child)) MoveWindow(child, 0, 0, cx, cy, 1)
+    }
+  } catch (e) {
+    console.error('[shellWindow] fitToVirtualScreen error:', e.message)
+  }
+}
+
+function hasLiveWallpaper() {
+  if (!toNum(workerw)) return false
+  let child = GetWindow(workerw, GW_CHILD)
+  while (toNum(child)) {
+    if (IsWindowVisible(child)) return true
+    child = GetWindow(child, GW_HWNDNEXT)
+  }
+  return false
+}
+
 function destroy() {
   for (const handle of [listview, defview, workerw, progman]) {
     try {
@@ -198,4 +235,4 @@ function destroy() {
   registered = false
 }
 
-module.exports = { register, destroy, onAppCommand }
+module.exports = { register, destroy, onAppCommand, fitToVirtualScreen, hasLiveWallpaper }

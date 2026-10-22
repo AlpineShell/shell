@@ -136,6 +136,7 @@ let powerThrottling = null
 try { powerThrottling = require('./modules/powerThrottling') } catch (e) { console.error('[main] powerThrottling load error:', e.message) }
 let shellWindow = null
 try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error('[main] shellWindow load error:', e.message) }
+const { createLiveWallpaperWatch } = require('./modules/liveWallpaperWatch')
 const gpuPreference = require('./modules/gpuPreference')
 const colorMode = require('./modules/colorMode')
 const dateTime = require('./modules/dateTime')
@@ -383,11 +384,30 @@ function startCursorTracking() {
   scheduleCursorTracking(CURSOR_POLL_FAST_MS)
 }
 
+const liveWallpaper = createLiveWallpaperWatch({
+  isAttached: () => Boolean(shellWindow && shellWindow.hasLiveWallpaper()),
+  onChange: showDesktopWallpaperWindows,
+})
+
+function showDesktopWallpaperWindows(liveWallpaperAttached) {
+  console.log(`[main] live wallpaper ${liveWallpaperAttached ? 'attached; hiding' : 'detached; showing'} the desktop wallpaper windows`)
+  for (const shell of shells.values()) {
+    if (shell.desktop.isDestroyed()) continue
+    if (liveWallpaperAttached) shell.desktop.hide()
+    else shell.desktop.showInactive()
+  }
+}
+
+function fitShellWindowToScreens() {
+  if (shellWindow) shellWindow.fitToVirtualScreen()
+}
+
 function createDesktopWindow(display) {
   const { x, y, width, height } = display.bounds
 
   const win = new BrowserWindow({
     x, y, width, height,
+    show: !liveWallpaper.isAttached(),
     frame: false,
     resizable: false,
     movable: false,
@@ -1230,6 +1250,7 @@ function startShellMode(claimedTakeover = null) {
   if (shellWindow && takeover.actingAsShell) {
     shellWindow.onAppCommand(volume.applyAppCommand)
     shellWindow.register()
+    liveWallpaper.start()
   }
 
   shellSurfaces.setShells(shells)
@@ -1305,6 +1326,7 @@ function startShellMode(claimedTakeover = null) {
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)
     createShellForDisplay(newDisplay)
+    fitShellWindowToScreens()
     scheduleReassert()
     if (powerThrottling) {
       setTimeout(() => powerThrottling.applyEcoQosToAllProcesses(), 1500)
@@ -1314,6 +1336,7 @@ function startShellMode(claimedTakeover = null) {
   screen.on('display-removed', (_event, oldDisplay) => {
     console.log(`[main] Display removed: ${oldDisplay.id}`)
     destroyShellForDisplay(oldDisplay.id)
+    fitShellWindowToScreens()
     scheduleReassert()
   })
 
@@ -1330,6 +1353,7 @@ function startShellMode(claimedTakeover = null) {
     console.log(`[main] Display metrics changed: ${display.id} [${changedMetrics.join(', ')}]`)
     if (changedMetrics.includes('bounds') || changedMetrics.includes('scaleFactor')) {
       repositionShell(display)
+      fitShellWindowToScreens()
     }
     scheduleReassert()
   })
@@ -1339,6 +1363,7 @@ app.on('will-quit', () => {
   unregisterAll()
   revealWindowsOnOtherDesktops()
   undimDisplays()
+  liveWallpaper.stop()
   if (shellWindow) shellWindow.destroy()
 })
 
