@@ -1,5 +1,6 @@
 const koffi = require('koffi')
 const { shellHookAppCommand } = require('./appCommandPolicy')
+const { rectInsideShellWindow } = require('./desktopHostGeometry')
 
 const user32 = koffi.load('user32.dll')
 const gdi32 = koffi.load('gdi32.dll')
@@ -39,6 +40,14 @@ const SetTaskmanWindow = user32.func('__stdcall', 'SetTaskmanWindow', 'int', ['u
 const RegisterShellHookWindow = user32.func('__stdcall', 'RegisterShellHookWindow', 'int', ['uintptr_t'])
 const RegisterWindowMessageW = user32.func('__stdcall', 'RegisterWindowMessageW', 'uint32', ['str16'])
 const GetShellWindow = user32.func('__stdcall', 'GetShellWindow', 'uintptr_t', [])
+const SetParent = user32.func('__stdcall', 'SetParent', 'uintptr_t', ['uintptr_t', 'uintptr_t'])
+const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
+const GetAncestor = user32.func('__stdcall', 'GetAncestor', 'uintptr_t', ['uintptr_t', 'uint32'])
+const GetWindowLongPtrW = user32.func('__stdcall', 'GetWindowLongPtrW', 'intptr_t', ['uintptr_t', 'int'])
+const SetWindowLongPtrW = user32.func('__stdcall', 'SetWindowLongPtrW', 'intptr_t', ['uintptr_t', 'int', 'intptr_t'])
+const MonitorFromRect = user32.func('__stdcall', 'MonitorFromRect', 'uintptr_t', ['void *', 'uint32'])
+const GetMonitorInfoW = user32.func('__stdcall', 'GetMonitorInfoW', 'int', ['uintptr_t', 'void *'])
+const MoveWindow = user32.func('__stdcall', 'MoveWindow', 'int', ['uintptr_t', 'int', 'int', 'int', 'int', 'int'])
 const GetModuleHandleW = kernel32.func('__stdcall', 'GetModuleHandleW', 'uintptr_t', ['str16'])
 const GetLastError = kernel32.func('__stdcall', 'GetLastError', 'uint32', [])
 const GetStockObject = gdi32.func('__stdcall', 'GetStockObject', 'uintptr_t', ['int'])
@@ -59,13 +68,22 @@ const WS_CHILD = 0x40000000
 const WS_VISIBLE = 0x10000000
 const WS_CLIPCHILDREN = 0x02000000
 const WS_CLIPSIBLINGS = 0x04000000
+const SW_HIDE = 0
 const SW_SHOWNA = 8
 const BLACK_BRUSH = 4
 const HWND_BOTTOM = 1
 const SWP_NOSIZE = 0x0001
 const SWP_NOMOVE = 0x0002
 const SWP_NOACTIVATE = 0x0010
+const SWP_SHOWWINDOW = 0x0040
+const GWL_STYLE = -16
+const GA_PARENT = 1
+const MONITOR_DEFAULTTONEAREST = 0x02
+const MONITOR_INFO_SIZE = 40
+const MONITOR_BOUNDS_OFFSET = 4
 const ICC_LISTVIEW_CLASSES = 0x00000001
+const WM_MOUSEACTIVATE = 0x0021
+const MA_NOACTIVATE = 3
 
 const PROGMAN_STYLE = (WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) >>> 0
 const CHILD_STYLE = (WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS) >>> 0
@@ -78,6 +96,7 @@ let wndProcPtr = null
 let registered = false
 let shellHookMessage = 0
 let appCommandListener = null
+const hostedDesktopWindows = new Set()
 
 function toNum(value) {
   return typeof value === 'bigint' ? Number(value) : value
@@ -92,6 +111,7 @@ function dispatchAppCommand(hookCode, lParam) {
 }
 
 function shellWndProc(h, msg, wParam, lParam) {
+  if (msg === WM_MOUSEACTIVATE) return MA_NOACTIVATE
   if (shellHookMessage && msg === shellHookMessage) dispatchAppCommand(wParam, lParam)
   return DefWindowProcW(h, msg, wParam, lParam)
 }
@@ -118,15 +138,21 @@ function registerClass(name, hInstance) {
   return RegisterClassExW(wc) !== 0
 }
 
+function virtualScreenBounds() {
+  return {
+    x: GetSystemMetrics(SM_XVIRTUALSCREEN),
+    y: GetSystemMetrics(SM_YVIRTUALSCREEN),
+    cx: GetSystemMetrics(SM_CXVIRTUALSCREEN),
+    cy: GetSystemMetrics(SM_CYVIRTUALSCREEN),
+  }
+}
+
 function create() {
   if (toNum(progman)) return progman
   const hInstance = GetModuleHandleW(null)
   wndProcPtr = koffi.register(shellWndProc, koffi.pointer(WNDPROC))
 
-  const x = GetSystemMetrics(SM_XVIRTUALSCREEN)
-  const y = GetSystemMetrics(SM_YVIRTUALSCREEN)
-  const cx = GetSystemMetrics(SM_CXVIRTUALSCREEN)
-  const cy = GetSystemMetrics(SM_CYVIRTUALSCREEN)
+  const { x, y, cx, cy } = virtualScreenBounds()
 
   if (!registerClass('Progman', hInstance)) {
     console.error('[shellWindow] RegisterClassExW(Progman) failed')
@@ -185,7 +211,107 @@ function register() {
   }
 }
 
+function fitToVirtualScreen() {
+  if (!toNum(progman)) return
+  try {
+    const { x, y, cx, cy } = virtualScreenBounds()
+    SetWindowPos(progman, HWND_BOTTOM, x, y, cx, cy, SWP_NOACTIVATE)
+    for (const child of [workerw, defview, listview]) {
+      if (toNum(child)) MoveWindow(child, 0, 0, cx, cy, 1)
+    }
+  } catch (e) {
+    console.error('[shellWindow] fitToVirtualScreen error:', e.message)
+  }
+}
+
+function setChildStyle(hwnd, asChild) {
+  const style = Number(GetWindowLongPtrW(hwnd, GWL_STYLE)) >>> 0
+  const next = asChild ? (style & ~WS_POPUP) | WS_CHILD : (style & ~WS_CHILD) | WS_POPUP
+  SetWindowLongPtrW(hwnd, GWL_STYLE, next >>> 0)
+}
+
+function monitorRectAt(screenPoint) {
+  const probe = Buffer.alloc(16)
+  probe.writeInt32LE(screenPoint.x, 0)
+  probe.writeInt32LE(screenPoint.y, 4)
+  probe.writeInt32LE(screenPoint.x + 1, 8)
+  probe.writeInt32LE(screenPoint.y + 1, 12)
+  const monitor = MonitorFromRect(probe, MONITOR_DEFAULTTONEAREST)
+  if (!toNum(monitor)) return null
+  const info = Buffer.alloc(MONITOR_INFO_SIZE)
+  info.writeUInt32LE(MONITOR_INFO_SIZE, 0)
+  if (!GetMonitorInfoW(monitor, info)) return null
+  return {
+    left: info.readInt32LE(MONITOR_BOUNDS_OFFSET),
+    top: info.readInt32LE(MONITOR_BOUNDS_OFFSET + 4),
+    right: info.readInt32LE(MONITOR_BOUNDS_OFFSET + 8),
+    bottom: info.readInt32LE(MONITOR_BOUNDS_OFFSET + 12),
+  }
+}
+
+function placeHostedDesktopWindow(hwnd, screenPoint) {
+  if (!hostedDesktopWindows.has(hwnd)) return false
+  const monitorRect = monitorRectAt(screenPoint)
+  if (!monitorRect) return false
+  const { x, y, width, height } = rectInsideShellWindow(monitorRect, virtualScreenBounds())
+  SetWindowPos(hwnd, HWND_BOTTOM, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW)
+  return true
+}
+
+function hostDesktopWindow(hwnd, screenPoint) {
+  if (!toNum(workerw) || !hwnd) return false
+  try {
+    setChildStyle(hwnd, true)
+    if (!toNum(SetParent(hwnd, workerw))) {
+      setChildStyle(hwnd, false)
+      console.error(`[shellWindow] SetParent(desktop ${hwnd}) failed err=${GetLastError()}`)
+      return false
+    }
+    hostedDesktopWindows.add(hwnd)
+    return placeHostedDesktopWindow(hwnd, screenPoint)
+  } catch (e) {
+    console.error('[shellWindow] hostDesktopWindow error:', e.message)
+    return false
+  }
+}
+
+function isLiveWallpaperWindow(hwnd) {
+  if (!toNum(workerw) || hostedDesktopWindows.has(hwnd)) return false
+  try {
+    return toNum(GetAncestor(hwnd, GA_PARENT)) === toNum(workerw)
+  } catch {
+    return false
+  }
+}
+
+function sendHostedDesktopWindowsToBottom() {
+  for (const hwnd of hostedDesktopWindows) {
+    try {
+      SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+    } catch (e) {
+      console.error('[shellWindow] sendHostedDesktopWindowsToBottom error:', e.message)
+    }
+  }
+}
+
+function forgetHostedDesktopWindow(hwnd) {
+  hostedDesktopWindows.delete(hwnd)
+}
+
+function releaseHostedDesktopWindows() {
+  for (const hwnd of hostedDesktopWindows) {
+    try {
+      if (!IsWindow(hwnd)) continue
+      ShowWindow(hwnd, SW_HIDE)
+      SetParent(hwnd, 0)
+      setChildStyle(hwnd, false)
+    } catch {}
+  }
+  hostedDesktopWindows.clear()
+}
+
 function destroy() {
+  releaseHostedDesktopWindows()
   for (const handle of [listview, defview, workerw, progman]) {
     try {
       if (toNum(handle)) DestroyWindow(handle)
@@ -198,4 +324,4 @@ function destroy() {
   registered = false
 }
 
-module.exports = { register, destroy, onAppCommand }
+module.exports = { register, destroy, onAppCommand, fitToVirtualScreen, hostDesktopWindow, placeHostedDesktopWindow, forgetHostedDesktopWindow, isLiveWallpaperWindow, sendHostedDesktopWindowsToBottom }
