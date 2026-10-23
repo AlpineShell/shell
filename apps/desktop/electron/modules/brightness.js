@@ -157,11 +157,12 @@ function enumLogicalMonitors() {
   const results = []
   const seen = new Set()
   for (const d of displays) {
+    const bounds = screen.dipToScreenRect(null, d.bounds)
     const rect = Buffer.alloc(16)
-    rect.writeInt32LE(d.bounds.x, 0)
-    rect.writeInt32LE(d.bounds.y, 4)
-    rect.writeInt32LE(d.bounds.x + d.bounds.width, 8)
-    rect.writeInt32LE(d.bounds.y + d.bounds.height, 12)
+    rect.writeInt32LE(bounds.x, 0)
+    rect.writeInt32LE(bounds.y, 4)
+    rect.writeInt32LE(bounds.x + bounds.width, 8)
+    rect.writeInt32LE(bounds.y + bounds.height, 12)
     const h = MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST)
     if (h && !seen.has(h)) {
       seen.add(h)
