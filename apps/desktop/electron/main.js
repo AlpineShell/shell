@@ -138,6 +138,7 @@ try { powerThrottling = require('./modules/powerThrottling') } catch (e) { conso
 let shellWindow = null
 try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error('[main] shellWindow load error:', e.message) }
 const { displayCenter } = require('./modules/desktopHostGeometry')
+const { planDisplayShells, planChangesShells } = require('./modules/displayShellPlan')
 const gpuPreference = require('./modules/gpuPreference')
 const colorMode = require('./modules/colorMode')
 const dateTime = require('./modules/dateTime')
@@ -645,6 +646,16 @@ function repositionShell(display) {
   setTimeout(() => forceShellBounds(shell), 300)
 }
 
+
+function syncShellsToDisplays() {
+  const shellDisplays = [...shells.values()].map((shell) => shell.display)
+  const plan = planDisplayShells(shellDisplays, screen.getAllDisplays())
+  if (!planChangesShells(plan)) return
+  for (const displayId of plan.stale) destroyShellForDisplay(displayId)
+  for (const display of plan.missing) createShellForDisplay(display)
+  for (const display of plan.moved) repositionShell(display)
+  fitShellWindowToScreens()
+}
 
 function createScreenshotWindow() {
   const win = new BrowserWindow({
@@ -1348,8 +1359,7 @@ function startShellMode(claimedTakeover = null) {
 
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)
-    createShellForDisplay(newDisplay)
-    fitShellWindowToScreens()
+    syncShellsToDisplays()
     scheduleReassert()
     if (powerThrottling) {
       setTimeout(() => powerThrottling.applyEcoQosToAllProcesses(), 1500)
@@ -1358,8 +1368,7 @@ function startShellMode(claimedTakeover = null) {
 
   screen.on('display-removed', (_event, oldDisplay) => {
     console.log(`[main] Display removed: ${oldDisplay.id}`)
-    destroyShellForDisplay(oldDisplay.id)
-    fitShellWindowToScreens()
+    syncShellsToDisplays()
     scheduleReassert()
   })
 
@@ -1375,8 +1384,7 @@ function startShellMode(claimedTakeover = null) {
 
     console.log(`[main] Display metrics changed: ${display.id} [${changedMetrics.join(', ')}]`)
     if (changedMetrics.includes('bounds') || changedMetrics.includes('scaleFactor')) {
-      repositionShell(display)
-      fitShellWindowToScreens()
+      syncShellsToDisplays()
     }
     scheduleReassert()
   })
