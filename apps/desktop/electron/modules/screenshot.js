@@ -1,6 +1,7 @@
-const { app, screen, desktopCapturer, clipboard, ClipboardItem } = require('electron')
+const { app, screen, clipboard, ClipboardItem } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { captureDisplay } = require('./displayCapture')
 
 let overlayWindow = null
 let overlayWindowFactory = null
@@ -73,18 +74,10 @@ async function showOverlay() {
     const cursor = screen.getCursorScreenPoint()
     const display = screen.getDisplayNearestPoint(cursor)
     const { width, height } = display.bounds
-    const sf = display.scaleFactor || 1
-    const pw = Math.round(width * sf)
-    const ph = Math.round(height * sf)
 
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width: pw, height: ph },
-    })
-
-    const source = sources.find(s => s.display_id === String(display.id)) || sources[0]
-    if (!source || source.thumbnail.isEmpty()) {
-      console.error('[screenshot] No usable screen source; aborting')
+    const frozenFrame = captureDisplay(display)
+    if (!frozenFrame || frozenFrame.isEmpty()) {
+      console.error('[screenshot] Could not capture the display; aborting')
       return
     }
 
@@ -102,11 +95,11 @@ async function showOverlay() {
 
     active = true
     capturedDisplay = display
-    capturedImage = source.thumbnail
+    capturedImage = frozenFrame
 
     const { x, y } = display.bounds
     overlayWindow.webContents.send('screenshot/show', {
-      image: `data:image/jpeg;base64,${source.thumbnail.toJPEG(90).toString('base64')}`,
+      image: `data:image/jpeg;base64,${frozenFrame.toJPEG(90).toString('base64')}`,
     })
     overlayWindow.setIgnoreMouseEvents(false)
     overlayWindow.setBounds({ x, y, width, height })
