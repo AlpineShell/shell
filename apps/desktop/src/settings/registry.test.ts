@@ -44,7 +44,7 @@ const LAUNCHER_SETTING_IDS = [
   'power',
 ]
 
-const SETTINGS_ONLY_IDS = ['battery-saver-dimming', 'battery-saver-dim-amount', 'battery-saver-dim-externals']
+const SETTINGS_ONLY_IDS = ['battery-saver-dimming', 'battery-saver-dim-amount', 'battery-saver-dim-externals', 'status-sound']
 
 const APPLIES = ['instant', 'confirm', 'restart', 'draft']
 
@@ -84,7 +84,7 @@ const SECTION_PAGE_LISTS: Record<SettingsSectionId, SettingsPageId[]> = {
   home: ['home', 'revert'],
   personalization: PERSONAL_SIDEBAR,
   desktop: ['search', 'tiling', 'shortcuts'],
-  devices: ['displays', 'wifi', 'bluetooth', 'battery', 'input'],
+  devices: ['displays', 'wifi', 'bluetooth', 'sound', 'battery', 'input'],
   system: ['apps', 'date-time', 'plugins', 'updates'],
 }
 
@@ -120,6 +120,9 @@ const PAGE_ONLY_IDS = [
   'language-remove',
   'switch-input-method',
   'default-input-method',
+  'sound',
+  'audio-output',
+  'audio-input',
   'wifi',
   'bluetooth',
   'displays',

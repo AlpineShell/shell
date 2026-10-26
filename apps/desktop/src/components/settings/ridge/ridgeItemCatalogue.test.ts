@@ -63,7 +63,7 @@ describe('RIDGE_ITEM_DETAILS', () => {
     ['tray', ['tray-all-monitors', 'tray-overflow'], ['tray-icons']],
     ['media', ['media-visualizer'], []],
     ['microphone', [], []],
-    ['status', [], ['wifi', 'bluetooth', 'battery']],
+    ['status', ['status-sound'], ['wifi', 'bluetooth', 'sound', 'battery']],
     ['plugins-right', [], ['plugins']],
     ['clock', ['clock-time-format', 'calendar-days', 'calendar-show-tasks'], []],
   ])('gives the %s callout its settings and its links', (id, entries, pages) => {

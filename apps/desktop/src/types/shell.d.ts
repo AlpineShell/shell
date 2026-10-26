@@ -418,6 +418,24 @@ declare global {
     hasBattery: boolean
   }
 
+  interface AudioDevice {
+    id: string
+    name: string
+    isDefault: boolean
+  }
+
+  interface AudioDevices {
+    output: AudioDevice[]
+    input: AudioDevice[]
+  }
+
+  interface AudioDeviceSetResult {
+    ok: boolean
+    devices: AudioDevices
+  }
+
+  type AudioDeviceFlow = keyof AudioDevices
+
   interface MonitorInfo {
     id: string
     name: string
@@ -1214,6 +1232,7 @@ declare global {
     | 'tiling'
     | 'shortcuts'
     | 'battery'
+    | 'sound'
     | 'displays'
     | 'wifi'
     | 'bluetooth'
@@ -2088,6 +2107,9 @@ declare global {
       onSearchIconChanged: (callback: (visible: boolean) => void) => () => void
       mediaVisualizer: () => Promise<boolean>
       setMediaVisualizer: (value: boolean) => Promise<boolean>
+      statusSound: () => Promise<boolean>
+      setStatusSound: (value: boolean) => Promise<boolean>
+      onStatusSoundChanged: (callback: (value: boolean) => void) => () => void
       onMediaVisualizerChanged: (callback: (value: boolean) => void) => () => void
       foregroundColor: () => Promise<ForegroundColorData[]>
       onForegroundColorChanged: (callback: (data: ForegroundColorBroadcast) => void) => () => void
@@ -2227,6 +2249,9 @@ declare global {
         mute: () => Promise<boolean>
         setMute: (muted: boolean) => Promise<boolean>
         onMuteChanged: (callback: (data: boolean) => void) => () => void
+        audioDevices: () => Promise<AudioDevices>
+        setAudioDevice: (id: string) => Promise<AudioDeviceSetResult>
+        onAudioDevicesChanged: (callback: (data: AudioDevices) => void) => () => void
         subscribePeak: () => Promise<boolean>
         unsubscribePeak: () => Promise<boolean>
         onAudioPeak: (callback: (peak: number) => void) => () => void

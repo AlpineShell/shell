@@ -108,6 +108,13 @@ contextBridge.exposeInMainWorld('topbar', {
   },
   mediaVisualizer: () => ipcRenderer.invoke('topbar/media-visualizer-get'),
   setMediaVisualizer: (value) => ipcRenderer.invoke('topbar/media-visualizer-set', value),
+  statusSound: () => ipcRenderer.invoke('topbar/status-sound-get'),
+  setStatusSound: (value) => ipcRenderer.invoke('topbar/status-sound-set', value),
+  onStatusSoundChanged: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('topbar/status-sound-changed', handler)
+    return () => ipcRenderer.removeListener('topbar/status-sound-changed', handler)
+  },
   onMediaVisualizerChanged: (callback) => {
     const handler = (_, data) => callback(data)
     ipcRenderer.on('topbar/media-visualizer-changed', handler)
@@ -531,6 +538,13 @@ contextBridge.exposeInMainWorld('shell', {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('system/mute-changed', handler)
       return () => ipcRenderer.removeListener('system/mute-changed', handler)
+    },
+    audioDevices: () => ipcRenderer.invoke('system/audio-devices-get'),
+    setAudioDevice: (id) => ipcRenderer.invoke('system/audio-device-set', id),
+    onAudioDevicesChanged: (callback) => {
+      const handler = (_, data) => callback(data)
+      ipcRenderer.on('system/audio-devices-changed', handler)
+      return () => ipcRenderer.removeListener('system/audio-devices-changed', handler)
     },
     subscribePeak: () => ipcRenderer.invoke('system/peak-subscribe'),
     unsubscribePeak: () => ipcRenderer.invoke('system/peak-unsubscribe'),

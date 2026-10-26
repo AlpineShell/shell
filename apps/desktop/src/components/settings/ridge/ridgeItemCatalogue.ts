@@ -29,7 +29,7 @@ export const RIDGE_ITEM_DETAILS: Record<TopbarItemId, RidgeItemDetail> = {
   tray: { entries: ['tray-all-monitors', 'tray-overflow'], links: [pageLink('tray-icons', trayIconCounts)] },
   media: { entries: ['media-visualizer'], links: [] },
   microphone: { entries: [], links: [] },
-  status: { entries: [], links: [pageLink('wifi'), pageLink('bluetooth'), pageLink('battery')] },
+  status: { entries: ['status-sound'], links: [pageLink('wifi'), pageLink('bluetooth'), pageLink('sound'), pageLink('battery')] },
   'plugins-right': { entries: [], links: [pageLink('plugins')] },
   clock: { entries: ['clock-time-format', 'calendar-days', 'calendar-show-tasks'], links: [] },
 }
