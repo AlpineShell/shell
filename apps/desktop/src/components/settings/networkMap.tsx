@@ -74,7 +74,7 @@ export default function NetworkMap({ details }: { details: NetworkDetails }) {
         {facts.map((fact) => (
           <div key={fact.label} className="flex min-w-0 justify-between gap-4">
             <dt className="shrink-0 text-ink-quiet">{fact.label}</dt>
-            <dd title={fact.value} className={`min-w-0 truncate text-right text-ink-primary ${looksLikeAddress(fact.value) ? 'font-mono text-xs leading-5' : ''}`}>
+            <dd title={fact.value} className={`min-w-0 truncate text-right text-ink-primary select-text ${looksLikeAddress(fact.value) ? 'font-mono text-xs leading-5' : ''}`}>
               {fact.value}
             </dd>
           </div>

@@ -495,7 +495,7 @@ export default function SetupApp() {
               {licenceRequired ? (
                 <p className="text-sm text-ink-secondary">Alpine Shell needs a licence on this PC before it can become your desktop.</p>
               ) : (
-                <p className="max-h-20 overflow-y-auto rounded-field border border-line-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all text-ink-secondary">
+                <p className="max-h-20 overflow-y-auto rounded-field border border-line-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all text-ink-secondary select-text">
                   {result.error}
                 </p>
               )}
