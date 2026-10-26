@@ -3,9 +3,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use napi::bindgen_prelude::{Object, ToNapiValue};
 use napi::{Env, JsDeferred};
 
-use crate::audio_session::AudioSession;
-
-pub type AudioWork<T> = Box<dyn FnOnce(&mut AudioSession) -> Result<T, String> + Send>;
+pub type ComWork<S, T> = Box<dyn FnOnce(&mut S) -> Result<T, String> + Send>;
 
 type Settlement<T> = Box<dyn FnOnce(Env) -> napi::Result<T> + Send>;
 
@@ -14,20 +12,26 @@ pub enum CallOutcome {
     Panicked,
 }
 
-pub trait PendingAudioCall: Send {
-    fn run(self: Box<Self>, session: &mut AudioSession) -> CallOutcome;
+pub trait PendingCall<S>: Send {
+    fn run(self: Box<Self>, state: &mut S) -> CallOutcome;
     fn fail(self: Box<Self>, reason: String);
 }
 
-pub struct AudioCall<T: ToNapiValue + Send + 'static> {
-    work: Option<AudioWork<T>>,
+pub struct ComCall<S: 'static, T: ToNapiValue + Send + 'static> {
+    label: &'static str,
+    work: Option<ComWork<S, T>>,
     deferred: Option<JsDeferred<T, Settlement<T>>>,
 }
 
-impl<T: ToNapiValue + Send + 'static> AudioCall<T> {
-    pub fn create<'env>(env: &'env Env, work: AudioWork<T>) -> napi::Result<(Box<Self>, Object<'env>)> {
+impl<S: 'static, T: ToNapiValue + Send + 'static> ComCall<S, T> {
+    pub fn create<'env>(
+        env: &'env Env,
+        label: &'static str,
+        work: ComWork<S, T>,
+    ) -> napi::Result<(Box<Self>, Object<'env>)> {
         let (deferred, promise) = env.create_deferred::<T, Settlement<T>>()?;
-        let call = Box::new(AudioCall {
+        let call = Box::new(ComCall {
+            label,
             work: Some(work),
             deferred: Some(deferred),
         });
@@ -47,13 +51,13 @@ impl<T: ToNapiValue + Send + 'static> AudioCall<T> {
     }
 }
 
-impl<T: ToNapiValue + Send + 'static> PendingAudioCall for AudioCall<T> {
-    fn run(mut self: Box<Self>, session: &mut AudioSession) -> CallOutcome {
+impl<S: 'static, T: ToNapiValue + Send + 'static> PendingCall<S> for ComCall<S, T> {
+    fn run(mut self: Box<Self>, state: &mut S) -> CallOutcome {
         let Some(work) = self.work.take() else {
-            self.reject("the audio call already ran".to_string());
+            self.reject(format!("the {} call already ran", self.label));
             return CallOutcome::Completed;
         };
-        match catch_unwind(AssertUnwindSafe(|| work(session))) {
+        match catch_unwind(AssertUnwindSafe(|| work(state))) {
             Ok(Ok(value)) => {
                 self.resolve(value);
                 CallOutcome::Completed
@@ -63,7 +67,7 @@ impl<T: ToNapiValue + Send + 'static> PendingAudioCall for AudioCall<T> {
                 CallOutcome::Completed
             }
             Err(_) => {
-                self.reject("the audio call panicked".to_string());
+                self.reject(format!("the {} call panicked", self.label));
                 CallOutcome::Panicked
             }
         }
@@ -74,8 +78,11 @@ impl<T: ToNapiValue + Send + 'static> PendingAudioCall for AudioCall<T> {
     }
 }
 
-impl<T: ToNapiValue + Send + 'static> Drop for AudioCall<T> {
+impl<S: 'static, T: ToNapiValue + Send + 'static> Drop for ComCall<S, T> {
     fn drop(&mut self) {
-        self.reject("the audio thread stopped before running this call".to_string());
+        if self.deferred.is_none() {
+            return;
+        }
+        self.reject(format!("the {} thread stopped before running this call", self.label));
     }
 }

@@ -1,7 +1,5 @@
-const path = require('path')
 const { groupAudioEndpoints } = require('./audioDevices')
-
-const ADDON_PATH = path.join(__dirname, '..', 'native', 'alpine_native.node')
+const { NATIVE_ADDON_PATH: ADDON_PATH } = require('../nativeAddonPath')
 
 function bindAudioEndpoint(addon) {
   return {

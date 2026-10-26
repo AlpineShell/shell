@@ -1,10 +1,11 @@
 #![cfg(windows)]
 
-mod audio_call;
+mod activation_session;
 mod audio_devices;
 mod audio_session;
-mod audio_thread;
+mod com_call;
 mod com_strings;
+mod com_worker;
 mod endpoint_watcher;
 mod policy_config;
 
@@ -12,10 +13,17 @@ use napi::bindgen_prelude::{Either, Null, Object, ToNapiValue};
 use napi::Env;
 use napi_derive::napi;
 
-use audio_call::AudioCall;
+use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED};
+
+use activation_session::ActivationSession;
 use audio_devices::{list_active_endpoints, set_default_endpoint, AudioEndpoint, EndpointFlow};
 use audio_session::{AudioSession, VolumeState};
-use audio_thread::submit_audio_call;
+use com_worker::ComWorker;
+
+static AUDIO_WORKER: ComWorker<AudioSession> = ComWorker::new("alpine-audio", "audio", COINIT_MULTITHREADED);
+
+static ACTIVATION_WORKER: ComWorker<ActivationSession> =
+    ComWorker::new("alpine-activation", "activation", COINIT_APARTMENTTHREADED);
 
 #[napi(object)]
 pub struct AudioState {
@@ -35,9 +43,7 @@ fn queue_audio_call<T: ToNapiValue + Send + 'static>(
     env: &Env,
     work: impl FnOnce(&mut AudioSession) -> Result<T, String> + Send + 'static,
 ) -> napi::Result<Object<'_>> {
-    let (call, promise) = AudioCall::create(env, Box::new(work))?;
-    submit_audio_call(call);
-    Ok(promise)
+    AUDIO_WORKER.queue(env, work)
 }
 
 fn to_audio_state(state: VolumeState) -> AudioState {
@@ -116,4 +122,14 @@ pub fn audio_list_devices(env: &Env) -> napi::Result<Object<'_>> {
 #[napi(ts_return_type = "Promise<boolean>")]
 pub fn audio_set_default_device(env: &Env, id: String) -> napi::Result<Object<'_>> {
     queue_audio_call(env, move |session| switch_default_device(session, &id))
+}
+
+#[napi(ts_return_type = "Promise<number>")]
+pub fn app_activate(env: &Env, aumid: String) -> napi::Result<Object<'_>> {
+    ACTIVATION_WORKER.queue(env, move |session| session.activate(&aumid))
+}
+
+#[napi(ts_return_type = "Promise<void>")]
+pub fn app_activation_warm(env: &Env) -> napi::Result<Object<'_>> {
+    ACTIVATION_WORKER.queue(env, |session| session.warm())
 }
