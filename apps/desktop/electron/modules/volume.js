@@ -1,89 +1,25 @@
-const { spawn } = require('child_process')
-const { app } = require('electron')
-const path = require('path')
-const fs = require('fs')
 const { volumeKeyAction } = require('./appCommandPolicy')
-const { NO_AUDIO_DEVICES, isEndpointId, parseAudioDevices, findAudioDevice, withDefaultDevice } = require('./audioDevices')
+const { NO_AUDIO_DEVICES, isEndpointId, findAudioDevice, withDefaultDevice } = require('./audioDevices')
+const { loadAudioEndpoint } = require('./audioEndpoint')
+const { skippedWhileStillRunning } = require('../skippedWhileStillRunning')
 
-const SCRIPT_PATH = app.isPackaged
-  ? path.join(process.resourcesPath, 'scripts', 'audio.ps1')
-  : path.join(__dirname, '..', 'scripts', 'audio.ps1')
-const DELIM = '__AUDIO_DONE__'
-
-let ps = null
-let psReady = null
-let pendingResolve = null
-let outputBuf = ''
-let commandQueue = []
-let busy = false
+let endpoint = null
 let lastSetTime = 0
 let lastVolume = undefined
 let lastMute = undefined
 
-function initPS() {
-  if (psReady) return psReady
-  psReady = new Promise((resolveInit) => {
-    ps = spawn('powershell', [
-      '-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', '-'
-    ], { stdio: ['pipe', 'pipe', 'ignore'] })
-
-    ps.stdout.on('data', (chunk) => {
-      outputBuf += chunk.toString()
-      const idx = outputBuf.indexOf(DELIM)
-      if (idx !== -1) {
-        const result = outputBuf.substring(0, idx).trim()
-        outputBuf = outputBuf.substring(idx + DELIM.length).replace(/^\r?\n/, '')
-        if (pendingResolve) {
-          const r = pendingResolve
-          pendingResolve = null
-          r(result)
-        }
-      }
-    })
-
-    ps.on('exit', () => {
-      console.error('[volume] PowerShell process exited unexpectedly')
-      ps = null
-      psReady = null
-      busy = false
-      if (pendingResolve) { pendingResolve(''); pendingResolve = null }
-      for (const { resolve } of commandQueue) resolve('')
-      commandQueue = []
-    })
-
-    const script = fs.readFileSync(SCRIPT_PATH, 'utf8')
-    const switchIdx = script.indexOf('\nswitch')
-    const typeDef = switchIdx > 0 ? script.substring(0, switchIdx) : script
-    pendingResolve = () => { resolveInit(); processNext() }
-    ps.stdin.write(`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n${typeDef}\nWrite-Output '${DELIM}'\n`)
-  })
-  return psReady
+function logAudioFailure(error) {
+  console.error('[volume] audio call failed:', error?.message ?? error)
 }
 
-function processNext() {
-  if (commandQueue.length === 0) { busy = false; return }
-  busy = true
-  const { cmd, resolve } = commandQueue.shift()
-  pendingResolve = (result) => {
-    resolve(result)
-    processNext()
-  }
-  ps.stdin.write(`${cmd}\nWrite-Output '${DELIM}'\n`)
-}
-
-async function runCmd(cmd) {
-  await initPS()
-  return new Promise((resolve) => {
-    commandQueue.push({ cmd, resolve })
-    if (!busy) processNext()
-  })
+function audioEndpoint() {
+  if (!endpoint) endpoint = loadAudioEndpoint()
+  return endpoint
 }
 
 async function getVolume() {
   try {
-    const result = await runCmd('[math]::Round([Audio]::GetVolume() * 100)')
-    const val = parseInt(result, 10)
-    return isNaN(val) ? 50 : val
+    return (await audioEndpoint().getState()).volume
   } catch {
     return 50
   }
@@ -92,30 +28,21 @@ async function getVolume() {
 async function setVolume(value) {
   const clamped = Math.max(0, Math.min(100, Math.round(value)))
   lastSetTime = Date.now()
-  commandQueue = commandQueue.filter(c => !c.cmd.startsWith('[Audio]::SetVolume'))
-  await runCmd(`[Audio]::SetVolume(${clamped} / 100.0)`)
+  await audioEndpoint().setVolume(clamped).catch(logAudioFailure)
   return clamped
 }
 
 async function getMute() {
   try {
-    const result = await runCmd('[Audio]::GetMute()')
-    return result.trim() === 'True'
+    return (await audioEndpoint().getState()).muted
   } catch {
     return false
   }
 }
 
-function parseState(raw) {
-  const [rawVolume, rawMute] = raw.trim().split('|')
-  const volume = parseInt(rawVolume, 10)
-  if (isNaN(volume)) return null
-  return { volume, muted: rawMute === '1' }
-}
-
 async function getState() {
   try {
-    return parseState(await runCmd('[Audio]::GetState()'))
+    return await audioEndpoint().getState()
   } catch {
     return null
   }
@@ -133,16 +60,16 @@ function publishState(state) {
   }
 }
 
-function volumeKeyCommand(action) {
-  if (action.kind === 'toggle-mute') return '[Audio]::ToggleMute()'
-  return `[Audio]::StepVolume(${action.delta})`
+function applyVolumeKeyAction(action) {
+  if (action.kind === 'toggle-mute') return audioEndpoint().toggleMute()
+  return audioEndpoint().stepVolume(action.delta)
 }
 
 async function applyAppCommand(appCommand) {
   const action = volumeKeyAction(appCommand)
   if (!action) return
   try {
-    publishState(parseState(await runCmd(volumeKeyCommand(action))))
+    publishState(await applyVolumeKeyAction(action))
   } catch (e) {
     console.error('[volume] volume key error:', e.message)
   }
@@ -150,8 +77,7 @@ async function applyAppCommand(appCommand) {
 
 async function setMute(muted) {
   lastSetTime = Date.now()
-  commandQueue = commandQueue.filter(c => !c.cmd.startsWith('[Audio]::SetMute'))
-  await runCmd(`[Audio]::SetMute($${muted ? 'true' : 'false'})`)
+  await audioEndpoint().setMute(muted).catch(logAudioFailure)
   return muted
 }
 
@@ -160,7 +86,7 @@ let lastAudioDevicesKey = null
 
 async function getAudioDevices() {
   try {
-    return parseAudioDevices(await runCmd('ConvertTo-Json -Compress -InputObject @([AudioDevices]::List())'))
+    return await audioEndpoint().listDevices()
   } catch {
     return NO_AUDIO_DEVICES
   }
@@ -184,8 +110,7 @@ async function setDefaultAudioDevice(id) {
   const devices = await getAudioDevices()
   if (!findAudioDevice(devices, id)) return { ok: false, devices }
   try {
-    const result = await runCmd(`[AudioDevices]::SetDefault('${id}')`)
-    if (result.trim() !== 'True') return { ok: false, devices: await refreshAudioDevices() }
+    if (!(await audioEndpoint().setDefaultDevice(id))) return { ok: false, devices: await refreshAudioDevices() }
   } catch (e) {
     console.error('[volume] default device error:', e.message)
     return { ok: false, devices: await refreshAudioDevices() }
@@ -204,8 +129,7 @@ const peakSubscribers = new Map()
 
 async function getPeak() {
   try {
-    const result = await runCmd('[Math]::Round([Audio]::GetPeak(), 3)')
-    return parseFloat(result) || 0
+    return await audioEndpoint().getPeak()
   } catch {
     return 0
   }
@@ -213,12 +137,12 @@ async function getPeak() {
 
 function startPeakMeter() {
   if (peakInterval || !broadcastToTopbarsRef) return
-  peakInterval = setInterval(async () => {
+  peakInterval = setInterval(skippedWhileStillRunning('volume', async () => {
     const peak = await getPeak()
     if (!peakInterval || peak === lastPeak) return
     lastPeak = peak
     broadcastToTopbarsRef('system/audio-peak', peak)
-  }, 66)
+  }), 66)
 }
 
 function stopPeakMeter() {
@@ -276,13 +200,13 @@ module.exports = {
     broadcastRef = broadcast
     broadcastToTopbarsRef = broadcastToTopbars
     if (peakSubscribers.size > 0) startPeakMeter()
-    initPS()
+    audioEndpoint().start()
 
-    setInterval(async () => {
+    setInterval(skippedWhileStillRunning('volume', async () => {
       if (Date.now() - lastSetTime < 1500) return
       publishState(await getState())
-    }, 1000)
+    }), 1000)
 
-    setInterval(refreshAudioDevices, 3000)
+    setInterval(skippedWhileStillRunning('volume', refreshAudioDevices), 3000)
   },
 }

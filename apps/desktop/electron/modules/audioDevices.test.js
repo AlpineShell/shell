@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import audioDevices from './audioDevices.js'
 
-const { NO_AUDIO_DEVICES, isEndpointId, parseAudioDevices, findAudioDevice, withDefaultDevice } = audioDevices
+const { NO_AUDIO_DEVICES, isEndpointId, groupAudioEndpoints, parseAudioDevices, findAudioDevice, withDefaultDevice } = audioDevices
 
 const SPEAKERS = '{0.0.0.00000000}.{d3ac2b73-0d5c-4882-aeac-51fdafd224c2}'
 const HEADPHONES = '{0.0.0.00000000}.{bdd5bb5d-2e6b-4fd1-99ec-dd7f4163b52d}'
@@ -59,6 +59,29 @@ describe('parseAudioDevices', () => {
   it('returns no devices for output that is not JSON', () => {
     expect(parseAudioDevices('')).toEqual(NO_AUDIO_DEVICES)
     expect(parseAudioDevices('Exception calling "List"')).toEqual(NO_AUDIO_DEVICES)
+  })
+})
+
+describe('groupAudioEndpoints', () => {
+  it('groups the endpoints the native add-on lists the same way as the PowerShell ones', () => {
+    expect(
+      groupAudioEndpoints([
+        { id: SPEAKERS, name: 'Speakers', flow: 'output', isDefault: false },
+        { id: HEADPHONES, name: 'Headphones', flow: 'output', isDefault: true },
+        { id: MICROPHONE, name: null, flow: 'input', isDefault: true },
+      ])
+    ).toEqual({
+      output: [
+        { id: HEADPHONES, name: 'Headphones', isDefault: true },
+        { id: SPEAKERS, name: 'Speakers', isDefault: false },
+      ],
+      input: [{ id: MICROPHONE, name: 'Unknown device', isDefault: true }],
+    })
+  })
+
+  it('returns no devices for anything that is not a list', () => {
+    expect(groupAudioEndpoints(null)).toEqual(NO_AUDIO_DEVICES)
+    expect(groupAudioEndpoints({ id: SPEAKERS })).toEqual(NO_AUDIO_DEVICES)
   })
 })
 

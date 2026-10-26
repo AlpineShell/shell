@@ -6,6 +6,7 @@ const { app, screen } = require('electron')
 const { createPersistentRunner } = require('../powershell')
 const { clampBrightnessPercent, dimmedBrightness, displaysToDim } = require('./batterySaverPolicy')
 const { createBatterySaverBaselines } = require('./batterySaverBaselines')
+const { skippedWhileStillRunning } = require('../skippedWhileStillRunning')
 const {
   BUILTIN_MONITOR_KEY,
   createMonitorIdentityCache,
@@ -516,21 +517,6 @@ async function setMonitorBrightness(id, value) {
   return monitors.find(m => m.id === id)?.brightness ?? clamped
 }
 
-function skippedWhileStillRunning(task) {
-  let running = false
-  return async () => {
-    if (running) return
-    running = true
-    try {
-      await task()
-    } catch (e) {
-      console.error('[brightness] periodic sweep failed:', e?.message ?? e)
-    } finally {
-      running = false
-    }
-  }
-}
-
 function publicState() {
   return monitors.map(m => ({
     id: m.id,
@@ -774,11 +760,11 @@ module.exports = {
     screen.on('display-added', resweepAfterDisplayChange)
     screen.on('display-removed', resweepAfterDisplayChange)
 
-    setInterval(skippedWhileStillRunning(async () => {
+    setInterval(skippedWhileStillRunning('brightness', async () => {
       if (await refresh()) publishMonitors()
     }), 15000)
 
-    setInterval(skippedWhileStillRunning(async () => {
+    setInterval(skippedWhileStillRunning('brightness', async () => {
       const state = await enumerate()
       if (JSON.stringify(state) !== lastStateJson) publishMonitors()
     }), 60000)

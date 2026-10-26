@@ -8,8 +8,8 @@
     "electron": "electron .",
     "start": "node scripts/dev.js",
     "start:setup": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron . --setup\"",
-    "build": "node scripts/generateMarketplaceConfig.js && node scripts/generateLicenceConfig.js && vite build && electron-builder --win",
-    "release": "node scripts/generateMarketplaceConfig.js && node scripts/generateLicenceConfig.js && vite build && electron-builder --win --publish never && node scripts/publish.js",
+    "build": "node scripts/generateMarketplaceConfig.js && node scripts/generateLicenceConfig.js && node scripts/buildNative.js && vite build && electron-builder --win",
+    "release": "node scripts/generateMarketplaceConfig.js && node scripts/generateLicenceConfig.js && node scripts/buildNative.js && vite build && electron-builder --win --publish never && node scripts/publish.js",
     "publish": "node scripts/publish.js",
     "publish:plugin": "node scripts/publishPlugin.js",
     "screenshots:settings": "bun scripts/captureSettingsSheets.js",
@@ -82,7 +82,8 @@
       "electron/shellExecuteWorker.js",
       "electron/waitForHandleWorker.js",
       "electron/bluetoothWorker.js",
-      "electron/bluetoothNative.js"
+      "electron/bluetoothNative.js",
+      "electron/native/*.node"
     ],
     "electronFuses": {
       "runAsNode": false,

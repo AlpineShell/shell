@@ -473,6 +473,14 @@ process.on('exit', () => {
   if (!exiting) restoreShell()
 })
 
+function buildNativeAddon() {
+  return new Promise((resolve) => {
+    const build = spawn(process.execPath, [path.join(__dirname, 'buildNative.js')], { cwd: projectRoot, stdio: 'ignore', windowsHide: true })
+    build.on('error', () => resolve(false))
+    build.on('exit', (code) => resolve(code === 0))
+  })
+}
+
 async function main() {
   console.clear()
   process.stdout.write(`${c.cyan}${c.bold}${ALPINE}${c.reset}`)
@@ -483,6 +491,10 @@ async function main() {
   const shellTask = prep.task('Detecting registered shell')
   userShell = await getRegisteredShell()
   shellTask.done(userShell ? 'Alpine Shell' : 'explorer.exe')
+
+  const nativeTask = prep.task('Building native add-on (the first build takes a few minutes)')
+  if (await buildNativeAddon()) nativeTask.done()
+  else nativeTask.fail('audio falls back to PowerShell')
 
   const portTask = prep.task(`Freeing port ${VITE_PORT}`)
   await freePort(VITE_PORT)

@@ -91,6 +91,17 @@ jobs:
           test -f electron/marketplacePublicKey.generated.js || { echo "::error::electron/marketplacePublicKey.generated.js was not written"; exit 1; }
           node -e "const k=require('./electron/marketplacePublicKey.generated.js');if(typeof k.publicKeyPem!=='string'||!k.publicKeyPem.includes('BEGIN PUBLIC KEY')){console.error('::error::no marketplace public key baked; set the ALPINE_MARKETPLACE_PUBKEY secret, a release build refuses every plugin it cannot verify');process.exit(1)}console.log('marketplace public key baked')"
 
+      - name: Setup Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Build native add-on
+        working-directory: apps/desktop
+        shell: bash
+        run: node scripts/buildNative.js
+
       - name: Build renderer
         working-directory: apps/desktop
         shell: bash
@@ -118,6 +129,13 @@ jobs:
           test -f release/win-unpacked/resources/app-update.yml || { echo "::error::app-update.yml was not written"; exit 1; }
           grep -F "url: $FEED" release/win-unpacked/resources/app-update.yml || { echo "::error::app-update.yml does not point at $FEED"; cat release/win-unpacked/resources/app-update.yml; exit 1; }
           echo "update feed: $FEED"
+
+      - name: Verify the native add-on is packaged
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          test -f release/win-unpacked/resources/app.asar.unpacked/electron/native/alpine_native.node || { echo "::error::alpine_native.node is missing from app.asar.unpacked"; exit 1; }
+          echo "native add-on packaged"
 
       - name: Verify Electron fuses
         working-directory: apps/desktop

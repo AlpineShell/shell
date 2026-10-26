@@ -20,6 +20,9 @@ apps/desktop/electron/marketplaceConfig.generated.js
 apps/desktop/electron/licenceConfig.generated.js
 apps/desktop/electron/marketplacePublicKey.generated.js
 
+# Built native add-on
+apps/desktop/electron/native/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
