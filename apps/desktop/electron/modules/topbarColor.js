@@ -13,6 +13,7 @@ let lastPalette = []
 let userOverride = DEFAULT_TOPBAR_COLOR
 let showSearchIcon = false
 let mediaShowVisualizer = false
+let statusShowSound = false
 let storePath = null
 let broadcastRef = null
 const colorChangeListeners = new Set()
@@ -49,6 +50,9 @@ function loadOverride() {
       if (typeof data.mediaShowVisualizer === 'boolean') {
         mediaShowVisualizer = data.mediaShowVisualizer
       }
+      if (typeof data.statusShowSound === 'boolean') {
+        statusShowSound = data.statusShowSound
+      }
     }
   } catch (e) {
     console.error('[topbarColor] load error:', e.message)
@@ -59,7 +63,7 @@ function saveOverride() {
   try {
     const dir = path.dirname(getStorePath())
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(getStorePath(), JSON.stringify({ color: userOverride, showSearchIcon, mediaShowVisualizer }))
+    fs.writeFileSync(getStorePath(), JSON.stringify({ color: userOverride, showSearchIcon, mediaShowVisualizer, statusShowSound }))
   } catch (e) {
     console.error('[topbarColor] save error:', e.message)
   }
@@ -235,6 +239,13 @@ module.exports = {
       saveOverride()
       if (broadcastRef) broadcastRef('topbar/media-visualizer-changed', mediaShowVisualizer)
       return mediaShowVisualizer
+    },
+    'topbar/status-sound-get': () => statusShowSound,
+    'topbar/status-sound-set': (_event, value) => {
+      statusShowSound = !!value
+      saveOverride()
+      if (broadcastRef) broadcastRef('topbar/status-sound-changed', statusShowSound)
+      return statusShowSound
     },
   },
 

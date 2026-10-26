@@ -3,6 +3,7 @@ const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { volumeKeyAction } = require('./appCommandPolicy')
+const { NO_AUDIO_DEVICES, isEndpointId, parseAudioDevices, findAudioDevice, withDefaultDevice } = require('./audioDevices')
 
 const SCRIPT_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts', 'audio.ps1')
@@ -154,6 +155,48 @@ async function setMute(muted) {
   return muted
 }
 
+let broadcastRef = null
+let lastAudioDevicesKey = null
+
+async function getAudioDevices() {
+  try {
+    return parseAudioDevices(await runCmd('ConvertTo-Json -Compress -InputObject @([AudioDevices]::List())'))
+  } catch {
+    return NO_AUDIO_DEVICES
+  }
+}
+
+function publishAudioDevices(devices) {
+  const key = JSON.stringify(devices)
+  if (key === lastAudioDevicesKey || !broadcastRef) return
+  lastAudioDevicesKey = key
+  broadcastRef('system/audio-devices-changed', devices)
+}
+
+async function refreshAudioDevices() {
+  const devices = await getAudioDevices()
+  publishAudioDevices(devices)
+  return devices
+}
+
+async function setDefaultAudioDevice(id) {
+  if (!isEndpointId(id)) return { ok: false, devices: await refreshAudioDevices() }
+  const devices = await getAudioDevices()
+  if (!findAudioDevice(devices, id)) return { ok: false, devices }
+  try {
+    const result = await runCmd(`[AudioDevices]::SetDefault('${id}')`)
+    if (result.trim() !== 'True') return { ok: false, devices: await refreshAudioDevices() }
+  } catch (e) {
+    console.error('[volume] default device error:', e.message)
+    return { ok: false, devices: await refreshAudioDevices() }
+  }
+  const refreshed = await getAudioDevices()
+  const settled = findAudioDevice(refreshed, id)?.isDefault ? refreshed : withDefaultDevice(refreshed, id)
+  publishAudioDevices(settled)
+  publishState(await getState())
+  return { ok: true, devices: settled }
+}
+
 let peakInterval = null
 let lastPeak = null
 let broadcastToTopbarsRef = null
@@ -212,6 +255,8 @@ module.exports = {
     'system/volume-set': (_event, value) => setVolume(value),
     'system/mute-get': () => getMute(),
     'system/mute-set': (_event, muted) => setMute(muted),
+    'system/audio-devices-get': () => getAudioDevices(),
+    'system/audio-device-set': (_event, id) => setDefaultAudioDevice(id),
     'system/peak-subscribe': (event) => {
       if (!event?.sender) return false
       rememberPeakSubscriber(event.sender)
@@ -227,7 +272,8 @@ module.exports = {
 
   applyAppCommand,
 
-  start(_broadcast, broadcastToTopbars) {
+  start(broadcast, broadcastToTopbars) {
+    broadcastRef = broadcast
     broadcastToTopbarsRef = broadcastToTopbars
     if (peakSubscribers.size > 0) startPeakMeter()
     initPS()
@@ -236,5 +282,7 @@ module.exports = {
       if (Date.now() - lastSetTime < 1500) return
       publishState(await getState())
     }, 1000)
+
+    setInterval(refreshAudioDevices, 3000)
   },
 }

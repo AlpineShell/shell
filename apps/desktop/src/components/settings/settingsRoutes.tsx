@@ -15,6 +15,7 @@ import PluginSettingsPage from './pluginSettingsPage'
 import PluginsPage from './pluginsPage'
 import RidgePage from './ridgePage'
 import SearchPage from './searchPage'
+import SoundPage from './soundPage'
 import ShortcutsPage from './shortcutsPage'
 import SystemRevertPage from './systemRevertPage'
 import TilingPage from './tilingPage'
@@ -37,6 +38,7 @@ export const SETTINGS_ROUTES: Record<string, SettingsRouteView> = {
   'tiling': () => <TilingPage />,
   'shortcuts': () => <ShortcutsPage />,
   'battery': () => <BatteryPage />,
+  'sound': () => <SoundPage />,
   'displays': () => <DisplaysPage />,
   'wifi': () => <WifiSettingsPage />,
   'bluetooth': () => <BluetoothSettingsPage />,
@@ -73,6 +75,7 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
       'power-show-hibernate',
       'topbar-search-icon',
       'media-visualizer',
+      'status-sound',
       'desktops-only-with-several',
       'desktop-lines-only-with-several',
       'tray-enabled',
@@ -101,6 +104,7 @@ export const SETTINGS_ROUTE_COVERAGE: Record<string, SettingsRouteCoverage> = {
   'date-time': { registryRows: true, renderedByThePage: ['time-zone', 'time-zone-automatic', 'time-automatic', 'time-sync'] },
   'tiling': { registryRows: true, renderedByThePage: [] },
   'battery': { registryRows: true, renderedByThePage: ['battery-saver'] },
+  'sound': { registryRows: true, renderedByThePage: ['audio-output', 'audio-input'] },
   'displays': { registryRows: false, renderedByThePage: ['brightness'] },
   'apps/installed': { registryRows: false, renderedByThePage: ['app-uninstall'] },
   'apps/running': { registryRows: false, renderedByThePage: ['app-force-close'] },

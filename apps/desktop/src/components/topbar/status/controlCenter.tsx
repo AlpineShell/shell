@@ -1,11 +1,14 @@
 import { useRef, useState, useEffect } from "react";
-import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Settings, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
+import { BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, ChevronRight, Settings, Speaker, Sun, Volume2, VolumeX, Wifi } from "lucide-react";
 import { useDarkText } from "../../themeContext";
 import { connectedSummary, displayedRadioOn } from "../../../lib/bluetoothPresentation";
 import { brightnessNeedsSubmenu } from "../../../lib/brightnessPresentation";
+import { defaultAudioDevice, useAudioDevices } from "../../../hooks/useAudioDevices";
+import { useStatusSound } from "../../../hooks/useStatusSound";
 import WifiMenu from "./wifiMenu";
 import BluetoothMenu from "./bluetoothMenu";
 import BrightnessMenu from "./brightnessMenu";
+import SoundMenu from "./soundMenu";
 import ControlSlider from "./controlSlider";
 
 interface ControlCenterProps {
@@ -39,7 +42,7 @@ function batteryIcon(percent: number | null, charging: boolean): React.FC<{ colo
     return BatteryWarning;
 }
 
-type View = 'main' | 'wifi' | 'bluetooth' | 'brightness';
+type View = 'main' | 'wifi' | 'bluetooth' | 'sound' | 'brightness';
 
 export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness, wifiNetworks, wifiScanning, scanWifi, wifiRadio, onToggleWifiRadio }: ControlCenterProps) {
     const darkText = useDarkText();
@@ -50,6 +53,9 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
         : undefined;
 
     const btLabel = connectedSummary(bluetooth);
+    const showSound = useStatusSound();
+    const audio = useAudioDevices();
+    const soundLabel = defaultAudioDevice(audio.devices.output)?.name;
     const brightnessIsSubmenu = brightnessNeedsSubmenu(monitors);
 
     const mainRef = useRef<HTMLDivElement>(null);
@@ -76,6 +82,7 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                     <div className="gap-3 mb-1 flex flex-col">
                         <ControlItem label="Wi-Fi" sublabel={wifiLabel} active={wifiRadio} Icon={Wifi} darkText={darkText} onClick={() => setView('wifi')} />
                         <ControlItem label="Bluetooth" sublabel={btLabel} active={displayedRadioOn(bluetooth)} Icon={Bluetooth} darkText={darkText} onClick={() => setView('bluetooth')} />
+                        {showSound && <ControlItem label="Sound" sublabel={soundLabel} active Icon={Speaker} darkText={darkText} onClick={() => setView('sound')} />}
                         {brightnessIsSubmenu && <ControlItem label="Brightness" active Icon={Sun} darkText={darkText} onClick={() => setView('brightness')} />}
                     </div>
                     <div className="flex flex-col gap-2">
@@ -114,6 +121,7 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                 <div ref={subRef} className="w-65 shrink-0 self-start">
                     {view === 'wifi' && <WifiMenu networks={wifiNetworks} scanning={wifiScanning} enabled={wifiRadio} onToggleRadio={onToggleWifiRadio} onScan={scanWifi} onBack={() => setView('main')} darkText={darkText} />}
                     {view === 'bluetooth' && <BluetoothMenu onBack={() => setView('main')} darkText={darkText} />}
+                    {view === 'sound' && <SoundMenu devices={audio.devices} onSelect={audio.setDefault} onBack={() => setView('main')} darkText={darkText} />}
                     {view === 'brightness' && <BrightnessMenu monitors={monitors} setMonitorBrightness={setMonitorBrightness} onBack={() => setView('main')} darkText={darkText} />}
                 </div>
             </div>

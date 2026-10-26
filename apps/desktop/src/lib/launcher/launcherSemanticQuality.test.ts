@@ -2,7 +2,7 @@ import fs from "fs"
 import path from "path"
 import { describe, expect, it } from "vitest"
 import { createSemanticIndex, parseSemanticModel } from "../semantic/semanticModel"
-import { SETTINGS_REGISTRY, settingsEntryHint } from "../../settings/registry"
+import { LAUNCHER_SETTINGS, settingsEntryHint } from "../../settings/registry"
 import { EMPTY_LAUNCHER_MEMORY } from "../launcherRanking"
 import { appEntries, commandEntries, settingEntries } from "./launcherEntries"
 import { LAUNCHER_COMMANDS } from "./launcherCommands"
@@ -40,7 +40,7 @@ const INSTALLED_APPS: LauncherItem[] = [
 const semantic = createSemanticIndex(parseSemanticModel(fs.readFileSync(MODEL_PATH)))
 const entries = [
   ...appEntries(INSTALLED_APPS),
-  ...settingEntries(SETTINGS_REGISTRY, settingsEntryHint),
+  ...settingEntries(LAUNCHER_SETTINGS, settingsEntryHint),
   ...commandEntries(LAUNCHER_COMMANDS),
 ]
 

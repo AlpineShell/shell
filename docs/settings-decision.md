@@ -450,6 +450,7 @@ test failure too.
 | `desktops-only-with-several` | instant | Hides the Desktop numbers and Desktop lines on Ridge while there is one desktop; the switch shows its effect at once and is undone by flipping it back. |
 | `desktop-lines-only-with-several` | instant | The same switch as `desktops-only-with-several`, filed in the Desktop lines callout so whichever look is on Ridge carries it; both rows read and write one value. |
 | `media-visualizer` | instant | Swaps one glyph of the Media item on Ridge for another. |
+| `status-sound` | instant | Adds or removes the Sound row in the Status pop-over on Ridge. Off by default; the Sound page in settings switches devices either way. |
 | `clock-time-format` | instant | Reformats the clock on Ridge and nothing else. Filed on Ridge rather than Calendar because it governs the bar's clock; its result in settings search opens the Clock callout with the row picked out. |
 | `calendar-days` | instant | Changes how many days the hover calendar draws. |
 | `calendar-show-tasks` | instant | Adds or removes a section of the hover calendar. |
@@ -465,6 +466,9 @@ test failure too.
 | `language-remove` | confirm | Removing a language takes every layout attached to it off the list in one write, so the button asks before it does anything. The last language has no remove button at all, because Windows needs at least one. |
 | `switch-input-method` | instant | Best effort by construction: it posts `WM_INPUTLANGCHANGEREQUEST` to the foreground window, which Windows may ignore. Nothing is persisted, so there is nothing to half-apply. |
 | `default-input-method` | instant | `Set-WinDefaultInputMethodOverride`, per-user, no elevation, no sign-out, undone by choosing another. |
+| `sound` | instant | A page-level entry; its two device pickers each declare their own. |
+| `audio-output` | instant | Makes the chosen speakers or headphones the Windows default for every role (console, multimedia, communications) through `IPolicyConfig::SetDefaultEndpoint`, per-user, no elevation. Sound moves at once and choosing the old device moves it back. A page-only entry because the choices are whatever is plugged in, which a fixed `select` cannot list. |
+| `audio-input` | instant | The same write for the microphone, and undone the same way. |
 | `tray` | instant | A page-level entry, filed under Ridge now that the System tray page has folded into it. The launcher opens its tray submenu from it, and the tray's own settings each declare their own. |
 | `tray-enabled` | instant | Shows or hides the System tray item on Ridge, and is the tray's only visibility switch. The story flagged hiding things on the bar as a way to lose the route to settings, and Ridge sharpens that: Status, the power menu and the tray can each be hidden, and hiding Status takes away the Settings gear in its pop-over (`controlCenter.tsx`). It still cannot strand anyone, and this was checked rather than assumed. The Search hotkey is always bound: a combination another app owns is refused with the old one left bound, and an empty one falls back to Win (`launcherHotkey.js`). Search opens Settings and has its own power submenu (`launcherPanel.tsx`) whatever Ridge shows, and Reset on the Ridge page puts every item back. Nothing about turning it off is one-way. |
 | `tray-overflow` | instant | Shows or hides the overflow chevron in the tray on Ridge; the icons behind it are still there, and Manage tray icons still lists them. |
