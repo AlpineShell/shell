@@ -55,6 +55,16 @@
   --font-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 }
 
+body {
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+}
+
 @property --slider-progress {
   syntax: '<percentage>';
   inherits: false;

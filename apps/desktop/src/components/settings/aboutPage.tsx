@@ -95,7 +95,7 @@ export default function AboutPage({ onNavigate }: { onNavigate: (path: string) =
           <h1 className="truncate text-2xl font-medium tracking-tight text-ink-primary">{info?.computerName ?? ''}</h1>
           <span className="truncate text-sm text-ink-secondary">{info?.os.name ?? ''}</span>
           {info?.os.build && (
-            <span className="text-xs text-ink-quiet">
+            <span className="text-xs text-ink-quiet select-text">
               Version {info.os.version} · Build {info.os.build}
             </span>
           )}
