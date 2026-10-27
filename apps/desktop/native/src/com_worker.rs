@@ -7,6 +7,7 @@ use napi::Env;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT};
 
 use crate::com_call::{CallOutcome, ComCall, PendingCall};
+use crate::com_post::PostedCall;
 
 type QueuedCall<S> = Box<dyn PendingCall<S>>;
 
@@ -101,5 +102,9 @@ impl<S: Default + 'static> ComWorker<S> {
         let (call, promise) = ComCall::create(env, self.label, Box::new(work))?;
         self.submit(call);
         Ok(promise)
+    }
+
+    pub fn post(&self, work: impl FnOnce(&mut S) + Send + 'static) {
+        self.submit(PostedCall::create(Box::new(work)));
     }
 }

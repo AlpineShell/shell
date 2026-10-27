@@ -4,10 +4,16 @@ mod activation_session;
 mod audio_devices;
 mod audio_session;
 mod com_call;
+mod com_post;
 mod com_strings;
 mod com_worker;
 mod endpoint_watcher;
+mod media_session;
+mod media_snapshot;
+mod media_thumbnail;
+mod media_watch;
 mod policy_config;
+mod winrt_async;
 
 use napi::bindgen_prelude::{Either, Null, Object, ToNapiValue};
 use napi::Env;
@@ -19,6 +25,7 @@ use activation_session::ActivationSession;
 use audio_devices::{list_active_endpoints, set_default_endpoint, AudioEndpoint, EndpointFlow};
 use audio_session::{AudioSession, VolumeState};
 use com_worker::ComWorker;
+use media_session::{MediaSession, SnapshotListener};
 
 static AUDIO_WORKER: ComWorker<AudioSession> = ComWorker::new("alpine-audio", "audio", COINIT_MULTITHREADED);
 
@@ -132,4 +139,49 @@ pub fn app_activate(env: &Env, aumid: String) -> napi::Result<Object<'_>> {
 #[napi(ts_return_type = "Promise<void>")]
 pub fn app_activation_warm(env: &Env) -> napi::Result<Object<'_>> {
     ACTIVATION_WORKER.queue(env, |session| session.warm())
+}
+
+static MEDIA_WORKER: ComWorker<MediaSession> = ComWorker::new("alpine-media", "media", COINIT_MULTITHREADED);
+
+fn request_media_refresh() {
+    MEDIA_WORKER.post(MediaSession::refresh_watch);
+}
+
+#[napi(ts_return_type = "Promise<MediaSnapshot>")]
+pub fn media_get_info(env: &Env, with_thumbnail: bool) -> napi::Result<Object<'_>> {
+    MEDIA_WORKER.queue(env, move |session| session.read_info(with_thumbnail))
+}
+
+#[napi(ts_return_type = "Promise<boolean>")]
+pub fn media_control(env: &Env, action: String) -> napi::Result<Object<'_>> {
+    MEDIA_WORKER.queue(env, move |session| session.control(&action))
+}
+
+#[napi(ts_return_type = "Promise<boolean>")]
+pub fn media_seek(env: &Env, position_ms: f64) -> napi::Result<Object<'_>> {
+    MEDIA_WORKER.queue(env, move |session| session.seek(position_ms))
+}
+
+#[napi(ts_return_type = "Promise<void>")]
+pub fn media_watch(env: &Env, listener: SnapshotListener) -> napi::Result<Object<'_>> {
+    MEDIA_WORKER.queue(env, move |session| {
+        session.watch(listener, request_media_refresh);
+        Ok(())
+    })
+}
+
+#[napi(ts_return_type = "Promise<void>")]
+pub fn media_refresh_watch(env: &Env) -> napi::Result<Object<'_>> {
+    MEDIA_WORKER.queue(env, |session| {
+        session.refresh_watch();
+        Ok(())
+    })
+}
+
+#[napi(ts_return_type = "Promise<void>")]
+pub fn media_unwatch(env: &Env) -> napi::Result<Object<'_>> {
+    MEDIA_WORKER.queue(env, |session| {
+        session.unwatch();
+        Ok(())
+    })
 }
