@@ -203,19 +203,13 @@ pub fn audio_watch<'env>(
     on_devices_changed: Function<(), ()>,
 ) -> napi::Result<Object<'env>> {
     AUDIO_EVENTS.replace(Some(AudioListeners::create(&on_volume, &on_devices_changed)?));
-    queue_audio_call(env, |session| {
-        session.sync_volume_watch();
-        Ok(())
-    })
+    queue_audio_call(env, |session| session.sync_volume_watch())
 }
 
 #[napi(ts_return_type = "Promise<void>")]
 pub fn audio_unwatch(env: &Env) -> napi::Result<Object<'_>> {
     AUDIO_EVENTS.replace(None);
-    queue_audio_call(env, |session| {
-        session.sync_volume_watch();
-        Ok(())
-    })
+    queue_audio_call(env, |session| session.sync_volume_watch())
 }
 
 #[napi(object)]

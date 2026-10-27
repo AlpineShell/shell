@@ -255,6 +255,7 @@ function ddcRawValue(monitor, percent) {
 
 
 async function writeInternalBrightness(percent) {
+  observedInternalBrightness = null
   internalWritesInFlight++
   try {
     return await brightnessWmi().writeBrightness(percent)

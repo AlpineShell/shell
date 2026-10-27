@@ -220,13 +220,14 @@ impl AudioSession {
         self.on_bound_endpoint(read_peak_value)
     }
 
-    pub fn sync_volume_watch(&mut self) {
-        let watching = AUDIO_EVENTS.is_watching();
-        if watching {
-            let _ = self.on_bound_endpoint(|_| Ok(()));
-        } else if let Some(bound) = self.bound.as_mut() {
+    pub fn sync_volume_watch(&mut self) -> Result<(), String> {
+        if AUDIO_EVENTS.is_watching() {
+            return self.on_bound_endpoint(|_| Ok(()));
+        }
+        if let Some(bound) = self.bound.as_mut() {
             bound.sync_volume_watch(false);
         }
+        Ok(())
     }
 
     fn read_capturing_process_ids(&mut self) -> windows::core::Result<Vec<u32>> {
@@ -235,18 +236,19 @@ impl AudioSession {
         self.capture_sessions.capturing_process_ids(enumerator, &self.stale.capture)
     }
 
-    fn release_capture_binding(&mut self) {
+    fn release_every_binding(&mut self) {
         self.capture_sessions.release();
         self.release_binding();
+        let _ = self.sync_volume_watch();
     }
 
     pub fn list_capturing_processes(&mut self) -> Result<Vec<ProcessIdentity>, String> {
         let process_ids = match self.read_capturing_process_ids() {
             Ok(process_ids) => process_ids,
             Err(_) => {
-                self.release_capture_binding();
+                self.capture_sessions.release();
                 self.read_capturing_process_ids().map_err(|error| {
-                    self.release_capture_binding();
+                    self.release_every_binding();
                     format!("could not list capture sessions: {} ({:#010x})", error.message(), error.code().0)
                 })?
             }

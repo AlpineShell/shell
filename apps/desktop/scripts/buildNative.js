@@ -13,7 +13,8 @@ function shouldSkipNativeBuild() {
 }
 
 function runCargoBuild() {
-  const result = spawnSync('cargo', ['build', '--release', '--manifest-path', path.join(crateRoot, 'Cargo.toml')], {
+  const result = spawnSync('cargo', ['build', '--release'], {
+    cwd: crateRoot,
     stdio: 'inherit',
   })
   if (result.error) throw new Error(`could not run cargo: ${result.error.message}`)
