@@ -3,11 +3,18 @@
 mod activation_session;
 mod audio_devices;
 mod audio_session;
+mod browser_tabs_session;
+mod browser_windows;
+mod call_deadline;
 mod com_call;
 mod com_strings;
+mod com_variant;
 mod com_worker;
 mod endpoint_watcher;
+mod msaa_tabs;
 mod policy_config;
+mod tab_selection;
+mod uia_tabs;
 
 use napi::bindgen_prelude::{Either, Null, Object, ToNapiValue};
 use napi::Env;
@@ -18,12 +25,16 @@ use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED
 use activation_session::ActivationSession;
 use audio_devices::{list_active_endpoints, set_default_endpoint, AudioEndpoint, EndpointFlow};
 use audio_session::{AudioSession, VolumeState};
+use browser_tabs_session::TabsSession;
 use com_worker::ComWorker;
+use tab_selection::TabRow;
 
 static AUDIO_WORKER: ComWorker<AudioSession> = ComWorker::new("alpine-audio", "audio", COINIT_MULTITHREADED);
 
 static ACTIVATION_WORKER: ComWorker<ActivationSession> =
     ComWorker::new("alpine-activation", "activation", COINIT_APARTMENTTHREADED);
+
+static TABS_WORKER: ComWorker<TabsSession> = ComWorker::new("alpine-browser-tabs", "browser tabs", COINIT_MULTITHREADED);
 
 #[napi(object)]
 pub struct AudioState {
@@ -132,4 +143,38 @@ pub fn app_activate(env: &Env, aumid: String) -> napi::Result<Object<'_>> {
 #[napi(ts_return_type = "Promise<void>")]
 pub fn app_activation_warm(env: &Env) -> napi::Result<Object<'_>> {
     ACTIVATION_WORKER.queue(env, |session| session.warm())
+}
+
+#[napi(object)]
+pub struct BrowserTab {
+    pub hwnd: i64,
+    pub browser: String,
+    pub index: u32,
+    pub selected: bool,
+    pub title: String,
+}
+
+fn to_browser_tab(row: TabRow) -> BrowserTab {
+    BrowserTab {
+        hwnd: row.hwnd,
+        browser: row.browser,
+        index: row.index,
+        selected: row.selected,
+        title: row.title,
+    }
+}
+
+#[napi(ts_return_type = "Promise<Array<BrowserTab>>")]
+pub fn browser_tabs_list(env: &Env) -> napi::Result<Object<'_>> {
+    TABS_WORKER.queue(env, |session| Ok(session.list()?.into_iter().map(to_browser_tab).collect::<Vec<_>>()))
+}
+
+#[napi(ts_return_type = "Promise<string>")]
+pub fn browser_tabs_activate(env: &Env, hwnd: i64, index: i32, title: String) -> napi::Result<Object<'_>> {
+    TABS_WORKER.queue(env, move |session| session.activate(hwnd, index, &title))
+}
+
+#[napi(ts_return_type = "Promise<void>")]
+pub fn browser_tabs_warm(env: &Env) -> napi::Result<Object<'_>> {
+    TABS_WORKER.queue(env, |session| session.warm())
 }
