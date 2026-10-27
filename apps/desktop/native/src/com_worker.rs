@@ -86,7 +86,7 @@ impl<S: Default + 'static> ComWorker<S> {
         }
     }
 
-    fn submit(&self, call: QueuedCall<S>) {
+    pub(crate) fn submit(&self, call: QueuedCall<S>) {
         let mut slot = self.running_thread.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Err(unsent) = send_to_running_thread(&mut slot, call) {
             self.send_to_respawned_thread(&mut slot, unsent);
