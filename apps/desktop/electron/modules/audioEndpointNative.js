@@ -1,6 +1,11 @@
 const { groupAudioEndpoints } = require('./audioDevices')
 const { NATIVE_ADDON_PATH: ADDON_PATH } = require('../nativeAddonPath')
 
+function changeWatchOf(addon) {
+  if (typeof addon.audioWatch !== 'function') return null
+  return (onState, onDevicesChanged) => addon.audioWatch(onState, onDevicesChanged)
+}
+
 function bindAudioEndpoint(addon) {
   return {
     kind: 'native',
@@ -13,6 +18,7 @@ function bindAudioEndpoint(addon) {
     getPeak: () => addon.audioGetPeak(),
     listDevices: async () => groupAudioEndpoints(await addon.audioListDevices()),
     setDefaultDevice: (id) => addon.audioSetDefaultDevice(id),
+    watch: changeWatchOf(addon),
   }
 }
 

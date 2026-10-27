@@ -2,6 +2,13 @@ const { volumeKeyAction } = require('./appCommandPolicy')
 const { NO_AUDIO_DEVICES, isEndpointId, findAudioDevice, withDefaultDevice } = require('./audioDevices')
 const { loadAudioEndpoint } = require('./audioEndpoint')
 const { skippedWhileStillRunning } = require('../skippedWhileStillRunning')
+const { createVolumeChangeFeed } = require('./volumeChangeFeed')
+
+const SET_SETTLE_MS = 1500
+const DEVICE_CHANGE_DELAY_MS = 100
+const POLLED_STATE_INTERVAL_MS = 1000
+const POLLED_DEVICES_INTERVAL_MS = 3000
+const WATCHED_SAFETY_POLL_INTERVAL_MS = 15000
 
 let endpoint = null
 let lastSetTime = 0
@@ -173,6 +180,40 @@ function rememberPeakSubscriber(sender) {
   })
 }
 
+function millisSinceLastSet() {
+  return Date.now() - lastSetTime
+}
+
+const changeFeed = createVolumeChangeFeed({
+  settleMs: SET_SETTLE_MS,
+  deviceChangeDelayMs: DEVICE_CHANGE_DELAY_MS,
+  millisSinceLastSet,
+  readState: getState,
+  publishState,
+  refreshDevices: refreshAudioDevices,
+})
+
+async function watchEndpointChanges() {
+  const chosen = audioEndpoint()
+  if (typeof chosen.watch !== 'function') return false
+  try {
+    await chosen.watch(changeFeed.onVolumeChanged, changeFeed.onDevicesChanged)
+    return true
+  } catch (e) {
+    logAudioFailure(e)
+    return false
+  }
+}
+
+function startPolling(watching) {
+  setInterval(skippedWhileStillRunning('volume', async () => {
+    if (millisSinceLastSet() < SET_SETTLE_MS) return
+    publishState(await getState())
+  }), watching ? WATCHED_SAFETY_POLL_INTERVAL_MS : POLLED_STATE_INTERVAL_MS)
+
+  setInterval(skippedWhileStillRunning('volume', refreshAudioDevices), watching ? WATCHED_SAFETY_POLL_INTERVAL_MS : POLLED_DEVICES_INTERVAL_MS)
+}
+
 module.exports = {
   handlers: {
     'system/volume-get': () => getVolume(),
@@ -201,12 +242,6 @@ module.exports = {
     broadcastToTopbarsRef = broadcastToTopbars
     if (peakSubscribers.size > 0) startPeakMeter()
     audioEndpoint().start()
-
-    setInterval(skippedWhileStillRunning('volume', async () => {
-      if (Date.now() - lastSetTime < 1500) return
-      publishState(await getState())
-    }), 1000)
-
-    setInterval(skippedWhileStillRunning('volume', refreshAudioDevices), 3000)
+    watchEndpointChanges().then(startPolling)
   },
 }

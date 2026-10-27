@@ -15,6 +15,7 @@ function fakeAddon() {
     audioGetPeak: vi.fn(async () => 0.25),
     audioListDevices: vi.fn(async () => [{ id: SPEAKERS, name: 'Speakers', flow: 'output', isDefault: true }]),
     audioSetDefaultDevice: vi.fn(async () => true),
+    audioWatch: vi.fn(async () => {}),
   }
 }
 
@@ -37,6 +38,22 @@ describe('bindAudioEndpoint', () => {
       output: [{ id: SPEAKERS, name: 'Speakers', isDefault: true }],
       input: [],
     })
+  })
+})
+
+describe('watch', () => {
+  it('hands both listeners to the add-on', async () => {
+    const addon = fakeAddon()
+    const onState = () => {}
+    const onDevicesChanged = () => {}
+    await bindAudioEndpoint(addon).watch(onState, onDevicesChanged)
+    expect(addon.audioWatch).toHaveBeenCalledWith(onState, onDevicesChanged)
+  })
+
+  it('is absent when the add-on predates change notifications', () => {
+    const { audioWatch, ...olderAddon } = fakeAddon()
+    expect(audioWatch).toBeTypeOf('function')
+    expect(bindAudioEndpoint(olderAddon).watch).toBeNull()
   })
 })
 

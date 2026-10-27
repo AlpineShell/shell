@@ -2,23 +2,28 @@
 
 mod activation_session;
 mod audio_devices;
+mod audio_events;
 mod audio_session;
+mod capture_sessions;
 mod com_call;
 mod com_strings;
 mod com_worker;
 mod endpoint_watcher;
 mod policy_config;
+mod process_identity;
 
-use napi::bindgen_prelude::{Either, Null, Object, ToNapiValue};
+use napi::bindgen_prelude::{Either, Function, Null, Object, ToNapiValue};
 use napi::Env;
 use napi_derive::napi;
 
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED};
 
 use activation_session::ActivationSession;
+use audio_events::{AudioListeners, AUDIO_EVENTS};
 use audio_devices::{list_active_endpoints, set_default_endpoint, AudioEndpoint, EndpointFlow};
 use audio_session::{AudioSession, VolumeState};
 use com_worker::ComWorker;
+use process_identity::ProcessIdentity;
 
 static AUDIO_WORKER: ComWorker<AudioSession> = ComWorker::new("alpine-audio", "audio", COINIT_MULTITHREADED);
 
@@ -132,4 +137,52 @@ pub fn app_activate(env: &Env, aumid: String) -> napi::Result<Object<'_>> {
 #[napi(ts_return_type = "Promise<void>")]
 pub fn app_activation_warm(env: &Env) -> napi::Result<Object<'_>> {
     ACTIVATION_WORKER.queue(env, |session| session.warm())
+}
+
+#[napi(object)]
+pub struct MicrophoneCapturer {
+    pub name: String,
+    pub path: Either<String, Null>,
+    pub description: Either<String, Null>,
+}
+
+fn to_microphone_capturer(identity: ProcessIdentity) -> MicrophoneCapturer {
+    MicrophoneCapturer {
+        name: identity.name,
+        path: identity.path.map_or(Either::B(Null), Either::A),
+        description: identity.description.map_or(Either::B(Null), Either::A),
+    }
+}
+
+#[napi(ts_return_type = "Promise<Array<MicrophoneCapturer>>")]
+pub fn microphone_list_capturers(env: &Env) -> napi::Result<Object<'_>> {
+    queue_audio_call(env, |session| {
+        let identities = session.list_capturing_processes()?;
+        Ok(identities.into_iter().map(to_microphone_capturer).collect::<Vec<_>>())
+    })
+}
+
+#[napi(
+    ts_args_type = "onVolume: (state: AudioState) => void, onDevicesChanged: () => void",
+    ts_return_type = "Promise<void>"
+)]
+pub fn audio_watch<'env>(
+    env: &'env Env,
+    on_volume: Function<AudioState, ()>,
+    on_devices_changed: Function<(), ()>,
+) -> napi::Result<Object<'env>> {
+    AUDIO_EVENTS.replace(Some(AudioListeners::create(&on_volume, &on_devices_changed)?));
+    queue_audio_call(env, |session| {
+        session.sync_volume_watch();
+        Ok(())
+    })
+}
+
+#[napi(ts_return_type = "Promise<void>")]
+pub fn audio_unwatch(env: &Env) -> napi::Result<Object<'_>> {
+    AUDIO_EVENTS.replace(None);
+    queue_audio_call(env, |session| {
+        session.sync_volume_watch();
+        Ok(())
+    })
 }

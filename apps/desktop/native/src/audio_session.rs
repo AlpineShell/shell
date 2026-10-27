@@ -1,14 +1,16 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use windows::core::GUID;
 use windows::Win32::Foundation::ERROR_NOT_FOUND;
-use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioMeterInformation};
+use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioEndpointVolumeCallback, IAudioMeterInformation};
 use windows::Win32::Media::Audio::{eMultimedia, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
 use crate::audio_devices::device_id;
-use crate::endpoint_watcher::WatchedEnumerator;
+use crate::audio_events::{volume_change_forwarder, AUDIO_EVENTS};
+use crate::capture_sessions::CaptureSessions;
+use crate::endpoint_watcher::{StaleBindings, WatchedEnumerator};
+use crate::process_identity::{ProcessIdentities, ProcessIdentity};
 
 pub struct VolumeState {
     pub percent: u32,
@@ -19,13 +21,16 @@ struct BoundEndpoint {
     device_id: String,
     volume: IAudioEndpointVolume,
     meter: IAudioMeterInformation,
+    volume_watch: Option<IAudioEndpointVolumeCallback>,
 }
 
 #[derive(Default)]
 pub struct AudioSession {
     bound: Option<BoundEndpoint>,
     watched_enumerator: Option<WatchedEnumerator>,
-    binding_stale: Arc<AtomicBool>,
+    stale: StaleBindings,
+    capture_sessions: CaptureSessions,
+    process_identities: ProcessIdentities,
 }
 
 const NO_EVENT_CONTEXT: *const GUID = std::ptr::null();
@@ -34,7 +39,7 @@ fn clamp_percent(percent: f64) -> f64 {
     percent.clamp(0.0, 100.0)
 }
 
-fn percent_of_scalar(scalar: f32) -> u32 {
+pub fn percent_of_scalar(scalar: f32) -> u32 {
     clamp_percent((f64::from(scalar) * 100.0).round()) as u32
 }
 
@@ -91,6 +96,35 @@ fn describe_failure(error: &windows::core::Error) -> String {
     format!("audio endpoint call failed: {} ({:#010x})", error.message(), error.code().0)
 }
 
+impl BoundEndpoint {
+    fn start_volume_watch(&mut self) {
+        let forwarder = volume_change_forwarder();
+        if unsafe { self.volume.RegisterControlChangeNotify(&forwarder) }.is_ok() {
+            self.volume_watch = Some(forwarder);
+        }
+    }
+
+    fn stop_volume_watch(&mut self) {
+        if let Some(forwarder) = self.volume_watch.take() {
+            let _ = unsafe { self.volume.UnregisterControlChangeNotify(&forwarder) };
+        }
+    }
+
+    fn sync_volume_watch(&mut self, watching: bool) {
+        match (watching, self.volume_watch.is_some()) {
+            (true, false) => self.start_volume_watch(),
+            (false, true) => self.stop_volume_watch(),
+            _ => {}
+        }
+    }
+}
+
+impl Drop for BoundEndpoint {
+    fn drop(&mut self) {
+        self.stop_volume_watch();
+    }
+}
+
 impl AudioSession {
     pub fn enumerator(&mut self) -> Result<&IMMDeviceEnumerator, String> {
         self.ensure_enumerator().map_err(|error| describe_failure(&error))
@@ -99,7 +133,7 @@ impl AudioSession {
     fn ensure_enumerator(&mut self) -> windows::core::Result<&IMMDeviceEnumerator> {
         if self.watched_enumerator.is_none() {
             let created: IMMDeviceEnumerator = unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
-            self.watched_enumerator = Some(WatchedEnumerator::watch(created, Arc::clone(&self.binding_stale)));
+            self.watched_enumerator = Some(WatchedEnumerator::watch(created, self.stale.clone()));
         }
         Ok(self
             .watched_enumerator
@@ -109,7 +143,8 @@ impl AudioSession {
     }
 
     pub fn mark_binding_stale(&self) {
-        self.binding_stale.store(true, Ordering::Release);
+        self.stale.render.store(true, Ordering::Release);
+        self.stale.capture.store(true, Ordering::Release);
     }
 
     fn release_binding(&mut self) {
@@ -119,14 +154,20 @@ impl AudioSession {
 
     fn can_reuse_binding(&self) -> bool {
         let watching = self.watched_enumerator.as_ref().is_some_and(WatchedEnumerator::is_watching);
-        watching && self.bound.is_some() && !self.binding_stale.load(Ordering::Acquire)
+        watching && self.bound.is_some() && !self.stale.render.load(Ordering::Acquire)
     }
 
     fn bind_default_endpoint(&mut self) -> windows::core::Result<&BoundEndpoint> {
-        if self.can_reuse_binding() {
-            return Ok(self.bound.as_ref().expect("binding was just checked"));
+        if !self.can_reuse_binding() {
+            self.rebind_default_endpoint()?;
         }
-        self.binding_stale.swap(false, Ordering::AcqRel);
+        let bound = self.bound.as_mut().expect("endpoint was just bound");
+        bound.sync_volume_watch(AUDIO_EVENTS.is_watching());
+        Ok(bound)
+    }
+
+    fn rebind_default_endpoint(&mut self) -> windows::core::Result<()> {
+        self.stale.render.swap(false, Ordering::AcqRel);
         let device = unsafe { self.ensure_enumerator()?.GetDefaultAudioEndpoint(eRender, eMultimedia)? };
         let default_id = device_id(&device)?;
         let still_bound = self.bound.as_ref().is_some_and(|bound| bound.device_id == default_id);
@@ -137,9 +178,10 @@ impl AudioSession {
                 device_id: default_id,
                 volume,
                 meter,
+                volume_watch: None,
             });
         }
-        Ok(self.bound.as_ref().expect("endpoint was just bound"))
+        Ok(())
     }
 
     fn on_bound_endpoint<T>(&mut self, body: impl Fn(&BoundEndpoint) -> windows::core::Result<T>) -> Result<T, String> {
@@ -176,5 +218,45 @@ impl AudioSession {
 
     pub fn read_peak(&mut self) -> Result<f64, String> {
         self.on_bound_endpoint(read_peak_value)
+    }
+
+    pub fn sync_volume_watch(&mut self) {
+        let watching = AUDIO_EVENTS.is_watching();
+        if watching {
+            let _ = self.on_bound_endpoint(|_| Ok(()));
+        } else if let Some(bound) = self.bound.as_mut() {
+            bound.sync_volume_watch(false);
+        }
+    }
+
+    fn read_capturing_process_ids(&mut self) -> windows::core::Result<Vec<u32>> {
+        self.ensure_enumerator()?;
+        let enumerator = self.watched_enumerator.as_ref().expect("enumerator was just created").enumerator();
+        self.capture_sessions.capturing_process_ids(enumerator, &self.stale.capture)
+    }
+
+    fn release_capture_binding(&mut self) {
+        self.capture_sessions.release();
+        self.release_binding();
+    }
+
+    pub fn list_capturing_processes(&mut self) -> Result<Vec<ProcessIdentity>, String> {
+        let process_ids = match self.read_capturing_process_ids() {
+            Ok(process_ids) => process_ids,
+            Err(_) => {
+                self.release_capture_binding();
+                self.read_capturing_process_ids().map_err(|error| {
+                    self.release_capture_binding();
+                    format!("could not list capture sessions: {} ({:#010x})", error.message(), error.code().0)
+                })?
+            }
+        };
+        let mut identities: Vec<ProcessIdentity> = Vec::new();
+        for identity in process_ids.into_iter().filter_map(|process_id| self.process_identities.identify(process_id)) {
+            if !identities.iter().any(|known| known.name == identity.name) {
+                identities.push(identity);
+            }
+        }
+        Ok(identities)
     }
 }
