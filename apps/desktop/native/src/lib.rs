@@ -4,6 +4,8 @@ mod activation_session;
 mod audio_devices;
 mod audio_events;
 mod audio_session;
+mod blocking_call;
+mod brightness_watcher;
 mod browser_tabs_session;
 mod browser_windows;
 mod call_deadline;
@@ -24,6 +26,11 @@ mod process_identity;
 mod tab_selection;
 mod uia_tabs;
 mod winrt_async;
+mod wmi_brightness;
+mod wmi_connection;
+mod wmi_variant;
+
+use std::time::Duration;
 
 use napi::bindgen_prelude::{Either, Function, Null, Object, ToNapiValue};
 use napi::Env;
@@ -35,16 +42,22 @@ use activation_session::ActivationSession;
 use audio_events::{AudioListeners, AUDIO_EVENTS};
 use audio_devices::{list_active_endpoints, set_default_endpoint, AudioEndpoint, EndpointFlow};
 use audio_session::{AudioSession, VolumeState};
+use blocking_call::run_blocking;
+use brightness_watcher::{start_watching, BrightnessListener};
 use browser_tabs_session::TabsSession;
 use com_worker::ComWorker;
 use media_session::{MediaSession, SnapshotListener};
 use process_identity::ProcessIdentity;
 use tab_selection::TabRow;
+use wmi_brightness::{BrightnessSession, MonitorIdentityRow};
 
 static AUDIO_WORKER: ComWorker<AudioSession> = ComWorker::new("alpine-audio", "audio", COINIT_MULTITHREADED);
 
 static ACTIVATION_WORKER: ComWorker<ActivationSession> =
     ComWorker::new("alpine-activation", "activation", COINIT_APARTMENTTHREADED);
+
+static BRIGHTNESS_WORKER: ComWorker<BrightnessSession> =
+    ComWorker::new("alpine-brightness", "brightness", COINIT_MULTITHREADED);
 
 static TABS_WORKER: ComWorker<TabsSession> = ComWorker::new("alpine-browser-tabs", "browser tabs", COINIT_MULTITHREADED);
 
@@ -282,4 +295,71 @@ pub fn media_unwatch(env: &Env) -> napi::Result<Object<'_>> {
         session.unwatch();
         Ok(())
     })
+}
+
+#[napi(object)]
+pub struct MonitorIdentity {
+    pub instance_name: Either<String, Null>,
+    pub manufacturer: String,
+    pub product_code: String,
+    pub serial: String,
+}
+
+fn to_monitor_identity(row: MonitorIdentityRow) -> MonitorIdentity {
+    MonitorIdentity {
+        instance_name: row.instance_name.map_or(Either::B(Null), Either::A),
+        manufacturer: row.manufacturer,
+        product_code: row.product_code,
+        serial: row.serial,
+    }
+}
+
+fn brightness_level(percent: f64) -> u8 {
+    if percent.is_nan() {
+        return 0;
+    }
+    percent.clamp(0.0, 100.0).round() as u8
+}
+
+#[napi(ts_return_type = "Promise<number | null>")]
+pub fn brightness_read_current(env: &Env) -> napi::Result<Object<'_>> {
+    BRIGHTNESS_WORKER.queue(env, |session| {
+        session
+            .read_current_brightness()
+            .map(|current| current.map_or(Either::B(Null), Either::A))
+    })
+}
+
+#[napi(ts_return_type = "Promise<Array<number>>")]
+pub fn brightness_read_video_output_technologies(env: &Env) -> napi::Result<Object<'_>> {
+    BRIGHTNESS_WORKER.queue(env, |session| session.read_video_output_technologies())
+}
+
+#[napi(ts_return_type = "Promise<Array<MonitorIdentity>>")]
+pub fn brightness_read_monitor_identities(env: &Env) -> napi::Result<Object<'_>> {
+    BRIGHTNESS_WORKER.queue(env, |session| {
+        session
+            .read_monitor_identities()
+            .map(|rows| rows.into_iter().map(to_monitor_identity).collect::<Vec<_>>())
+    })
+}
+
+#[napi(ts_return_type = "Promise<boolean>")]
+pub fn brightness_set_internal(env: &Env, percent: f64) -> napi::Result<Object<'_>> {
+    let level = brightness_level(percent);
+    BRIGHTNESS_WORKER.queue(env, move |session| session.set_brightness(level))
+}
+
+#[napi]
+pub fn brightness_set_internal_blocking(percent: f64, timeout_ms: u32) -> napi::Result<bool> {
+    let level = brightness_level(percent);
+    run_blocking(&BRIGHTNESS_WORKER, "brightness", Duration::from_millis(u64::from(timeout_ms)), move |session| {
+        session.set_brightness(level)
+    })
+    .map_err(napi::Error::from_reason)
+}
+
+#[napi(ts_args_type = "listener: (error: Error | null, brightness: number) => void")]
+pub fn brightness_watch(listener: BrightnessListener) -> napi::Result<()> {
+    start_watching(listener).map_err(napi::Error::from_reason)
 }

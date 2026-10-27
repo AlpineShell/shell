@@ -1,20 +1,16 @@
 const koffi = require('koffi')
 const fs = require('fs')
 const path = require('path')
-const { exec, execSync } = require('child_process')
 const { app, screen } = require('electron')
-const { createPersistentRunner } = require('../powershell')
 const { clampBrightnessPercent, dimmedBrightness, displaysToDim } = require('./batterySaverPolicy')
 const { createBatterySaverBaselines } = require('./batterySaverBaselines')
 const { skippedWhileStillRunning } = require('../skippedWhileStillRunning')
 const {
   BUILTIN_MONITOR_KEY,
   createMonitorIdentityCache,
-  parseMonitorEdidRows,
   portMonitorKey,
 } = require('./monitorIdentity')
-
-const wmiRunner = createPersistentRunner()
+const { loadBrightnessWmi } = require('./brightnessWmi')
 
 
 const user32 = koffi.load('user32.dll')
@@ -79,7 +75,7 @@ const BATTERY_SAVER_BASELINE_FILE = 'battery-saver-brightness.json'
 const SHUTDOWN_INTERNAL_WRITE_TIMEOUT_MS = 2000
 const DISPLAY_CHANGE_SETTLE_MS = 1500
 const BRIGHTNESS_READBACK_TOLERANCE_PERCENT = 2
-const WMI_BRIGHTNESS_WRITE_ACCEPTED = 'ALPINE_BRIGHTNESS_WRITE_ACCEPTED'
+const INTERNAL_BRIGHTNESS_EVENT_SETTLE_MS = 250
 
 
 let monitors = []
@@ -93,6 +89,11 @@ let displayChangeTimer = null
 let desiredBatterySaverReduction = null
 let desiredExternalDisplayDimming = false
 let batterySaverSettleRunning = false
+let brightnessWmiBackend = null
+let internalBrightnessWatched = false
+let internalWritesInFlight = 0
+let observedInternalBrightness = null
+let internalBrightnessEventTimer = null
 const brightnessWritesByMonitorKey = new Map()
 const brightnessWritableByMonitorKey = new Map()
 const monitorIdentityCache = createMonitorIdentityCache()
@@ -116,40 +117,10 @@ function cleanName(physName, deviceName, index) {
 }
 
 
-function isInternalVideoOutput(values) {
-  return values.some(v => v === 16 || v === 2147483648 || v === 6 || v === 11 || v === 13)
+function brightnessWmi() {
+  if (!brightnessWmiBackend) brightnessWmiBackend = loadBrightnessWmi()
+  return brightnessWmiBackend
 }
-
-const INTERNAL_PROBE_CMD =
-  'powershell -NoProfile -Command "' +
-  "$ErrorActionPreference='SilentlyContinue';$v='';$b='';" +
-  "try{$v=((Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorConnectionParams).VideoOutputTechnology -join ',')}catch{};" +
-  "try{$b=(@((Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness)[0])}catch{};" +
-  "($v + '#' + $b)" +
-  '"'
-
-const MONITOR_EDID_QUERY =
-  'Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorID -ErrorAction SilentlyContinue | ' +
-  "ForEach-Object { $_.InstanceName + '|' + " +
-  "(-join [char[]]($_.ManufacturerName | Where-Object { $_ })) + '|' + " +
-  "(-join [char[]]($_.ProductCodeID | Where-Object { $_ })) + '|' + " +
-  "(-join [char[]]($_.SerialNumberID | Where-Object { $_ })) }"
-
-function probeInternalAndBrightness() {
-  return new Promise((resolve) => {
-    exec(INTERNAL_PROBE_CMD, (err, stdout) => {
-      if (err) return resolve({ hasInternal: false, brightness: null })
-      const line = (stdout || '').trim()
-      const sep = line.indexOf('#')
-      const votPart = sep >= 0 ? line.slice(0, sep) : line
-      const brPart = sep >= 0 ? line.slice(sep + 1) : ''
-      const values = votPart.split(',').map(v => parseInt(v.trim(), 10)).filter(v => !isNaN(v))
-      const brightness = parseInt(brPart.trim(), 10)
-      resolve({ hasInternal: isInternalVideoOutput(values), brightness: isNaN(brightness) ? null : brightness })
-    })
-  })
-}
-
 
 const MONITOR_DEFAULTTONEAREST = 0x02
 
@@ -283,29 +254,51 @@ function ddcRawValue(monitor, percent) {
 }
 
 
-async function wmiGetBrightness() {
-  const result = await wmiRunner.run('(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness')
-  const val = parseInt(result.trim(), 10)
-  return isNaN(val) ? null : val
+async function writeInternalBrightness(percent) {
+  internalWritesInFlight++
+  try {
+    return await brightnessWmi().writeBrightness(percent)
+  } finally {
+    internalWritesInFlight--
+  }
 }
 
-function wmiSetBrightnessCommand(clamped) {
-  return `powershell -NoProfile -Command "try{(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, ${clamped}) | Out-Null; '${WMI_BRIGHTNESS_WRITE_ACCEPTED}'}catch{}"`
+function adoptObservedInternalBrightness() {
+  internalBrightnessEventTimer = null
+  if (internalWritesInFlight > 0) {
+    scheduleObservedInternalBrightness()
+    return
+  }
+  const observed = observedInternalBrightness
+  observedInternalBrightness = null
+  const internal = monitors.find(m => m.type === 'internal')
+  if (!internal || observed === null) return
+  noteObservedBrightness(internal, observed)
+  if (internal.brightness === observed) return
+  internal.brightness = observed
+  publishMonitors()
 }
 
-function wmiWriteWasAccepted(output) {
-  return String(output ?? '').includes(WMI_BRIGHTNESS_WRITE_ACCEPTED)
+function scheduleObservedInternalBrightness() {
+  clearTimeout(internalBrightnessEventTimer)
+  internalBrightnessEventTimer = setTimeout(adoptObservedInternalBrightness, INTERNAL_BRIGHTNESS_EVENT_SETTLE_MS)
 }
 
-function wmiSetBrightness(value) {
-  return new Promise((resolve) => {
-    exec(wmiSetBrightnessCommand(clampBrightnessPercent(value)), (err, stdout) => {
-      if (err) return resolve({ accepted: false, answered: false })
-      resolve({ accepted: wmiWriteWasAccepted(stdout), answered: true })
-    })
-  })
+function onInternalBrightnessEvent(brightness) {
+  observedInternalBrightness = brightness
+  scheduleObservedInternalBrightness()
 }
 
+function onInternalBrightnessWatchFailed(error) {
+  internalBrightnessWatched = false
+  console.error('[brightness] stopped watching the built-in display brightness, polling instead:', error?.message ?? error)
+}
+
+function watchInternalBrightness() {
+  if (!hasInternalDisplay || internalBrightnessWatched) return
+  internalBrightnessWatched = true
+  brightnessWmi().watchBrightness(onInternalBrightnessEvent, onInternalBrightnessWatchFailed)
+}
 
 function recordBrightnessWrite(monitor, brightness) {
   const cacheKey = monitorCacheKey(monitor)
@@ -375,11 +368,11 @@ async function enumerate() {
 
   let internalBrightness
   if (hasInternalDisplay === null) {
-    const probe = await probeInternalAndBrightness()
+    const probe = await brightnessWmi().probeInternalAndBrightness()
     hasInternalDisplay = probe.hasInternal
     internalBrightness = probe.brightness
   } else if (hasInternalDisplay) {
-    internalBrightness = await wmiGetBrightness()
+    internalBrightness = await brightnessWmi().readBrightness()
   }
 
   if (hasInternalDisplay && internalBrightness != null) {
@@ -410,7 +403,7 @@ function ensureMonitorsEnumerated() {
 
 async function readMonitorEdid() {
   try {
-    return parseMonitorEdidRows(await wmiRunner.run(MONITOR_EDID_QUERY))
+    return await brightnessWmi().readMonitorEdid()
   } catch (e) {
     console.error('[brightness] could not read the monitor EDID identities:', e?.message ?? e)
     return new Map()
@@ -453,7 +446,7 @@ async function refresh() {
 
   const internal = sweptMonitors.find(m => m.type === 'internal')
   if (internal) {
-    const val = await wmiGetBrightness()
+    const val = await brightnessWmi().readBrightness()
     if (val !== null) {
       if (val !== internal.brightness) {
         internal.brightness = val
@@ -499,7 +492,7 @@ async function writeMonitorBrightness(id, value) {
   if (!m) return { accepted: false, value: clamped }
 
   let outcome = { accepted: false, answered: false }
-  if (m.type === 'internal') outcome = await wmiSetBrightness(clamped)
+  if (m.type === 'internal') outcome = await writeInternalBrightness(clamped)
   else if (m.hMon) outcome = await ddcWriteBrightness(m, clamped)
 
   noteBrightnessWriteOutcome(m, outcome)
@@ -659,6 +652,7 @@ function resweepAfterDisplayChange() {
     enumerate()
       .then(() => {
         publishMonitors()
+        watchInternalBrightness()
         return settleBatterySaver()
       })
       .catch((e) => console.error('[brightness] display change sweep failed:', e?.message ?? e))
@@ -686,17 +680,8 @@ function writeDdcBrightnessSynchronously(monitor, percent) {
   return accepted
 }
 
-function writeInternalBrightnessSynchronously(percent) {
-  const output = execSync(wmiSetBrightnessCommand(clampBrightnessPercent(percent)), {
-    timeout: SHUTDOWN_INTERNAL_WRITE_TIMEOUT_MS,
-    stdio: ['ignore', 'pipe', 'ignore'],
-    windowsHide: true,
-  })
-  return wmiWriteWasAccepted(output)
-}
-
 function restoreMonitorBrightnessSynchronously(monitor, baseline) {
-  if (monitor.type === 'internal') return writeInternalBrightnessSynchronously(baseline)
+  if (monitor.type === 'internal') return brightnessWmi().writeBrightnessSynchronously(baseline, SHUTDOWN_INTERNAL_WRITE_TIMEOUT_MS)
   return !!monitor.hMon && writeDdcBrightnessSynchronously(monitor, clampBrightnessPercent(baseline))
 }
 
@@ -752,6 +737,7 @@ module.exports = {
       ensureMonitorsEnumerated()
         .then(() => {
           publishMonitors()
+          watchInternalBrightness()
           return settleBatterySaver()
         })
         .catch((e) => console.error('[brightness] initial sweep failed:', e?.message ?? e))

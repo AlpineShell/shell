@@ -14,6 +14,8 @@ const {
   createMonitorIdentityCache,
   isPersistableMonitorKey,
   migratePersistedBaselines,
+  indexEdidByInstancePath,
+  isInternalVideoOutput,
   parseMonitorEdidRows,
 } = monitorIdentity
 
@@ -362,5 +364,39 @@ describe('parseMonitorEdidRows', () => {
   it('reads an empty query result without throwing', () => {
     expect(parseMonitorEdidRows('').size).toBe(0)
     expect(parseMonitorEdidRows(null).size).toBe(0)
+  })
+})
+
+describe('indexEdidByInstancePath', () => {
+  it('keys identities read straight from WMI the same way as the parsed PowerShell rows', () => {
+    const fromWmi = indexEdidByInstancePath([
+      { instanceName: LEFT_DELL_WMI_INSTANCE, manufacturer: 'DEL', productCode: '4278', serial: LEFT_DELL_SERIAL },
+      { instanceName: RIGHT_DELL_WMI_INSTANCE, manufacturer: 'DEL', productCode: '4278', serial: RIGHT_DELL_SERIAL },
+    ])
+    expect(fromWmi).toEqual(dellEdidRows(LEFT_DELL_SERIAL, RIGHT_DELL_SERIAL))
+  })
+
+  it('skips identities without a usable instance name', () => {
+    const rows = indexEdidByInstancePath([
+      { instanceName: null, manufacturer: 'DEL', productCode: '4278', serial: LEFT_DELL_SERIAL },
+      { instanceName: 'DISPLAY', manufacturer: 'DEL', productCode: '4278', serial: RIGHT_DELL_SERIAL },
+    ])
+    expect(rows.size).toBe(0)
+  })
+
+  it('reads a missing identity list without throwing', () => {
+    expect(indexEdidByInstancePath(undefined).size).toBe(0)
+  })
+})
+
+describe('isInternalVideoOutput', () => {
+  it('recognises the connection types of a built-in panel', () => {
+    expect(isInternalVideoOutput([10, 2147483648])).toBe(true)
+    expect(isInternalVideoOutput([11])).toBe(true)
+  })
+
+  it('treats external connections alone as no built-in panel', () => {
+    expect(isInternalVideoOutput([5, 10])).toBe(false)
+    expect(isInternalVideoOutput([])).toBe(false)
   })
 })

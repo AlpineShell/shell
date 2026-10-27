@@ -162,20 +162,32 @@ function migratePersistedBaselines(stored) {
   return { baselines, discarded }
 }
 
-function parseMonitorEdidRows(stdout) {
+function indexEdidByInstancePath(identities) {
   const byInstancePath = new Map()
-  for (const line of String(stdout ?? '').split(/\r?\n/)) {
-    const fields = line.trim().split('|')
-    if (fields.length < 4) continue
-    const instancePath = normalizeInstancePath(fields[0])
+  for (const identity of identities ?? []) {
+    const instancePath = normalizeInstancePath(identity?.instanceName)
     if (!instancePath) continue
     byInstancePath.set(instancePath, {
-      manufacturer: fields[1].trim(),
-      productCode: fields[2].trim(),
-      serial: fields[3].trim(),
+      manufacturer: String(identity.manufacturer ?? '').trim(),
+      productCode: String(identity.productCode ?? '').trim(),
+      serial: String(identity.serial ?? '').trim(),
     })
   }
   return byInstancePath
+}
+
+function isInternalVideoOutput(values) {
+  return values.some(v => v === 16 || v === 2147483648 || v === 6 || v === 11 || v === 13)
+}
+
+function monitorEdidRowIdentity(line) {
+  const fields = line.trim().split('|')
+  if (fields.length < 4) return null
+  return { instanceName: fields[0], manufacturer: fields[1], productCode: fields[2], serial: fields[3] }
+}
+
+function parseMonitorEdidRows(stdout) {
+  return indexEdidByInstancePath(String(stdout ?? '').split(/\r?\n/).map(monitorEdidRowIdentity).filter(Boolean))
 }
 
 module.exports = {
@@ -191,5 +203,7 @@ module.exports = {
   createMonitorIdentityCache,
   isPersistableMonitorKey,
   migratePersistedBaselines,
+  indexEdidByInstancePath,
+  isInternalVideoOutput,
   parseMonitorEdidRows,
 }
