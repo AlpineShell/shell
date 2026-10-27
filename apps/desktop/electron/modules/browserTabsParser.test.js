@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import browserTabsParser from './browserTabsParser.js'
 
-const { cleanTabTitle, parseTabs } = browserTabsParser
+const { cleanTabTitle, parseTabs, toBrowserTab } = browserTabsParser
 
 describe('cleanTabTitle', () => {
   it('strips the Chrome memory usage annotation', () => {
@@ -50,5 +50,17 @@ describe('parseTabs', () => {
   it('handles CRLF output from PowerShell', () => {
     const raw = '1\tchrome\t0\t0\tAlpha\r\n2\tfirefox\t1\t1\tBeta'
     expect(parseTabs(raw).map((t) => t.title)).toEqual(['Alpha', 'Beta'])
+  })
+})
+
+describe('toBrowserTab', () => {
+  it('cleans the title of a row the native add-on read', () => {
+    const row = { hwnd: 263166, browser: 'chrome', index: 1, selected: true, title: 'Figma - High memory usage - 1.0 GB' }
+    expect(toBrowserTab(row)).toEqual({ hwnd: 263166, browser: 'chrome', index: 1, selected: true, title: 'Figma' })
+  })
+
+  it('drops a row whose title is empty once cleaned', () => {
+    expect(toBrowserTab({ hwnd: 1, browser: 'chrome', index: 0, selected: false, title: ' - Audio playing' })).toBeNull()
+    expect(toBrowserTab({ hwnd: 1, browser: 'chrome', index: 0, selected: false, title: undefined })).toBeNull()
   })
 })
