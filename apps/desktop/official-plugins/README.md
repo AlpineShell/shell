@@ -14,7 +14,7 @@ bun run publish:plugin official-plugins/<id>
 ```
 
 Bundled first-party plugins that ship *inside* the app instead live in
-`apps/desktop/presets/plugins/`; tutorial examples live in `apps/desktop/examples/plugins/`.
+`apps/desktop/presets/plugins/`.
 
 First-party plugins can also live in their own repos in the AlpineShell org with a
 standalone publish script — the Claude Code Usage plugin moved to
