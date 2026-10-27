@@ -8,12 +8,23 @@ function isEndpointId(value) {
 }
 
 function toAudioDevice(endpoint) {
-  const name = typeof endpoint.Name === 'string' && endpoint.Name.trim() ? endpoint.Name.trim() : UNNAMED_DEVICE
-  return { id: endpoint.Id, name, isDefault: endpoint.IsDefault === true }
+  const name = typeof endpoint.name === 'string' && endpoint.name.trim() ? endpoint.name.trim() : UNNAMED_DEVICE
+  return { id: endpoint.id, name, isDefault: endpoint.isDefault === true }
+}
+
+function fromPowerShellEndpoint(endpoint) {
+  return { id: endpoint?.Id, name: endpoint?.Name, flow: endpoint?.Flow, isDefault: endpoint?.IsDefault }
 }
 
 function byName(a, b) {
   return a.name.localeCompare(b.name)
+}
+
+function groupAudioEndpoints(endpoints) {
+  if (!Array.isArray(endpoints)) return NO_AUDIO_DEVICES
+  const connected = endpoints.filter((endpoint) => endpoint && isEndpointId(endpoint.id))
+  const devicesFor = (flow) => connected.filter((endpoint) => endpoint.flow === flow).map(toAudioDevice).sort(byName)
+  return { output: devicesFor('output'), input: devicesFor('input') }
 }
 
 function parseAudioDevices(raw) {
@@ -23,11 +34,7 @@ function parseAudioDevices(raw) {
   } catch {
     return NO_AUDIO_DEVICES
   }
-  const endpoints = (Array.isArray(parsed) ? parsed : [parsed]).filter(
-    (endpoint) => endpoint && isEndpointId(endpoint.Id)
-  )
-  const devicesFor = (flow) => endpoints.filter((endpoint) => endpoint.Flow === flow).map(toAudioDevice).sort(byName)
-  return { output: devicesFor('output'), input: devicesFor('input') }
+  return groupAudioEndpoints((Array.isArray(parsed) ? parsed : [parsed]).map(fromPowerShellEndpoint))
 }
 
 function findAudioDevice(devices, id) {
@@ -42,4 +49,4 @@ function withDefaultDevice(devices, id) {
   }
 }
 
-module.exports = { NO_AUDIO_DEVICES, isEndpointId, parseAudioDevices, findAudioDevice, withDefaultDevice }
+module.exports = { NO_AUDIO_DEVICES, isEndpointId, groupAudioEndpoints, parseAudioDevices, findAudioDevice, withDefaultDevice }

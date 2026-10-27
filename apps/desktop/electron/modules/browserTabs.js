@@ -1,32 +1,12 @@
-const { app } = require('electron')
-const path = require('path')
-const fs = require('fs')
-const { createPersistentRunner } = require('../powershell')
 const launcherPrefs = require('./launcherPrefs')
 const browserTabFavicons = require('./browserTabFavicons')
 const sqliteWorker = require('./sqliteWorker')
-const { parseTabs } = require('./browserTabsParser')
+const { browserTabsBackend } = require('./browserTabsBackend')
 
-const COMMAND_TIMEOUT_MS = 30000
 const WARM_DELAY_MS = 30000
 
 let broadcastFn = null
 let listGeneration = 0
-
-function scriptPath() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'scripts', 'browserTabs.ps1')
-    : path.join(__dirname, '..', 'scripts', 'browserTabs.ps1')
-}
-
-let runner = null
-
-function ensureRunner() {
-  if (!runner) {
-    runner = createPersistentRunner(undefined, COMMAND_TIMEOUT_MS, () => fs.readFileSync(scriptPath(), 'utf8'))
-  }
-  return runner
-}
 
 function scheduleFaviconEnrichment(tabs, generation) {
   if (tabs.length === 0) return
@@ -42,7 +22,7 @@ function scheduleFaviconEnrichment(tabs, generation) {
 
 async function listTabs() {
   try {
-    const tabs = parseTabs(await ensureRunner().run('Get-BrowserTabs'))
+    const tabs = await browserTabsBackend().listTabs()
     const generation = ++listGeneration
     const { complete } = browserTabFavicons.attachFromCache(tabs)
     if (!complete) scheduleFaviconEnrichment(tabs, generation)
@@ -58,14 +38,18 @@ async function activateTab(tab) {
   const index = Math.trunc(Number(tab?.index))
   const title = typeof tab?.title === 'string' ? tab.title : ''
   if (!Number.isFinite(hwnd) || !Number.isFinite(index) || !title) return { ok: false }
-  const titleBase64 = Buffer.from(title, 'utf8').toString('base64')
   try {
-    const result = await ensureRunner().run(`Select-BrowserTab ${hwnd} ${index} '${titleBase64}'`)
-    return { ok: result.trim() === 'ok' }
+    return { ok: await browserTabsBackend().activateTab(hwnd, index, title) }
   } catch (e) {
     console.error('[browserTabs] activate error:', e?.message ?? e)
     return { ok: false }
   }
+}
+
+function warmBackend() {
+  Promise.resolve()
+    .then(() => browserTabsBackend().warm())
+    .catch((e) => console.error('[browserTabs] warm error:', e?.message ?? e))
 }
 
 module.exports = {
@@ -77,7 +61,7 @@ module.exports = {
     broadcastFn = broadcast
     setTimeout(() => {
       if (!launcherPrefs.getShowBrowserTabs()) return
-      ensureRunner().warm()
+      warmBackend()
       sqliteWorker.warm()
     }, WARM_DELAY_MS)
   },
