@@ -11,6 +11,7 @@ dependencies = [
  "napi-derive",
  "windows",
  "windows-core",
+ "windows-future",
 ]
 
 [[package]]
