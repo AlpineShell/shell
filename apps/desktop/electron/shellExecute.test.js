@@ -5,7 +5,7 @@ import os from 'os'
 import path from 'path'
 import shellExecute from './shellExecute.js'
 
-const { splitCommandLine, startProcessCommand, shellExecuteElevated } = shellExecute
+const { splitCommandLine, startProcessCommand, shellExecuteElevated, isMarkedFromInternet } = shellExecute
 
 let fixtureDir
 let spacedExecutable
@@ -149,5 +149,72 @@ describe('shellExecuteElevated', () => {
     const startConsentWorker = vi.fn()
     await expect(shellExecuteElevated('  ', { startConsentWorker })).resolves.toBe(false)
     expect(startConsentWorker).not.toHaveBeenCalled()
+  })
+
+  it('lets Windows show the SmartScreen prompt when the file was downloaded', () => {
+    const consentWorker = makeFakeWorker()
+    shellExecuteElevated(downloadedExecutable, { startConsentWorker: () => consentWorker })
+    expect(consentWorker.postMessage.mock.calls[0][0]).toMatchObject({ file: downloadedExecutable, verb: 'runas', showUi: true })
+  })
+
+  it('keeps the prompt-free launch for a file that was not downloaded', () => {
+    const consentWorker = makeFakeWorker()
+    shellExecuteElevated('Tool.lnk', { startConsentWorker: () => consentWorker })
+    expect(consentWorker.postMessage.mock.calls[0][0]).toMatchObject({ showUi: false })
+  })
+})
+
+function markAsDownloaded(file, zone) {
+  fs.writeFileSync(file, '')
+  fs.writeFileSync(`${file}:Zone.Identifier`, `[ZoneTransfer]\r\nZoneId=${zone}\r\nHostUrl=https://example.invalid/setup.exe\r\n`)
+}
+
+let downloadedExecutable
+let intranetExecutable
+
+beforeAll(() => {
+  downloadedExecutable = path.join(fixtureDir, 'setup.exe')
+  intranetExecutable = path.join(fixtureDir, 'intranet.exe')
+  markAsDownloaded(downloadedExecutable, 3)
+  markAsDownloaded(intranetExecutable, 1)
+})
+
+describe('isMarkedFromInternet', () => {
+  it('spots a file Windows marked as coming from the internet', () => {
+    expect(isMarkedFromInternet(downloadedExecutable)).toBe(true)
+  })
+
+  it('leaves files from the local intranet and unmarked files alone', () => {
+    expect(isMarkedFromInternet(intranetExecutable)).toBe(false)
+    expect(isMarkedFromInternet(spacedExecutable)).toBe(false)
+    expect(isMarkedFromInternet(path.join(fixtureDir, 'missing.exe'))).toBe(false)
+  })
+})
+
+describe('shellExecute on a downloaded file', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('launches it on a worker of its own that lets the SmartScreen prompt appear', async () => {
+    const promptWorker = makeFakeWorker()
+    const launched = shellExecute.shellExecute(downloadedExecutable, '--quiet', { startPromptWorker: () => promptWorker })
+    const [request] = promptWorker.postMessage.mock.calls[0]
+    expect(request).toMatchObject({ file: downloadedExecutable, args: '--quiet', verb: null, showUi: true })
+    promptWorker.emit('message', { id: request.id, ok: true })
+    await expect(launched).resolves.toBe(true)
+    expect(promptWorker.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the launch SmartScreen cancelled as not launched', async () => {
+    const promptWorker = makeFakeWorker()
+    const launched = shellExecute.shellExecute(downloadedExecutable, null, { startPromptWorker: () => promptWorker })
+    const [request] = promptWorker.postMessage.mock.calls[0]
+    promptWorker.emit('message', { id: request.id, ok: false, detail: '1223' })
+    await expect(launched).resolves.toBe(false)
   })
 })

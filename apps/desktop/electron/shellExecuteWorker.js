@@ -4,6 +4,7 @@ const koffi = require('koffi')
 const COINIT_APARTMENTTHREADED = 0x2
 const COINIT_DISABLE_OLE1DDE = 0x4
 const SEE_MASK_FLAG_NO_UI = 0x00000400
+const SEE_MASK_NOASYNC = 0x00000100
 const SW_SHOWNORMAL = 1
 
 const shell32 = koffi.load('shell32.dll')
@@ -37,7 +38,7 @@ parentPort.postMessage({ ready: true })
 parentPort.on('message', (request) => {
   const info = {
     cbSize: koffi.sizeof(execInfo),
-    fMask: SEE_MASK_FLAG_NO_UI,
+    fMask: request.showUi ? SEE_MASK_NOASYNC : SEE_MASK_FLAG_NO_UI,
     hwnd: 0,
     lpVerb: request.verb || null,
     lpFile: request.file,
