@@ -78,6 +78,7 @@ const battery = require('./modules/battery')
 const batterySaver = require('./modules/batterySaver')
 const systemInfo = require('./modules/systemInfo')
 const launcher = require('./modules/launcher')
+const winFocus = require('./modules/winFocus')
 const appCatalog = require('./modules/appCatalog')
 const appLaunch = require('./modules/appLaunch')
 const frecency = require('./modules/frecency')
@@ -777,9 +778,15 @@ function repaintSettingsChrome() {
   settingsWin.setTitleBarOverlay(settingsTitleBarOverlay())
 }
 
+function bringSettingsForward() {
+  const [hwnd] = settingsWindowHandles()
+  if (hwnd) winFocus.activateWindow(hwnd)
+  settingsWin.focus()
+}
+
 function createSettingsWindow() {
   if (settingsWin && !settingsWin.isDestroyed()) {
-    settingsWin.focus()
+    bringSettingsForward()
     return settingsWin
   }
   settingsWin = new BrowserWindow({
