@@ -10,6 +10,7 @@ const HIDE_ANIMATION_MS = 300
 const ALT_RELEASE_POLL_MS = 100
 
 let altIsDown = false
+let gestureHolding = false
 let active = false
 let building = false
 let selectedIndex = 0
@@ -93,6 +94,10 @@ function presentOnTopBar(topBar) {
   topBar.webContents.send('window-switcher/show', { windows, selectedIndex })
 }
 
+function isHeldOpen() {
+  return gestureHolding || (altIsDown && keyState.isAltHeld())
+}
+
 async function open() {
   windowThumbnails.arm()
   const showGeneration = ++generation
@@ -105,7 +110,7 @@ async function open() {
   const plan = planSwitcherAfterBuild({
     isLatestBuild,
     windowCount: collected.length,
-    altHeld: altIsDown && keyState.isAltHeld(),
+    altHeld: isHeldOpen(),
     pendingSteps,
   })
   if (plan.action === 'drop') return
@@ -128,6 +133,7 @@ async function open() {
 
 function hide() {
   generation++
+  gestureHolding = false
   building = false
   active = false
   windows = []
@@ -154,7 +160,7 @@ function commitSelection() {
 
 function commitIfAltReleased() {
   try {
-    if (!active || keyState.isAltHeld()) return
+    if (!active || gestureHolding || keyState.isAltHeld()) return
     altIsDown = false
     commitSelection()
   } catch (e) {
@@ -218,6 +224,23 @@ function handleSwitcherKey(keyEvent) {
   return decision.swallow
 }
 
+function beginGesture() {
+  gestureHolding = true
+  if (!active && !building) openInBackground()
+}
+
+function stepGesture(delta) {
+  if (!gestureHolding) return
+  if (active) moveSelection(delta)
+  else if (building) pendingSteps += delta
+}
+
+function endGesture() {
+  if (!gestureHolding) return
+  gestureHolding = false
+  if (active && !keyState.isAltHeld()) commitSelection()
+}
+
 function hideForLauncher() {
   if (!active && !building && !activeTopBar) return
   hide()
@@ -229,6 +252,9 @@ module.exports = {
   },
   handleKey: handleSwitcherKey,
   hideForLauncher,
+  beginGesture,
+  stepGesture,
+  endGesture,
 
   isActive() {
     return active

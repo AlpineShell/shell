@@ -24,6 +24,8 @@ mod msaa_tabs;
 mod policy_config;
 mod process_identity;
 mod tab_selection;
+mod touchpad_layout;
+mod touchpad_watcher;
 mod uia_tabs;
 mod winrt_async;
 mod wmi_brightness;
@@ -49,6 +51,7 @@ use com_worker::ComWorker;
 use media_session::{MediaSession, SnapshotListener};
 use process_identity::ProcessIdentity;
 use tab_selection::TabRow;
+use touchpad_watcher::TouchpadListener;
 use wmi_brightness::{BrightnessSession, MonitorIdentityRow};
 
 static AUDIO_WORKER: ComWorker<AudioSession> = ComWorker::new("alpine-audio", "audio", COINIT_MULTITHREADED);
@@ -356,4 +359,9 @@ pub fn brightness_set_internal_blocking(percent: f64, timeout_ms: u32) -> napi::
 #[napi(ts_args_type = "listener: (error: Error | null, brightness: number) => void")]
 pub fn brightness_watch(listener: BrightnessListener) -> napi::Result<()> {
     start_watching(listener).map_err(napi::Error::from_reason)
+}
+
+#[napi(ts_args_type = "listener: (error: Error | null, report: TouchpadReport) => void")]
+pub fn touchpad_watch(listener: TouchpadListener) -> napi::Result<()> {
+    touchpad_watcher::start_watching(listener).map_err(napi::Error::from_reason)
 }

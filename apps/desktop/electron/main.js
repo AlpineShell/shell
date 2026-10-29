@@ -126,6 +126,7 @@ const emojiKeyCapture = require('./modules/emojiKeyCapture')
 const clipboardHistory = require('./modules/clipboardHistory')
 const displayModeKeyCapture = require('./modules/displayModeKeyCapture')
 const windowSwitcher = require('./modules/windowSwitcher')
+const touchpadGestures = require('./modules/touchpadGestures')
 const switcherWindows = require('./modules/switcherWindows')
 const shellSurfaces = require('./modules/shellSurfaces')
 const activeDisplay = require('./modules/activeDisplay')
@@ -1070,7 +1071,7 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, shellShortcuts, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, touchpadGestures, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, shellShortcuts, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
 
   theme.followColorMode(colorMode)
   theme.onThemeChange(repaintSettingsChrome)
