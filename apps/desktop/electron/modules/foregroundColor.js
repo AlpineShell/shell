@@ -11,7 +11,7 @@ const IsZoomed = user32.func('__stdcall', 'IsZoomed', 'int', ['uintptr_t'])
 const GetWindowRect = user32.func('__stdcall', 'GetWindowRect', 'int', ['uintptr_t', 'void *'])
 const GetDC = user32.func('__stdcall', 'GetDC', 'uintptr_t', ['uintptr_t'])
 const ReleaseDC = user32.func('__stdcall', 'ReleaseDC', 'int', ['uintptr_t', 'uintptr_t'])
-const GetPixel = gdi32.func('__stdcall', 'GetPixel', 'uint32', ['uintptr_t', 'int', 'int'])
+const GetDIBits = gdi32.func('__stdcall', 'GetDIBits', 'int', ['uintptr_t', 'uintptr_t', 'uint32', 'uint32', 'void *', 'void *', 'uint32'])
 const CreateCompatibleDC = gdi32.func('__stdcall', 'CreateCompatibleDC', 'uintptr_t', ['uintptr_t'])
 const CreateCompatibleBitmap = gdi32.func('__stdcall', 'CreateCompatibleBitmap', 'uintptr_t', ['uintptr_t', 'int', 'int'])
 const SelectObject = gdi32.func('__stdcall', 'SelectObject', 'uintptr_t', ['uintptr_t', 'uintptr_t'])
@@ -26,7 +26,11 @@ const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uin
 const batterySaver = require('./batterySaver')
 const { isExposedOwnWindow } = require('./exposedOwnWindows')
 
+const { mostCommonColor } = require('./mostCommonColor')
+
 const SRCCOPY = 0x00CC0020
+const BITMAPINFOHEADER_BYTES = 40
+const STRIP_HEIGHT_DIPS = 6
 
 const POLL_INTERVAL_MS = 300
 const BATTERY_SAVER_POLL_INTERVAL_MS = 1000
@@ -69,41 +73,42 @@ function sampleTitleBarColor(hwnd) {
   const barPx = Math.round(24 * scale)
   const titleBarCenter = top + barPx + Math.round(15 * scale)
 
-  const centerX = left + Math.floor(width / 2)
-  const stripW = 21
+  const frameInset = Math.round(8 * scale)
+  const stripLeft = left + frameInset
+  const stripW = width - 2 * frameInset
+  const stripH = Math.max(1, Math.round(STRIP_HEIGHT_DIPS * scale))
+  const stripTop = titleBarCenter - Math.floor(stripH / 2)
+  if (stripW <= 0) return null
 
   const screenDC = GetDC(0)
   if (!screenDC) return null
 
   const memDC = CreateCompatibleDC(screenDC)
-  const bmp = CreateCompatibleBitmap(screenDC, stripW, 1)
+  const bmp = CreateCompatibleBitmap(screenDC, stripW, stripH)
   const old = SelectObject(memDC, bmp)
 
-  BitBlt(memDC, 0, 0, stripW, 1, screenDC, centerX - 10, titleBarCenter, SRCCOPY)
-
-  let totalR = 0, totalG = 0, totalB = 0, count = 0
-  for (let x = 0; x <= 20; x += 5) {
-    const pixel = GetPixel(memDC, x, 0)
-    if (pixel !== 0xFFFFFFFF) {
-      totalR += pixel & 0xFF
-      totalG += (pixel >> 8) & 0xFF
-      totalB += (pixel >> 16) & 0xFF
-      count++
-    }
+  try {
+    if (!BitBlt(memDC, 0, 0, stripW, stripH, screenDC, stripLeft, stripTop, SRCCOPY)) return null
+    SelectObject(memDC, old)
+    const pixels = Buffer.alloc(stripW * stripH * 4)
+    if (!GetDIBits(screenDC, bmp, 0, stripH, pixels, bitmapInfoHeader(stripW, stripH), 0)) return null
+    return mostCommonColor(pixels)
+  } finally {
+    SelectObject(memDC, old)
+    DeleteObject(bmp)
+    DeleteDC(memDC)
+    ReleaseDC(0, screenDC)
   }
+}
 
-  SelectObject(memDC, old)
-  DeleteObject(bmp)
-  DeleteDC(memDC)
-  ReleaseDC(0, screenDC)
-
-  if (count === 0) return null
-
-  return {
-    r: Math.round(totalR / count),
-    g: Math.round(totalG / count),
-    b: Math.round(totalB / count),
-  }
+function bitmapInfoHeader(width, height) {
+  const header = Buffer.alloc(BITMAPINFOHEADER_BYTES)
+  header.writeUInt32LE(BITMAPINFOHEADER_BYTES, 0)
+  header.writeInt32LE(width, 4)
+  header.writeInt32LE(-height, 8)
+  header.writeUInt16LE(1, 12)
+  header.writeUInt16LE(32, 14)
+  return header
 }
 
 function getDisplayIdForWindow(hwnd) {
