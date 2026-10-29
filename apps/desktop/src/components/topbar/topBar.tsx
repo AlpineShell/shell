@@ -12,6 +12,7 @@ import LauncherTrigger from "./launcherTrigger";
 import LauncherPanel from "./launcher/launcherPanel";
 import WindowSwitcherPanel from "./windowSwitcherPanel";
 import DisplayModePanel from "./displayModePanel";
+import SmartScreenPanel from "./smartScreenPanel";
 import { warmRenderableEmojis } from "../../lib/emojiRenderable";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
@@ -101,6 +102,7 @@ export default function TopBar() {
                 <NoticeStrip />
                 <WindowSwitcherPanel />
                 <DisplayModePanel />
+                <SmartScreenPanel />
             </RidgeBackdropProvider>
         </ThemeProvider>
     );

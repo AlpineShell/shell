@@ -107,6 +107,8 @@ const OPEN_APP_TIMEOUT_MS = 300000
 const fileHandlers = require('./modules/fileHandlers')
 const displayConfig = require('./modules/displayConfig')
 const displayModePicker = require('./modules/displayModePicker')
+const smartScreenPrompt = require('./modules/smartScreenPrompt')
+const smartScreenHost = require('./modules/smartScreenHost')
 const clockPrefs = require('./modules/clockPrefs')
 const topbarLayout = require('./modules/topbarLayout')
 const theme = require('./modules/theme')
@@ -318,7 +320,7 @@ function scheduleMenuClose(win, state) {
 }
 
 function hookSurfaceOwnsTopBar(win) {
-  return windowSwitcher.ownsTopBar(win) || displayModePicker.isActive(win)
+  return windowSwitcher.ownsTopBar(win) || displayModePicker.isActive(win) || smartScreenPrompt.isActive(win)
 }
 
 function evaluateTopBarInteraction(win, state) {
@@ -1071,7 +1073,7 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, touchpadGestures, displayModePicker, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, shellShortcuts, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, touchpadGestures, displayModePicker, smartScreenPrompt, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, shellShortcuts, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
 
   theme.followColorMode(colorMode)
   theme.onThemeChange(repaintSettingsChrome)
@@ -1286,6 +1288,7 @@ function startShellMode(claimedTakeover = null) {
     shellWindow.onAppCommand(volume.applyAppCommand)
     shellWindow.register()
     keepLiveWallpapersAboveDesktopWindows()
+    smartScreenHost.start()
   }
 
   shellSurfaces.setShells(shells)
@@ -1302,6 +1305,15 @@ function startShellMode(claimedTakeover = null) {
     windowSwitcher.hideForLauncher()
   })
   displayModePicker.setDisplayProvider(() => activeDisplay.currentDisplay())
+  smartScreenPrompt.setShells(shells)
+  smartScreenPrompt.setOtherSurfacesCloser(() => {
+    launcher.hideForOverlay()
+    windowSwitcher.hideForLauncher()
+    displayModePicker.hide()
+  })
+  smartScreenPrompt.setDisplayProvider(() => activeDisplay.currentDisplay())
+  smartScreenPrompt.setAnswerSink((id, userAction) => smartScreenHost.answer(id, userAction))
+  smartScreenHost.onPrompt((prompt) => smartScreenPrompt.show(prompt))
 
   if (screenshot) {
     screenshot.setOverlayWindowFactory(createScreenshotWindow)
@@ -1393,6 +1405,8 @@ function startShellMode(claimedTakeover = null) {
 
 app.on('will-quit', () => {
   unregisterAll()
+  smartScreenPrompt.declineAll()
+  smartScreenHost.stop()
   revealWindowsOnOtherDesktops()
   undimDisplays()
   if (shellWindow) shellWindow.destroy()

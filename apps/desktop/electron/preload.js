@@ -251,6 +251,20 @@ contextBridge.exposeInMainWorld('displayMode', {
   dismiss: () => ipcRenderer.invoke('displaymode/dismiss'),
 })
 
+contextBridge.exposeInMainWorld('smartScreen', {
+  onShow: (callback) => {
+    const handler = (_event, prompt) => callback(prompt)
+    ipcRenderer.on('smartscreen/show', handler)
+    return () => ipcRenderer.removeListener('smartscreen/show', handler)
+  },
+  onHide: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('smartscreen/hide', handler)
+    return () => ipcRenderer.removeListener('smartscreen/hide', handler)
+  },
+  answer: (id, userAction) => ipcRenderer.invoke('smartscreen/answer', id, userAction),
+})
+
 contextBridge.exposeInMainWorld('clipboardHistory', {
   entries: () => ipcRenderer.invoke('clipboard/history-get'),
   restore: (id) => ipcRenderer.invoke('clipboard/history-restore', id),

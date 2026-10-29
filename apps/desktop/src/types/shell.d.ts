@@ -380,6 +380,22 @@ declare global {
     selectedMode: DisplayMode
   }
 
+  type SmartScreenUserAction = 'run' | 'norun'
+
+  interface SmartScreenPromptDetail {
+    label: string
+    value: string
+  }
+
+  interface SmartScreenPrompt {
+    id: number
+    title: string
+    message: string
+    details: SmartScreenPromptDetail[]
+    runLabel: string
+    dontRunLabel: string
+  }
+
   interface ScreenshotShowPayload {
     image: string
   }
@@ -2090,6 +2106,11 @@ declare global {
       onSelectionChanged: (callback: (mode: DisplayMode) => void) => () => void
       choose: (mode: DisplayMode) => Promise<void>
       dismiss: () => Promise<void>
+    }
+    smartScreen: {
+      onShow: (callback: (prompt: SmartScreenPrompt) => void) => () => void
+      onHide: (callback: () => void) => () => void
+      answer: (id: number, userAction: SmartScreenUserAction) => Promise<void>
     }
     topbar: {
       setActiveRegion: (region: TopbarActiveRegion | null) => void

@@ -6,7 +6,10 @@ const { quotePowerShellLiteral } = require('./powershell')
 const WORKER_ENTRY = path.join(__dirname, 'shellExecuteWorker.js')
 const REQUEST_TIMEOUT_MS = 15000
 const CONSENT_REQUEST_TIMEOUT_MS = 120000
+const PROMPT_REQUEST_TIMEOUT_MS = 15 * 60000
 const ELEVATE_VERB = 'runas'
+const ZONE_IDENTIFIER_STREAM = 'Zone.Identifier'
+const INTERNET_ZONE = 3
 
 let worker = null
 let workerReady = false
@@ -110,10 +113,22 @@ function fallbackExecute(file, args, verb) {
   })
 }
 
-function shellExecute(file, args) {
+function isMarkedFromInternet(file) {
+  try {
+    const mark = /ZoneId\s*=\s*(\d+)/i.exec(fs.readFileSync(`${file}:${ZONE_IDENTIFIER_STREAM}`, 'utf8'))
+    return Boolean(mark) && Number(mark[1]) >= INTERNET_ZONE
+  } catch {
+    return false
+  }
+}
+
+function shellExecute(file, args, { startPromptWorker = startWorker } = {}) {
   const target = String(file || '').trim()
   if (!target) return Promise.resolve(false)
   const parameters = args ? String(args) : null
+  if (isMarkedFromInternet(target)) {
+    return launchOnOwnWorker(target, { args: parameters, showUi: true, startOwnWorker: startPromptWorker, timeoutMs: PROMPT_REQUEST_TIMEOUT_MS })
+  }
   const active = ensureWorker()
   if (!active) return fallbackExecute(target, parameters)
   const id = ++nextRequestId
@@ -129,41 +144,51 @@ function shellExecute(file, args) {
   })
 }
 
-function shellExecuteElevated(file, { startConsentWorker = startWorker, timeoutMs = CONSENT_REQUEST_TIMEOUT_MS } = {}) {
-  const target = String(file || '').trim()
-  if (!target) return Promise.resolve(false)
-  if (workerUnavailable) return fallbackExecute(target, null, ELEVATE_VERB)
-  let consentWorker
+function launchOnOwnWorker(target, { args = null, verb = null, showUi, startOwnWorker, timeoutMs }) {
+  if (workerUnavailable) return fallbackExecute(target, args, verb)
+  let ownWorker
   try {
-    consentWorker = startConsentWorker()
+    ownWorker = startOwnWorker()
   } catch (e) {
-    console.error('[shellExecute] consent worker unavailable, falling back to Start-Process:', e.message)
-    return fallbackExecute(target, null, ELEVATE_VERB)
+    console.error('[shellExecute] own worker unavailable, falling back to Start-Process:', e.message)
+    return fallbackExecute(target, args, verb)
   }
   const id = ++nextRequestId
   return new Promise((resolve) => {
     let ready = false
     const timer = setTimeout(() => {
-      console.error('[shellExecute] no answer to the elevation prompt for', target, 'within', timeoutMs, 'ms')
+      console.error('[shellExecute] no answer to the prompt for', target, 'within', timeoutMs, 'ms')
       finish(false)
     }, timeoutMs)
     if (typeof timer.unref === 'function') timer.unref()
     function finish(result) {
       clearTimeout(timer)
-      stopWorker(consentWorker)
+      stopWorker(ownWorker)
       resolve(result)
     }
-    consentWorker.on('message', (message) => {
+    ownWorker.on('message', (message) => {
       if (message.ready) { ready = true; return }
-      if (!message.ok) console.error('[shellExecute] elevation failed, detail', message.detail)
+      if (!message.ok) console.error('[shellExecute] prompted launch failed, detail', message.detail)
       finish(!!message.ok)
     })
-    consentWorker.on('error', (e) => {
-      console.error('[shellExecute] consent worker error:', e.message)
-      finish(ready ? false : fallbackExecute(target, null, ELEVATE_VERB))
+    ownWorker.on('error', (e) => {
+      console.error('[shellExecute] own worker error:', e.message)
+      finish(ready ? false : fallbackExecute(target, args, verb))
     })
-    consentWorker.on('exit', () => finish(false))
-    consentWorker.postMessage({ id, file: target, args: null, verb: ELEVATE_VERB })
+    ownWorker.on('exit', () => finish(false))
+    ownWorker.postMessage({ id, file: target, args, verb, showUi })
+  })
+}
+
+function shellExecuteElevated(file, { startConsentWorker = startWorker, timeoutMs = CONSENT_REQUEST_TIMEOUT_MS } = {}) {
+  const target = String(file || '').trim()
+  if (!target) return Promise.resolve(false)
+  const showUi = isMarkedFromInternet(target)
+  return launchOnOwnWorker(target, {
+    verb: ELEVATE_VERB,
+    showUi,
+    startOwnWorker: startConsentWorker,
+    timeoutMs: showUi ? PROMPT_REQUEST_TIMEOUT_MS : timeoutMs,
   })
 }
 
@@ -197,4 +222,4 @@ function shellExecuteCommandLine(commandLine) {
   return shellExecute(file, args)
 }
 
-module.exports = { shellExecute, shellExecuteElevated, shellExecuteCommandLine, splitCommandLine, startProcessCommand }
+module.exports = { shellExecute, shellExecuteElevated, shellExecuteCommandLine, splitCommandLine, startProcessCommand, isMarkedFromInternet }
