@@ -129,6 +129,7 @@ const emojiKeyCapture = require('./modules/emojiKeyCapture')
 const clipboardHistory = require('./modules/clipboardHistory')
 const displayModeKeyCapture = require('./modules/displayModeKeyCapture')
 const windowSwitcher = require('./modules/windowSwitcher')
+const fixedSurfaceKeys = require('./modules/fixedSurfaceKeys')
 const touchpadGestures = require('./modules/touchpadGestures')
 const switcherWindows = require('./modules/switcherWindows')
 const shellSurfaces = require('./modules/shellSurfaces')
@@ -761,6 +762,14 @@ function exposedOwnWindowHandles() {
   return handles
 }
 
+function arrangeableOwnWindowHandles() {
+  const handles = exposedOwnWindowHandles()
+  if (setupWin && !setupWin.isDestroyed()) {
+    try { handles.push(setupWin.getNativeWindowHandle().readUInt32LE(0)) } catch {}
+  }
+  return handles
+}
+
 function settingsWindowHandles() {
   if (!settingsWin || settingsWin.isDestroyed()) return []
   try { return [settingsWin.getNativeWindowHandle().readUInt32LE(0)] } catch { return [] }
@@ -1279,6 +1288,7 @@ function routeKeyboardInput() {
     displayModeKeyCapture.handleKey,
     shellHotkeys.handleShortcut,
     windowSwitcher.handleKey,
+    fixedSurfaceKeys.handleKey,
   ])
 }
 
@@ -1305,6 +1315,7 @@ function startShellMode(claimedTakeover = null) {
   tiling.setExposedOwnWindows(exposedOwnWindowHandles)
   winEvents.setExposedOwnWindows(exposedOwnWindowHandles)
   windowCoverage.setExposedOwnWindows(exposedOwnWindowHandles)
+  fixedSurfaceKeys.setArrangeableOwnWindows(arrangeableOwnWindowHandles)
   foregroundColor.setUnsampledWindows(settingsWindowHandles)
   displayModePicker.setShells(shells)
   displayModePicker.setOtherSurfacesCloser(() => {
