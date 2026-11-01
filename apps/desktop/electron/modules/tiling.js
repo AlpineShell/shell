@@ -17,6 +17,7 @@ const SetWindowPos = user32.func('__stdcall', 'SetWindowPos', 'int', ['uintptr_t
 const GetWindowRect = user32.func('__stdcall', 'GetWindowRect', 'int', ['uintptr_t', 'void *'])
 const GetForegroundWindow = user32.func('__stdcall', 'GetForegroundWindow', 'uintptr_t', [])
 const ShowWindow = user32.func('__stdcall', 'ShowWindow', 'int', ['uintptr_t', 'int'])
+const ShowWindowAsync = user32.func('__stdcall', 'ShowWindowAsync', 'int', ['uintptr_t', 'int'])
 const IsIconic = user32.func('__stdcall', 'IsIconic', 'int', ['uintptr_t'])
 const IsZoomed = user32.func('__stdcall', 'IsZoomed', 'int', ['uintptr_t'])
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
@@ -611,17 +612,17 @@ function doSnap(direction, shift, requestedHwnd) {
   const next = transitionZone(current, direction)
 
   if (next === 'maximize') {
-    ShowWindow(hwnd, SW_MAXIMIZE)
+    ShowWindowAsync(hwnd, SW_MAXIMIZE)
     snapStateByHwnd.set(hwnd, 'maximize')
     return
   }
   if (next === 'minimize') {
-    ShowWindow(hwnd, SW_MINIMIZE)
+    ShowWindowAsync(hwnd, SW_MINIMIZE)
     snapStateByHwnd.delete(hwnd)
     return
   }
   if (next === 'restore') {
-    ShowWindow(hwnd, SW_RESTORE)
+    ShowWindowAsync(hwnd, SW_RESTORE)
     snapStateByHwnd.delete(hwnd)
     return
   }
