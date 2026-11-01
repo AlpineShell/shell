@@ -6,10 +6,11 @@ const kernel32 = koffi.load('kernel32.dll')
 const GetForegroundWindow = user32.func('__stdcall', 'GetForegroundWindow', 'uintptr_t', [])
 const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProcessId', 'uint32', ['uintptr_t', 'void *'])
 const SetForegroundWindow = user32.func('__stdcall', 'SetForegroundWindow', 'int', ['uintptr_t'])
-const BringWindowToTop = user32.func('__stdcall', 'BringWindowToTop', 'int', ['uintptr_t'])
+const SetWindowPos = user32.func('__stdcall', 'SetWindowPos', 'int', ['uintptr_t', 'uintptr_t', 'int', 'int', 'int', 'int', 'uint32'])
 const AttachThreadInput = user32.func('__stdcall', 'AttachThreadInput', 'int', ['uint32', 'uint32', 'int'])
 const GetCurrentThreadId = kernel32.func('__stdcall', 'GetCurrentThreadId', 'uint32', [])
-const ShowWindow = user32.func('__stdcall', 'ShowWindow', 'int', ['uintptr_t', 'int'])
+const ShowWindowAsync = user32.func('__stdcall', 'ShowWindowAsync', 'int', ['uintptr_t', 'int'])
+const IsHungAppWindow = user32.func('__stdcall', 'IsHungAppWindow', 'int', ['uintptr_t'])
 const PostMessageW = user32.func('__stdcall', 'PostMessageW', 'int', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t'])
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const SendInput = user32.func('__stdcall', 'SendInput', 'uint32', ['uint32', 'void *', 'int'])
@@ -26,6 +27,10 @@ const VK_V = 0x56
 const FOCUS_SETTLE_MS = 40
 const WM_CLOSE = 0x0010
 const ASFW_ANY = 0xFFFFFFFF
+const HWND_TOP = 0
+const SWP_NOSIZE = 0x0001
+const SWP_NOMOVE = 0x0002
+const SWP_ASYNCWINDOWPOS = 0x4000
 
 const INPUT_KEYBOARD = 1
 const KEYEVENTF_KEYUP = 0x0002
@@ -42,36 +47,38 @@ function getForegroundWindow() {
 }
 
 function minimizeWindow(hwnd) {
-  if (hwnd && IsWindow(hwnd)) ShowWindow(hwnd, SW_MINIMIZE)
+  if (hwnd && IsWindow(hwnd)) ShowWindowAsync(hwnd, SW_MINIMIZE)
 }
 
 function maximizeWindow(hwnd) {
-  if (hwnd && IsWindow(hwnd)) ShowWindow(hwnd, SW_MAXIMIZE)
+  if (hwnd && IsWindow(hwnd)) ShowWindowAsync(hwnd, SW_MAXIMIZE)
 }
 
 function closeWindow(hwnd) {
   if (hwnd && IsWindow(hwnd)) PostMessageW(hwnd, WM_CLOSE, 0, 0)
 }
 
+function bringToFrontWithoutWaiting(hwnd) {
+  SetForegroundWindow(hwnd)
+  SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_ASYNCWINDOWPOS)
+}
+
 function forceForeground(hwnd) {
   if (!hwnd) return
   const fg = toNum(GetForegroundWindow())
-  if (!fg || fg === hwnd) {
-    SetForegroundWindow(hwnd)
-    BringWindowToTop(hwnd)
+  if (!fg || fg === hwnd || IsHungAppWindow(fg)) {
+    bringToFrontWithoutWaiting(hwnd)
     return
   }
   const fgThread = GetWindowThreadProcessId(fg, null)
   const myThread = GetCurrentThreadId()
   if (fgThread === myThread) {
-    SetForegroundWindow(hwnd)
-    BringWindowToTop(hwnd)
+    bringToFrontWithoutWaiting(hwnd)
     return
   }
   try {
     AttachThreadInput(fgThread, myThread, 1)
-    SetForegroundWindow(hwnd)
-    BringWindowToTop(hwnd)
+    bringToFrontWithoutWaiting(hwnd)
   } finally {
     AttachThreadInput(fgThread, myThread, 0)
   }
@@ -79,7 +86,7 @@ function forceForeground(hwnd) {
 
 function activateWindow(hwnd) {
   if (!hwnd || !IsWindow(hwnd)) return
-  if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE)
+  if (IsIconic(hwnd)) ShowWindowAsync(hwnd, SW_RESTORE)
   keybd_event(VK_LMENU, 0, 0, 0)
   SetForegroundWindow(hwnd)
   keybd_event(VK_LMENU, 0, KEYEVENTF_KEYUP, 0)

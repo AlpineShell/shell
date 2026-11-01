@@ -30,7 +30,7 @@ const DestroyWindow = user32.func('__stdcall', 'DestroyWindow', 'int', ['uintptr
 const DefWindowProcW = user32.func('__stdcall', 'DefWindowProcW', 'intptr_t', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t'])
 const FindWindowW = user32.func('__stdcall', 'FindWindowW', 'uintptr_t', ['str16', 'str16'])
 const RegisterWindowMessageW = user32.func('__stdcall', 'RegisterWindowMessageW', 'uint32', ['str16'])
-const SendMessageTimeoutW = user32.func('__stdcall', 'SendMessageTimeoutW', 'intptr_t', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t', 'uint32', 'uint32', 'void *'])
+const SendNotifyMessageW = user32.func('__stdcall', 'SendNotifyMessageW', 'int', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t'])
 const PostMessageW = user32.func('__stdcall', 'PostMessageW', 'int', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t'])
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProcessId', 'uint32', ['uintptr_t', 'void *'])
@@ -51,7 +51,6 @@ const WM_RBUTTONUP = 0x0205
 const WM_CONTEXTMENU = 0x007b
 const NIN_SELECT = 0x0400
 const HWND_BROADCAST = 0xffff
-const SMTO_ABORTIFHUNG = 0x0002
 const SM_CXSMICON = 49
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
@@ -330,7 +329,7 @@ function createHost() {
 
 function broadcastTaskbarCreated() {
   const msg = RegisterWindowMessageW('TaskbarCreated')
-  if (msg) SendMessageTimeoutW(HWND_BROADCAST, msg, 0, 0, SMTO_ABORTIFHUNG, 1000, null)
+  if (msg) SendNotifyMessageW(HWND_BROADCAST, msg, 0, 0)
 }
 
 function announceTaskbar() {

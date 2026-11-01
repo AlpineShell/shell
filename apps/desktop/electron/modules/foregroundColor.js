@@ -4,33 +4,21 @@ const koffi = require('koffi')
 const { screen } = require('electron')
 
 const user32 = koffi.load('user32.dll')
-const gdi32 = koffi.load('gdi32.dll')
 
 const GetForegroundWindow = user32.func('__stdcall', 'GetForegroundWindow', 'uintptr_t', [])
 const IsZoomed = user32.func('__stdcall', 'IsZoomed', 'int', ['uintptr_t'])
 const GetWindowRect = user32.func('__stdcall', 'GetWindowRect', 'int', ['uintptr_t', 'void *'])
-const GetDC = user32.func('__stdcall', 'GetDC', 'uintptr_t', ['uintptr_t'])
-const ReleaseDC = user32.func('__stdcall', 'ReleaseDC', 'int', ['uintptr_t', 'uintptr_t'])
-const GetDIBits = gdi32.func('__stdcall', 'GetDIBits', 'int', ['uintptr_t', 'uintptr_t', 'uint32', 'uint32', 'void *', 'void *', 'uint32'])
-const CreateCompatibleDC = gdi32.func('__stdcall', 'CreateCompatibleDC', 'uintptr_t', ['uintptr_t'])
-const CreateCompatibleBitmap = gdi32.func('__stdcall', 'CreateCompatibleBitmap', 'uintptr_t', ['uintptr_t', 'int', 'int'])
-const SelectObject = gdi32.func('__stdcall', 'SelectObject', 'uintptr_t', ['uintptr_t', 'uintptr_t'])
-const BitBlt = gdi32.func('__stdcall', 'BitBlt', 'int', ['uintptr_t', 'int', 'int', 'int', 'int', 'uintptr_t', 'int', 'int', 'uint32'])
-const DeleteDC = gdi32.func('__stdcall', 'DeleteDC', 'int', ['uintptr_t'])
-const DeleteObject = gdi32.func('__stdcall', 'DeleteObject', 'int', ['uintptr_t'])
 const GetDpiForWindow = user32.func('__stdcall', 'GetDpiForWindow', 'uint32', ['uintptr_t'])
 
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
 const IsWindowVisible = user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t'])
 
 const batterySaver = require('./batterySaver')
+const windowCapture = require('./windowCapture')
 const { isExposedOwnWindow } = require('./exposedOwnWindows')
+const { titleBarStrip } = require('./windowCapturePolicy')
 
 const { mostCommonColor } = require('./mostCommonColor')
-
-const SRCCOPY = 0x00CC0020
-const BITMAPINFOHEADER_BYTES = 40
-const STRIP_HEIGHT_DIPS = 6
 
 const POLL_INTERVAL_MS = 300
 const BATTERY_SAVER_POLL_INTERVAL_MS = 1000
@@ -45,6 +33,7 @@ let startupIgnoreHwnd = null
 let displayRemovedListener = null
 let stopPolling = null
 let unsampledWindowsProvider = null
+let sampling = false
 
 const ADAPT_STORE_FILE = 'foreground-color.json'
 let adaptToApps = true
@@ -57,58 +46,27 @@ function colorEqual(a, b) {
   return a.r === b.r && a.g === b.g && a.b === b.b
 }
 
-function sampleTitleBarColor(hwnd) {
-  const rect = Buffer.alloc(16)
-  if (!GetWindowRect(hwnd, rect)) return null
-
-  const left = rect.readInt32LE(0)
-  const top = rect.readInt32LE(4)
-  const right = rect.readInt32LE(8)
-  const width = right - left
-  if (width <= 0) return null
-
-  let dpi = 96
-  try { dpi = GetDpiForWindow(hwnd) || 96 } catch (_) {}
-  const scale = dpi / 96
-  const barPx = Math.round(24 * scale)
-  const titleBarCenter = top + barPx + Math.round(15 * scale)
-
-  const frameInset = Math.round(8 * scale)
-  const stripLeft = left + frameInset
-  const stripW = width - 2 * frameInset
-  const stripH = Math.max(1, Math.round(STRIP_HEIGHT_DIPS * scale))
-  const stripTop = titleBarCenter - Math.floor(stripH / 2)
-  if (stripW <= 0) return null
-
-  const screenDC = GetDC(0)
-  if (!screenDC) return null
-
-  const memDC = CreateCompatibleDC(screenDC)
-  const bmp = CreateCompatibleBitmap(screenDC, stripW, stripH)
-  const old = SelectObject(memDC, bmp)
-
+function windowDpi(hwnd) {
   try {
-    if (!BitBlt(memDC, 0, 0, stripW, stripH, screenDC, stripLeft, stripTop, SRCCOPY)) return null
-    SelectObject(memDC, old)
-    const pixels = Buffer.alloc(stripW * stripH * 4)
-    if (!GetDIBits(screenDC, bmp, 0, stripH, pixels, bitmapInfoHeader(stripW, stripH), 0)) return null
-    return mostCommonColor(pixels)
-  } finally {
-    SelectObject(memDC, old)
-    DeleteObject(bmp)
-    DeleteDC(memDC)
-    ReleaseDC(0, screenDC)
+    return GetDpiForWindow(hwnd) || 96
+  } catch {
+    return 96
   }
 }
 
-function bitmapInfoHeader(width, height) {
-  const header = Buffer.alloc(BITMAPINFOHEADER_BYTES)
-  header.writeUInt32LE(BITMAPINFOHEADER_BYTES, 0)
-  header.writeInt32LE(width, 4)
-  header.writeInt32LE(-height, 8)
-  header.writeUInt16LE(1, 12)
-  header.writeUInt16LE(32, 14)
-  return header
+function titleBarStripOf(hwnd) {
+  const rect = Buffer.alloc(16)
+  if (!GetWindowRect(hwnd, rect)) return null
+  return titleBarStrip({ left: rect.readInt32LE(0), top: rect.readInt32LE(4), right: rect.readInt32LE(8) }, windowDpi(hwnd))
+}
+
+async function sampleTitleBarColor(hwnd) {
+  const strip = titleBarStripOf(hwnd)
+  if (!strip) return { status: 'failed' }
+  const shot = await windowCapture.captureScreenRect(strip)
+  if (shot.status !== 'captured') return { status: shot.status === 'failed' ? 'failed' : 'unavailable' }
+  const rgb = mostCommonColor(shot.pixels)
+  return rgb ? { status: 'sampled', rgb } : { status: 'failed' }
 }
 
 function getDisplayIdForWindow(hwnd) {
@@ -177,7 +135,23 @@ function setAdaptToApps(value) {
   return adaptToApps
 }
 
-function update(broadcast) {
+function samplingStillWanted(hwnd) {
+  return adaptToApps && !windowSwitcher.isActive() && GetForegroundWindow() === hwnd
+}
+
+async function update(broadcast) {
+  if (sampling) return
+  sampling = true
+  try {
+    await updateOnce(broadcast)
+  } catch (e) {
+    console.error('[foregroundColor] update error:', e.message)
+  } finally {
+    sampling = false
+  }
+}
+
+async function updateOnce(broadcast) {
   if (windowSwitcher.isActive()) return
   if (!adaptToApps) return
 
@@ -209,12 +183,14 @@ function update(broadcast) {
 
   if (sampledHwndPerDisplay.get(displayId) === hwnd && perDisplay.has(displayId)) return
 
-  const rgb = sampleTitleBarColor(hwnd)
-  if (!rgb) {
+  const sample = await sampleTitleBarColor(hwnd)
+  if (sample.status === 'unavailable' || !samplingStillWanted(hwnd)) return
+  if (sample.status !== 'sampled') {
     clearDisplay(displayId, broadcast)
     return
   }
 
+  const { rgb } = sample
   const lum = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b
   const color = { r: rgb.r, g: rgb.g, b: rgb.b, darkText: lum > 128 }
   const pending = pendingDisplay.get(displayId)

@@ -42,7 +42,8 @@ async function streamFreshThumbnails(showGeneration, shown) {
     for (const entry of shown) {
       await nextTurn()
       if (showGeneration !== generation) return
-      const thumbnail = windowThumbnails.capture(entry.hwnd, { allowScreenCopy: false })
+      const thumbnail = await windowThumbnails.capture(entry.hwnd, { allowScreenCopy: false })
+      if (showGeneration !== generation) return
       if (!thumbnail || thumbnail === entry.thumbnail) continue
       if (!activeTopBar || activeTopBar.isDestroyed()) return
       activeTopBar.webContents.send('window-switcher/thumbnail', { hwnd: entry.hwnd, thumbnail })

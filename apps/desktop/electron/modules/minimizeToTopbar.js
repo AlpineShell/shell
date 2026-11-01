@@ -21,6 +21,7 @@ const MonitorFromWindow = user32.func('__stdcall', 'MonitorFromWindow', 'uintptr
 const GetMonitorInfoW = user32.func('__stdcall', 'GetMonitorInfoW', 'int', ['uintptr_t', 'void *'])
 const GetWindowPlacement = user32.func('__stdcall', 'GetWindowPlacement', 'int', ['uintptr_t', 'void *'])
 const SetWindowPlacement = user32.func('__stdcall', 'SetWindowPlacement', 'int', ['uintptr_t', 'void *'])
+const IsHungAppWindow = user32.func('__stdcall', 'IsHungAppWindow', 'int', ['uintptr_t'])
 const SetWindowPos = user32.func('__stdcall', 'SetWindowPos', 'int', ['uintptr_t', 'uintptr_t', 'int', 'int', 'int', 'int', 'uint32'])
 
 const EVENT_SYSTEM_FOREGROUND = 0x0003
@@ -43,6 +44,7 @@ const MONITOR_DEFAULTTONEAREST = 2
 const SWP_NOSIZE = 0x0001
 const SWP_NOZORDER = 0x0004
 const SWP_NOACTIVATE = 0x0010
+const SWP_ASYNCWINDOWPOS = 0x4000
 
 const WINDOWPLACEMENT_SIZE = 44
 const MONITORINFO_SIZE = 40
@@ -91,7 +93,7 @@ function topbarAnimationTarget(hwnd) {
 }
 
 function aimMinimizeAtTopbar(hwnd) {
-  if (!isManageableWindow(hwnd)) return
+  if (!isManageableWindow(hwnd) || IsHungAppWindow(hwnd)) return
   const target = topbarAnimationTarget(hwnd)
   if (!target) return
   const previous = minPositionTargets.get(hwnd)
@@ -114,7 +116,7 @@ function aimMinimizeAtTopbar(hwnd) {
 
 function parkMinimizedWindow(hwnd) {
   if (!IsWindow(hwnd) || !IsIconic(hwnd) || !isManageableWindow(hwnd)) return
-  SetWindowPos(hwnd, 0, OFFSCREEN_PARK, OFFSCREEN_PARK, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE)
+  SetWindowPos(hwnd, 0, OFFSCREEN_PARK, OFFSCREEN_PARK, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS)
 }
 
 function schedulePark(hwnd) {
