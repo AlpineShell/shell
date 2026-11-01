@@ -137,6 +137,14 @@ jobs:
           test -f release/win-unpacked/resources/app.asar.unpacked/electron/native/alpine_native.node || { echo "::error::alpine_native.node is missing from app.asar.unpacked"; exit 1; }
           echo "native add-on packaged"
 
+      - name: Verify koffi is packaged
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          test -f release/win-unpacked/resources/app.asar.unpacked/node_modules/@koromix/koffi-win32-x64/win32_x64/koffi.node || { echo "::error::koffi.node is missing from app.asar.unpacked"; exit 1; }
+          bunx @electron/asar list release/win-unpacked/resources/app.asar | grep -qE '[\\/]node_modules[\\/]koffi[\\/]src[\\/]koffi[\\/]index\.cjs' || { echo "::error::the koffi loader is missing from app.asar"; exit 1; }
+          echo "koffi packaged"
+
       - name: Verify Electron fuses
         working-directory: apps/desktop
         shell: bash
