@@ -22,7 +22,7 @@
     "@alpine/plugin-sdk": "workspace:*",
     "electron-updater": "^6.8.10",
     "htm": "^3.1",
-    "koffi": "^2.15.1",
+    "koffi": "^3.3.6",
     "motion": "^14.4.0",
     "zustand": "^5"
   },
@@ -67,11 +67,11 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "!node_modules/koffi/build/koffi/**",
-      "node_modules/koffi/build/koffi/win32_x64/**",
-      "!node_modules/koffi/src/**",
+      "!node_modules/koffi/src/**/*.{cc,hh,inc,def,S,asm,txt}",
+      "!node_modules/koffi/lib/**",
       "!node_modules/koffi/doc/**",
       "!node_modules/koffi/vendor/**",
+      "!node_modules/@koromix/koffi-*/**/*.lib",
       "!node_modules/lightningcss-*/**",
       "!node_modules/@tailwindcss/oxide-*/**",
       "!dist/cursor/**",
