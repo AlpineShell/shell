@@ -583,6 +583,7 @@ contextBridge.exposeInMainWorld('shell', {
     applyDisplayLayout: (layout) => ipcRenderer.invoke('system/displays-apply', layout),
     keepDisplayLayout: () => ipcRenderer.invoke('system/displays-keep'),
     revertDisplayLayout: () => ipcRenderer.invoke('system/displays-revert'),
+    identifyDisplays: () => ipcRenderer.invoke('system/displays-identify'),
     onDisplaysChanged: (callback) => {
       const handler = (_, data) => callback(data)
       ipcRenderer.on('system/displays-changed', handler)

@@ -5,12 +5,13 @@ import './index.css'
 import DesktopApp from './components/desktop/desktopApp'
 import RootErrorBoundary from './components/rootErrorBoundary'
 
-type Mode = 'topbar' | 'desktop' | 'screenshot' | 'setup' | 'settings'
+type Mode = 'topbar' | 'desktop' | 'screenshot' | 'identify' | 'setup' | 'settings'
 
 function getMode(): Mode {
   const mode = new URLSearchParams(window.location.search).get('mode')
   if (mode === 'topbar') return 'topbar'
   if (mode === 'screenshot') return 'screenshot'
+  if (mode === 'identify') return 'identify'
   if (mode === 'setup') return 'setup'
   if (mode === 'settings') return 'settings'
   return 'desktop'
@@ -39,6 +40,10 @@ async function resolveView(mode: Mode): Promise<ReactNode> {
         <ScreenshotOverlay />
       </div>
     )
+  }
+  if (mode === 'identify') {
+    const { default: DisplayIdentifyBadge } = await import('./components/displayIdentify/displayIdentifyBadge')
+    return <DisplayIdentifyBadge />
   }
   if (mode === 'setup') {
     const { default: SetupApp } = await import('./components/setup/setupApp')
