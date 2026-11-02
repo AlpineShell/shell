@@ -2286,6 +2286,7 @@ declare global {
         applyDisplayLayout: (layout: DisplayLayoutEntry[]) => Promise<DisplayApplyResult>
         keepDisplayLayout: () => Promise<{ ok: boolean }>
         revertDisplayLayout: () => Promise<DisplayInfo[]>
+        identifyDisplays: () => Promise<{ ok: boolean }>
         onDisplaysChanged: (callback: (data: DisplayInfo[]) => void) => () => void
         powerAction: (action: PowerCommandAction) => Promise<void>
         powerConfirm: () => Promise<boolean>

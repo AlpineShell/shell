@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
-import { RotateCw, Star, MonitorCheck } from 'lucide-react'
+import { RotateCw, Star, MonitorCheck, ScanEye } from 'lucide-react'
 import { Button, Card, EmptyState, PageTitle, Row, Section, Slider } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useDisplays } from '../../hooks/useDisplays'
@@ -176,7 +176,19 @@ export default function DisplaysPage() {
           {error && <p className="text-xs text-danger">{error}</p>}
 
           <Section variant="label" title="Arrangement">
-            <DisplayCanvas displays={draft} selectedId={selectedId} onSelect={setSelectedId} onMove={moveDisplay} />
+            <div className="relative">
+              <DisplayCanvas displays={draft} selectedId={selectedId} onSelect={setSelectedId} onMove={moveDisplay} />
+              <Button
+                shape="square"
+                variant="outline"
+                size="sm"
+                icon={<ScanEye size={14} />}
+                className="absolute top-2 right-2"
+                onClick={() => window.shell.system.identifyDisplays()}
+              >
+                Identify
+              </Button>
+            </div>
           </Section>
 
           {selected && (

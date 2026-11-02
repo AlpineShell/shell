@@ -108,6 +108,7 @@ const OPEN_APP_TIMEOUT_MS = 300000
 const fileHandlers = require('./modules/fileHandlers')
 const displayConfig = require('./modules/displayConfig')
 const displayModePicker = require('./modules/displayModePicker')
+const displayIdentify = require('./modules/displayIdentify')
 const smartScreenPrompt = require('./modules/smartScreenPrompt')
 const smartScreenHost = require('./modules/smartScreenHost')
 const clockPrefs = require('./modules/clockPrefs')
@@ -696,6 +697,38 @@ function createScreenshotWindow() {
   return win
 }
 
+function createDisplayIdentifyWindow({ number, bounds }) {
+  const win = new BrowserWindow({
+    ...bounds,
+    frame: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    skipTaskbar: true,
+    focusable: false,
+    transparent: true,
+    thickFrame: false,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      devTools: isDev,
+    },
+  })
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.setIgnoreMouseEvents(true)
+  win.once('ready-to-show', () => {
+    if (win.isDestroyed()) return
+    win.setBounds(bounds)
+    win.showInactive()
+  })
+  win.loadURL(`${getURL('identify')}&number=${number}`)
+  return win
+}
+
 
 const SETUP_WINDOW_WIDTH = 480
 const SETUP_WINDOW_INITIAL_HEIGHT = 208
@@ -1089,7 +1122,9 @@ async function startApp() {
 
   sqliteWorker.removeLeftoverSnapshots()
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, touchpadGestures, displayModePicker, smartScreenPrompt, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, shellShortcuts, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
+  displayIdentify.setBadgeWindowFactory(createDisplayIdentifyWindow)
+
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, touchpadGestures, displayModePicker, smartScreenPrompt, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, shellShortcuts, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, displayIdentify, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
 
   theme.followColorMode(colorMode)
   theme.onThemeChange(repaintSettingsChrome)

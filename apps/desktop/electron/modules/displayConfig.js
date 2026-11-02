@@ -305,6 +305,7 @@ module.exports = {
       return displays
     },
   },
+  enumerateDisplays,
   readDisplayMode,
   applyDisplayMode,
   start(broadcast) {
