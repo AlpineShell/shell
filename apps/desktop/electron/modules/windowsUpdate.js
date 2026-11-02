@@ -3,6 +3,7 @@ const { execFile, spawn, execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const { quotePowerShellLiteral } = require('../powershell')
+const { hresultFromText, windowsUpdateErrorMessage, searchFailureMessage } = require('./windowsUpdateErrors')
 
 let cachedBuild = null
 function getCurrentBuild() {
@@ -43,15 +44,15 @@ function setState(partial) {
 
 function searchWindowsUpdates() {
   const script =
-    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ProgressPreference='SilentlyContinue'; $session = New-Object -ComObject Microsoft.Update.Session; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search(\"IsInstalled=0 and Type='Software'\"); $items = @(); foreach ($u in $result.Updates) { $kb = @($u.KBArticleIDs) -join ','; $cat = @($u.Categories | ForEach-Object { $_.Name }); $items += [pscustomobject]@{ title = $u.Title; kb = $kb; sizeBytes = [int64]$u.MaxDownloadSize; updateId = $u.Identity.UpdateID; isFeature = [bool]($cat -contains 'Upgrades') } }; $items | ConvertTo-Json -Compress"
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ProgressPreference='SilentlyContinue'; try { $session = New-Object -ComObject Microsoft.Update.Session; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search(\"IsInstalled=0 and Type='Software'\"); $items = @(); foreach ($u in $result.Updates) { $kb = @($u.KBArticleIDs) -join ','; $cat = @($u.Categories | ForEach-Object { $_.Name }); $items += [pscustomobject]@{ title = $u.Title; kb = $kb; sizeBytes = [int64]$u.MaxDownloadSize; updateId = $u.Identity.UpdateID; isFeature = [bool]($cat -contains 'Upgrades') } }; $items | ConvertTo-Json -Compress } catch { $failure = $_.Exception; while ($failure.InnerException) { $failure = $failure.InnerException }; [Console]::Error.WriteLine(('0x{0:X8}' -f $failure.HResult)); exit 1 }"
 
   return new Promise((resolve, reject) => {
     execFile(
       'powershell',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
-      { maxBuffer: 4 * 1024 * 1024, timeout: 120000 },
-      (err, stdout) => {
-        if (err) return reject(new Error(err.message))
+      { maxBuffer: 4 * 1024 * 1024, timeout: 120000, windowsHide: true },
+      (err, stdout, stderr) => {
+        if (err) return reject(new Error(searchFailureMessage({ timedOut: err.killed === true, stderr })))
 
         const trimmed = (stdout || '').trim()
         if (!trimmed) return resolve([])
@@ -59,8 +60,8 @@ function searchWindowsUpdates() {
         let parsed
         try {
           parsed = JSON.parse(trimmed)
-        } catch (e) {
-          return reject(new Error(e.message))
+        } catch {
+          return reject(new Error(windowsUpdateErrorMessage(null)))
         }
 
         const list = Array.isArray(parsed) ? parsed : [parsed]
@@ -199,7 +200,9 @@ function buildInstallScript(progressFilePath, targetUpdateId) {
     '  }',
     '  exit 0',
     '} catch {',
-    "  Write-Progress-Record @{ phase = 'error'; percent = 0; index = 0; total = 0; title = $null; rebootRequired = $false; error = $_.Exception.Message }",
+    '  $failure = $_.Exception',
+    '  while ($failure.InnerException) { $failure = $failure.InnerException }',
+    "  Write-Progress-Record @{ phase = 'error'; percent = 0; index = 0; total = 0; title = $null; rebootRequired = $false; error = ('0x{0:X8}' -f $failure.HResult) }",
     '  exit 1',
     '}',
   ].join('\n')
@@ -224,7 +227,7 @@ function mapPhaseToState(record) {
       status: 'error',
       progressLabel: null,
       installingId: null,
-      error: record && record.error ? String(record.error) : 'Windows update installation failed.',
+      error: windowsUpdateErrorMessage(hresultFromText(record && record.error)),
     }
   }
   return null
