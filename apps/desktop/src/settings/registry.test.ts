@@ -44,7 +44,7 @@ const LAUNCHER_SETTING_IDS = [
   'power',
 ]
 
-const SETTINGS_ONLY_IDS = ['battery-saver-dimming', 'battery-saver-dim-amount', 'battery-saver-dim-externals', 'status-sound']
+const SETTINGS_ONLY_IDS = ['battery-saver-dimming', 'battery-saver-dim-amount', 'battery-saver-dim-externals', 'status-sound', 'restart-alpine-shell']
 
 const APPLIES = ['instant', 'confirm', 'restart', 'draft']
 

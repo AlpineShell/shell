@@ -537,6 +537,11 @@ declare global {
     error: string | null
   }
 
+  interface ShellRestartResult {
+    success: boolean
+    error: string | null
+  }
+
   type SetupPage = 'signIn' | 'waiting' | 'noLicence' | 'seatsInUse' | 'welcome' | 'options' | 'installing' | 'complete' | 'error'
 
   interface SetupStatus {
@@ -1421,6 +1426,7 @@ declare global {
   type SettingsSearchAction =
     | { kind: 'toggle'; entry: SettingsValueEntry }
     | { kind: 'navigate'; route: string; highlight: string | null }
+    | { kind: 'run'; run(): Promise<unknown>; actionIcon: SettingsIcon }
     | { kind: 'launcher' }
 
   interface SettingsRouteCoverage {
@@ -1443,6 +1449,11 @@ declare global {
     score: number
   }
 
+  interface SettingsSearchRunFailure {
+    targetId: string
+    message: string
+  }
+
   interface SettingsSearchResultsProps {
     query: string
     matches: SettingsSearchMatch[]
@@ -1450,6 +1461,7 @@ declare global {
     selected: number
     listId: string
     rowId: (index: number) => string
+    runFailure: SettingsSearchRunFailure | null
     onPoint: (index: number) => void
     onActivate: (target: SettingsSearchTarget) => void
   }
@@ -2022,6 +2034,7 @@ declare global {
       isTestSession: () => Promise<boolean>
       endTestSession: () => Promise<RevertResult>
       relaunch: () => Promise<void>
+      restartShell: () => Promise<ShellRestartResult>
       restartWindows: () => Promise<void>
       revertTemporary: () => Promise<RevertResult>
       revertPermanent: () => Promise<RevertResult>

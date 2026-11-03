@@ -363,6 +363,7 @@ if (currentPageMode === 'settings') {
   contextBridge.exposeInMainWorld('setup', {
     isTestSession: () => ipcRenderer.invoke('setup/test-session'),
     endTestSession: () => ipcRenderer.invoke('setup/end-test-session'),
+    restartShell: () => ipcRenderer.invoke('setup/restart-shell'),
     revertTemporary: () => ipcRenderer.invoke('setup/revert-temporary'),
     revertPermanent: () => ipcRenderer.invoke('setup/revert-permanent'),
     uninstall: () => ipcRenderer.invoke('setup/uninstall'),

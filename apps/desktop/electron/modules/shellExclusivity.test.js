@@ -12,6 +12,11 @@ const {
   requiresShellRegistration,
   isRegistrationSatisfied,
   revertBlockedReason,
+  RESTART_BLOCKED_IN_DEVELOPMENT,
+  RESTART_BLOCKED_WHEN_NOT_INSTALLED,
+  RESTART_BLOCKED_BY_UPDATE,
+  RESTART_BLOCKED_IN_TEST_SESSION,
+  restartBlockedReason,
   planAutostartLaunch,
   shouldProcessAutostart,
   matchHandoffLogon,
@@ -274,6 +279,30 @@ describe('revertBlockedReason', () => {
   it('still blocks ending a test-out in development and during an update', () => {
     expect(revertBlockedReason({ packaged: false, updatePending: false, testSession: true, endsTestSession: true })).toBe(REVERT_BLOCKED_IN_DEVELOPMENT)
     expect(revertBlockedReason({ packaged: true, updatePending: true, testSession: true, endsTestSession: true })).toBe(REVERT_BLOCKED_BY_UPDATE)
+  })
+})
+
+describe('restartBlockedReason', () => {
+  const installed = { packaged: true, portable: false, updatePending: false, testSession: false }
+
+  it('lets the installed shell restart itself', () => {
+    expect(restartBlockedReason(installed)).toBe(null)
+  })
+
+  it('refuses in development, where the dev launcher owns the process', () => {
+    expect(restartBlockedReason({ ...installed, packaged: false })).toBe(RESTART_BLOCKED_IN_DEVELOPMENT)
+  })
+
+  it('refuses a portable run, which would come back as the installer', () => {
+    expect(restartBlockedReason({ ...installed, portable: true })).toBe(RESTART_BLOCKED_WHEN_NOT_INSTALLED)
+  })
+
+  it('refuses while an update owns the shell registration', () => {
+    expect(restartBlockedReason({ ...installed, updatePending: true })).toBe(RESTART_BLOCKED_BY_UPDATE)
+  })
+
+  it('refuses during a test-out, whose helper would bring Explorer back', () => {
+    expect(restartBlockedReason({ ...installed, testSession: true })).toBe(RESTART_BLOCKED_IN_TEST_SESSION)
   })
 })
 

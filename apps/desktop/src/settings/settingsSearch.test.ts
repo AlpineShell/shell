@@ -201,6 +201,15 @@ describe('settings search ranking', () => {
     expect(wallpaper).toHaveLength(1)
   })
 
+  it('offers Restart Alpine Shell as a result that runs, and only to someone who searches for it', () => {
+    for (const query of ['restart alpine', 'restart shell', 'ridge missing']) {
+      const match = shown(query).find((candidate) => candidate.target.id === 'restart-alpine-shell')
+      expect(match?.target.action.kind, query).toBe('run')
+    }
+    const restartPage = settingsPageRoute(SETTINGS_REGISTRY.find((entry) => entry.id === 'restart-alpine-shell')?.page as SettingsPageId)
+    expect(restartPage).toBeNull()
+  })
+
   it('keeps a page reachable through a target that carries the section it belongs to', () => {
     const wifi = SETTINGS_SEARCH_TARGETS.find((target) => target.label === 'Network')
     expect(wifi?.context).toBe('Devices')

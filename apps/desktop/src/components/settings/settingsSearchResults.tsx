@@ -12,6 +12,7 @@ export default function SettingsSearchResults({
   selected,
   listId,
   rowId,
+  runFailure,
   onPoint,
   onActivate,
 }: SettingsSearchResultsProps) {
@@ -31,6 +32,7 @@ export default function SettingsSearchResults({
               key={match.target.id}
               id={rowId(index)}
               target={match.target}
+              failure={runFailure?.targetId === match.target.id ? runFailure.message : null}
               active={index === selected}
               onPoint={() => onPoint(index)}
               onActivate={() => onActivate(match.target)}
@@ -53,6 +55,7 @@ function resultSummary(count: number, query: string): string {
 interface ResultRowProps {
   id: string
   target: SettingsSearchTarget
+  failure: string | null
   active: boolean
   onPoint: () => void
   onActivate: () => void
@@ -61,6 +64,7 @@ interface ResultRowProps {
 function ResultRow(props: ResultRowProps) {
   const action = props.target.action
   if (action.kind === 'toggle') return <ToggleResultRow {...props} entry={action.entry} />
+  if (action.kind === 'run') return <ResultShell {...props} trailing={<action.actionIcon size={14} />} />
   return (
     <ResultShell
       {...props}
@@ -88,6 +92,7 @@ function ToggleResultRow({ entry, ...shell }: ResultRowProps & { entry: Settings
 function ResultShell({
   id,
   target,
+  failure,
   active,
   state,
   trailing,
@@ -111,7 +116,11 @@ function ResultShell({
       <Icon size={16} className="shrink-0 text-ink-quiet" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm text-ink-primary">{target.label}</div>
-        <div className="truncate text-xs text-ink-quiet">{target.description}</div>
+        {failure ? (
+          <div role="alert" className="select-text truncate text-xs text-danger">{failure}</div>
+        ) : (
+          <div className="truncate text-xs text-ink-quiet">{target.description}</div>
+        )}
       </div>
       <span className="max-w-32 shrink-0 truncate text-eyebrow uppercase text-ink-faint">{target.context}</span>
       <span className="flex w-9 shrink-0 items-center justify-end text-ink-faint">{trailing}</span>

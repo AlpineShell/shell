@@ -18,6 +18,7 @@ function entryAction(entry: SettingsEntry, page: SettingsPage): SettingsSearchAc
     return { kind: 'toggle', entry }
   }
   if (page.route !== null) return { kind: 'navigate', route: page.route, highlight: entry.id }
+  if (entry.control.kind === 'action') return { kind: 'run', run: entry.control.run, actionIcon: entry.control.actionIcon }
   return { kind: 'launcher' }
 }
 
