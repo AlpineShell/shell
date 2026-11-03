@@ -144,7 +144,7 @@ try { powerThrottling = require('./modules/powerThrottling') } catch (e) { conso
 let shellWindow = null
 try { shellWindow = require('./modules/shellWindow') } catch (e) { console.error('[main] shellWindow load error:', e.message) }
 const { displayCenter } = require('./modules/desktopHostGeometry')
-const { planDisplayShells, planChangesShells } = require('./modules/displayShellPlan')
+const { planDisplayShells, planChangesShells, misplacedShells, planSnapBack } = require('./modules/displayShellPlan')
 const gpuPreference = require('./modules/gpuPreference')
 const colorMode = require('./modules/colorMode')
 const dateTime = require('./modules/dateTime')
@@ -297,6 +297,8 @@ const NEAR_BAR_MARGIN = 200
 
 const MENU_CLOSE_GRACE_MS = 300
 
+const DISPLAY_SETTLE_PASSES_MS = [300, 1500, 4000]
+
 const shells = new Map()
 
 let cursorTracker = null
@@ -405,6 +407,20 @@ function hostDesktopInShellWindow(shell) {
   shell.desktopHosted = shellWindow.hostDesktopWindow(desktopWindowHandle(shell.desktop), desktopScreenCenter(shell.display))
 }
 
+function sameBounds(a, b) {
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+}
+
+function placeWindow(win, bounds) {
+  win.setBounds(bounds)
+  if (!sameBounds(win.getBounds(), bounds)) win.setBounds(bounds)
+}
+
+function liveDisplayBounds(displayId) {
+  const display = screen.getAllDisplays().find((candidate) => candidate.id === displayId)
+  return display ? display.bounds : null
+}
+
 function placeDesktopWindow(shell) {
   if (shell.desktop.isDestroyed()) return
   if (shell.desktopHosted) {
@@ -412,7 +428,7 @@ function placeDesktopWindow(shell) {
     return
   }
   const { x, y, width, height } = shell.display.bounds
-  shell.desktop.setBounds({ x, y, width, height })
+  placeWindow(shell.desktop, { x, y, width, height })
 }
 
 function keepLiveWallpapersAboveDesktopWindows() {
@@ -460,12 +476,16 @@ function createDesktopWindow(display) {
 
 function forceShellBounds(shell) {
   if (!shell) return
-  const { x, y, width, height } = shell.display.bounds
   placeDesktopWindow(shell)
-  if (!shell.topBar.isDestroyed()) {
-    shell.topBar.setBounds({ x, y, width, height })
-    if (shell.topBar.refreshBarBounds) shell.topBar.refreshBarBounds()
-  }
+  if (shell.topBar.isDestroyed()) return
+  if (isTopBarRaised(shell)) shell.topBar.keepRaisedOnOwnDisplay()
+  else shell.topBar.restoreFullBounds()
+  shell.topBar.refreshBarBounds()
+}
+
+function isTopBarRaised(shell) {
+  if (shell.topBar.isDestroyed()) return false
+  return Boolean(shell.topBarState.activeRegion) || launcher.isLauncherActive(shell.topBar) || hookSurfaceOwnsTopBar(shell.topBar)
 }
 
 function createTopBarWindow(display) {
@@ -502,17 +522,26 @@ function createTopBarWindow(display) {
     state.bounds = win.getBounds()
   }
 
+  const ownDisplayBounds = () => liveDisplayBounds(display.id) ?? screen.getDisplayMatching(win.getBounds()).bounds
+
   win.setRaisedBounds = (bottom) => {
     if (win.isDestroyed()) return
-    const db = screen.getDisplayMatching(win.getBounds()).bounds
+    const db = ownDisplayBounds()
     const height = Math.min(db.height, Math.max(TOP_BAR_HEIGHT, Math.ceil(bottom) + RAISED_REGION_PAD))
-    win.setBounds({ x: db.x, y: db.y, width: db.width, height })
+    placeWindow(win, { x: db.x, y: db.y, width: db.width, height })
   }
 
   win.restoreFullBounds = () => {
     if (win.isDestroyed()) return
-    const db = screen.getDisplayMatching(win.getBounds()).bounds
-    win.setBounds({ x: db.x, y: db.y, width: db.width, height: db.height })
+    const db = ownDisplayBounds()
+    placeWindow(win, { x: db.x, y: db.y, width: db.width, height: db.height })
+  }
+
+  win.keepRaisedOnOwnDisplay = () => {
+    if (win.isDestroyed()) return
+    const db = ownDisplayBounds()
+    const height = Math.min(db.height, Math.max(TOP_BAR_HEIGHT, win.getBounds().height))
+    placeWindow(win, { x: db.x, y: db.y, width: db.width, height })
   }
 
   win.restorePassiveTopBar = () => {
@@ -529,8 +558,36 @@ function createTopBarWindow(display) {
     evaluateTopBarInteraction(win, state)
   }
 
-  win.on('move', win.refreshBarBounds)
-  win.on('resize', win.refreshBarBounds)
+  let snapBackQueued = false
+  let recentSnapBacks = []
+
+  const snapBackIfPushedAway = () => {
+    snapBackQueued = false
+    const shell = shells.get(display.id)
+    if (!shell || shell.topBar !== win || win.isDestroyed()) return
+    if (!liveDisplayBounds(display.id)) return
+    if (misplacedShells([{ ...shellPlacement(shell), display: liveDisplayBounds(display.id), desktop: null }]).length === 0) return
+    const plan = planSnapBack(recentSnapBacks, Date.now())
+    recentSnapBacks = plan.recent
+    if (!plan.allowed) return
+    console.log(`[main] Ridge of display ${display.id} was moved off its place, putting it back`)
+    forceShellBounds(shell)
+  }
+
+  const queueSnapBack = () => {
+    if (snapBackQueued) return
+    snapBackQueued = true
+    setImmediate(snapBackIfPushedAway)
+  }
+
+  win.on('move', () => {
+    win.refreshBarBounds()
+    queueSnapBack()
+  })
+  win.on('resize', () => {
+    win.refreshBarBounds()
+    queueSnapBack()
+  })
 
   const onTopBarInput = (_event, input) => {
     if (input.type !== 'mouseDown') return
@@ -636,12 +693,8 @@ function repositionShell(display) {
 
   console.log(`[main] Repositioning shell for display ${display.id}: ${display.bounds.width}x${display.bounds.height} @ ${display.scaleFactor}x DPI`)
 
-  const { x, y, width, height } = display.bounds
-
   shell.display = display
-  placeDesktopWindow(shell)
-  shell.topBar.setBounds({ x, y, width, height })
-  if (shell.topBar.refreshBarBounds) shell.topBar.refreshBarBounds()
+  forceShellBounds(shell)
 
   try {
     registerAppBar(shell.topBar, display, TOP_BAR_HEIGHT)
@@ -661,6 +714,38 @@ function syncShellsToDisplays() {
   for (const display of plan.missing) createShellForDisplay(display)
   for (const display of plan.moved) repositionShell(display)
   fitShellWindowToScreens()
+}
+
+function shellPlacement(shell) {
+  return {
+    displayId: shell.display.id,
+    display: shell.display.bounds,
+    topBar: shell.topBar.isDestroyed() ? null : shell.topBar.getBounds(),
+    raised: isTopBarRaised(shell),
+    desktop: shell.desktopHosted || shell.desktop.isDestroyed() ? null : shell.desktop.getBounds(),
+  }
+}
+
+function putMisplacedShellsBack() {
+  const misplaced = misplacedShells([...shells.values()].map(shellPlacement))
+  for (const displayId of misplaced) {
+    console.log(`[main] Putting the shell of display ${displayId} back on its display`)
+    forceShellBounds(shells.get(displayId))
+  }
+  if (misplaced.length > 0) fitShellWindowToScreens()
+}
+
+function reconcileShellsWithDisplays() {
+  syncShellsToDisplays()
+  putMisplacedShellsBack()
+  scheduleReassert()
+}
+
+let displaySettleTimers = []
+
+function reconcileShellsOnceDisplaysSettle() {
+  for (const timer of displaySettleTimers) clearTimeout(timer)
+  displaySettleTimers = DISPLAY_SETTLE_PASSES_MS.map((delay) => setTimeout(reconcileShellsWithDisplays, delay))
 }
 
 function createScreenshotWindow() {
@@ -1426,7 +1511,7 @@ function startShellMode(claimedTakeover = null) {
   screen.on('display-added', (_event, newDisplay) => {
     console.log(`[main] Display added: ${newDisplay.id}`)
     syncShellsToDisplays()
-    scheduleReassert()
+    reconcileShellsOnceDisplaysSettle()
     if (powerThrottling) {
       setTimeout(() => powerThrottling.applyEcoQosToAllProcesses(), 1500)
     }
@@ -1435,7 +1520,7 @@ function startShellMode(claimedTakeover = null) {
   screen.on('display-removed', (_event, oldDisplay) => {
     console.log(`[main] Display removed: ${oldDisplay.id}`)
     syncShellsToDisplays()
-    scheduleReassert()
+    reconcileShellsOnceDisplaysSettle()
   })
 
   screen.on('display-metrics-changed', (_event, display, changedMetrics) => {
@@ -1449,11 +1534,12 @@ function startShellMode(claimedTakeover = null) {
     }
 
     console.log(`[main] Display metrics changed: ${display.id} [${changedMetrics.join(', ')}]`)
-    if (changedMetrics.includes('bounds') || changedMetrics.includes('scaleFactor')) {
-      syncShellsToDisplays()
-    }
-    scheduleReassert()
+    syncShellsToDisplays()
+    reconcileShellsOnceDisplaysSettle()
   })
+
+  powerMonitor.on('resume', reconcileShellsOnceDisplaysSettle)
+  powerMonitor.on('unlock-screen', reconcileShellsOnceDisplaysSettle)
 }
 
 app.on('will-quit', () => {
