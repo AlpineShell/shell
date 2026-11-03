@@ -1,3 +1,4 @@
+import { FlaskConical } from 'lucide-react'
 import {
   SETTINGS_PAGES,
   SETTINGS_PAGE_GROUP,
@@ -8,6 +9,16 @@ import {
 import { scoreField } from '../lib/launcherSearch'
 
 export const SETTINGS_SEARCH_LIMIT = 12
+
+const PREVIEW_BUILDS_TARGET: SettingsSearchTarget = {
+  id: 'preview-builds',
+  label: 'Preview builds',
+  description: 'Enable early access to Alpine Shell updates',
+  keywords: ['preview', 'preview builds', 'early access', 'beta', 'nightly', 'update channel'],
+  icon: FlaskConical,
+  context: 'Updates',
+  action: { kind: 'update-channel', channel: 'nightly' },
+}
 
 const KEYWORD_PENALTY = 4
 const DESCRIPTION_PENALTY = 8
@@ -70,6 +81,7 @@ export function settingsSearchTargets(
     if (!page || entry.group === SETTINGS_PAGE_GROUP) continue
     add(entryTarget(entry, page))
   }
+  add(PREVIEW_BUILDS_TARGET)
   return targets
 }
 

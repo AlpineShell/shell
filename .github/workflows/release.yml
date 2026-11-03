@@ -3,6 +3,7 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,14 +28,32 @@ jobs:
         with:
           bun-version: 1.3.12
 
-      - name: Validate release tag is strict semver
+      - name: Validate release tag and pick the channel
         shell: bash
+        env:
+          MARKED_PRERELEASE: ${{ github.event.release.prerelease == true }}
         run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::Run this workflow on a release tag, not on '${GITHUB_REF_NAME}'."
+            exit 1
+          fi
           VERSION="${GITHUB_REF_NAME#v}"
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Tag '${GITHUB_REF_NAME}' is not a strict MAJOR.MINOR.PATCH version (got '${VERSION}')."
-            echo "::error::electron-updater compares with semver: 4 segments (e.g. 0.1.20260602.2) get mangled into a lower/pre-release version and clients will not update."
-            echo "::error::Use a 3-segment tag that is strictly greater than the last release, e.g. v0.1.20260603 or, for multiple builds per day, encode the build into the patch: v0.1.2026060201."
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "FEED_CHANNEL=latest" >> "$GITHUB_ENV"
+            if [ "$MARKED_PRERELEASE" = "true" ]; then
+              echo "PUBLISH_TO_FEED=false" >> "$GITHUB_ENV"
+            else
+              echo "PUBLISH_TO_FEED=true" >> "$GITHUB_ENV"
+            fi
+          elif [[ "$VERSION" =~ ^0\.[0-9]{8}\.[0-9]+$ ]]; then
+            echo "FEED_CHANNEL=latest" >> "$GITHUB_ENV"
+            echo "PUBLISH_TO_FEED=true" >> "$GITHUB_ENV"
+          elif [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]]; then
+            echo "FEED_CHANNEL=nightly" >> "$GITHUB_ENV"
+            echo "PUBLISH_TO_FEED=true" >> "$GITHUB_ENV"
+          else
+            echo "::error::Tag '${GITHUB_REF_NAME}' is neither a stable MAJOR.MINOR.PATCH version, the date-numbered bridge 0.YYYYMMDD.N, nor a nightly MAJOR.MINOR.PATCH-nightly.YYYYMMDD.N version (got '${VERSION}')."
+            echo "::error::electron-updater compares with semver, so a stable tag must be greater than the last stable release, e.g. v0.1.0 then v0.1.1."
             exit 1
           fi
 
@@ -115,11 +134,12 @@ jobs:
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: |
           if [ "$SIGN_WINDOWS_BINARIES" = "true" ]; then
-            bunx electron-builder --win --publish never -c.forceCodeSigning=true
+            bunx electron-builder --win --publish never -c.publish.channel="$FEED_CHANNEL" -c.forceCodeSigning=true
           else
             echo "::warning::WIN_CSC_LINK is not set, so the installer and every file it installs are unsigned."
-            bunx electron-builder --win --publish never
+            bunx electron-builder --win --publish never -c.publish.channel="$FEED_CHANNEL"
           fi
+          test -f "release/$FEED_CHANNEL.yml" || { echo "::error::electron-builder did not write release/$FEED_CHANNEL.yml"; exit 1; }
 
       - name: Verify the baked update feed
         working-directory: apps/desktop
@@ -186,8 +206,8 @@ jobs:
           compression-level: 0
           overwrite: true
 
-      - name: Publish installer + latest.yml to Railway
-        if: ${{ !github.event.release.prerelease }}
+      - name: Publish installer + update feed to Railway
+        if: env.PUBLISH_TO_FEED == 'true'
         working-directory: apps/desktop
         env:
           STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}

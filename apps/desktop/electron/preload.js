@@ -759,6 +759,7 @@ contextBridge.exposeInMainWorld('shell', {
     install: () => ipcRenderer.invoke('updates/install'),
     preferences: () => ipcRenderer.invoke('updates/get-preferences'),
     setPreferences: (partial) => ipcRenderer.invoke('updates/set-preferences', partial),
+    openChangelog: () => ipcRenderer.invoke('updates/open-changelog'),
     onStateChanged: (callback) => {
       ipcRenderer.on('updates/state-changed', (_, data) => callback(data))
     },

@@ -964,19 +964,23 @@ function createSettingsWindow() {
   return settingsWin
 }
 
-function openSettingsToPlugins(deepInstall) {
-  pendingSettingsPage = 'plugins'
+function openSettingsToPage(page, afterNavigate) {
+  pendingSettingsPage = page
   const win = createSettingsWindow()
   if (!win) return
   const send = () => {
     if (!win || win.isDestroyed()) return
-    win.webContents.send('windows/settings-navigate', 'plugins')
-    if (deepInstall) win.webContents.send('plugins/deep-install', deepInstall)
+    win.webContents.send('windows/settings-navigate', page)
+    afterNavigate?.(win)
     if (win.isMinimized()) win.restore()
     win.focus()
   }
   if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send)
   else send()
+}
+
+function openSettingsToPlugins(deepInstall) {
+  openSettingsToPage('plugins', deepInstall ? (win) => win.webContents.send('plugins/deep-install', deepInstall) : undefined)
 }
 
 function openSettingsFromHotkey() {
@@ -1001,6 +1005,11 @@ function handleDeepLink(rawUrl) {
     const id = parsed.searchParams.get('id')
     if (!id) return
     openSettingsToPlugins({ id, version: parsed.searchParams.get('version') || '' })
+    return
+  }
+  if (action === 'enable-preview') {
+    updater.setPreferences({ channel: 'nightly' })
+    openSettingsToPage('updates')
     return
   }
   if (action === 'open-app') {

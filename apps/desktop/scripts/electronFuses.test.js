@@ -43,7 +43,7 @@ describe('electron fuses', () => {
 
   it('verifies the fuses before the installer is published', () => {
     expect(stepIndex('Build installer')).toBeLessThan(stepIndex('Verify Electron fuses'))
-    expect(stepIndex('Verify Electron fuses')).toBeLessThan(stepIndex('Publish installer + latest.yml to Railway'))
+    expect(stepIndex('Verify Electron fuses')).toBeLessThan(stepIndex('Publish installer + update feed to Railway'))
     expect(stepIndex('Verify Electron fuses')).toBeLessThan(stepIndex('Attach installer to GitHub Release'))
   })
 })

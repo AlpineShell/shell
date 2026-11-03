@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, AppWindow, CheckCircle2, Download, LogIn, RefreshCw, RotateCcw } from 'lucide-react'
+import { AlertTriangle, AppWindow, CheckCircle2, Download, ExternalLink, LogIn, RefreshCw, RotateCcw } from 'lucide-react'
 import { Button, Card, ListRow, PageHeader, Section, Spinner } from '@alpine/ui'
 import { settingsPage } from '../../settings/registry'
 import { useUpdate } from '../../hooks/useUpdate'
@@ -46,6 +46,7 @@ export default function UpdatesPage() {
   const checking = alpine.state.status === 'checking' || windows.state.status === 'checking'
   const installing = windows.state.status === 'downloading' || windows.state.status === 'installing'
   const restartRequired = windows.state.status === 'restart-required' || windows.state.rebootRequired
+  const previewEnabled = alpine.preferences?.channel === 'nightly'
 
   const alpineActionable =
     alpine.state.status === 'available' ||
@@ -101,11 +102,33 @@ export default function UpdatesPage() {
             variant="plain"
             icon={<AppWindow size={16} className="text-ink-secondary" />}
             title={`Alpine Shell ${alpine.state.currentVersion}`}
-            detail={alpineDetail(alpine.state)}
+            detail={previewEnabled ? `${alpineDetail(alpine.state)} · Preview builds enabled` : alpineDetail(alpine.state)}
             actions={
-              alpineActionable ? (
-                <AlpineAction state={alpine.state} download={alpine.download} install={alpine.install} disabled={installing} />
-              ) : undefined
+              <div className="flex items-center gap-1">
+                {previewEnabled && (
+                  <Button
+                    shape="square"
+                    variant="ghost"
+                    size="sm"
+                    disabled={alpineBusy}
+                    onClick={() => alpine.setChannel('stable')}
+                  >
+                    Switch to Stable
+                  </Button>
+                )}
+                <Button
+                  shape="square"
+                  variant="ghost"
+                  size="sm"
+                  icon={<ExternalLink size={14} />}
+                  onClick={alpine.openChangelog}
+                >
+                  What's new
+                </Button>
+                {alpineActionable && (
+                  <AlpineAction state={alpine.state} download={alpine.download} install={alpine.install} disabled={installing} />
+                )}
+              </div>
             }
           />
         </Card>
