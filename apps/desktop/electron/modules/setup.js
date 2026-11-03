@@ -24,6 +24,12 @@ const REVERT_BLOCKED_MESSAGES = {
   [shellExclusivity.REVERT_BLOCKED_IN_TEST_SESSION]: 'Alpine Shell is only being tested. Use Return to Windows instead.',
   [shellExclusivity.REVERT_BLOCKED_WITHOUT_TEST_SESSION]: 'There is no test to end.',
 }
+const RESTART_BLOCKED_MESSAGES = {
+  [shellExclusivity.RESTART_BLOCKED_IN_DEVELOPMENT]: 'Unavailable in development.',
+  [shellExclusivity.RESTART_BLOCKED_WHEN_NOT_INSTALLED]: 'Install Alpine Shell first.',
+  [shellExclusivity.RESTART_BLOCKED_BY_UPDATE]: 'An update is in progress. Try again once it has finished.',
+  [shellExclusivity.RESTART_BLOCKED_IN_TEST_SESSION]: 'Alpine Shell is only being tested. Use Return to Windows instead.',
+}
 const XAML_START_MENU_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced'
 const RUN_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'
 const RUN_VALUE_NAME = 'AlpineShell'
@@ -481,8 +487,22 @@ async function runRevert(action, { beforeAction = null, endsTestSession = false 
   }
 }
 
+function restartShell() {
+  const blockedReason = shellExclusivity.restartBlockedReason({
+    packaged: electronApp().isPackaged,
+    portable: installer.isPortableRun(),
+    updatePending: updater.isUpdatePending() || installer.isUpdateHandoffActive(),
+    testSession: isTestSession(),
+  })
+  if (blockedReason) return { success: false, error: RESTART_BLOCKED_MESSAGES[blockedReason] }
+  electronApp().relaunch()
+  exitShellAfterReply()
+  return { success: true, error: null }
+}
+
 const settingsWindowHandlers = guardHandlers({
   'setup/test-session': () => isTestSession(),
+  'setup/restart-shell': () => restartShell(),
   'setup/end-test-session': () => runRevert(handBackFromTestSession, { endsTestSession: true }),
   'setup/revert-temporary': () => runRevert(() => installer.revertShellTemporarily()),
   'setup/revert-permanent': () => runRevert(() => installer.revertShellPermanently()),

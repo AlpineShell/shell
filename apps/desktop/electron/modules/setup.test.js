@@ -259,7 +259,7 @@ describe('setup handlers and their callers', () => {
   })
 
   it('answers the revert channels only from the settings window', async () => {
-    for (const channel of ['setup/test-session', 'setup/end-test-session', 'setup/revert-temporary', 'setup/revert-permanent', 'setup/uninstall']) {
+    for (const channel of ['setup/test-session', 'setup/end-test-session', 'setup/revert-temporary', 'setup/revert-permanent', 'setup/uninstall', 'setup/restart-shell']) {
       await expect(async () => setup.handlers[channel](fromSetupWindow)).rejects.toThrow('untrusted-sender')
       await expect(async () => setup.handlers[channel](fromStranger)).rejects.toThrow('untrusted-sender')
     }
@@ -799,6 +799,58 @@ describe('ending a test-out from settings', () => {
     expect(installerMock.uninstall).not.toHaveBeenCalled()
     expect(licenceMock.releaseSelf).not.toHaveBeenCalled()
     expect(regCalls).toHaveLength(0)
+    expect(shellShutdown).not.toHaveBeenCalled()
+  })
+})
+
+describe('restarting Alpine Shell from settings', () => {
+  const shellShutdown = vi.fn()
+
+  function freshSetup() {
+    delete nodeRequire.cache[nodeRequire.resolve('./setup.js')]
+    const setupModule = nodeRequire('./setup.js')
+    setupModule.setShellShutdown(shellShutdown)
+    return setupModule
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    electronApp.isPackaged = true
+    electronApp.relaunch.mockClear()
+    shellShutdown.mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('asks Windows to start Alpine again, then closes this run cleanly, without touching the registry', async () => {
+    const result = freshSetup().handlers['setup/restart-shell'](fromSettingsWindow)
+    expect(result).toEqual({ success: true, error: null })
+    await vi.runAllTimersAsync()
+    expect(electronApp.relaunch).toHaveBeenCalledTimes(1)
+    expect(shellShutdown).toHaveBeenCalledTimes(1)
+    expect(regCalls).toHaveLength(0)
+  })
+
+  it('refuses in development and keeps running', async () => {
+    electronApp.isPackaged = false
+    const result = freshSetup().handlers['setup/restart-shell'](fromSettingsWindow)
+    expect(result).toEqual({ success: false, error: 'Unavailable in development.' })
+    await vi.runAllTimersAsync()
+    expect(electronApp.relaunch).not.toHaveBeenCalled()
+    expect(shellShutdown).not.toHaveBeenCalled()
+  })
+
+  it('refuses during a test-out, whose helper would bring Explorer back while Alpine restarts', async () => {
+    explorerShellMock.shellHostedByExplorer.mockImplementation(() => false)
+    const setupModule = freshSetup()
+    const started = setupModule.beginTestSession()
+    await vi.advanceTimersByTimeAsync(15000)
+    await started
+    const result = setupModule.handlers['setup/restart-shell'](fromSettingsWindow)
+    expect(result).toEqual({ success: false, error: 'Alpine Shell is only being tested. Use Return to Windows instead.' })
+    expect(electronApp.relaunch).not.toHaveBeenCalled()
     expect(shellShutdown).not.toHaveBeenCalled()
   })
 })

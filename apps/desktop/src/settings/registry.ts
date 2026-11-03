@@ -44,6 +44,7 @@ import {
   Puzzle,
   RefreshCw,
   RotateCcw,
+  RotateCw,
   Ruler,
   Scaling,
   Search,
@@ -452,6 +453,13 @@ function toTopBarColorOverride(value: unknown): TopBarColor | null {
 function refuseUnboundHotkey(result: HotkeyBindResult): HotkeyBindResult {
   if (!result.ok) throw new Error('Alpine could not use that shortcut. Search still opens with the old one — try another combination.')
   return result
+}
+
+function restartAlpineShell(): Promise<unknown> {
+  return window.setup.restartShell().then((result) => {
+    if (!result.success) throw new Error(result.error ?? 'Alpine Shell could not restart.')
+    return result
+  })
 }
 
 function freezeAutomaticTopBarColor(): Promise<unknown> {
@@ -1860,6 +1868,19 @@ export const SETTINGS_REGISTRY: SettingsEntry[] = [
     order: 3,
     applies: 'confirm',
     control: { kind: 'power' },
+  },
+  {
+    id: 'restart-alpine-shell',
+    label: 'Restart Alpine Shell',
+    description: 'Reopen Ridge and the desktop. Your apps stay open.',
+    keywords: ['restart shell', 'reload shell', 'relaunch alpine', 'reopen ridge', 'ridge missing', 'ridge broken'],
+    icon: RotateCw,
+    page: 'quick-actions',
+    group: 'System',
+    order: 5,
+    applies: 'instant',
+    hiddenFromLauncher: true,
+    control: { kind: 'action', actionLabel: 'Restart Alpine Shell', actionIcon: RotateCw, run: restartAlpineShell },
   },
 ]
 

@@ -73,6 +73,7 @@ export default function SettingsApp() {
   const [historyIndex, setHistoryIndex] = useState(() => history.length - 1)
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
+  const [runFailure, setRunFailure] = useState<SettingsSearchRunFailure | null>(null)
   const lastPathInSection = useRef<Partial<Record<SettingsSectionId, string>>>({})
 
   const currentPath = history[historyIndex]
@@ -104,6 +105,14 @@ export default function SettingsApp() {
   function clearSearch() {
     setQuery('')
     setActiveIndex(0)
+    setRunFailure(null)
+  }
+
+  function runFromSearch(target: SettingsSearchTarget, run: () => Promise<unknown>) {
+    setRunFailure(null)
+    run().catch((error: unknown) => {
+      setRunFailure({ targetId: target.id, message: error instanceof Error ? error.message : String(error) })
+    })
   }
 
   function navigate(path: string) {
@@ -133,6 +142,10 @@ export default function SettingsApp() {
     const action = target.action
     if (action.kind === 'toggle') {
       toggleSettingsValue(action.entry)
+      return
+    }
+    if (action.kind === 'run') {
+      runFromSearch(target, action.run)
       return
     }
     if (action.kind === 'launcher') {
@@ -224,6 +237,7 @@ export default function SettingsApp() {
             onChange={(next) => {
               setQuery(next)
               setActiveIndex(0)
+              setRunFailure(null)
             }}
             onKeyDown={onSearchKey}
             label="Search settings"
@@ -271,6 +285,7 @@ export default function SettingsApp() {
               selected={selected}
               listId={listId}
               rowId={rowId}
+              runFailure={runFailure}
               onPoint={setActiveIndex}
               onActivate={activateMatch}
             />

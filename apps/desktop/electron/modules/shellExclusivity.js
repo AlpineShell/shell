@@ -8,6 +8,11 @@ const REVERT_BLOCKED_BY_UPDATE = 'update-in-progress'
 const REVERT_BLOCKED_IN_TEST_SESSION = 'test-session'
 const REVERT_BLOCKED_WITHOUT_TEST_SESSION = 'no-test-session'
 
+const RESTART_BLOCKED_IN_DEVELOPMENT = 'development'
+const RESTART_BLOCKED_WHEN_NOT_INSTALLED = 'not-installed'
+const RESTART_BLOCKED_BY_UPDATE = 'update-in-progress'
+const RESTART_BLOCKED_IN_TEST_SESSION = 'test-session'
+
 function idlePlan(shellRegisteredToAlpine) {
   return { steps: [], actingAsShell: Boolean(shellRegisteredToAlpine) }
 }
@@ -47,6 +52,14 @@ function revertBlockedReason({ packaged, updatePending, testSession = false, end
   if (updatePending) return REVERT_BLOCKED_BY_UPDATE
   if (testSession && !endsTestSession) return REVERT_BLOCKED_IN_TEST_SESSION
   if (!testSession && endsTestSession) return REVERT_BLOCKED_WITHOUT_TEST_SESSION
+  return null
+}
+
+function restartBlockedReason({ packaged, portable, updatePending, testSession }) {
+  if (!packaged) return RESTART_BLOCKED_IN_DEVELOPMENT
+  if (portable) return RESTART_BLOCKED_WHEN_NOT_INSTALLED
+  if (updatePending) return RESTART_BLOCKED_BY_UPDATE
+  if (testSession) return RESTART_BLOCKED_IN_TEST_SESSION
   return null
 }
 
@@ -124,6 +137,11 @@ module.exports = {
   requiresShellRegistration,
   isRegistrationSatisfied,
   revertBlockedReason,
+  RESTART_BLOCKED_IN_DEVELOPMENT,
+  RESTART_BLOCKED_WHEN_NOT_INSTALLED,
+  RESTART_BLOCKED_BY_UPDATE,
+  RESTART_BLOCKED_IN_TEST_SESSION,
+  restartBlockedReason,
   planAutostartLaunch,
   shouldProcessAutostart,
   matchHandoffLogon,
