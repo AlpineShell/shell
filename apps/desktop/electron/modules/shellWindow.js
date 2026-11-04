@@ -249,13 +249,31 @@ function monitorRectAt(screenPoint) {
   }
 }
 
-function placeHostedDesktopWindow(hwnd, screenPoint) {
-  if (!hostedDesktopWindows.has(hwnd)) return false
+function hostedDesktopRect(hwnd, screenPoint) {
+  if (!hostedDesktopWindows.has(hwnd)) return null
   const monitorRect = monitorRectAt(screenPoint)
-  if (!monitorRect) return false
-  const { x, y, width, height } = rectInsideShellWindow(monitorRect, virtualScreenBounds())
-  SetWindowPos(hwnd, HWND_BOTTOM, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW)
+  if (!monitorRect) return null
+  return rectInsideShellWindow(monitorRect, virtualScreenBounds())
+}
+
+function placeHostedDesktopWindow(hwnd, screenPoint) {
+  const rect = hostedDesktopRect(hwnd, screenPoint)
+  if (!rect) return false
+  SetWindowPos(hwnd, HWND_BOTTOM, rect.x, rect.y, rect.width, rect.height, SWP_NOACTIVATE | SWP_SHOWWINDOW)
   return true
+}
+
+function resyncHostedDesktopWindowSize(hwnd, screenPoint) {
+  const rect = hostedDesktopRect(hwnd, screenPoint)
+  if (!rect) return false
+  try {
+    SetWindowPos(hwnd, HWND_BOTTOM, rect.x, rect.y, rect.width, Math.max(1, rect.height - 1), SWP_NOACTIVATE)
+    SetWindowPos(hwnd, HWND_BOTTOM, rect.x, rect.y, rect.width, rect.height, SWP_NOACTIVATE | SWP_SHOWWINDOW)
+    return true
+  } catch (e) {
+    console.error('[shellWindow] resyncHostedDesktopWindowSize error:', e.message)
+    return false
+  }
 }
 
 function hostDesktopWindow(hwnd, screenPoint) {
@@ -324,4 +342,4 @@ function destroy() {
   registered = false
 }
 
-module.exports = { register, destroy, onAppCommand, fitToVirtualScreen, hostDesktopWindow, placeHostedDesktopWindow, forgetHostedDesktopWindow, isLiveWallpaperWindow, sendHostedDesktopWindowsToBottom }
+module.exports = { register, destroy, onAppCommand, fitToVirtualScreen, hostDesktopWindow, placeHostedDesktopWindow, resyncHostedDesktopWindowSize, forgetHostedDesktopWindow, isLiveWallpaperWindow, sendHostedDesktopWindowsToBottom }
