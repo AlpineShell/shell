@@ -21,7 +21,7 @@ nodeRequire.cache[electronModuleId] = {
 }
 
 const DARK_THEME = { name: 'dark', background: '#1f2020' }
-const LIGHT_THEME = { name: 'light', background: '#d6d6d6' }
+const LIGHT_THEME = { name: 'light', background: '#f7f7f7' }
 
 function createColorMode(initial) {
   const listeners = []

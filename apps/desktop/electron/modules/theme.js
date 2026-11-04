@@ -1,5 +1,5 @@
 const GROUND_COLORS = {
-  light: '#d6d6d6',
+  light: '#f7f7f7',
   dark: '#1f2020',
 }
 

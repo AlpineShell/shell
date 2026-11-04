@@ -436,7 +436,7 @@ export default function SetupApp() {
                 </Button>
                 <IconButton
                   label={`Customize ${verb.toLowerCase()}`}
-                  shape="round"
+                  shape="square"
                   tooltip="topEnd"
                   disabled={installing || testingOut}
                   onClick={() => setPage('options')}
@@ -446,7 +446,7 @@ export default function SetupApp() {
                 {!isUpdate && (
                   <IconButton
                     label="Test out, resets on restart"
-                    shape="round"
+                    shape="square"
                     tooltip="topEnd"
                     busy={testingOut}
                     disabled={installing}
