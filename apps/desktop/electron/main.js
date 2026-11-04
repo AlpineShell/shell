@@ -437,6 +437,14 @@ function keepLiveWallpapersAboveDesktopWindows() {
   })
 }
 
+function resyncHostedDesktopSizes() {
+  if (!shellWindow) return
+  for (const shell of shells.values()) {
+    if (!shell.desktopHosted || shell.desktop.isDestroyed()) continue
+    shellWindow.resyncHostedDesktopWindowSize(desktopWindowHandle(shell.desktop), desktopScreenCenter(shell.display))
+  }
+}
+
 function fitShellWindowToScreens() {
   if (!shellWindow) return
   shellWindow.fitToVirtualScreen()
@@ -745,7 +753,11 @@ let displaySettleTimers = []
 
 function reconcileShellsOnceDisplaysSettle() {
   for (const timer of displaySettleTimers) clearTimeout(timer)
-  displaySettleTimers = DISPLAY_SETTLE_PASSES_MS.map((delay) => setTimeout(reconcileShellsWithDisplays, delay))
+  const lastPass = DISPLAY_SETTLE_PASSES_MS.length - 1
+  displaySettleTimers = DISPLAY_SETTLE_PASSES_MS.map((delay, pass) => setTimeout(() => {
+    reconcileShellsWithDisplays()
+    if (pass === lastPass) resyncHostedDesktopSizes()
+  }, delay))
 }
 
 function createScreenshotWindow() {
