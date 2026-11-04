@@ -71,6 +71,27 @@ describe("searchLauncher", () => {
     expect(sectionIds(sections)).not.toContain("windows")
   })
 
+  it("does not pin windows or tabs whose titles only start a word with the first letter", () => {
+    const commandPrompt = appEntries([item(5, "Command Prompt", "C:\\Windows\\System32\\cmd.exe")])
+    const windows = windowEntries(
+      [openWindow(15, "Microsoft Teams", "Chat | Simon Unger | Migros | Tim.Hug@digitecgalaxus.ch | Microsoft Teams", "C:\\Teams\\ms-teams.exe")],
+      commandPrompt
+    )
+    const tabs = tabEntries(
+      [{ hwnd: 21, browser: "chrome", index: 0, title: "OPA-56455 LogiPulse - First Line Chart by DG-TimHug · Pull Request #18083 · DigitecGalaxus/devinite", selected: false, host: "github.com" }],
+      new Map(),
+      []
+    )
+    const sections = searchLauncher([...commandPrompt, ...windows, ...tabs], "cmd", context())
+    expect(sectionIds(sections)).not.toContain("windows")
+    expect(rowIds(sections)[0]).toBe(`app:${appResultKey("C:\\Windows\\System32\\cmd.exe")}`)
+  })
+
+  it("still finds a window by a word that starts in its title", () => {
+    const windows = windowEntries([openWindow(16, "Microsoft Teams", "Chat | Simon Unger | Microsoft Teams", "C:\\Teams\\ms-teams.exe")], apps)
+    expect(rowIds(searchLauncher([...apps, ...windows], "simon", context()))[0]).toBe("window:16")
+  })
+
   it("lets an open window stand in for the app it runs", () => {
     const windows = windowEntries([openWindow(14, "Google Chrome", "News - Google Chrome", CHROME)], apps)
     const ids = rowIds(searchLauncher([...apps, ...windows], "chrome", context()))

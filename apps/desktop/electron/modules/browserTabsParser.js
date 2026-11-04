@@ -1,7 +1,8 @@
 const CHROME_TAB_ANNOTATION = /(?: - (?:High memory usage|Memory usage) - [\d.,]+\s?[KMG]B| - (?:Audio playing|Audio muted))+$/
+const CHROME_TAB_GROUP_ANNOTATION = / [-–—] Part of (?:unnamed group|group .+)$/
 
 function cleanTabTitle(title) {
-  return title.replace(CHROME_TAB_ANNOTATION, '').trim()
+  return title.replace(CHROME_TAB_ANNOTATION, '').replace(CHROME_TAB_GROUP_ANNOTATION, '').trim()
 }
 
 function toBrowserTab({ hwnd, browser, index, selected, title }) {
