@@ -1,7 +1,7 @@
 import { TIER_GAP, deriveFields } from "../launcherSearch"
 import { appResultKey, settingResultKey, tabResultKey } from "../launcherRanking"
 
-export const WORD_BOUNDARY_SCORE = 2 * TIER_GAP
+export const WORD_PREFIX_SCORE = 3 * TIER_GAP
 export const ALPINE_SETTINGS_TARGET = "alpine:settings"
 export const QUICK_ACTIONS_PAGE: SettingsPageId = "quick-actions"
 
@@ -82,7 +82,7 @@ export function windowEntries(openApps: OpenApp[], apps: LauncherEntry[]): Launc
   return openApps.map((app) => {
     const installed = installedFor(app)
     const launchItem = installed && installed.kind === "app" ? installed.item : null
-    const titleTerms = app.title && app.title !== app.name ? [term(app.title, 0, WORD_BOUNDARY_SCORE)] : []
+    const titleTerms = app.title && app.title !== app.name ? [term(app.title, 0, WORD_PREFIX_SCORE)] : []
     return {
       kind: "window",
       id: `window:${app.hwnd}`,
@@ -104,8 +104,8 @@ export function tabEntries(tabs: BrowserTab[], meta: ReadonlyMap<string, Browser
   return tabs.map((tab) => {
     const known = meta.get(`${tab.hwnd}:${tab.index}`)
     const host = known?.host ?? tab.host ?? null
-    const terms = [term(tab.title, 0, WORD_BOUNDARY_SCORE)]
-    if (host) terms.push(term(host, TAB_HOST_PENALTY, WORD_BOUNDARY_SCORE))
+    const terms = [term(tab.title, 0, WORD_PREFIX_SCORE)]
+    if (host) terms.push(term(host, TAB_HOST_PENALTY, WORD_PREFIX_SCORE))
     return {
       kind: "tab",
       id: `tab:${tab.hwnd}:${tab.index}`,

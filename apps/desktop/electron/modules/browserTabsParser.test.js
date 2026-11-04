@@ -14,6 +14,12 @@ describe('cleanTabTitle', () => {
     expect(cleanTabTitle('Lo-fi beats - YouTube - Audio muted')).toBe('Lo-fi beats - YouTube')
   })
 
+  it('strips the tab group annotation', () => {
+    expect(cleanTabTitle('First Line Chart · Pull Request #18083 · DigitecGalaxus/devinite – Part of group Reviews')).toBe('First Line Chart · Pull Request #18083 · DigitecGalaxus/devinite')
+    expect(cleanTabTitle('Release notes - Part of unnamed group')).toBe('Release notes')
+    expect(cleanTabTitle('Release notes - Part of group Docs - Memory usage - 90 MB')).toBe('Release notes')
+  })
+
   it('keeps titles without annotations intact', () => {
     expect(cleanTabTitle('Inbox - user@example.com - Gmail')).toBe('Inbox - user@example.com - Gmail')
     expect(cleanTabTitle('Memory usage guide')).toBe('Memory usage guide')
