@@ -143,6 +143,11 @@ contextBridge.exposeInMainWorld('plugins', {
   setEnabled: (id, enabled) => ipcRenderer.invoke('plugins/set-enabled', { id, enabled }),
   manifest: (id) => ipcRenderer.invoke('plugins/manifest', id),
   readme: (id) => ipcRenderer.invoke('plugins/readme', id),
+  trust: (id) => ipcRenderer.invoke('plugins/trust', id),
+  github: {
+    resolve: (releaseUrl) => ipcRenderer.invoke('plugins/github-resolve', releaseUrl),
+    install: (token) => ipcRenderer.invoke('plugins/github-install', token),
+  },
   marketplace: {
     base: () => ipcRenderer.invoke('plugins/marketplace-base'),
     list: () => ipcRenderer.invoke('plugins/marketplace-list'),

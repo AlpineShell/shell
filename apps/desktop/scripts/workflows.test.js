@@ -10,6 +10,7 @@ const workflows = Object.fromEntries(
 const ci = workflows['ci.yml']
 const release = workflows['release.yml']
 const nightly = workflows['nightly.yml']
+const communityPlugin = workflows['community-plugin.yml']
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const rootPackageJson = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))
 
@@ -31,6 +32,31 @@ function bunInstallCommands(workflow) {
 
 function bunVersion(workflow) {
   return workflow.match(/^\s*bun-version: (\S+)$/m)?.[1]
+}
+
+function jobBody(workflow, jobName) {
+  const start = workflow.indexOf(`\n  ${jobName}:\n`)
+  if (start === -1) return ''
+  const rest = workflow.slice(start + 1)
+  const next = rest.slice(1).search(/\n {2}[\w-]+:\n/)
+  return next === -1 ? rest : rest.slice(0, next + 1)
+}
+
+function runScripts(workflow) {
+  const lines = workflow.split('\n')
+  const scripts = []
+  lines.forEach((line, index) => {
+    const match = line.match(/^(\s*)run:\s*(.*)$/)
+    if (!match) return
+    const indent = match[1].length
+    const body = [match[2]]
+    for (const next of lines.slice(index + 1)) {
+      if (next.trim() && next.search(/\S/) <= indent) break
+      body.push(next)
+    }
+    scripts.push(body.join('\n'))
+  })
+  return scripts
 }
 
 describe('workflows', () => {
@@ -130,6 +156,72 @@ describe('release workflow', () => {
 
   it('signs the DLLs and native modules along with the executables', () => {
     expect(packageJson.build.win.signExts).toEqual(['.dll', '.node'])
+  })
+})
+
+describe('community plugin workflow', () => {
+  const build = jobBody(communityPlugin, 'build')
+  const stage = jobBody(communityPlugin, 'stage')
+  const reportBuildFailure = jobBody(communityPlugin, 'report-build-failure')
+  const publish = jobBody(communityPlugin, 'publish')
+  const revoke = jobBody(communityPlugin, 'revoke')
+
+  it('is started by the account service with a read-only token', () => {
+    expect(communityPlugin).toMatch(/^on:\n {2}workflow_dispatch:\n/m)
+    expect(communityPlugin).toMatch(/^permissions:\n {2}contents: read\n/m)
+    expect(communityPlugin).not.toContain('contents: write')
+    for (const job of [build, stage, reportBuildFailure, publish, revoke]) expect(job).toContain('    permissions:\n      contents: read\n')
+  })
+
+  it('builds the plugin without a single secret and keeps no credentials in either checkout', () => {
+    expect(build).toContain("if: inputs.action == 'build'")
+    expect(build).not.toContain('secrets.')
+    expect(build).not.toContain('github.token')
+    expect(build.match(/uses: actions\/checkout@/g)).toHaveLength(2)
+    expect(build.match(/persist-credentials: false/g)).toHaveLength(2)
+    expect(stepBody(build, 'Checkout the plugin')).toContain('ref: ${{ inputs.commit }}')
+    expect(stepBody(build, 'Build the plugin')).toContain('communityPlugin.js build --dir plugin --out out')
+    expect(stepBody(build, 'Keep the bundle for review')).toContain('retention-days: 7')
+  })
+
+  it('stages the bundle without installing or running any plugin code', () => {
+    expect(stage).toContain('needs: build\n')
+    expect(stage).not.toMatch(/npm (?:install|ci|run)|yarn|pnpm/)
+    expect(stage).not.toContain('inputs.repository')
+    expect(stage).not.toContain('inputs.commit')
+    expect(stage).not.toContain('communityPlugin.js build')
+    expect(stage).not.toMatch(/bun (?:run|x)\b|bunx/)
+    const installs = bunInstallCommands(stage)
+    expect(installs).toEqual(['bun install --frozen-lockfile --ignore-scripts'])
+    expect(stepIndex(stage, 'Install dependencies')).toBeLessThan(stepIndex(stage, 'Download the bundle'))
+    expect(stepBody(stage, 'Stage the bundle for review')).toContain('communityPlugin.js stage')
+  })
+
+  it('reports a failed build or stage back to the account service', () => {
+    expect(reportBuildFailure).toContain('needs: [build, stage]\n')
+    expect(reportBuildFailure).toContain('if: failure()')
+    expect(reportBuildFailure).toContain('report-failure --stage build')
+  })
+
+  it('signs only the bundle that was reviewed', () => {
+    const step = stepBody(publish, 'Sign and publish the reviewed bundle')
+    expect(step).toContain('REVIEWED_SHA256: ${{ inputs.sha256 }}')
+    expect(step).toContain('--sha256 "$REVIEWED_SHA256"')
+    expect(bunInstallCommands(publish)).toEqual(['bun install --frozen-lockfile --ignore-scripts'])
+    expect(stepBody(publish, 'Report a failure before publishing')).toContain("if: failure() && steps.publish.outcome != 'failure'")
+  })
+
+  it('hands the signing key to the publish and revoke jobs and nothing else', () => {
+    expect(communityPlugin.match(/secrets\.ALPINE_PLUGIN_SIGNING_KEY }}/g)).toHaveLength(2)
+    expect(publish).toContain('ALPINE_PLUGIN_SIGNING_KEY: ${{ secrets.ALPINE_PLUGIN_SIGNING_KEY }}')
+    expect(revoke).toContain('ALPINE_PLUGIN_SIGNING_KEY: ${{ secrets.ALPINE_PLUGIN_SIGNING_KEY }}')
+    expect(stepBody(revoke, 'Publish the revocation list')).toContain('communityPlugin.js revoke --list-url')
+  })
+
+  it('never expands an input inside a shell script', () => {
+    const scripts = runScripts(communityPlugin)
+    expect(scripts.length).toBeGreaterThan(0)
+    for (const script of scripts) expect(script).not.toContain('${{')
   })
 })
 

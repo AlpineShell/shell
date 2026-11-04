@@ -5,6 +5,22 @@ const { parseManifest } = require('../pluginManifest')
 const marketplace = require('../pluginMarketplace')
 const { loadLicenceConfig } = require('../licenceConfig')
 const { guardHandlers, SETTINGS_WINDOW } = require('../trustedSenders')
+const { getMarketplacePublicKey } = require('../pluginSignature')
+const {
+  TRUST_FILE_NAME,
+  trustedFilesOf,
+  folderContentHash,
+  needsContentHash,
+  trustDecision,
+  receivesStoreUpdates,
+  originOf,
+  storeTrust,
+  folderTrust,
+  migratedStoreTrust,
+  createTrustStore,
+} = require('../pluginTrust')
+const { REVOCATIONS_CACHE_FILE_NAME, REVOCATIONS_KEY, findRevocation, createRevocationWatcher } = require('../pluginRevocations')
+const { createGithubInstaller } = require('../githubPluginInstall')
 
 const PLUGINS_DIR_NAME = 'plugins'
 const PLUGIN_DATA_DIR_NAME = 'plugin-data'
@@ -32,6 +48,9 @@ let pluginsDir = null
 let broadcast = null
 let disabledIds = null
 let pluginStopper = (_id, work) => work()
+let trustStoreInstance = null
+let revocationWatcher = null
+let githubInstaller = null
 
 const capabilities = new Map()
 const changeListeners = new Set()
@@ -167,17 +186,127 @@ function scanDir(baseDir, preset) {
   return plugins
 }
 
+function installedUserPluginIds() {
+  try {
+    return fs
+      .readdirSync(getPluginsDir(), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && SAFE_ID.test(entry.name) && fs.existsSync(path.join(getPluginsDir(), entry.name, MANIFEST_FILE)))
+      .map((entry) => entry.name)
+  } catch {
+    return []
+  }
+}
+
+function seedTrustFromInstalledPlugins() {
+  return Object.fromEntries(installedUserPluginIds().map((id) => [id, migratedStoreTrust()]))
+}
+
+function trustStore() {
+  if (!trustStoreInstance) {
+    trustStoreInstance = createTrustStore(path.join(app.getPath('userData'), TRUST_FILE_NAME), { seed: seedTrustFromInstalledPlugins })
+  }
+  return trustStoreInstance
+}
+
+function revocationKeys() {
+  return { publicKey: getMarketplacePublicKey(), allowUnsigned: loadLicenceConfig().isReleaseBuild !== true }
+}
+
+function revocations() {
+  if (!revocationWatcher) {
+    revocationWatcher = createRevocationWatcher({
+      cacheFile: path.join(app.getPath('userData'), REVOCATIONS_CACHE_FILE_NAME),
+      listUrl: () => `${marketplace.getBase()}/${REVOCATIONS_KEY}`,
+      keys: revocationKeys,
+      onChange: () => triggerReload(),
+    })
+  }
+  return revocationWatcher
+}
+
+function userPluginContentHash(record) {
+  return folderContentHash(path.join(getPluginsDir(), record.id), trustedFilesOf(record))
+}
+
+function withAccess(record, { disabled, trustEntries, revokedEntries }) {
+  const preset = record.preset === true
+  const trust = preset ? null : trustEntries[record.id] || null
+  const contentHash = needsContentHash(preset, trust) ? userPluginContentHash(record) : null
+  const decision = trustDecision({ preset, trust, contentHash })
+  const revocation = findRevocation(revokedEntries, record.id, record.version)
+  return {
+    ...record,
+    enabled: !disabled.has(record.id),
+    source: decision.source,
+    needsTrust: decision.needsTrust,
+    revoked: revocation ? { reason: revocation.reason } : null,
+    origin: originOf(trust),
+    updatesFromStore: receivesStoreUpdates(decision.source),
+    loadable: record.valid && record.compat.apiOk && record.compat.engineOk && decision.trusted && !revocation,
+  }
+}
+
 function listPlugins() {
   ensurePluginsDir()
-  const disabled = loadDisabledIds()
+  const context = { disabled: loadDisabledIds(), trustEntries: trustStore().all(), revokedEntries: revocations().current() }
   const byId = new Map()
   for (const record of scanDir(getPresetPluginsDir(), true)) byId.set(record.id, record)
   for (const record of scanDir(getPluginsDir(), false)) byId.set(record.id, record)
-  return [...byId.values()].map((record) => ({
-    ...record,
-    enabled: !disabled.has(record.id),
-    loadable: record.valid && record.compat.apiOk && record.compat.engineOk,
-  }))
+  return [...byId.values()].map((record) => withAccess(record, context))
+}
+
+function findPlugin(id) {
+  return listPlugins().find((record) => record.id === id) || null
+}
+
+function acceptFolderPlugin(id) {
+  if (typeof id !== 'string' || !SAFE_ID.test(id)) return false
+  const record = findPlugin(id)
+  if (!record || record.preset || !record.needsTrust) return false
+  trustStore().set(id, folderTrust(userPluginContentHash(record)))
+  triggerReload()
+  return true
+}
+
+function github() {
+  if (!githubInstaller) {
+    githubInstaller = createGithubInstaller({
+      installBundle: marketplace.installBundle,
+      maxBytes: marketplace.MAX_BUNDLE_BYTES,
+      sourceOf: (id) => {
+        const record = findPlugin(id)
+        return record ? record.source : null
+      },
+      recordTrust: (id, entry) => trustStore().set(id, entry),
+    })
+  }
+  return githubInstaller
+}
+
+function installFromStore(payload) {
+  const id = payload && typeof payload === 'object' ? payload.id : payload
+  const existing = typeof id === 'string' ? findPlugin(id) : null
+  if (existing && !existing.updatesFromStore) return Promise.resolve({ ok: false, error: 'installed-outside-store' })
+  return marketplace.install(payload, {
+    pluginsDir: getPluginsDir(),
+    onChange: () => triggerReload(),
+    onInstalled: ({ id: installedId, sha256 }) => trustStore().set(installedId, storeTrust({ sha256 })),
+    withPluginStopped: (pluginId, work) => pluginStopper(pluginId, work),
+  })
+}
+
+async function uninstallPlugin(id) {
+  const result = await marketplace.uninstall(id, {
+    pluginsDir: getPluginsDir(),
+    onChange: () => triggerReload(),
+    withPluginStopped: (pluginId, work) =>
+      pluginStopper(pluginId, async () => {
+        await work()
+        removePluginData(pluginId)
+      }),
+  })
+  if (result.ok) trustStore().remove(id)
+  return result
 }
 
 function readPluginReadme(id) {
@@ -257,21 +386,15 @@ module.exports = {
     },
     ...guardHandlers({
       'plugins/set-enabled': (_event, payload) => setEnabled(payload && payload.id, !!(payload && payload.enabled)),
-      'plugins/marketplace-install': (_event, payload) =>
-        marketplace.install(payload, {
+      'plugins/marketplace-install': (_event, payload) => installFromStore(payload),
+      'plugins/marketplace-uninstall': (_event, id) => uninstallPlugin(id),
+      'plugins/trust': (_event, id) => acceptFolderPlugin(id),
+      'plugins/github-resolve': (_event, releaseUrl) => github().resolve(releaseUrl),
+      'plugins/github-install': (_event, token) =>
+        github().install(token, {
           pluginsDir: getPluginsDir(),
           onChange: () => triggerReload(),
-          withPluginStopped: (id, work) => pluginStopper(id, work),
-        }),
-      'plugins/marketplace-uninstall': (_event, id) =>
-        marketplace.uninstall(id, {
-          pluginsDir: getPluginsDir(),
-          onChange: () => triggerReload(),
-          withPluginStopped: (pluginId, work) =>
-            pluginStopper(pluginId, async () => {
-              await work()
-              removePluginData(pluginId)
-            }),
+          withPluginStopped: (pluginId, work) => pluginStopper(pluginId, work),
         }),
     }, [SETTINGS_WINDOW]),
   },
@@ -279,6 +402,7 @@ module.exports = {
   start(b) {
     broadcast = b
     ensurePluginsDir()
+    revocations().start()
   },
 
   getPluginsDir,
@@ -290,5 +414,6 @@ module.exports = {
   setPluginStopper,
   ensurePluginDataDir,
   listPlugins,
+  refreshRevocations: () => revocations().refresh(),
   mimeFor,
 }

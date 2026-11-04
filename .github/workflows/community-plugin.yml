@@ -1,0 +1,249 @@
+name: Community plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: build, publish or revoke
+        required: true
+        type: choice
+        options:
+          - build
+          - publish
+          - revoke
+      submission_id:
+        description: The submission in the account service
+        required: false
+        default: ''
+      repository:
+        description: The plugin repository as owner/repo
+        required: false
+        default: ''
+      commit:
+        description: The full commit SHA the release tag pointed to
+        required: false
+        default: ''
+      sha256:
+        description: The sha256 of the reviewed bundle
+        required: false
+        default: ''
+      publisher_slug:
+        description: The slug of the developer organisation
+        required: false
+        default: ''
+      publisher_name:
+        description: The name of the developer organisation
+        required: false
+        default: ''
+      callback_url:
+        description: Where the job reports its result
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: inputs.action == 'build'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: read
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: shell
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        working-directory: shell
+        run: bun install --frozen-lockfile
+
+      - name: Checkout the plugin
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.commit }}
+          path: plugin
+          persist-credentials: false
+
+      - name: Build the plugin
+        run: node shell/apps/desktop/scripts/communityPlugin.js build --dir plugin --out out
+
+      - name: Keep the bundle for review
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bundle
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+  stage:
+    needs: build
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: read
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Download the bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bundle
+          path: out
+
+      - name: Stage the bundle for review
+        env:
+          STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
+          STORAGE_REGION: ${{ secrets.STORAGE_REGION }}
+          STORAGE_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
+          STORAGE_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
+          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
+          STORAGE_FORCE_PATH_STYLE: ${{ secrets.STORAGE_FORCE_PATH_STYLE }}
+          PLUGIN_BUILD_CALLBACK_TOKEN: ${{ secrets.PLUGIN_BUILD_CALLBACK_TOKEN }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node apps/desktop/scripts/communityPlugin.js stage --submission "$SUBMISSION_ID" --out out --callback "$CALLBACK_URL" --run-url "$RUN_URL"
+
+  report-build-failure:
+    needs: [build, stage]
+    if: failure() && inputs.action == 'build'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Report the failed build
+        env:
+          PLUGIN_BUILD_CALLBACK_TOKEN: ${{ secrets.PLUGIN_BUILD_CALLBACK_TOKEN }}
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node apps/desktop/scripts/communityPlugin.js report-failure --stage build --callback "$CALLBACK_URL" --run-url "$RUN_URL" --error "The build failed. The run log has the details."
+
+  publish:
+    if: inputs.action == 'publish'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: read
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Sign and publish the reviewed bundle
+        id: publish
+        env:
+          ALPINE_PLUGIN_SIGNING_KEY: ${{ secrets.ALPINE_PLUGIN_SIGNING_KEY }}
+          STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
+          STORAGE_REGION: ${{ secrets.STORAGE_REGION }}
+          STORAGE_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
+          STORAGE_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
+          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
+          STORAGE_FORCE_PATH_STYLE: ${{ secrets.STORAGE_FORCE_PATH_STYLE }}
+          PLUGIN_BUILD_CALLBACK_TOKEN: ${{ secrets.PLUGIN_BUILD_CALLBACK_TOKEN }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+          REVIEWED_SHA256: ${{ inputs.sha256 }}
+          PUBLISHER_SLUG: ${{ inputs.publisher_slug }}
+          PUBLISHER_NAME: ${{ inputs.publisher_name }}
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          node apps/desktop/scripts/communityPlugin.js publish
+          --submission "$SUBMISSION_ID"
+          --sha256 "$REVIEWED_SHA256"
+          --publisher-slug "$PUBLISHER_SLUG"
+          --publisher-name "$PUBLISHER_NAME"
+          --callback "$CALLBACK_URL"
+          --run-url "$RUN_URL"
+
+      - name: Report a failure before publishing
+        if: failure() && steps.publish.outcome != 'failure'
+        env:
+          PLUGIN_BUILD_CALLBACK_TOKEN: ${{ secrets.PLUGIN_BUILD_CALLBACK_TOKEN }}
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node apps/desktop/scripts/communityPlugin.js report-failure --stage publish --callback "$CALLBACK_URL" --run-url "$RUN_URL" --error "The publish job failed before it could publish. The run log has the details."
+
+  revoke:
+    if: inputs.action == 'revoke'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: read
+    concurrency:
+      group: community-plugin-revocations
+      cancel-in-progress: false
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Publish the revocation list
+        id: revoke
+        env:
+          ALPINE_PLUGIN_SIGNING_KEY: ${{ secrets.ALPINE_PLUGIN_SIGNING_KEY }}
+          STORAGE_ENDPOINT: ${{ secrets.STORAGE_ENDPOINT }}
+          STORAGE_REGION: ${{ secrets.STORAGE_REGION }}
+          STORAGE_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
+          STORAGE_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
+          STORAGE_BUCKET: ${{ secrets.STORAGE_BUCKET }}
+          STORAGE_FORCE_PATH_STYLE: ${{ secrets.STORAGE_FORCE_PATH_STYLE }}
+          PLUGIN_BUILD_CALLBACK_TOKEN: ${{ secrets.PLUGIN_BUILD_CALLBACK_TOKEN }}
+          REVOCATIONS_URL: ${{ vars.ALPINE_AUTH_BASE || 'https://auth.alpineshell.com' }}/plugins/revocations
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node apps/desktop/scripts/communityPlugin.js revoke --list-url "$REVOCATIONS_URL" --callback "$CALLBACK_URL" --run-url "$RUN_URL"
+
+      - name: Report a failure before revoking
+        if: failure() && steps.revoke.outcome != 'failure'
+        env:
+          PLUGIN_BUILD_CALLBACK_TOKEN: ${{ secrets.PLUGIN_BUILD_CALLBACK_TOKEN }}
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node apps/desktop/scripts/communityPlugin.js report-failure --stage revoke --callback "$CALLBACK_URL" --run-url "$RUN_URL" --error "The revoke job failed before it could publish the list. The run log has the details."

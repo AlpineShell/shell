@@ -192,7 +192,8 @@ bun run publish:plugin presets/plugins/<plugin-id>
 ```
 
 This packs the plugin folder into `<id>.alpineplugin` (a zip with `plugin.json` at the root,
-built with the system `tar`/bsdtar and containment-checked against symlinks and path escapes),
+written by `scripts/zipArchive.js` with fixed timestamps, so the same source gives the same bytes,
+and containment-checked against symlinks and path escapes),
 computes its SHA-256, signs the digest with Ed25519, uploads the immutable bundle plus a per-plugin
 `plugins/<id>/latest.json`, and rolls the plugin's card into the shared `plugins/index.json` catalog
 (fetched, merged, re-uploaded `no-cache`). The
@@ -221,6 +222,70 @@ always match, or every install from the store fails with "its signature could no
 
 The order matters when the key is new: re-publish every plugin in the catalog signed, check that each
 `plugins/<id>/latest.json` carries a `signature`, and only then release a build with the key baked.
+
+## Community plugins
+
+Plugins from outside developers reach the store through the account service
+([AlpineShell/auth](https://github.com/AlpineShell/auth)) and `scripts/communityPlugin.js`. Nobody
+starts these jobs by hand: the account service dispatches `.github/workflows/community-plugin.yml`
+on `main` with `GITHUB_DISPATCH_TOKEN`, passing the action (`build`, `publish` or `revoke`), the
+submission id, the repository and the commit SHA the release tag pointed to, the reviewed sha256,
+the publisher and the callback URL. Every job reports its result to that URL.
+
+1. **Build** (`build` job, on a submission). Runs with a read-only token and references no secret at
+   all; neither checkout keeps credentials. It checks out this repository into `shell/` and the
+   plugin repository at the exact commit into `plugin/`, then runs
+   `communityPlugin.js build --dir plugin --out out`: if the plugin's `package.json` has a `build`
+   script it installs (`bun install` with a `bun.lock`, `npm install` otherwise) and runs it, validates
+   `plugin.json` with the SDK, and packs the folder like first-party plugins, leaving out
+   `node_modules`, `.git`, `.github` and every pattern in an optional `.alpineignore` (one glob per
+   line, `#` for comments, a leading `/` anchors to the plugin root). The bundle, `manifest.json` and
+   `files.json` are kept as the `bundle` artifact for seven days.
+2. **Stage** (`stage` job). Installs only this repository's locked dependencies with
+   `--ignore-scripts` and never checks out, installs or runs plugin code. It reads the manifest and
+   file list from the bundle itself, uploads it to `plugins-staging/<submission>.alpineplugin` and
+   sends the sha256, size, manifest and files to the account service, which puts the submission in
+   review. A failed build or stage is reported by `report-build-failure`.
+3. **Review.** A team member approves or rejects the submission in the admin dashboard of the website.
+4. **Publish** (`publish` job, on approval). Downloads the staged bundle, refuses it unless its sha256
+   is the one that was reviewed, signs the digest with `ALPINE_PLUGIN_SIGNING_KEY` and publishes it
+   exactly like `publishPlugin.js`, with `publisher: { slug, name }` and `community: true` added to
+   `plugins/<id>/latest.json` and the catalog entry. A community plugin is never listed as
+   `verified`, whatever its manifest says.
+5. **Revoke** (`revoke` job, when a team member revokes or lifts a revocation). Reads the active list
+   from `<ALPINE_AUTH_BASE>/plugins/revocations` and writes `plugins/revoked.json`, `no-cache`:
+   `{ version: 1, issuedAt, revoked: [{ id, version, reason }], signature }`, where `signature` is
+   Ed25519 with the plugin signing key over the canonical JSON (keys sorted, no whitespace) of the
+   document without `signature`. The app turns off every plugin on the list.
+
+Repository secrets for this workflow:
+
+- `PLUGIN_BUILD_CALLBACK_TOKEN`: the bearer token the jobs send with every report. The account
+  service must hold the same value.
+- `ALPINE_PLUGIN_SIGNING_KEY`: the same key first-party plugins are signed with; only the `publish`
+  and `revoke` jobs see it.
+- `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`,
+  `STORAGE_BUCKET` and `STORAGE_FORCE_PATH_STYLE`: the plugin store, for `stage`, `publish` and
+  `revoke`.
+
+The repository variable `ALPINE_AUTH_BASE` names the account service the `revoke` job reads the list
+from, and defaults to `https://auth.alpineshell.com`.
+
+For local development the account service runs the same script itself (`PLUGIN_BUILDER=local`),
+with `--store <dir>` in place of the bucket:
+
+```sh
+node apps/desktop/scripts/communityPlugin.js local-build --submission <id> --repository <owner/repo> --commit <sha> --callback <url> --store <dir>
+node apps/desktop/scripts/communityPlugin.js publish --submission <id> --sha256 <hex> --publisher-slug <slug> --publisher-name <name> --callback <url> --store <dir>
+node apps/desktop/scripts/communityPlugin.js revoke --list-url <auth>/plugins/revocations --callback <url> --store <dir>
+```
+
+`local-build` clones the repository into a temporary folder, checks out the commit, builds and stages
+it, and always deletes the folder. `--store` writes the same keys as the bucket. Without
+`ALPINE_PLUGIN_SIGNING_KEY` it signs with a development key it creates once at
+`<store>/.dev-signing-key`, and writes the public half to `<store>/dev-public-key.pem`, the key a
+development build of the app verifies those bundles with. `PLUGIN_BUILD_CALLBACK_TOKEN` must be set
+in every case.
 
 ## Storage: Railway/MinIO
 
