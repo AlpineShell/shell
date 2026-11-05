@@ -83,7 +83,7 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
     }, [open, shape]);
 
     useLayoutEffect(() => {
-        if (!open || !shape) return;
+        if (!open || !shape || pendingClose.current) return;
         if (clipRef.current) {
             clipRef.current.style.height = `${shape.bodyHeight}px`;
             clipRef.current.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
@@ -122,6 +122,7 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
         if (!body) return;
         let prevH = body.offsetHeight;
         const observer = new ResizeObserver(() => {
+            if (pendingClose.current) return;
             const next = measureShape();
             if (!next) return;
             if (Math.abs(next.bodyHeight - prevH) < 1 && Math.abs(next.bodyWidth - shape.bodyWidth) < 1) return;
