@@ -24,6 +24,7 @@ mod msaa_tabs;
 mod policy_config;
 mod process_identity;
 mod tab_selection;
+mod touchpad_frames;
 mod touchpad_layout;
 mod touchpad_watcher;
 mod uia_tabs;
@@ -361,7 +362,9 @@ pub fn brightness_watch(listener: BrightnessListener) -> napi::Result<()> {
     start_watching(listener).map_err(napi::Error::from_reason)
 }
 
-#[napi(ts_args_type = "listener: (error: Error | null, report: TouchpadReport) => void")]
-pub fn touchpad_watch(listener: TouchpadListener) -> napi::Result<()> {
-    touchpad_watcher::start_watching(listener).map_err(napi::Error::from_reason)
+#[napi(
+    ts_args_type = "swipeFingerCount: number, listener: (error: Error | null, frame: Array<TouchpadContact>) => void"
+)]
+pub fn touchpad_watch(swipe_finger_count: u32, listener: TouchpadListener) -> napi::Result<()> {
+    touchpad_watcher::start_watching(swipe_finger_count, listener).map_err(napi::Error::from_reason)
 }

@@ -1,3 +1,5 @@
+const { createSharedIntervals } = require('./sharedIntervals')
+
 const HKEY_CURRENT_USER = 0x80000001
 const KEY_READ = 0x20019
 const REG_NOTIFY_CHANGE_NAME = 0x00000001
@@ -12,6 +14,8 @@ const REG_EXPAND_SZ = 2
 const INITIAL_VALUE_BUFFER_BYTES = 4096
 const MAX_VALUE_BUFFER_BYTES = 1048576
 const FALLBACK_POLL_INTERVAL_MS = 5000
+
+const notificationChecks = createSharedIntervals()
 
 let registryApi = null
 let registryApiUnavailable = false
@@ -100,7 +104,8 @@ function watchCurrentUserKeyChanges({ subKey, label, checkIntervalMs, changeFilt
   }
 
   let eventHandle = null
-  let timer = null
+  let fallbackPollTimer = null
+  let stopCheckingNotification = () => {}
 
   function releaseEvent() {
     if (!eventHandle) return
@@ -114,8 +119,9 @@ function watchCurrentUserKeyChanges({ subKey, label, checkIntervalMs, changeFilt
 
   function fallBackToPoll(reason) {
     console.error(`[registryWatch] HKCU\\${subKey} (${label}): ${reason}, falling back to a ${FALLBACK_POLL_INTERVAL_MS} ms poll`)
-    if (timer) clearInterval(timer)
-    timer = setInterval(onNotify, FALLBACK_POLL_INTERVAL_MS)
+    stopCheckingNotification()
+    if (fallbackPollTimer) clearInterval(fallbackPollTimer)
+    fallbackPollTimer = setInterval(onNotify, FALLBACK_POLL_INTERVAL_MS)
   }
 
   function checkNotification() {
@@ -134,13 +140,14 @@ function watchCurrentUserKeyChanges({ subKey, label, checkIntervalMs, changeFilt
     releaseEvent()
     fallBackToPoll('RegNotifyChangeKeyValue failed')
   } else {
-    timer = setInterval(checkNotification, checkIntervalMs)
+    stopCheckingNotification = notificationChecks.add(checkIntervalMs, checkNotification)
   }
 
   function stop() {
-    if (timer) {
-      clearInterval(timer)
-      timer = null
+    stopCheckingNotification()
+    if (fallbackPollTimer) {
+      clearInterval(fallbackPollTimer)
+      fallbackPollTimer = null
     }
     releaseEvent()
     api.RegCloseKey(keyHandle)

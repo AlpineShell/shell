@@ -28,15 +28,20 @@ function shellWindowHandle() {
   return typeof raw === 'bigint' ? Number(raw) : raw
 }
 
+function isDesktopShellWindow(hwnd, shellWindow) {
+  return shellWindow !== 0 && shellWindow === hwnd
+}
+
 const switcherWindowProbe = {
   ...windowEnum.windowProbe,
   isShellSurface: (hwnd) => shellSurfaces.isShellSurface(hwnd),
-  isShellWindow: (hwnd) => {
-    const shellWindow = shellWindowHandle()
-    return shellWindow !== 0 && shellWindow === hwnd
-  },
+  isShellWindow: (hwnd) => isDesktopShellWindow(hwnd, shellWindowHandle()),
   isOwnProcess: (hwnd) => windowEnum.windowProcessId(hwnd) === process.pid,
   isExposedOwnWindow: (hwnd) => exposedOwnWindows.isExposedOwnWindow(hwnd, exposedOwnWindowsProvider),
+}
+
+function probeWithKnownShellWindow(shellWindow) {
+  return { ...switcherWindowProbe, isShellWindow: (hwnd) => isDesktopShellWindow(hwnd, shellWindow) }
 }
 
 function isEligible(hwnd) {
@@ -44,7 +49,8 @@ function isEligible(hwnd) {
 }
 
 function listHandles() {
-  return windowEnum.enumerateWindows(isEligible)
+  const enumerationProbe = probeWithKnownShellWindow(shellWindowHandle())
+  return windowEnum.enumerateWindows((hwnd) => isSwitcherWindow(hwnd, enumerationProbe))
 }
 
 async function exeIcon(exePath) {

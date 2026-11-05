@@ -5,11 +5,11 @@ function bindTouchpad(addon) {
     throw new Error('the native add-on has no touchpad exports')
   }
 
-  function watch(onReport, onFailure) {
+  function watch(swipeFingerCount, onFrame, onFailure) {
     try {
-      addon.touchpadWatch((error, report) => {
+      addon.touchpadWatch(swipeFingerCount, (error, frame) => {
         if (error) onFailure(error)
-        else onReport(report)
+        else onFrame(frame)
       })
     } catch (e) {
       onFailure(e)

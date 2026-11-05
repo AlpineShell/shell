@@ -5,6 +5,7 @@ import { getChromeSurface, getSurfaceBackdrop, subscribeChromeSurface, subscribe
 const OPEN_MS = 460;
 const CLOSE_MS = 300;
 const MORPH_MS = 400;
+const SURFACE_ACTIVE_OPEN = 0.004;
 
 const easeOutExpo = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
 const easeInCubic = (t: number) => t * t * t;
@@ -20,6 +21,7 @@ interface ChromeCanvasProps {
 export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, windowCoverage }: ChromeCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const kickRef = useRef<(() => void) | undefined>(undefined);
+    const kickIfCoverageShowsRef = useRef<(() => void) | undefined>(undefined);
     const propsRef = useRef({ barHeight, bg, barBorderColor, hovered, windowCoverage });
     propsRef.current = { barHeight, bg, barBorderColor, hovered, windowCoverage };
 
@@ -140,7 +142,7 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, w
 
             openValue = sampleOpen();
             const height = fullH * openValue;
-            const surfaceActive = openValue > 0.004;
+            const surfaceActive = openValue > SURFACE_ACTIVE_OPEN;
 
             const need = surfaceActive ? surfaceHeight(fullH) : restingHeight();
             if (need > allocatedHeight) allocate(need);
@@ -220,7 +222,14 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, w
             }
         }
 
+        const coverageShows = () => propsRef.current.hovered || openValue > SURFACE_ACTIVE_OPEN;
+
+        const kickIfCoverageShows = () => {
+            if (coverageShows()) kick();
+        };
+
         kickRef.current = kick;
+        kickIfCoverageShowsRef.current = kickIfCoverageShows;
         resize();
         const unsubscribe = subscribeChromeSurface(syncSurface);
         const unsubscribeBackdrops = subscribeSurfaceBackdrops(kick);
@@ -237,7 +246,11 @@ export default function ChromeCanvas({ barHeight, bg, barBorderColor, hovered, w
 
     useEffect(() => {
         kickRef.current?.();
-    }, [barHeight, bg, barBorderColor, hovered, windowCoverage]);
+    }, [barHeight, bg, barBorderColor, hovered]);
+
+    useEffect(() => {
+        kickIfCoverageShowsRef.current?.();
+    }, [windowCoverage]);
 
     return (
         <canvas

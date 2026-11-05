@@ -146,7 +146,24 @@ function clearRecoveredErrors(errors, devices) {
   return next
 }
 
+function isEmptyRecord(record) {
+  return Object.keys(record).length === 0
+}
+
+function hasDeviceWork(session) {
+  return !isEmptyRecord(session.operations) || !isEmptyRecord(session.errors) || !isEmptyRecord(session.absentReads)
+}
+
+function isRepeatOfAppliedRead(session, read) {
+  return read.devices === session.devices
+    && read.signature === session.stackSignature
+    && session.devicesAvailable
+    && session.failedReads === 0
+    && !hasDeviceWork(session)
+}
+
 function applyDeviceRead(session, read, now) {
+  if (isRepeatOfAppliedRead(session, read)) return session
   const next = { ...session, devices: read.devices, devicesAvailable: true, failedReads: 0, stackSignature: read.signature }
   const settled = settleDeviceOperations(next, read.confirmed, now)
   return { ...settled, errors: clearRecoveredErrors(settled.errors, settled.devices) }
@@ -170,7 +187,12 @@ function expireRadio(radio, now) {
   return next
 }
 
+function isSessionIdle(session) {
+  return !hasDeviceWork(session) && !session.radio.pending && !session.radio.error
+}
+
 function expireSession(session, now) {
+  if (isSessionIdle(session)) return session
   const settled = settleDeviceOperations(session, false, now)
   return { ...settled, errors: expireErrors(settled.errors, now), radio: expireRadio(settled.radio, now) }
 }

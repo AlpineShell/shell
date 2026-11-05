@@ -1,30 +1,68 @@
-const { ipcMain, BrowserWindow } = require('electron')
 const { guardShellSender } = require('./trustedSenders')
 
-function sendToWindow(win, channel, data) {
-  if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
-    win.webContents.send(channel, data)
+const SHELL_PAGE_PROTOCOLS = new Set(['file:', 'http:', 'https:'])
+const PAGE_MODE_CACHE_LIMIT = 64
+
+const BROADCAST_CHANNELS_HEARD_BY_PAGE_MODE = new Map([
+  ['desktop', new Set(['windows/wallpaper-changed', 'theme/changed'])],
+  ['screenshot', new Set(['theme/changed'])],
+  ['identify', new Set(['theme/changed'])],
+])
+
+const pageModeByUrl = new Map()
+
+function parsePageMode(url) {
+  try {
+    const parsed = new URL(url)
+    if (!SHELL_PAGE_PROTOCOLS.has(parsed.protocol)) return null
+    return parsed.searchParams.get('mode')
+  } catch {
+    return null
+  }
+}
+
+function pageModeOfUrl(url) {
+  if (pageModeByUrl.has(url)) return pageModeByUrl.get(url)
+  const mode = parsePageMode(url)
+  if (pageModeByUrl.size >= PAGE_MODE_CACHE_LIMIT) pageModeByUrl.clear()
+  pageModeByUrl.set(url, mode)
+  return mode
+}
+
+function pageModeHearsChannel(mode, channel) {
+  const heardChannels = BROADCAST_CHANNELS_HEARD_BY_PAGE_MODE.get(mode)
+  return !heardChannels || heardChannels.has(channel)
+}
+
+function isLiveWindow(win) {
+  return !win.isDestroyed() && !win.webContents.isDestroyed()
+}
+
+function windowPageMode(win) {
+  return pageModeOfUrl(win.webContents.getURL())
+}
+
+function allWindows() {
+  const { BrowserWindow } = require('electron')
+  return BrowserWindow.getAllWindows()
+}
+
+function sendToWindowsWhere(acceptsWindow, channel, data) {
+  for (const win of allWindows()) {
+    if (isLiveWindow(win) && acceptsWindow(win)) win.webContents.send(channel, data)
   }
 }
 
 function broadcast(channel, data) {
-  for (const win of BrowserWindow.getAllWindows()) {
-    sendToWindow(win, channel, data)
-  }
+  sendToWindowsWhere((win) => pageModeHearsChannel(windowPageMode(win), channel), channel, data)
 }
 
 function isTopbarWindow(win) {
-  try {
-    return new URL(win.webContents.getURL()).searchParams.get('mode') === 'topbar'
-  } catch {
-    return false
-  }
+  return windowPageMode(win) === 'topbar'
 }
 
 function broadcastToTopbars(channel, data) {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (isTopbarWindow(win)) sendToWindow(win, channel, data)
-  }
+  sendToWindowsWhere(isTopbarWindow, channel, data)
 }
 
 function moduleLabel(handlers) {
@@ -35,6 +73,7 @@ function moduleLabel(handlers) {
 
 function registerHandler(label, channel, handler) {
   try {
+    const { ipcMain } = require('electron')
     ipcMain.handle(channel, guardShellSender(channel, handler))
   } catch (e) {
     console.error(`[ipc] ${label} handler register failed for '${channel}':`, e?.message ?? e)
@@ -77,4 +116,4 @@ function register(...modules) {
   }
 }
 
-module.exports = { register, handle, broadcast, broadcastToTopbars }
+module.exports = { register, handle, broadcast, broadcastToTopbars, parsePageMode, pageModeHearsChannel }

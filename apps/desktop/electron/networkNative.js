@@ -227,11 +227,17 @@ function decodeWiredConnection(tableBuffer) {
   return { connected: false }
 }
 
-function readWiredConnection() {
+function callOffThread(nativeFunction, ...args) {
+  return new Promise((resolve) => {
+    nativeFunction.async(...args, (error, status) => resolve(error ? null : status))
+  })
+}
+
+async function readWiredConnection() {
   const api = loadNativeApi()
   if (!api) return null
   const table = [null]
-  const status = api.GetIfTable2(table)
+  const status = await callOffThread(api.GetIfTable2, table)
   if (!table[0]) return null
   try {
     if (status !== ERROR_SUCCESS) return null
@@ -244,30 +250,19 @@ function readWiredConnection() {
   }
 }
 
-function queryInterface(api, client, interfaceGuid, opCode) {
-  const dataSize = [0]
-  const data = [null]
-  if (api.WlanQueryInterface(client, interfaceGuid, opCode, 0, dataSize, data, 0) !== ERROR_SUCCESS) return null
-  try {
-    return bytesAt(api, data[0], 0, dataSize[0])
-  } finally {
-    api.WlanFreeMemory(data[0])
-  }
-}
-
-function overWlanInterfaces(visit) {
+async function overWlanInterfacesOffThread(visit) {
   const api = loadNativeApi()
   if (!api) return null
   const client = openWlanClient(api)
   if (!client) return null
   const interfaceList = [null]
-  if (api.WlanEnumInterfaces(client, 0, interfaceList) !== ERROR_SUCCESS) return null
+  if (await callOffThread(api.WlanEnumInterfaces, client, 0, interfaceList) !== ERROR_SUCCESS) return null
   try {
     const count = bytesAt(api, interfaceList[0], 0, WLAN_INTERFACE_LIST_HEADER_BYTES).readUInt32LE(0)
     for (let index = 0; index < count; index += 1) {
       const guidOffset = WLAN_INTERFACE_LIST_HEADER_BYTES + index * WLAN_INTERFACE_INFO_BYTES
       const guid = bytesAt(api, interfaceList[0], guidOffset, WLAN_INTERFACE_GUID_BYTES)
-      const found = visit(api, client, guid)
+      const found = await visit(api, client, guid)
       if (found !== null) return found
     }
     return undefined
@@ -276,13 +271,15 @@ function overWlanInterfaces(visit) {
   }
 }
 
-function readWifiRadioState() {
-  const state = overWlanInterfaces((api, client, guid) => {
-    const buffer = queryInterface(api, client, guid, WLAN_INTF_OPCODE_RADIO_STATE)
-    if (!buffer || buffer.length < WLAN_PHY_COUNT_BYTES) return null
-    const decoded = decodeRadioState(buffer)
-    return decoded === 'unavailable' ? null : decoded
-  })
+async function readRadioStateOfInterface(api, client, guid) {
+  const buffer = await queryInterfaceBuffer(api, client, guid, WLAN_INTF_OPCODE_RADIO_STATE)
+  if (!buffer || buffer.length < WLAN_PHY_COUNT_BYTES) return null
+  const decoded = decodeRadioState(buffer)
+  return decoded === 'unavailable' ? null : decoded
+}
+
+async function readWifiRadioState() {
+  const state = await overWlanInterfacesOffThread(readRadioStateOfInterface)
   if (state === null) return null
   return state === undefined ? 'unavailable' : state
 }

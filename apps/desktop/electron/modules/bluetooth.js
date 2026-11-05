@@ -29,6 +29,8 @@ const WORKER_ENTRY = path.join(__dirname, '..', 'bluetoothWorker.js')
 let session = operations.createSession()
 let broadcastRef = null
 let lastPublishedKey = null
+let lastComposedSession = null
+let lastDeviceRead = { readId: null, devices: null, stackIds: null }
 let readerChannel = null
 let radioRetryTimer = null
 let radioRetryDelayMs = 0
@@ -103,6 +105,8 @@ function currentState() {
 }
 
 function publish() {
+  if (session === lastComposedSession) return
+  lastComposedSession = session
   const state = currentState()
   const key = operations.stateKey(state)
   if (key === lastPublishedKey) return
@@ -120,31 +124,41 @@ function reportReadDuration(elapsedMs, ok) {
   else failures.success('slow-read')
 }
 
-function applySnapshot(snapshot) {
-  const devices = inStableOrder(groupDevices(snapshot))
+function deviceReadOfSnapshot(readId, snapshot) {
+  return { readId, devices: inStableOrder(groupDevices(snapshot)), stackIds: snapshot.stackIds }
+}
+
+function deviceReadOfReply(reply) {
+  if (reply?.unchanged) return lastDeviceRead
+  if (!reply?.snapshot) return null
+  lastDeviceRead = deviceReadOfSnapshot(reply.readId, reply.snapshot)
+  return lastDeviceRead
+}
+
+function applyDeviceRead(deviceRead) {
   const read = reconcileDeviceRead(
     { previousDevices: session.devices, previousSignature: session.stackSignature },
-    { devices, stackIds: snapshot.stackIds },
+    { devices: deviceRead.devices, stackIds: deviceRead.stackIds },
   )
   session = operations.applyDeviceRead(session, read, Date.now())
   return read.stackChanged
 }
 
-function applyReadOutcome(snapshot, failure) {
-  if (!snapshot) {
+function applyReadOutcome(deviceRead, failure) {
+  if (!deviceRead) {
     failures.failure('read-failed', failure)
     session = operations.applyFailedRead(session)
     return
   }
   failures.success('read-failed')
-  if (applySnapshot(snapshot)) refreshRadioQuietly('stack-changed')
+  if (applyDeviceRead(deviceRead)) refreshRadioQuietly('stack-changed')
 }
 
 async function readDevicesOnWorker() {
   const startedAt = Date.now()
-  const outcome = await readerWorkers().request({ type: 'read-nodes' }, READ_WATCHDOG_MS)
+  const outcome = await readerWorkers().request({ type: 'read-nodes-if-changed', knownReadId: lastDeviceRead.readId }, READ_WATCHDOG_MS)
   reportReadDuration(Date.now() - startedAt, outcome.ok)
-  applyReadOutcome(outcome.ok ? outcome.value : null, outcome.error ?? 'the reader returned nothing')
+  applyReadOutcome(outcome.ok ? deviceReadOfReply(outcome.value) : null, outcome.error ?? 'the reader returned nothing')
   expireAndPublish()
 }
 
@@ -161,7 +175,8 @@ async function readFreshDevices() {
 }
 
 function readDevicesAtBoot() {
-  applyReadOutcome(bluetoothNative.readBluetoothNodes(), 'the boot read returned nothing')
+  const snapshot = bluetoothNative.readBluetoothNodes()
+  applyReadOutcome(snapshot ? deviceReadOfSnapshot(null, snapshot) : null, 'the boot read returned nothing')
   expireAndPublish()
 }
 

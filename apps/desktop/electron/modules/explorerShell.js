@@ -34,7 +34,7 @@ function shellTrayWindows() {
 
 function ownerProcessName(hwnd) {
   const processId = windowEnum.windowProcessId(hwnd)
-  if (!processId) return ''
+  if (!processId || processId === process.pid) return ''
   return windowEnum.processNameFromPath(windowEnum.processImagePath(processId)).toLowerCase()
 }
 

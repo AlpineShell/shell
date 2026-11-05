@@ -60,6 +60,24 @@ describe('readWideString', () => {
   it('preserves non-ascii characters', () => {
     expect(readWideString(wideBuffer('Größe — ◑', 16), 16)).toBe('Größe — ◑')
   })
+
+  it('keeps an unpaired surrogate as the window reported it', () => {
+    const buffer = Buffer.alloc(8)
+    buffer.writeUInt16LE(0x41, 0)
+    buffer.writeUInt16LE(0xd83d, 2)
+    buffer.writeUInt16LE(0x42, 4)
+    expect(readWideString(buffer, 4)).toBe(`A${String.fromCharCode(0xd83d)}B`)
+  })
+
+  it('reads only the requested characters from a reused buffer holding a longer earlier value', () => {
+    const reused = wideBuffer('Chrome_WidgetWin_1', 32)
+    wideBuffer('Edit', 4).copy(reused)
+    expect(readWideString(reused, 4)).toBe('Edit')
+  })
+
+  it('returns an empty string when no characters were requested', () => {
+    expect(readWideString(wideBuffer('Notepad', 16), 0)).toBe('')
+  })
 })
 
 describe('processNameFromPath', () => {
