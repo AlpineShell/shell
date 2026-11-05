@@ -1,10 +1,10 @@
 import { Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bluetooth, BluetoothConnected, BluetoothOff, EthernetPort, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react";
 import { indicatorKind } from "../../../lib/bluetoothPresentation";
 
-function NetworkIcon({ network, radioOn, darkText }: Pick<StatusFaceProps, "network" | "radioOn" | "darkText">) {
+function NetworkIcon({ network, wifiRadio, darkText }: Pick<StatusFaceProps, "network" | "wifiRadio" | "darkText">) {
     const color = darkText ? "black" : "white";
     if (network.type === "ethernet") return <EthernetPort color={color} size={14} />;
-    if (!radioOn) return <WifiOff color={color} size={14} />;
+    if (wifiRadio !== 'on') return <WifiOff color={color} size={14} />;
     if (!network.connected) return <WifiOff color={color} size={14} />;
     if (network.signal === null) return <Wifi color={color} size={14} />;
     if (network.signal >= 70) return <Wifi color={color} size={14} />;
@@ -31,11 +31,11 @@ function BatteryIcon({ battery, darkText }: Pick<StatusFaceProps, "battery" | "d
     return <BatteryWarning color={color} className="ml-0.5" size={16} />;
 }
 
-export default function StatusFace({ bluetooth, network, radioOn, battery, darkText }: StatusFaceProps) {
+export default function StatusFace({ bluetooth, network, wifiRadio, battery, darkText }: StatusFaceProps) {
     return (
         <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex px-2 rounded-full h-4.5 items-center gap-1 transition-colors duration-300`}>
             <BluetoothIcon bluetooth={bluetooth} darkText={darkText} />
-            <NetworkIcon network={network} radioOn={radioOn} darkText={darkText} />
+            <NetworkIcon network={network} wifiRadio={wifiRadio} darkText={darkText} />
             {battery.hasBattery && <BatteryIcon battery={battery} darkText={darkText} />}
         </div>
     );

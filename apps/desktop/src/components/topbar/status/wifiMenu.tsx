@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { ChevronLeft, Loader2, Lock, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, RefreshCw } from "lucide-react";
+import { useEffect } from "react";
+import { ChevronLeft, EthernetPort, Loader2, Lock, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, RefreshCw } from "lucide-react";
+import { useWifiJoin } from "../../../hooks/useWifiJoin";
+import { ETHERNET_ONLY_TITLE, networkStatusLabel, wifiOffLabel } from "../../../lib/wifiPresentation";
 
 function SignalIcon({ signal, color, size }: { signal: number; color: string; size: number }) {
     if (signal >= 70) return <Wifi color={color} size={size} />;
@@ -9,11 +11,8 @@ function SignalIcon({ signal, color, size }: { signal: number; color: string; si
 }
 
 interface WifiMenuProps {
-    networks: WifiNetwork[];
-    scanning: boolean;
-    enabled: boolean;
+    state: WifiState;
     onToggleRadio: (enabled: boolean) => void;
-    onScan: () => void;
     onBack: () => void;
     darkText: boolean;
 }
@@ -43,46 +42,20 @@ function ToggleSwitch({ checked, onChange, darkText }: { checked: boolean; onCha
     );
 }
 
-export default function WifiMenu({ networks, scanning, enabled, onToggleRadio, onScan, onBack, darkText }: WifiMenuProps) {
-    const [connecting, setConnecting] = useState<string | null>(null);
-    const [passwordFor, setPasswordFor] = useState<string | null>(null);
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState(false);
+export default function WifiMenu({ state, onToggleRadio, onBack, darkText }: WifiMenuProps) {
+    const { passwordFor, password, setPassword, activate, submitPassword, cancelPassword, wrongPasswordFor } = useWifiJoin();
+    const enabled = state.radio === 'on';
+    const networks = state.networks;
+
+    useEffect(() => {
+        void window.shell.network.wifiScan().catch(() => {});
+    }, []);
 
     const color = darkText ? "black" : "white";
     const dimColor = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)";
 
-    async function handleConnect(ssid: string, pwd?: string) {
-        setConnecting(ssid);
-        setError(false);
-        const result = await window.shell.network.wifiConnect(ssid, pwd);
-        if (result.needsPassword && !pwd) {
-            setConnecting(null);
-            setPasswordFor(ssid);
-            setPassword("");
-            return;
-        }
-        if (!result.success) {
-            setConnecting(null);
-            setError(true);
-            return;
-        }
-        await new Promise((r) => setTimeout(r, 1500));
-        setPasswordFor(null);
-        setPassword("");
-        setConnecting(null);
-        onScan();
-    }
-
-    async function handleDisconnect() {
-        await window.shell.network.wifiDisconnect();
-        await new Promise((r) => setTimeout(r, 1000));
-        onScan();
-    }
-
-    function handlePasswordSubmit(ssid: string) {
-        if (!password.trim()) return;
-        handleConnect(ssid, password);
+    function scan() {
+        void window.shell.network.wifiScan().catch(() => {});
     }
 
     return (
@@ -92,22 +65,27 @@ export default function WifiMenu({ networks, scanning, enabled, onToggleRadio, o
                     <ChevronLeft color={color} size={16} />
                     <span className="text-sm font-medium">Wi-Fi</span>
                 </div>
-                <div className="flex items-center gap-2.5">
-                    <button onClick={onScan} disabled={scanning || !enabled} className="cursor-pointer">
-                        <RefreshCw color={dimColor} size={14} className={scanning ? "animate-spin" : ""} style={{ opacity: enabled ? 1 : 0.4 }} />
+                {!state.blockedByEthernet && <div className="flex items-center gap-2.5">
+                    <button onClick={scan} disabled={state.scanning || !enabled} className="cursor-pointer">
+                        <RefreshCw color={dimColor} size={14} className={state.scanning ? "animate-spin" : ""} style={{ opacity: enabled ? 1 : 0.4 }} />
                     </button>
                     <div style={{ marginLeft: 4 }}>
                         <ToggleSwitch checked={enabled} onChange={onToggleRadio} darkText={darkText} />
                     </div>
-                </div>
+                </div>}
             </div>
 
-            {!enabled ? (
+            {state.blockedByEthernet ? (
                 <div className={`flex flex-col items-center gap-2 py-4 ${darkText ? "text-black/40" : "text-white/40"}`}>
-                    <WifiOff size={20} />
-                    <span className="text-sm">Wi-Fi off</span>
+                    <EthernetPort size={20} />
+                    <span className="text-sm">{ETHERNET_ONLY_TITLE}</span>
                 </div>
-            ) : scanning && networks.length === 0 ? (
+            ) : !enabled ? (
+                <div className={`flex flex-col items-center gap-2 py-4 ${darkText ? "text-black/40" : "text-white/40"}`}>
+                    {state.ethernet ? <EthernetPort size={20} /> : <WifiOff size={20} />}
+                    <span className="text-sm">{wifiOffLabel(state)}</span>
+                </div>
+            ) : state.scanning && networks.length === 0 ? (
                 <div className={`flex items-center justify-center py-6 ${darkText ? "text-black/40" : "text-white/40"}`}>
                     <Loader2 size={20} className="animate-spin" />
                 </div>
@@ -123,37 +101,36 @@ export default function WifiMenu({ networks, scanning, enabled, onToggleRadio, o
                             <div
                                 className={`flex shrink-0 snap-start items-center justify-between px-2 py-1.5 rounded-md cursor-pointer ${darkText ? "hover:bg-black/5" : "hover:bg-white/10"} transition-colors`}
                                 onClick={() => {
-                                    if (connecting) return;
-                                    if (network.connected) handleDisconnect();
-                                    else if (passwordFor === network.ssid) { setPasswordFor(null); setPassword(""); }
-                                    else handleConnect(network.ssid);
+                                    if (state.operation) return;
+                                    if (passwordFor === network.ssid) cancelPassword();
+                                    else void activate(network);
                                 }}
                             >
                                 <div className={`flex items-center gap-2.5 ${darkText ? "text-black" : "text-white"}`}>
                                     <SignalIcon signal={network.signal} color={network.connected ? color : dimColor} size={15} />
                                     <div className="flex flex-col">
                                         <span className={`text-[13px] ${network.connected ? "" : (darkText ? "text-black/70" : "text-white/70")}`}>{network.ssid}</span>
-                                        {network.connected && <span className={`text-[11px] -mt-0.5 ${darkText ? "text-black/50" : "text-white/50"}`}>Connected</span>}
+                                        {networkStatusLabel(network, state) && <span className={`text-[11px] -mt-0.5 ${darkText ? "text-black/50" : "text-white/50"}`}>{networkStatusLabel(network, state)}</span>}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {connecting === network.ssid && <Loader2 color={dimColor} size={12} className="animate-spin" />}
-                                    {network.security !== "Open" && <Lock color={dimColor} size={12} />}
+                                    {state.operation?.ssid === network.ssid && <Loader2 color={dimColor} size={12} className="animate-spin" />}
+                                    {network.secured && <Lock color={dimColor} size={12} />}
                                 </div>
                             </div>
-                            {passwordFor === network.ssid && (
+                            {passwordFor === network.ssid && !network.connected && (
                                 <div className={`flex gap-2 px-2 py-1.5 items-center`}>
                                     <input
                                         type="password"
                                         value={password}
-                                        onChange={(e) => { setPassword(e.target.value); setError(false); }}
-                                        onKeyDown={(e) => { if (e.key === "Enter") handlePasswordSubmit(network.ssid); }}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === "Enter") void submitPassword(); }}
                                         placeholder="Password"
                                         autoFocus
-                                        className={`flex-1 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${error ? "ring-1 ring-red-400" : ""}`}
+                                        className={`flex-1 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
                                     />
                                     <button
-                                        onClick={() => handlePasswordSubmit(network.ssid)}
+                                        onClick={() => { if (password.trim()) void submitPassword(); }}
                                         className={`text-[12px] px-2 py-1 rounded-md cursor-pointer ${darkText ? "bg-black/10 text-black hover:bg-black/15" : "bg-white/15 text-white hover:bg-white/20"} transition-colors`}
                                     >
                                         Join

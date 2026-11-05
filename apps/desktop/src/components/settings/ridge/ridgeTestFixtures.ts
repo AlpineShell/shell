@@ -64,7 +64,7 @@ export function liveRidgePreviewData(): RidgePreviewData {
         ],
         devicesAvailable: true,
       },
-      network: { signal: 80, connected: true, type: 'wifi', ssid: 'Home' },
+      network: { signal: 80, connected: true, type: 'wifi', ssid: 'Home', wifi: { connected: true, ssid: 'Home', signal: 80 } },
     },
     media: {
       playback: {

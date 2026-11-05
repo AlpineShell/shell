@@ -1,9 +1,24 @@
 import { describe, it, expect } from 'vitest'
-import { buildInterfaceGeneration, decodeBssEntry, decodeConnectionDetails, decodeRadioState, decodeSsid } from './networkNative.js'
+import { buildInterfaceGeneration, decodeBssEntry, decodeConnectionDetails, decodeRadioState, decodeSsid, decodeWiredConnection } from './networkNative.js'
 
 const CONNECTION_SSID_LENGTH_OFFSET = 520
 const CONNECTION_SSID_OFFSET = 524
 const CONNECTION_STRUCT_BYTES = 604
+const MIB_IF_TABLE_HEADER_BYTES = 8
+const MIB_IF_ROW_BYTES = 1352
+
+function wiredTableFor(entries) {
+  const buffer = Buffer.alloc(MIB_IF_TABLE_HEADER_BYTES + entries.length * MIB_IF_ROW_BYTES)
+  buffer.writeUInt32LE(entries.length, 0)
+  entries.forEach(({ type, flags, operStatus, mediaConnectState }, index) => {
+    const base = MIB_IF_TABLE_HEADER_BYTES + index * MIB_IF_ROW_BYTES
+    buffer.writeUInt32LE(type, base + 1128)
+    buffer.writeUInt8(flags, base + 1152)
+    buffer.writeUInt32LE(operStatus, base + 1156)
+    buffer.writeUInt32LE(mediaConnectState, base + 1164)
+  })
+  return buffer
+}
 
 function connectionBufferFor(ssid) {
   const buffer = Buffer.alloc(CONNECTION_STRUCT_BYTES)
@@ -159,5 +174,37 @@ describe('decodeBssEntry', () => {
 
   it('finds nothing when the access point is not in the list', () => {
     expect(decodeBssEntry(bssListFor([{ bssid: [1, 2, 3, 4, 5, 6], rssi: -80, frequencyKhz: 2412000 }]), 'AA:BB:CC:0D:0E:0F')).toBeNull()
+  })
+})
+
+describe('decodeWiredConnection', () => {
+  it('recognizes a hardware Ethernet interface with an active media link', () => {
+    expect(decodeWiredConnection(wiredTableFor([{ type: 6, flags: 5, operStatus: 1, mediaConnectState: 1 }]))).toEqual({ connected: true })
+  })
+
+  it('ignores a Hyper-V style interface without the hardware flag', () => {
+    expect(decodeWiredConnection(wiredTableFor([{ type: 6, flags: 4, operStatus: 1, mediaConnectState: 1 }]))).toEqual({ connected: false })
+  })
+
+  it('ignores Ethernet whose media is disconnected', () => {
+    expect(decodeWiredConnection(wiredTableFor([{ type: 6, flags: 5, operStatus: 1, mediaConnectState: 2 }]))).toEqual({ connected: false })
+  })
+
+  it('ignores Wi-Fi interfaces', () => {
+    expect(decodeWiredConnection(wiredTableFor([{ type: 71, flags: 5, operStatus: 1, mediaConnectState: 1 }]))).toEqual({ connected: false })
+  })
+
+  it('returns only complete matching rows from a truncated table', () => {
+    const complete = wiredTableFor([
+      { type: 71, flags: 5, operStatus: 1, mediaConnectState: 1 },
+      { type: 6, flags: 5, operStatus: 1, mediaConnectState: 1 },
+    ])
+    expect(decodeWiredConnection(complete.subarray(0, MIB_IF_TABLE_HEADER_BYTES + MIB_IF_ROW_BYTES))).toEqual({ connected: false })
+    expect(decodeWiredConnection(complete.subarray(0, MIB_IF_TABLE_HEADER_BYTES + MIB_IF_ROW_BYTES + 1170))).toEqual({ connected: false })
+    const connectedFirstRow = wiredTableFor([
+      { type: 6, flags: 5, operStatus: 1, mediaConnectState: 1 },
+      { type: 71, flags: 5, operStatus: 1, mediaConnectState: 1 },
+    ])
+    expect(decodeWiredConnection(connectedFirstRow.subarray(0, MIB_IF_TABLE_HEADER_BYTES + MIB_IF_ROW_BYTES + 1170))).toEqual({ connected: true })
   })
 })

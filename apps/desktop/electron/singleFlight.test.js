@@ -67,6 +67,28 @@ describe('singleFlight', () => {
     await expect(guarded()).resolves.toBe('immediate')
   })
 
+  it('turns a synchronous throw into a rejected flight', async () => {
+    const guarded = singleFlight(() => {
+      throw new Error('unavailable')
+    })
+
+    await expect(guarded()).rejects.toThrow('unavailable')
+    expect(guarded.isPending()).toBe(false)
+  })
+
+  it('publishes the flight before running a reentrant task', async () => {
+    let nested
+    let guarded
+    guarded = singleFlight(() => {
+      nested = guarded()
+      return 'complete'
+    })
+
+    const outer = guarded()
+    expect(nested).toBe(outer)
+    await expect(outer).resolves.toBe('complete')
+  })
+
   it('reports whether a task is still in flight', async () => {
     const gate = deferred()
     const guarded = singleFlight(() => gate.promise)

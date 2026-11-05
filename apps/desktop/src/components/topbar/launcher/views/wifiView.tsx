@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import { Loader2, Lock, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { EthernetPort, Loader2, Lock, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from "lucide-react"
 import { launcherColors } from "../launcherColors"
 import { MENU_LIST_CLASS, MenuDivider, SubToggle } from "./launcherMenu"
 import { menuListMaxHeight } from "../launcherSizing"
+import { useWifi } from "../../../../hooks/useWifi"
+import { useWifiJoin } from "../../../../hooks/useWifiJoin"
+import { ETHERNET_ONLY_TITLE, networkStatusLabel, wifiOffLabel } from "../../../../lib/wifiPresentation"
 
 function WifiSignalIcon({ signal, color, size }: { signal: number; color: string; size: number }) {
   if (signal >= 70) return <Wifi color={color} size={size} />
@@ -13,41 +16,24 @@ function WifiSignalIcon({ signal, color, size }: { signal: number; color: string
 
 export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () => void }) {
   const colors = launcherColors(darkText)
-  const [networks, setNetworks] = useState<WifiNetwork[]>([])
-  const [enabled, setEnabled] = useState(false)
-  const [scanning, setScanning] = useState(true)
+  const state = useWifi()
+  const join = useWifiJoin()
+  const enabled = state.radio === 'on'
+  const networks = state.networks
   const [selected, setSelected] = useState(0)
-  const [connecting, setConnecting] = useState<string | null>(null)
-  const [passwordFor, setPasswordFor] = useState<string | null>(null)
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState(false)
   const passwordRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const itemCount = 1 + (enabled ? networks.length : 0)
   const current = Math.min(selected, itemCount - 1)
 
-  const collectScan = useCallback(async () => {
-    try {
-      const found = await window.shell.network.wifiScan()
-      if (found) setNetworks(found)
-    } finally {
-      setScanning(false)
-    }
+  useEffect(() => {
+    void window.shell.network.wifiScan().catch(() => {})
   }, [])
 
-  const scan = useCallback(() => {
-    setScanning(true)
-    return collectScan()
-  }, [collectScan])
-
   useEffect(() => {
-    window.shell.network.wifiRadioGet().then((radio) => setEnabled(typeof radio?.state === "string" && radio.state.toLowerCase() === "on")).catch(() => {})
-    window.shell.network.wifiNetworks().then(setNetworks).catch(() => {})
-    const off = window.shell.network.onWifiScanUpdated((data) => { setNetworks(data); setScanning(false) })
-    collectScan()
-    return () => off()
-  }, [collectScan])
+    if (join.passwordFor) requestAnimationFrame(() => passwordRef.current?.focus())
+  }, [join.passwordFor])
 
   useEffect(() => {
     const element = listRef.current?.querySelector(`[data-idx="${current}"]`) as HTMLElement | null
@@ -56,37 +42,18 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
 
   function toggleRadio() {
     const next = !enabled
-    setEnabled(next)
     setSelected(0)
-    window.shell.network.wifiRadioSet(next).then(() => { if (next) scan() }).catch(() => {})
-  }
-
-  async function connect(network: WifiNetwork, secret?: string) {
-    setConnecting(network.ssid)
-    setError(false)
-    const result = await window.shell.network.wifiConnect(network.ssid, secret)
-    if (result.needsPassword && !secret) {
-      setConnecting(null)
-      setPasswordFor(network.ssid)
-      setPassword("")
-      requestAnimationFrame(() => passwordRef.current?.focus())
-      return
-    }
-    setConnecting(null)
-    if (!result.success) { setError(true); return }
-    setPasswordFor(null)
-    setPassword("")
-    setTimeout(scan, 1200)
+    void window.shell.network.wifiRadioSet(next).catch(() => {})
   }
 
   function activateNetwork(network: WifiNetwork) {
-    if (connecting) return
-    if (network.connected) { window.shell.network.wifiDisconnect().then(() => setTimeout(scan, 800)); return }
-    if (passwordFor === network.ssid) { setPasswordFor(null); setPassword(""); return }
-    connect(network)
+    if (state.operation) return
+    if (join.passwordFor === network.ssid) join.cancelPassword()
+    else void join.activate(network)
   }
 
   function activate(index: number) {
+    if (state.blockedByEthernet) return
     if (index === 0) { toggleRadio(); return }
     const network = networks[index - 1]
     if (network) activateNetwork(network)
@@ -94,7 +61,7 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (passwordFor) return
+       if (join.passwordFor) return
       if (event.key === "Escape" || event.key === "Backspace" || event.key === "ArrowLeft") { event.preventDefault(); onBack() }
       else if (event.key === "ArrowDown") { event.preventDefault(); setSelected(Math.min(current + 1, itemCount - 1)) }
       else if (event.key === "ArrowUp") { event.preventDefault(); setSelected(Math.max(current - 1, 0)) }
@@ -103,6 +70,17 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   })
+
+  if (state.blockedByEthernet) {
+    return (
+      <div ref={listRef} className={`${MENU_LIST_CLASS} ${darkText ? "cc-scroll-light" : ""}`} style={{ maxHeight: menuListMaxHeight() }}>
+        <div className={`flex shrink-0 items-center gap-2 justify-center py-4 text-[13px] ${colors.dim}`}>
+          <EthernetPort size={15} className="shrink-0" />
+          <span>{ETHERNET_ONLY_TITLE}</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div ref={listRef} className={`${MENU_LIST_CLASS} ${darkText ? "cc-scroll-light" : ""}`} style={{ maxHeight: menuListMaxHeight() }}>
@@ -120,7 +98,9 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
 
       {enabled && <MenuDivider darkText={darkText} />}
 
-      {!enabled ? null : scanning && networks.length === 0 ? (
+      {!enabled ? (
+        <div className={`flex shrink-0 items-center gap-2 justify-center py-4 text-[13px] ${colors.dim}`}>{state.ethernet ? <EthernetPort size={15} /> : <WifiOff size={15} />}<span>{wifiOffLabel(state)}</span></div>
+      ) : state.scanning && networks.length === 0 ? (
         <div className={`flex shrink-0 items-center justify-center py-4 ${colors.dim}`}><Loader2 size={18} className="animate-spin" /></div>
       ) : networks.length === 0 ? (
         <div className={`flex shrink-0 items-center gap-2 justify-center py-4 text-[13px] ${colors.dim}`}><WifiOff size={15} /><span>No networks</span></div>
@@ -141,28 +121,28 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
                 </span>
                 <div className="flex flex-col min-w-0 flex-1">
                   <span className={`text-[13px] truncate ${colors.text}`}>{network.ssid}</span>
-                  {network.connected && <span className={`text-[11px] ${colors.dim}`}>Connected</span>}
+                  {networkStatusLabel(network, state) && <span className={`text-[11px] ${colors.dim}`}>{networkStatusLabel(network, state)}</span>}
                 </div>
-                {connecting === network.ssid && <Loader2 size={13} className={`shrink-0 animate-spin ${colors.dim}`} />}
-                {network.security !== "Open" && <Lock size={12} className={`shrink-0 ${colors.dim}`} />}
+                {state.operation?.ssid === network.ssid && <Loader2 size={13} className={`shrink-0 animate-spin ${colors.dim}`} />}
+                {network.secured && <Lock size={12} className={`shrink-0 ${colors.dim}`} />}
               </button>
-              {passwordFor === network.ssid && (
+              {join.passwordFor === network.ssid && !network.connected && (
                 <div className="flex gap-2 px-2.5 py-1.5 items-center">
                   <input
                     ref={passwordRef}
                     type="password"
-                    value={password}
-                    onChange={(event) => { setPassword(event.target.value); setError(false) }}
+                    value={join.password}
+                    onChange={(event) => join.setPassword(event.target.value)}
                     onKeyDown={(event) => {
                       event.stopPropagation()
-                      if (event.key === "Enter") { if (password.trim()) connect(network, password) }
-                      else if (event.key === "Escape") { setPasswordFor(null); setPassword("") }
+                      if (event.key === "Enter") { if (join.password.trim()) void join.submitPassword() }
+                      else if (event.key === "Escape") join.cancelPassword()
                     }}
                     placeholder="Password"
                     autoFocus
-                    className={`flex-1 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${error ? "ring-1 ring-red-400" : ""}`}
+                    className={`flex-1 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${join.wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
                   />
-                  <button type="button" onClick={() => { if (password.trim()) connect(network, password) }} className={`text-[12px] px-2 py-1 rounded-md cursor-pointer ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}>Join</button>
+                  <button type="button" onClick={() => { if (join.password.trim()) void join.submitPassword() }} className={`text-[12px] px-2 py-1 rounded-md cursor-pointer ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}>Join</button>
                 </div>
               )}
             </div>
