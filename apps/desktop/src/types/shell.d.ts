@@ -85,7 +85,17 @@ interface NetworkStatus {
   connected: boolean
   type: 'wifi' | 'ethernet'
   ssid: string | null
+  wifi: WifiConnection
 }
+
+interface WifiConnection { connected: boolean; ssid: string | null; signal: number | null }
+type WifiRadioState = 'on' | 'off' | 'unavailable' | 'unknown'
+type WifiSecurity = 'open' | 'owe' | 'wep' | 'wpa-personal' | 'wpa2-personal' | 'wpa3-personal' | 'enterprise' | 'unknown'
+interface WifiNetwork { ssid: string; signal: number; security: WifiSecurity; secured: boolean; saved: boolean; connected: boolean; connectable: boolean }
+type WifiConnectError = 'wrong-password' | 'invalid-password' | 'unsupported-security' | 'timed-out' | 'not-found' | 'failed'
+interface WifiOperation { kind: 'connect' | 'disconnect'; ssid: string }
+interface WifiState { radio: WifiRadioState; networks: WifiNetwork[]; scanning: boolean; operation: WifiOperation | null; lastError: { ssid: string; error: WifiConnectError } | null; ethernet: boolean; offForEthernet: boolean; blockedByEthernet: boolean }
+interface WifiConnectResult { success: boolean; needsPassword?: boolean; error?: WifiConnectError }
 
 interface WifiLinkDetails {
   ssid: string | null
@@ -256,13 +266,6 @@ declare global {
     progressLabel: string | null
     installingId: string | null
     error: string | null
-  }
-
-  interface WifiNetwork {
-    ssid: string
-    signal: number
-    security: string
-    connected: boolean
   }
 
   type BluetoothDeviceOperation = 'connect' | 'disconnect' | 'remove' | 'repair'
@@ -1055,8 +1058,8 @@ declare global {
 
   interface StatusFaceProps {
     bluetooth: BluetoothState
-    network: Pick<NetworkStatus, 'signal' | 'connected' | 'type'>
-    radioOn: boolean
+    network: NetworkStatus
+    wifiRadio: WifiRadioState
     battery: Pick<BatteryStatus, 'percent' | 'charging' | 'hasBattery'>
     darkText: boolean
   }
@@ -2257,14 +2260,13 @@ declare global {
       network: {
         wifiSignal: () => Promise<NetworkStatus>
         onWifiSignalChanged: (callback: (data: NetworkStatus) => void) => () => void
-        wifiScan: () => Promise<WifiNetwork[] | null>
-        wifiNetworks: () => Promise<WifiNetwork[]>
-        onWifiScanUpdated: (callback: (data: WifiNetwork[]) => void) => () => void
-        wifiConnect: (ssid: string, password?: string) => Promise<{ success: boolean; needsPassword?: boolean }>
+        wifiState: () => Promise<WifiState>
+        onWifiChanged: (callback: (data: WifiState) => void) => () => void
+        wifiScan: () => Promise<WifiState>
+        wifiConnect: (ssid: string, password?: string) => Promise<WifiConnectResult>
         details: () => Promise<NetworkDetails | null>
         onDetailsChanged: (callback: (details: NetworkDetails | null) => void) => () => void
         wifiDisconnect: () => Promise<{ success: boolean }>
-        wifiRadioGet: () => Promise<{ success: boolean; state: string }>
         wifiRadioSet: (enabled: boolean) => Promise<{ success: boolean; state: string }>
       }
       system: {

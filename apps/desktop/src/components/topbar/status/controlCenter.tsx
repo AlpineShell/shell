@@ -21,10 +21,7 @@ interface ControlCenterProps {
     toggleMute: () => void;
     monitors: MonitorInfo[];
     setMonitorBrightness: (id: string, value: number) => void;
-    wifiNetworks: WifiNetwork[];
-    wifiScanning: boolean;
-    scanWifi: () => void;
-    wifiRadio: boolean;
+    wifiState: WifiState;
     onToggleWifiRadio: (enabled: boolean) => void;
 }
 
@@ -44,13 +41,16 @@ function batteryIcon(percent: number | null, charging: boolean): React.FC<{ colo
 
 type View = 'main' | 'wifi' | 'bluetooth' | 'sound' | 'brightness';
 
-export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness, wifiNetworks, wifiScanning, scanWifi, wifiRadio, onToggleWifiRadio }: ControlCenterProps) {
+export default function ControlCenter({ battery, network, bluetooth, volume, setVolume, muted, toggleMute, monitors, setMonitorBrightness, wifiState, onToggleWifiRadio }: ControlCenterProps) {
     const darkText = useDarkText();
     const [view, setView] = useState<View>('main');
 
-    const wifiLabel = wifiRadio && network.connected && network.type === 'wifi' && network.ssid
-        ? network.ssid
-        : undefined;
+    const wifiLabel = wifiState.blockedByEthernet
+        ? 'Ethernet'
+        : network.wifi.connected && network.wifi.ssid
+            ? network.wifi.ssid
+            : wifiState.radio !== 'on' && wifiState.ethernet ? 'Ethernet' : undefined;
+    const wifiActive = !wifiState.blockedByEthernet && wifiState.radio === 'on';
 
     const btLabel = connectedSummary(bluetooth);
     const showSound = useStatusSound();
@@ -80,7 +80,7 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
             >
                 <div ref={mainRef} className="p-3 gap-3 flex flex-col h-fit w-65 shrink-0">
                     <div className="gap-3 mb-1 flex flex-col">
-                        <ControlItem label="Wi-Fi" sublabel={wifiLabel} active={wifiRadio} Icon={Wifi} darkText={darkText} onClick={() => setView('wifi')} />
+                        <ControlItem label="Wi-Fi" sublabel={wifiLabel} active={wifiActive} Icon={Wifi} darkText={darkText} onClick={() => setView('wifi')} />
                         <ControlItem label="Bluetooth" sublabel={btLabel} active={displayedRadioOn(bluetooth)} Icon={Bluetooth} darkText={darkText} onClick={() => setView('bluetooth')} />
                         {showSound && <ControlItem label="Sound" sublabel={soundLabel} active Icon={Speaker} darkText={darkText} onClick={() => setView('sound')} />}
                         {brightnessIsSubmenu && <ControlItem label="Brightness" active Icon={Sun} darkText={darkText} onClick={() => setView('brightness')} />}
@@ -119,7 +119,7 @@ export default function ControlCenter({ battery, network, bluetooth, volume, set
                 </div>
 
                 <div ref={subRef} className="w-65 shrink-0 self-start">
-                    {view === 'wifi' && <WifiMenu networks={wifiNetworks} scanning={wifiScanning} enabled={wifiRadio} onToggleRadio={onToggleWifiRadio} onScan={scanWifi} onBack={() => setView('main')} darkText={darkText} />}
+                    {view === 'wifi' && <WifiMenu state={wifiState} onToggleRadio={onToggleWifiRadio} onBack={() => setView('main')} darkText={darkText} />}
                     {view === 'bluetooth' && <BluetoothMenu onBack={() => setView('main')} darkText={darkText} />}
                     {view === 'sound' && <SoundMenu devices={audio.devices} onSelect={audio.setDefault} onBack={() => setView('main')} darkText={darkText} />}
                     {view === 'brightness' && <BrightnessMenu monitors={monitors} setMonitorBrightness={setMonitorBrightness} onBack={() => setView('main')} darkText={darkText} />}

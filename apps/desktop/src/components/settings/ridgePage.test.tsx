@@ -87,7 +87,7 @@ const FORBIDDEN_BRIDGES = [
   'shell.tray.setLayout',
   'shell.system.subscribePeak',
   'shell.network.wifiScan',
-  'shell.network.wifiRadioGet',
+  'shell.network.wifiState',
   'shell.system.bluetoothRefresh',
   'shell.system.bluetoothConnect',
   'shell.system.bluetoothDisconnect',
