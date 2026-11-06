@@ -1,3 +1,4 @@
+const crypto = require('crypto')
 const koffi = require('koffi')
 const winEvents = require('./winEvents')
 const switcherWindows = require('./switcherWindows')
@@ -58,14 +59,25 @@ function thumbnailUrl({ width, height, pixels }) {
   return nativeImage.createFromBitmap(pixels, { width, height }).toDataURL()
 }
 
+function shotFingerprint({ width, height, pixels }) {
+  return `${width}x${height}:${crypto.createHash('sha1').update(pixels).digest('base64')}`
+}
+
+function urlForShot(hwnd, shot, fingerprint) {
+  const previous = thumbnailCache.get(hwnd)
+  if (previous && previous.fingerprint === fingerprint) return previous.url
+  return thumbnailUrl(shot)
+}
+
 async function capture(hwnd, { allowScreenCopy = true } = {}) {
   if (isSlowWindow(hwnd)) return cached(hwnd)
   try {
     const shot = await windowCapture.captureWindow(hwnd, { allowScreenCopy, maxWidth: THUMBNAIL_MAX_WIDTH, maxHeight: THUMBNAIL_MAX_HEIGHT })
     if (shot.status === 'timeout') rememberSlowWindow(hwnd)
     if (shot.status !== 'captured') return cached(hwnd)
-    const url = thumbnailUrl(shot)
-    thumbnailCache.set(hwnd, { url, ts: Date.now() })
+    const fingerprint = shotFingerprint(shot)
+    const url = urlForShot(hwnd, shot, fingerprint)
+    thumbnailCache.set(hwnd, { url, ts: Date.now(), fingerprint })
     return url
   } catch (e) {
     console.error('[windowThumbnails] capture error:', e.message)

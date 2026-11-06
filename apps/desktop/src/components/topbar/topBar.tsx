@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Clock from "./clock";
 import StatusIndicator from "./status/statusIndicator";
 import SystemMenu from "./systemMenu";
@@ -16,12 +16,12 @@ import SmartScreenPanel from "./smartScreenPanel";
 import { warmRenderableEmojis } from "../../lib/emojiRenderable";
 import { useTopbarColor } from "../../hooks/useTopbarColor";
 import { useForegroundColor } from "../../hooks/useForegroundColor";
-import { useWindowCoverage } from "../../hooks/useWindowCoverage";
 import { useTopbarLayout } from "../../hooks/useTopbarLayout";
 import { useTopbarInteractiveZones } from "../../hooks/useTopbarInteractiveZones";
 import { visibleTopbarSlotItems } from "./layout/topbarLayout";
 import { topbarSurface } from "./topbarSurface";
-import ChromeCanvas from "./chrome/ChromeCanvas";
+import TopbarChrome from "./chrome/topbarChrome";
+import { setBarHovered } from "./chrome/chromeStore";
 import PluginSlot from "./pluginSlot";
 import NoticeStrip from "./noticeStrip";
 import NoticeStatus from "./noticeStatus";
@@ -49,17 +49,27 @@ const renderSlot = (layout: TopbarLayoutItem[], slot: TopbarSlot) =>
         <Fragment key={item.id}>{TOPBAR_ELEMENTS[item.id]()}</Fragment>
     ));
 
+const markBarHovered = () => setBarHovered(true);
+const markBarLeft = () => setBarHovered(false);
+
+const OVERLAY_PANELS = (
+    <>
+        <NoticeStrip />
+        <WindowSwitcherPanel />
+        <DisplayModePanel />
+        <SmartScreenPanel />
+    </>
+);
+
 export default function TopBar() {
     const wallpaperColor = useTopbarColor();
     const fgColor = useForegroundColor();
-    const windowCoverage = useWindowCoverage();
     const layout = useTopbarLayout();
     const leftCluster = useRef<HTMLDivElement>(null);
     const centerCluster = useRef<HTMLDivElement>(null);
     const rightCluster = useRef<HTMLDivElement>(null);
     useTopbarInteractiveZones(leftCluster, centerCluster, rightCluster);
     const { bg, darkText, borderColor } = topbarSurface(fgColor || wallpaperColor);
-    const [hovered, setHovered] = useState(false);
     const [launcherOpen, setLauncherOpen] = useState(false);
     const [launcherMode, setLauncherMode] = useState<string | undefined>(undefined);
     const [ridgeBackdrop, setRidgeBackdrop] = useState<HTMLSpanElement | null>(null);
@@ -76,33 +86,35 @@ export default function TopBar() {
 
     useEffect(() => warmRenderableEmojis(), []);
 
+    const theme = useMemo(() => ({ darkText, bg, onMenuOpenChange: noop }), [darkText, bg]);
+    const leftSlot = useMemo(() => renderSlot(layout, "left"), [layout]);
+    const centerSlot = useMemo(() => renderSlot(layout, "center"), [layout]);
+    const rightSlot = useMemo(() => renderSlot(layout, "right"), [layout]);
+
     return (
-        <ThemeProvider value={{ darkText, bg, onMenuOpenChange: noop }}>
+        <ThemeProvider value={theme}>
             <RidgeBackdropProvider value={ridgeBackdrop}>
-                <ChromeCanvas barHeight={24} bg={bg} barBorderColor={borderColor} hovered={hovered} windowCoverage={windowCoverage} />
+                <TopbarChrome barHeight={24} bg={bg} barBorderColor={borderColor} />
                 <div
                     className="w-full flex justify-between items-center h-6 relative z-10 transition-colors duration-300"
                     style={{ backgroundColor: bg }}
-                    onMouseEnter={() => setHovered(true)}
-                    onMouseLeave={() => setHovered(false)}
+                    onMouseEnter={markBarHovered}
+                    onMouseLeave={markBarLeft}
                 >
                     <span ref={setRidgeBackdrop} aria-hidden className="absolute inset-0 pointer-events-none" />
                     <div ref={leftCluster} className="flex items-center gap-1 relative z-1 self-stretch min-w-0">
-                        {renderSlot(layout, "left")}
+                        {leftSlot}
                     </div>
                     <div ref={centerCluster} className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center gap-1 z-1">
                         <NoticeStatus />
-                        {renderSlot(layout, "center")}
+                        {centerSlot}
                     </div>
                     <div ref={rightCluster} className="flex items-center gap-1 mr-1 relative z-1 self-stretch">
-                        {renderSlot(layout, "right")}
+                        {rightSlot}
                     </div>
                 </div>
                 {launcherOpen && <LauncherPanel mode={launcherMode} />}
-                <NoticeStrip />
-                <WindowSwitcherPanel />
-                <DisplayModePanel />
-                <SmartScreenPanel />
+                {OVERLAY_PANELS}
             </RidgeBackdropProvider>
         </ThemeProvider>
     );

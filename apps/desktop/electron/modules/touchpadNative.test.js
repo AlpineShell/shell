@@ -3,25 +3,26 @@ import touchpadNative from './touchpadNative.js'
 
 const { NATIVE_ADDON_PATH, bindTouchpad, loadNativeTouchpad } = touchpadNative
 
-const REPORT = { contactCount: 1, contacts: [{ id: 0, touching: true, x: 0.5, y: 0.5 }] }
+const FRAME = [{ id: 0, x: 0.5, y: 0.5 }]
 
 describe('bindTouchpad', () => {
-  it('hands reports and failures to their own callbacks', () => {
+  it('hands frames and failures to their own callbacks', () => {
     const addon = { touchpadWatch: vi.fn() }
-    const onReport = vi.fn()
+    const onFrame = vi.fn()
     const onFailure = vi.fn()
-    bindTouchpad(addon).watch(onReport, onFailure)
-    const listener = addon.touchpadWatch.mock.calls[0][0]
-    listener(null, REPORT)
+    bindTouchpad(addon).watch(3, onFrame, onFailure)
+    const [swipeFingerCount, listener] = addon.touchpadWatch.mock.calls[0]
+    listener(null, FRAME)
     listener(new Error('gone'), undefined)
-    expect(onReport).toHaveBeenCalledWith(REPORT)
+    expect(swipeFingerCount).toBe(3)
+    expect(onFrame).toHaveBeenCalledWith(FRAME)
     expect(onFailure).toHaveBeenCalledWith(new Error('gone'))
   })
 
   it('reports a watch that cannot start', () => {
     const onFailure = vi.fn()
     const addon = { touchpadWatch: () => { throw new Error('no window') } }
-    bindTouchpad(addon).watch(vi.fn(), onFailure)
+    bindTouchpad(addon).watch(3, vi.fn(), onFailure)
     expect(onFailure).toHaveBeenCalledWith(new Error('no window'))
   })
 

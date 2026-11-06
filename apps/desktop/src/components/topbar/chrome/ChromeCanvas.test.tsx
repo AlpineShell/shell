@@ -90,6 +90,62 @@ describe("ChromeCanvas", () => {
         expect(context.stroke).toHaveBeenCalled();
     });
 
+    it("leaves the canvas alone when a window moves while no border is drawn", () => {
+        const { rerender } = render(
+            <ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />
+        );
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+        context.clearRect.mockClear();
+
+        rerender(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[WINDOW_UNDER_RIDGE]} />);
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(context.clearRect).not.toHaveBeenCalled();
+    });
+
+    it("draws the border over a window that moved in while the Ridge was not hovered once it is hovered", () => {
+        const { rerender } = render(
+            <ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />
+        );
+        rerender(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[WINDOW_UNDER_RIDGE]} />);
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+        expect(context.stroke).not.toHaveBeenCalled();
+
+        rerender(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={true} windowCoverage={[WINDOW_UNDER_RIDGE]} />);
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(painted).toEqual(["clip", "stroke", "restore"]);
+    });
+
+    it("repaints when a window moves while a surface is open", () => {
+        let now = 1000;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        const { rerender } = render(
+            <ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />
+        );
+        act(() => setChromeSurface(surface(90)));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+        context.stroke.mockClear();
+
+        rerender(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[WINDOW_UNDER_RIDGE]} />);
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(context.stroke).toHaveBeenCalled();
+    });
+
     it("lays a registered backdrop over the bar and the surface shape, fading with the surface", () => {
         let now = 1000;
         vi.spyOn(performance, "now").mockImplementation(() => now);

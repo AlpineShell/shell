@@ -5,6 +5,7 @@ const windowEnum = require('./windowEnum')
 const windowRules = require('./windowRules')
 const winFocus = require('./winFocus')
 const { friendlyAppName } = require('../appNames')
+const { createWindowImageCache } = require('./windowSweepMemo')
 
 let lastSnapshot = null
 let lastApps = null
@@ -47,6 +48,10 @@ let refreshing = false
 let refreshQueued = false
 let lastRefreshAt = 0
 const trackedWindowHandles = new Set()
+const windowImages = createWindowImageCache(
+  (processId) => windowEnum.processImagePath(processId),
+  (exePath) => windowEnum.processNameFromPath(exePath)
+)
 
 function toNum(v) {
   return typeof v === 'bigint' ? Number(v) : v
@@ -72,9 +77,9 @@ function describeWindow(hwnd) {
   if (!title) return null
   const id = windowEnum.windowProcessId(hwnd)
   if (!id) return null
-  const exePath = windowEnum.processImagePath(id)
-  if (!exePath) return null
-  return { id, hwnd, name: windowEnum.processNameFromPath(exePath), title, path: exePath }
+  const image = windowImages.imageFor(hwnd, id)
+  if (!image) return null
+  return { id, hwnd, name: image.name, title, path: image.exePath }
 }
 
 function listTaskbarWindows() {
@@ -86,6 +91,7 @@ function listTaskbarWindows() {
     console.error('[openApps] window enumeration failed:', e?.message ?? e)
     return listed
   }
+  windowImages.retainOnly(handles)
   for (const hwnd of handles) {
     const taskbarWindow = describeWindow(hwnd)
     if (taskbarWindow && isListedWindow(taskbarWindow)) listed.push(taskbarWindow)

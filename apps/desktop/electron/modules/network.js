@@ -207,7 +207,7 @@ async function readRadioThroughScript() {
 }
 
 async function readRadioState() {
-  const nativeRadio = readWifiRadioState()
+  const nativeRadio = await readWifiRadioState()
   if (nativeRadio !== null) return nativeRadio
   return readRadioThroughScript()
 }
@@ -233,7 +233,7 @@ const refreshNetworkState = singleFlight(async () => {
   if (shuttingDown) return cachedStatus
   const [radio, wired, wifi, rawNetworks] = await Promise.all([
     readRadioState(),
-    Promise.resolve().then(() => readWiredConnection()),
+    readWiredConnection(),
     readWifiConnection(),
     readAvailableNetworks(),
   ])

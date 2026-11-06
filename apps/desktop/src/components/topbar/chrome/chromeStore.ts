@@ -62,3 +62,23 @@ export function subscribeSurfaceBackdrops(listener: () => void): () => void {
         backdropListeners.delete(listener);
     };
 }
+
+let barHovered = false;
+const barHoverListeners = new Set<() => void>();
+
+export function setBarHovered(hovered: boolean): void {
+    if (barHovered === hovered) return;
+    barHovered = hovered;
+    barHoverListeners.forEach((l) => l());
+}
+
+export function isBarHovered(): boolean {
+    return barHovered;
+}
+
+export function subscribeBarHovered(listener: () => void): () => void {
+    barHoverListeners.add(listener);
+    return () => {
+        barHoverListeners.delete(listener);
+    };
+}

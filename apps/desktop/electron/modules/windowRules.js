@@ -118,11 +118,27 @@ function readShortcutNames(folder) {
   return names
 }
 
+function shortcutFolderStamp(folder) {
+  return START_MENU_ROOTS.map((root) => {
+    try {
+      return String(fs.statSync(path.join(root, folder)).mtimeMs)
+    } catch {
+      return ''
+    }
+  }).join('|')
+}
+
 function shortcutsIn(folder) {
   const cached = shortcutsByFolder.get(folder)
-  if (cached && Date.now() - cached.readAt < SHORTCUT_CACHE_MS) return cached.names
+  const now = Date.now()
+  if (cached && now - cached.readAt < SHORTCUT_CACHE_MS) return cached.names
+  const stamp = shortcutFolderStamp(folder)
+  if (cached && cached.stamp === stamp) {
+    cached.readAt = now
+    return cached.names
+  }
   const names = readShortcutNames(folder)
-  shortcutsByFolder.set(folder, { names, readAt: Date.now() })
+  shortcutsByFolder.set(folder, { names, stamp, readAt: now })
   return names
 }
 

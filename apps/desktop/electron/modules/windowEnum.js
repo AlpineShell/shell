@@ -24,6 +24,13 @@ let bindings = null
 let loadedLibraries = []
 let enumerationContext = null
 
+const classNameBuffer = Buffer.alloc(MAX_CLASS_NAME_CHARS * 2)
+const cloakStateBuffer = Buffer.alloc(4)
+const processIdBuffer = Buffer.alloc(4)
+const frameRectBuffer = Buffer.alloc(RECT_BYTES)
+const imagePathBuffer = Buffer.alloc(MAX_IMAGE_PATH_CHARS * 2)
+const imagePathSizeBuffer = Buffer.alloc(4)
+
 function koffiInterface() {
   if (!koffiModule) koffiModule = require('koffi')
   return koffiModule
@@ -122,13 +129,10 @@ function callNativeAsync(nativeFunction, args) {
 }
 
 function readWideString(buffer, maxChars) {
-  let text = ''
-  for (let i = 0; i < maxChars; i++) {
-    const code = buffer.readUInt16LE(i * 2)
-    if (code === 0) break
-    text += String.fromCharCode(code)
-  }
-  return text
+  const byteLength = Math.min(Math.max(0, maxChars) * 2, buffer.length & ~1)
+  const text = buffer.toString('utf16le', 0, byteLength)
+  const terminator = text.indexOf('\0')
+  return terminator === -1 ? text : text.slice(0, terminator)
 }
 
 function processNameFromPath(exePath) {
@@ -166,9 +170,8 @@ const windowProbe = {
     return loadBindings().GetWindowTextLengthW(hwnd)
   },
   className(hwnd) {
-    const buffer = Buffer.alloc(MAX_CLASS_NAME_CHARS * 2)
-    const length = loadBindings().GetClassNameW(hwnd, buffer, MAX_CLASS_NAME_CHARS)
-    return readWideString(buffer, length)
+    const length = loadBindings().GetClassNameW(hwnd, classNameBuffer, MAX_CLASS_NAME_CHARS)
+    return readWideString(classNameBuffer, length)
   },
   exStyle(hwnd) {
     return loadBindings().GetWindowLongW(hwnd, GWL_EXSTYLE)
@@ -179,9 +182,9 @@ const windowProbe = {
   isCloaked(hwnd) {
     const { DwmGetWindowAttribute } = loadBindings()
     if (!DwmGetWindowAttribute) return false
-    const cloaked = Buffer.alloc(4)
-    DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, cloaked, 4)
-    return cloaked.readUInt32LE(0) !== 0
+    cloakStateBuffer.writeUInt32LE(0, 0)
+    DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, cloakStateBuffer, 4)
+    return cloakStateBuffer.readUInt32LE(0) !== 0
   },
 }
 
@@ -210,9 +213,9 @@ function windowTitle(hwnd) {
 
 function windowProcessId(hwnd) {
   const native = loadBindings()
-  const buffer = Buffer.alloc(4)
-  native.GetWindowThreadProcessId(hwnd, buffer)
-  return buffer.readUInt32LE(0)
+  processIdBuffer.writeUInt32LE(0, 0)
+  native.GetWindowThreadProcessId(hwnd, processIdBuffer)
+  return processIdBuffer.readUInt32LE(0)
 }
 
 function readRect(buffer) {
@@ -226,11 +229,10 @@ function readRect(buffer) {
 
 function windowFrameBounds(hwnd) {
   const native = loadBindings()
-  const buffer = Buffer.alloc(RECT_BYTES)
-  if (native.DwmGetWindowAttribute && native.DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, buffer, RECT_BYTES) === 0) {
-    return readRect(buffer)
+  if (native.DwmGetWindowAttribute && native.DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, frameRectBuffer, RECT_BYTES) === 0) {
+    return readRect(frameRectBuffer)
   }
-  return native.GetWindowRect(hwnd, buffer) ? readRect(buffer) : null
+  return native.GetWindowRect(hwnd, frameRectBuffer) ? readRect(frameRectBuffer) : null
 }
 
 function processImagePath(processId) {
@@ -238,11 +240,9 @@ function processImagePath(processId) {
   const handle = native.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, processId)
   if (!handle) return null
   try {
-    const pathBuffer = Buffer.alloc(MAX_IMAGE_PATH_CHARS * 2)
-    const sizeBuffer = Buffer.alloc(4)
-    sizeBuffer.writeUInt32LE(MAX_IMAGE_PATH_CHARS, 0)
-    if (!native.QueryFullProcessImageNameW(handle, 0, pathBuffer, sizeBuffer)) return null
-    return readWideString(pathBuffer, sizeBuffer.readUInt32LE(0))
+    imagePathSizeBuffer.writeUInt32LE(MAX_IMAGE_PATH_CHARS, 0)
+    if (!native.QueryFullProcessImageNameW(handle, 0, imagePathBuffer, imagePathSizeBuffer)) return null
+    return readWideString(imagePathBuffer, imagePathSizeBuffer.readUInt32LE(0))
   } finally {
     native.CloseHandle(handle)
   }

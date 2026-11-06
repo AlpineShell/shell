@@ -62,6 +62,7 @@ try { require('node:module').enableCompileCache(path.join(app.getPath('userData'
 protocol.registerSchemesAsPrivileged(PRIVILEGED_SCHEMES)
 const ipc = require('./ipc')
 const wallpaper = require('./modules/wallpaper')
+const { startWallpaperScaling } = require('./modules/wallpaperScaling')
 const network = require('./modules/network')
 const bluetooth = require('./modules/bluetooth')
 const openApps = require('./modules/openApps')
@@ -328,15 +329,19 @@ function hookSurfaceOwnsTopBar(win) {
   return windowSwitcher.ownsTopBar(win) || displayModePicker.isActive(win) || smartScreenPrompt.isActive(win)
 }
 
-function evaluateTopBarInteraction(win, state) {
+function isCursorInBarRow(cursor, bounds) {
+  return cursor.y >= bounds.y && cursor.y < bounds.y + TOP_BAR_HEIGHT &&
+         cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width
+}
+
+function evaluateTopBarInteraction(win, state, knownCursor = null) {
   if (win.isDestroyed()) return
   if (launcher.isLauncherActive(win)) return
   if (hookSurfaceOwnsTopBar(win)) return
   const bounds = state.bounds
-  const cursor = screen.getCursorScreenPoint()
+  const cursor = knownCursor || screen.getCursorScreenPoint()
 
-  const inBarRow = cursor.y >= bounds.y && cursor.y < bounds.y + TOP_BAR_HEIGHT &&
-                   cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width
+  const inBarRow = isCursorInBarRow(cursor, bounds)
 
   let inInteractive
   if (state.activeRegion) {
@@ -367,6 +372,10 @@ function isCursorNearBarBand(cursor, state) {
   return cursor.y >= bounds.y - NEAR_BAR_MARGIN && cursor.y < bounds.y + TOP_BAR_HEIGHT + NEAR_BAR_MARGIN
 }
 
+function evaluationCanChangeTopBar(cursor, state) {
+  return !state.ignoring || Boolean(state.activeRegion) || isCursorInBarRow(cursor, state.bounds)
+}
+
 function trackCursorInteraction() {
   if (shells.size === 0) return CURSOR_POLL_SLOW_MS
   const cursor = screen.getCursorScreenPoint()
@@ -375,7 +384,7 @@ function trackCursorInteraction() {
   for (const shell of shells.values()) {
     const state = shell.topBarState
     if (shell.display.id === nearest.id || !state.ignoring || state.activeRegion) {
-      evaluateTopBarInteraction(shell.topBar, state)
+      if (evaluationCanChangeTopBar(cursor, state)) evaluateTopBarInteraction(shell.topBar, state, cursor)
     }
     if (!needsFastPoll && isCursorNearBarBand(cursor, state)) needsFastPoll = true
   }
@@ -480,6 +489,12 @@ function createDesktopWindow(display) {
   loadAppURL(win, getURL('desktop'))
 
   return win
+}
+
+function reloadDesktopWallpapers() {
+  for (const shell of shells.values()) {
+    if (!shell.desktop.isDestroyed()) shell.desktop.webContents.reload()
+  }
 }
 
 function forceShellBounds(shell) {
@@ -1176,13 +1191,15 @@ async function startApp() {
   }
 
   const wallpaperExts = new Set(['.jpg', '.jpeg', '.png', '.bmp', '.webp'])
+  const wallpaperScaler = startWallpaperScaling({ onServedCopyOutgrown: reloadDesktopWallpapers })
   protocol.handle('alpine-wallpaper', async (request) => {
     const url = new URL(request.url)
     const filePath = url.searchParams.get('p')
     if (!filePath) return new Response(null, { status: 400 })
     const ext = path.extname(filePath).toLowerCase()
     if (!wallpaperExts.has(ext)) return new Response(null, { status: 403 })
-    const response = await net.fetch(pathToFileURL(filePath).href)
+    const servedPath = await wallpaperScaler.servedFileFor(filePath)
+    const response = await net.fetch(pathToFileURL(servedPath).href)
     return new Response(response.body, {
       status: response.status,
       headers: {
