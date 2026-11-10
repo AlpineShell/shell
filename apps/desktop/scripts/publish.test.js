@@ -3,7 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
-const { compareVersionsDescending, manifestVersion, readPackedLicenceConfig, releaseReadinessProblems } = await import('./publish.js')
+const { compareVersionsDescending, manifestVersion, readPackedLicenceConfig, releaseReadinessProblems, staleVersionsOnChannel } = await import('./publish.js')
 const { renderModule } = await import('./generateLicenceConfig.js')
 const { createPackage } = await import('@electron/asar')
 
@@ -42,8 +42,27 @@ describe('manifestVersion', () => {
 })
 
 describe('compareVersionsDescending', () => {
-  it('sorts numerically per segment, newest first', () => {
-    expect(['0.9.0', '0.20260925.0', '0.1.0', '0.20260917.1'].sort(compareVersionsDescending)).toEqual(['0.20260925.0', '0.20260917.1', '0.9.0', '0.1.0'])
+  it('sorts numerically per segment, newest first, with the date-based versions below 0.1.0', () => {
+    expect(['0.9.0', '0.20260925.0', '0.1.0', '0.20260917.1', '0.10.0'].sort(compareVersionsDescending)).toEqual(['0.10.0', '0.9.0', '0.1.0', '0.20260925.0', '0.20260917.1'])
+  })
+})
+
+describe('staleVersionsOnChannel', () => {
+  const installerVersions = [
+    '0.20260925.0',
+    '0.20261102.1',
+    '0.1.0',
+    '0.1.1-nightly.20261103.0',
+    '0.1.1-nightly.20261104.0',
+    '0.1.1-nightly.20261105.0',
+  ]
+
+  it('prunes stable installers without touching a nightly one', () => {
+    expect(staleVersionsOnChannel(installerVersions, 'stable', 1)).toEqual(['0.20261102.1', '0.20260925.0'])
+  })
+
+  it('prunes nightly installers without touching a stable one', () => {
+    expect(staleVersionsOnChannel(installerVersions, 'nightly', 2)).toEqual(['0.1.1-nightly.20261103.0'])
   })
 })
 
@@ -86,8 +105,22 @@ describe('releaseReadinessProblems', () => {
     expect(releaseReadinessProblems(readyRelease({ appUpdateConfig: null }))).toHaveLength(1)
   })
 
-  it('refuses the unbumped 0.1.0 of a local build once the feed is ahead of it', () => {
-    expect(releaseReadinessProblems(readyRelease({ releaseManifest: feedManifestFor('0.1.0') }))).toEqual(['version 0.1.0 is not newer than 0.20260925.0, which the update feed already offers'])
+  it('refuses a local build once the feed is ahead of it', () => {
+    expect(releaseReadinessProblems(readyRelease({ releaseManifest: feedManifestFor('0.1.0'), feedManifest: feedManifestFor('0.1.1') }))).toEqual(['version 0.1.0 is not newer than 0.1.1, which the update feed already offers'])
+  })
+
+  it('lets 0.1.0 replace a date-based release on the stable feed', () => {
+    expect(releaseReadinessProblems(readyRelease({ releaseManifest: feedManifestFor('0.1.0'), feedManifest: feedManifestFor('0.20261102.1') }))).toEqual([])
+  })
+
+  it('publishes a nightly that is newer than the nightly feed', () => {
+    const nightly = { channel: 'nightly', releaseManifest: feedManifestFor('0.1.1-nightly.20261103.0'), feedManifest: feedManifestFor('0.1.1-nightly.20261102.0') }
+    expect(releaseReadinessProblems(readyRelease(nightly))).toEqual([])
+  })
+
+  it('keeps a nightly out of latest.yml and a stable release out of nightly.yml', () => {
+    expect(releaseReadinessProblems(readyRelease({ releaseManifest: feedManifestFor('0.1.1-nightly.20261103.0') }))).toEqual(['version 0.1.1-nightly.20261103.0 is not a stable version, so it does not belong in latest.yml'])
+    expect(releaseReadinessProblems(readyRelease({ channel: 'nightly', releaseManifest: feedManifestFor('0.1.1'), feedManifest: null }))).toEqual(['version 0.1.1 is not a nightly version, so it does not belong in nightly.yml'])
   })
 
   it('refuses a different build of the version the feed already offers', () => {

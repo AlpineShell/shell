@@ -37,6 +37,21 @@ S3-compatible API. Set these before publishing:
 
 See `docs/STORAGE.md` for how to obtain these.
 
+## Channels
+
+There are two update channels, and each has its own manifest in the bucket:
+
+| Channel | Tag | Manifest | Who gets it |
+| --- | --- | --- | --- |
+| Stable | `vMAJOR.MINOR.PATCH`, a full GitHub Release, e.g. `v0.1.0` | `latest.yml` | Everyone. The website's download and a fresh install are always stable. |
+| Preview | `vMAJOR.MINOR.PATCH-nightly.YYYYMMDD.N`, a pre-release, e.g. `v0.1.1-nightly.20261103.0` | `nightly.yml` | Whoever enables Preview builds from Settings search or the website guide. |
+
+`electron/releaseVersions.js` holds the rules both the app and `publish.js` use. A nightly is numbered towards the patch after the latest stable release, so it sorts above that release and below the next one: someone who turns nightly builds off again stays on their build until a stable release passes it, and is never moved down. The app picks the channel at every check (`autoUpdater.channel` is `latest` or `nightly`), keeps downgrades off, and remembers the choice as `channel` in `<userData>/update-prefs.json`; without a choice a nightly build follows nightly and every other build follows stable.
+
+The versions before 0.1.0 were numbered after their day, `0.YYYYMMDD.N`, and semver puts every one of them above `0.1.0`. `releaseVersions.compareVersions` ranks them below every numbered version instead, so `publish.js` lets `0.1.0` replace them in `latest.yml`, and a date-numbered build allows a downgrade so it moves to `0.1.0`. The release workflow accepts one more date-numbered bridge build on `latest.yml` so existing installs can get this updater before the first numbered release.
+
+The website's `/changelog` lists both channels from these GitHub Releases, and the "What's new" row on the Updates page opens it at the running version (or the one on offer). The release body is the note customers read: write the notes of a stable release by hand. Generated notes are cut down to the `feat`, `fix` and `perf` titles there.
+
 ## Release Steps
 
 Cut a release by publishing a GitHub Release; the workflow under Automated Releases below does the
@@ -76,18 +91,23 @@ does not fail the publish.
 `.github/workflows/release.yml` runs on a `blacksmith-4vcpu-windows-2025` runner, because NSIS must
 build on Windows, whenever a GitHub Release is published:
 
-1. Create a Release with a strict `MAJOR.MINOR.PATCH` tag greater than the last one, such as
-   `v0.20260928.0`. The workflow strips the leading `v` and writes the version into
-   `apps/desktop/package.json`.
+1. For a stable release, create a full Release with a `MAJOR.MINOR.PATCH` tag greater than the last
+   stable one, such as `v0.1.0`. Nightlies need nothing: `.github/workflows/nightly.yml` runs every
+   night at 02:00 UTC (or by hand from the Actions tab), skips the night when `main` has not moved
+   since the last tag, and otherwise creates the next `-nightly.YYYYMMDD.N` pre-release with
+   generated notes and starts this workflow on its tag with `gh workflow run`, because a release
+   created with `GITHUB_TOKEN` does not trigger `release: published`. The workflow strips the leading
+   `v`, writes the version into `apps/desktop/package.json` and picks the channel from the tag.
 2. The `verify` job runs `ci.yml` on the tagged commit: the frozen install, typecheck, lint and
    tests every pull request gets. Only when it passes does the build job install dependencies with
    `bun install --frozen-lockfile`, build the SDK, bake and check the licence config, build the
    renderer and the installer, and check the update feed URL, the Electron fuses and, once signing
    is set up, every signature.
-3. For a full release it then runs `scripts/publish.js`, which uploads the installer and
-   `latest.yml` to the store and prunes old versions. A pre-release stops short of that: its
-   installer is attached to the GitHub Release for testing and the update feed is left alone. To
-   ship that build to everyone, publish a full release with a new tag.
+3. electron-builder writes the channel's manifest (`-c.publish.channel=latest` or `nightly`), and
+   `scripts/publish.js` uploads the installer and that manifest to the store and prunes old versions,
+   keeping five per channel. A pre-release with a plain `MAJOR.MINOR.PATCH` tag stops short of that:
+   its installer is attached to the GitHub Release for testing and no feed is touched. To ship that
+   build to everyone, publish a full release with a new tag.
 4. A separate job, the only one with a write token, attaches the installer to the GitHub Release.
 5. Installed clients see the new version on their next update check.
 

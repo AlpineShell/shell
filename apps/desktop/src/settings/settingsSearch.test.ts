@@ -80,6 +80,13 @@ describe('settings search targets', () => {
 })
 
 describe('settings search ranking', () => {
+  it('finds the Preview builds action by its user-facing name and synonyms', () => {
+    for (const query of ['preview builds', 'early access', 'nightly', 'update channel']) {
+      const match = searchSettings(query).find((result) => result.target.id === 'preview-builds')
+      expect(match?.target.action).toEqual({ kind: 'update-channel', channel: 'nightly' })
+    }
+  })
+
   it('finds a setting by a synonym that appears in no title', () => {
     const found = labels(shown('eco'))
     expect(found).toContain('Force battery saver on')

@@ -8,6 +8,7 @@ const nodeRequire = createRequire(import.meta.url)
 
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpine-updater-'))
 let licenceToken = 'token-1'
+let appVersion = '1.2.3'
 const licenceListeners = new Set()
 const checkCalls = []
 const downloadCalls = []
@@ -40,7 +41,7 @@ function inject(moduleId, exports) {
 }
 
 inject(nodeRequire.resolve('electron'), {
-  app: { getPath: () => userDataDir, isPackaged: true, getVersion: () => '1.2.3', exit: () => undefined },
+  app: { getPath: () => userDataDir, isPackaged: true, getVersion: () => appVersion, exit: () => undefined },
 })
 inject(nodeRequire.resolve('electron-updater'), { autoUpdater: fakeAutoUpdater, CancellationToken: FakeCancellationToken })
 inject(nodeRequire.resolve('./licence.js'), {
@@ -170,17 +171,17 @@ describe('the update-check switch', () => {
   })
 
   it('is on by default', () => {
-    expect(updater.handlers['updates/get-preferences']()).toEqual({ checkForUpdates: true })
+    expect(updater.handlers['updates/get-preferences']()).toEqual({ checkForUpdates: true, channel: 'stable' })
     expect(fs.existsSync(preferencesFile)).toBe(false)
   })
 
   it('persists the choice in update-prefs.json and broadcasts it', () => {
     broadcasts.length = 0
-    expect(updater.handlers['updates/set-preferences'](null, { checkForUpdates: false })).toEqual({ checkForUpdates: false })
+    expect(updater.handlers['updates/set-preferences'](null, { checkForUpdates: false })).toEqual({ checkForUpdates: false, channel: 'stable' })
     expect(JSON.parse(fs.readFileSync(preferencesFile, 'utf8'))).toEqual({ checkForUpdates: false })
-    expect(broadcasts.find((b) => b.channel === 'updates/preferences-changed')?.data).toEqual({ checkForUpdates: false })
-    expect(updater.handlers['updates/set-preferences'](null, { checkForUpdates: 'yes' })).toEqual({ checkForUpdates: false })
-    expect(updater.handlers['updates/set-preferences'](null, {})).toEqual({ checkForUpdates: false })
+    expect(broadcasts.find((b) => b.channel === 'updates/preferences-changed')?.data).toEqual({ checkForUpdates: false, channel: 'stable' })
+    expect(updater.handlers['updates/set-preferences'](null, { checkForUpdates: 'yes' })).toEqual({ checkForUpdates: false, channel: 'stable' })
+    expect(updater.handlers['updates/set-preferences'](null, {})).toEqual({ checkForUpdates: false, channel: 'stable' })
   })
 
   it('makes no request at all while off: not on the schedule, not by hand, not when the licence changes, not for a download', () => {
@@ -215,5 +216,73 @@ describe('the update-check switch', () => {
     updater.handlers['updates/set-preferences'](null, { checkForUpdates: true })
     expect(checkCalls).toHaveLength(checksBefore + 1)
     expect(checkCalls.at(-1)).toEqual({ Authorization: 'Bearer token-9' })
+  })
+})
+
+describe('changelogUrl', () => {
+  it('opens the changelog at the version on its channel', () => {
+    expect(updater.changelogUrl('https://alpineshell.com', '0.1.0')).toBe('https://alpineshell.com/changelog#v0.1.0')
+    expect(updater.changelogUrl('https://alpineshell.com', '0.1.1-nightly.20261102.0')).toBe('https://alpineshell.com/changelog?channel=nightly#v0.1.1-nightly.20261102.0')
+    expect(updater.changelogUrl('https://alpineshell.com', '')).toBe('https://alpineshell.com/changelog')
+  })
+})
+
+describe('the update channel', () => {
+  const preferencesFile = path.join(userDataDir, updater.PREFERENCES_FILE)
+
+  function logMessages() {
+    return updater.handlers['updates/get-log']().map((entry) => entry.message)
+  }
+
+  it('follows stable releases on a stable build and reads latest.yml without allowing a downgrade', () => {
+    setLicence('token-10')
+    updater.handlers['updates/check']()
+    expect(fakeAutoUpdater.channel).toBe('latest')
+    expect(fakeAutoUpdater.allowDowngrade).toBe(false)
+  })
+
+  it('switches to nightly.yml, remembers the choice and checks straight away', () => {
+    setLicence('token-11')
+    const checksBefore = checkCalls.length
+    expect(updater.handlers['updates/set-preferences'](null, { channel: 'nightly' })).toEqual({ checkForUpdates: true, channel: 'nightly' })
+    expect(JSON.parse(fs.readFileSync(preferencesFile, 'utf8'))).toEqual({ checkForUpdates: true, channel: 'nightly' })
+    expect(checkCalls).toHaveLength(checksBefore + 1)
+    expect(fakeAutoUpdater.channel).toBe('nightly')
+    expect(fakeAutoUpdater.allowDowngrade).toBe(false)
+    expect(logMessages()).toContain('Switched to nightly builds')
+  })
+
+  it('forgets an update offered on the other channel', () => {
+    setLicence('token-12')
+    updaterListeners.get('update-available')({ version: '1.2.4-nightly.20261102.0' })
+    updater.handlers['updates/set-preferences'](null, { channel: 'stable' })
+    expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'idle', availableVersion: null })
+    expect(fakeAutoUpdater.channel).toBe('latest')
+  })
+
+  it('lets a build from before 0.1.0 move down to the first numbered release', () => {
+    setLicence('token-14')
+    appVersion = '0.20261103.0'
+    try {
+      updater.handlers['updates/check']()
+      expect(fakeAutoUpdater.allowDowngrade).toBe(true)
+    } finally {
+      appVersion = '1.2.3'
+    }
+  })
+
+  it('ignores a channel it does not know', () => {
+    expect(updater.handlers['updates/set-preferences'](null, { channel: 'beta' })).toEqual({ checkForUpdates: true, channel: 'stable' })
+  })
+
+  it('says there is no build yet when the channel has no feed', () => {
+    setLicence('token-13')
+    updater.handlers['updates/set-preferences'](null, { channel: 'nightly' })
+    const missingFeed = new Error('Cannot find channel "nightly.yml" update info')
+    missingFeed.code = 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
+    updaterListeners.get('error')(missingFeed)
+    expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'not-available', error: null })
+    expect(logMessages().at(-1)).toBe('No nightly build yet')
+    updater.handlers['updates/set-preferences'](null, { channel: 'stable' })
   })
 })

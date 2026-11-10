@@ -2,6 +2,7 @@ import { type ReactNode } from 'react'
 import { ArrowUpRight, ChevronRight } from 'lucide-react'
 import { EmptyState, PageTitle, Toggle } from '@alpine/ui'
 import { useSettingsValue } from '../../hooks/useSettingsValue'
+import { useUpdate } from '../../hooks/useUpdate'
 
 const IGNORE_CHANGE = () => {}
 
@@ -65,10 +66,32 @@ function ResultRow(props: ResultRowProps) {
   const action = props.target.action
   if (action.kind === 'toggle') return <ToggleResultRow {...props} entry={action.entry} />
   if (action.kind === 'run') return <ResultShell {...props} trailing={<action.actionIcon size={14} />} />
+  if (action.kind === 'update-channel') return <UpdateChannelResultRow {...props} />
   return (
     <ResultShell
       {...props}
       trailing={action.kind === 'launcher' ? <ArrowUpRight size={14} /> : <ChevronRight size={14} />}
+    />
+  )
+}
+
+function UpdateChannelResultRow(props: ResultRowProps) {
+  const { preferences } = useUpdate()
+  const enabled = preferences?.channel === 'nightly'
+  const target = enabled
+    ? { ...props.target, description: 'Preview builds are enabled' }
+    : props.target
+
+  return (
+    <ResultShell
+      {...props}
+      target={target}
+      state={enabled ? 'enabled' : 'not enabled'}
+      trailing={
+        <span aria-hidden className="pointer-events-none">
+          <Toggle variant="compact" checked={enabled} onChange={IGNORE_CHANGE} label={props.target.label} disabled />
+        </span>
+      }
     />
   )
 }

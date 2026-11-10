@@ -1,0 +1,46 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  cut-nightly:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Cut the nightly pre-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          read -r VERSION PREVIOUS_TAG < <(git tag -l 'v*' | node apps/desktop/scripts/nightlyVersion.js)
+          test -n "$VERSION" || { echo "::error::Could not work out the nightly version"; exit 1; }
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [ -n "$PREVIOUS_TAG" ] && [ "$(git rev-list -n 1 "$PREVIOUS_TAG")" = "$HEAD_SHA" ]; then
+            echo "main has not changed since ${PREVIOUS_TAG}, so there is no nightly to cut."
+            exit 0
+          fi
+          NOTES_FROM=()
+          if [ -n "$PREVIOUS_TAG" ]; then NOTES_FROM=(--notes-start-tag "$PREVIOUS_TAG"); fi
+          gh release create "v${VERSION}" --target "$HEAD_SHA" --prerelease --title "Nightly ${VERSION}" --generate-notes "${NOTES_FROM[@]}"
+          gh workflow run release.yml --ref "v${VERSION}"
+          echo "Cut v${VERSION} and started its release build."

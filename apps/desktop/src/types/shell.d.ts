@@ -240,8 +240,11 @@ declare global {
     message: string
   }
 
+  type UpdateChannel = 'stable' | 'nightly'
+
   interface UpdatePreferences {
     checkForUpdates: boolean
+    channel: UpdateChannel
   }
 
   type WindowsUpdateStatus = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'installing' | 'restart-required' | 'installed' | 'error'
@@ -1430,6 +1433,7 @@ declare global {
     | { kind: 'toggle'; entry: SettingsValueEntry }
     | { kind: 'navigate'; route: string; highlight: string | null }
     | { kind: 'run'; run(): Promise<unknown>; actionIcon: SettingsIcon }
+    | { kind: 'update-channel'; channel: UpdateChannel }
     | { kind: 'launcher' }
 
   interface SettingsRouteCoverage {
@@ -2359,6 +2363,7 @@ declare global {
         install: () => Promise<void>
         preferences: () => Promise<UpdatePreferences>
         setPreferences: (partial: Partial<UpdatePreferences>) => Promise<UpdatePreferences>
+        openChangelog: () => Promise<void>
         onStateChanged: (callback: (state: UpdateState) => void) => void
         onLogChanged: (callback: (entries: UpdateLogEntry[]) => void) => void
         onPreferencesChanged: (callback: (preferences: UpdatePreferences) => void) => () => void

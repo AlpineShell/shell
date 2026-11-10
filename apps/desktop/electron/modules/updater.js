@@ -4,6 +4,7 @@ const installer = require('./installer')
 const frecency = require('./frecency')
 const appIcons = require('./appIcons')
 const licence = require('./licence')
+const releaseVersions = require('../releaseVersions')
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const INITIAL_CHECK_DELAY_MS = 10000
@@ -15,6 +16,9 @@ const SIGN_IN_FOR_UPDATES_MESSAGE = 'Sign in to get updates'
 const UPDATES_REFUSED_FOR_LICENCE_MESSAGE = 'Updates are not available for this licence. Alpine Shell keeps working as it is.'
 const UPDATE_CHECKS_OFF_MESSAGE = 'Update checks are off. Alpine Shell will not contact alpineshell.com.'
 const FEED_STATUS_CODES_REFUSING_LICENCE = new Set([401, 403])
+const MISSING_FEED_ERROR_CODE = 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
+const NO_BUILD_ON_CHANNEL_MESSAGES = { stable: 'No stable release yet', nightly: 'No nightly build yet' }
+const CHANNEL_SWITCH_MESSAGES = { stable: 'Switched to stable releases', nightly: 'Switched to nightly builds' }
 const PREFERENCES_FILE = 'update-prefs.json'
 
 const state = {
@@ -39,6 +43,7 @@ let downloadStallTimer = null
 let boundAutoUpdater = null
 let feedCredentialsPresent = false
 let checkForUpdates = true
+let chosenChannel = null
 
 function electronApp() {
   return require('electron').app
@@ -52,17 +57,42 @@ function loadPreferences() {
   try {
     const parsed = JSON.parse(fs.readFileSync(preferencesFilePath(), 'utf8'))
     if (typeof parsed.checkForUpdates === 'boolean') checkForUpdates = parsed.checkForUpdates
+    if (releaseVersions.isUpdateChannel(parsed.channel)) chosenChannel = parsed.channel
   } catch {}
 }
 
 function savePreferences() {
+  const saved = chosenChannel ? { checkForUpdates, channel: chosenChannel } : { checkForUpdates }
   try {
-    fs.writeFileSync(preferencesFilePath(), JSON.stringify({ checkForUpdates }, null, 2))
+    fs.writeFileSync(preferencesFilePath(), JSON.stringify(saved, null, 2))
   } catch {}
 }
 
+function updateChannel() {
+  return chosenChannel ?? releaseVersions.channelOfVersion(electronApp().getVersion())
+}
+
 function preferences() {
-  return { checkForUpdates }
+  return { checkForUpdates, channel: updateChannel() }
+}
+
+function applyUpdateChannel() {
+  const updater = autoUpdater()
+  updater.channel = releaseVersions.feedNameForChannel(updateChannel())
+  updater.allowDowngrade = releaseVersions.isDateBasedVersion(electronApp().getVersion())
+}
+
+function changelogUrl(websiteBase, version) {
+  const url = new URL(`${websiteBase}/changelog`)
+  if (!releaseVersions.isVersion(version)) return url.toString()
+  if (releaseVersions.channelOfVersion(version) === 'nightly') url.searchParams.set('channel', 'nightly')
+  url.hash = `v${version}`
+  return url.toString()
+}
+
+function openChangelog() {
+  const { websiteBase } = require('../licenceConfig').loadLicenceConfig()
+  return require('electron').shell.openExternal(changelogUrl(websiteBase, state.availableVersion ?? state.currentVersion))
 }
 
 function updaterLibrary() {
@@ -180,6 +210,7 @@ function runCheck(announce, allowRetry = false) {
   }
   announceResult = announce
   allowRetryForCurrentCheck = allowRetry
+  applyUpdateChannel()
   autoUpdater().checkForUpdates().catch(() => {})
 }
 
@@ -220,18 +251,32 @@ function abandonDownloadForPreference() {
   if (cancellation) cancellation.cancel()
 }
 
+function dropUpdateFromPreviousChannel() {
+  abandonDownloadForPreference()
+  downloadedFile = null
+  setState({ status: 'idle', availableVersion: null, progressPercent: 0, error: null })
+}
+
 function setPreferences(partial) {
-  const requested = partial && typeof partial.checkForUpdates === 'boolean' ? partial.checkForUpdates : checkForUpdates
-  const changed = requested !== checkForUpdates
-  checkForUpdates = requested
+  const requestedChecks = partial && typeof partial.checkForUpdates === 'boolean' ? partial.checkForUpdates : checkForUpdates
+  const requestedChannel = partial && releaseVersions.isUpdateChannel(partial.channel) ? partial.channel : updateChannel()
+  const checksChanged = requestedChecks !== checkForUpdates
+  const channelChanged = requestedChannel !== updateChannel()
+  checkForUpdates = requestedChecks
+  if (partial && releaseVersions.isUpdateChannel(partial.channel)) chosenChannel = partial.channel
   savePreferences()
   if (broadcastChanged) broadcastChanged('updates/preferences-changed', preferences())
-  if (!changed) return preferences()
+  if (!checksChanged && !channelChanged) return preferences()
   clearRetry()
+  if (channelChanged) {
+    pushLog('info', CHANNEL_SWITCH_MESSAGES[requestedChannel])
+    dropUpdateFromPreviousChannel()
+  }
   if (checkForUpdates) {
-    runCheck(false, true)
+    runCheck(channelChanged, true)
     return preferences()
   }
+  if (!checksChanged) return preferences()
   abandonDownloadForPreference()
   pushLog('info', UPDATE_CHECKS_OFF_MESSAGE)
   if (state.status !== 'downloaded') setState({ status: 'not-available', availableVersion: null, progressPercent: 0, error: null })
@@ -299,6 +344,12 @@ function bindAutoUpdater(updater) {
       setState({ status: 'error', error: UPDATES_REFUSED_FOR_LICENCE_MESSAGE })
       return
     }
+    if (err && err.code === MISSING_FEED_ERROR_CODE) {
+      clearRetry()
+      pushLog('info', NO_BUILD_ON_CHANNEL_MESSAGES[updateChannel()])
+      setState({ status: 'not-available' })
+      return
+    }
     pushLog('error', `Update error: ${toMessage(err)}`)
     setState({ status: 'error', error: toMessage(err) })
     if (allowRetryForCurrentCheck) scheduleRetry()
@@ -330,6 +381,8 @@ module.exports = {
   UPDATES_REFUSED_FOR_LICENCE_MESSAGE,
   UPDATE_CHECKS_OFF_MESSAGE,
   PREFERENCES_FILE,
+  changelogUrl,
+  setPreferences,
 
   handlers: {
     'updates/get-state': () => state,
@@ -339,6 +392,8 @@ module.exports = {
     'updates/get-preferences': () => preferences(),
 
     'updates/set-preferences': (_event, partial) => setPreferences(partial),
+
+    'updates/open-changelog': () => openChangelog(),
 
     'updates/check': () => {
       runCheck(true, false)

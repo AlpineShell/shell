@@ -148,6 +148,13 @@ export default function SettingsApp() {
       runFromSearch(target, action.run)
       return
     }
+    if (action.kind === 'update-channel') {
+      void window.shell.updates.setPreferences({ channel: action.channel }).then(
+        () => navigate('updates'),
+        () => navigate('updates')
+      )
+      return
+    }
     if (action.kind === 'launcher') {
       clearSearch()
       window.launcher.show()
