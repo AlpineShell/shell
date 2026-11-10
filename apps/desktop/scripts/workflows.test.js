@@ -105,6 +105,15 @@ describe('release workflow', () => {
     expect(buildJob.slice(stepIndex(buildJob, feedPublishStep) + 1)).not.toContain('- name: ')
   })
 
+  it('scans the installer with Microsoft Defender before it is kept or reaches the feed', () => {
+    const scanStep = 'Scan the installer with Microsoft Defender'
+    expect(stepIndex(release, 'Build installer')).toBeLessThan(stepIndex(release, scanStep))
+    expect(stepIndex(release, scanStep)).toBeLessThan(stepIndex(release, 'Keep the installer for the release'))
+    expect(stepIndex(release, scanStep)).toBeLessThan(stepIndex(release, feedPublishStep))
+    expect(stepBody(release, scanStep)).toContain('./scripts/scanInstaller.ps1 -InstallerDirectory release')
+    expect(stepBody(release, scanStep)).not.toContain('continue-on-error')
+  })
+
   it('replaces the installer artifact when the build job is re-run', () => {
     expect(stepBody(release, 'Keep the installer for the release')).toContain('overwrite: true')
   })
