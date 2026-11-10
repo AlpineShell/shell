@@ -53,7 +53,7 @@ jobs:
             echo "PUBLISH_TO_FEED=true" >> "$GITHUB_ENV"
           else
             echo "::error::Tag '${GITHUB_REF_NAME}' is neither a stable MAJOR.MINOR.PATCH version, the date-numbered bridge 0.YYYYMMDD.N, nor a nightly MAJOR.MINOR.PATCH-nightly.YYYYMMDD.N version (got '${VERSION}')."
-            echo "::error::electron-updater compares with semver, so a stable tag must be greater than the last stable release, e.g. v0.1.0 then v0.1.1."
+            echo "::error::electron-updater compares with semver, so a stable tag must be greater than the last stable release, e.g. v1.0.0 then v1.0.1."
             exit 1
           fi
 

@@ -6,9 +6,9 @@ const { nextNightly } = createRequire(import.meta.url)('./nightlyVersion.js')
 const november2 = new Date('2026-11-02T02:00:00Z')
 
 describe('nextNightly', () => {
-  it('builds towards 0.1.0 while only date-based versions exist', () => {
+  it('builds towards 1.0.0 while only date-based versions exist', () => {
     expect(nextNightly(['v0.20261101.0', 'v0.20261102.1'], november2)).toEqual({
-      version: '0.1.0-nightly.20261102.0',
+      version: '1.0.0-nightly.20261102.0',
       previousTag: 'v0.20261102.1',
     })
   })
@@ -29,7 +29,7 @@ describe('nextNightly', () => {
   })
 
   it('ignores tags that are not versions and works without any tag', () => {
-    expect(nextNightly(['latest', 'v1'], november2)).toEqual({ version: '0.1.0-nightly.20261102.0', previousTag: '' })
-    expect(nextNightly([], november2)).toEqual({ version: '0.1.0-nightly.20261102.0', previousTag: '' })
+    expect(nextNightly(['latest', 'v1'], november2)).toEqual({ version: '1.0.0-nightly.20261102.0', previousTag: '' })
+    expect(nextNightly([], november2)).toEqual({ version: '1.0.0-nightly.20261102.0', previousTag: '' })
   })
 })
