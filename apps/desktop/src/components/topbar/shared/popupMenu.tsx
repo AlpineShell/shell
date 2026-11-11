@@ -5,6 +5,7 @@ import { useSurfaceSuperseded } from "../../../hooks/useSurfaceSuperseded";
 import { RADIUS, chromeSurfaceBounds, chromeContentBounds, type ChromeAnchor } from "../chrome/chromeShape";
 import { setChromeSurface, clearChromeSurface, nextSurfaceId } from "../chrome/chromeStore";
 import { placePopup } from "./popupPlacement";
+import { armMenuRegion } from "./menuRegion";
 
 const BAR_BOTTOM = 24;
 const CLOSE_MS = 300;
@@ -107,11 +108,11 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
         const heldBottom = Math.max(settled.bottom, regionBottomRef.current);
         clearTimeout(shrinkTimer.current);
         regionBottomRef.current = heldBottom;
-        window.topbar.setActiveRegion({ ...settled, bottom: heldBottom });
+        armMenuRegion({ ...settled, bottom: heldBottom });
         if (settled.bottom < heldBottom) {
             shrinkTimer.current = setTimeout(() => {
                 regionBottomRef.current = settled.bottom;
-                window.topbar.setActiveRegion(settled);
+                armMenuRegion(settled);
             }, REGION_SHRINK_DELAY_MS);
         }
     }, [open, shape]);
@@ -139,7 +140,7 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
         clearChromeSurface(idRef.current);
         clearTimeout(shrinkTimer.current);
         regionBottomRef.current = 0;
-        window.topbar.setActiveRegion(null);
+        armMenuRegion(null);
         clearTimeout(closeTimer.current);
         closeTimer.current = setTimeout(() => {
             setOpen(false);
@@ -159,7 +160,7 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
         clearChromeSurface(idRef.current);
         if (activeMenu === selfRef.current) {
             activeMenu = null;
-            window.topbar.setActiveRegion(null);
+            armMenuRegion(null);
         }
     }, []);
 
@@ -177,7 +178,7 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
         }
         pendingClose.current = false;
         const triggerRect = wrapperRef.current?.getBoundingClientRect();
-        window.topbar.setActiveRegion({
+        armMenuRegion({
             top: triggerRect ? triggerRect.bottom : BAR_BOTTOM,
             bottom: window.innerHeight,
             left: 0,

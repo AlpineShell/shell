@@ -1,4 +1,4 @@
-import { Component, useRef, useState, type ReactNode } from "react";
+import { Component, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useDarkText } from "../themeContext";
 import { useTrayIcons } from "../../hooks/useTrayIcons";
 import { useTrayLayout } from "../../hooks/useTrayLayout";
@@ -8,10 +8,12 @@ import { composeTray } from "./tray/composeTray";
 import { TrayCaretGlyph, TrayIconGlyph } from "./faces/trayFace";
 import { TRAY_CARET_SLOT_CLASS, TRAY_CLUSTER_CLASS, TRAY_ICON_SLOT_CLASS } from "./faces/faceClasses";
 import PopupMenu from "./shared/popupMenu";
+import { rearmMenuRegion } from "./shared/menuRegion";
 
 const DRAG_THRESHOLD = 5;
 const DRAG_EXPAND_HEIGHT = 240;
 const BAR_DROP_Y = 32;
+const CARET_DROP_SLACK = 6;
 
 type DragSource = "visible" | "overflow";
 interface DragState {
@@ -22,7 +24,7 @@ interface DragState {
     startY: number;
     active: boolean;
     dropIndex: number;
-    overCaret: boolean;
+    overHiddenIcons: boolean;
     lastX: number;
     lastY: number;
 }
@@ -34,6 +36,12 @@ function screenAnchor(el: HTMLElement) {
         x: Math.round((window.screenX + rect.left + rect.width / 2) * dpr),
         y: Math.round((window.screenY + rect.bottom) * dpr),
     };
+}
+
+function isPointWithin(el: HTMLElement | null, x: number, y: number, verticalSlack = 0) {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    return x >= rect.left && x <= rect.right && y >= rect.top - verticalSlack && y <= rect.bottom + verticalSlack;
 }
 
 function clickTray(id: string, button: "left" | "right", el: HTMLElement) {
@@ -73,12 +81,13 @@ function SystemTrayInner() {
 
     const containerRef = useRef<HTMLDivElement>(null);
     const caretRef = useRef<HTMLDivElement>(null);
+    const overflowPanelRef = useRef<HTMLDivElement>(null);
     const iconRefs = useRef(new Map<string, HTMLButtonElement>());
     const dragRef = useRef<DragState | null>(null);
 
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
-    const [overCaret, setOverCaret] = useState(false);
+    const [overHiddenIcons, setOverHiddenIcons] = useState(false);
 
     const { visible, overflow } = composeTray(icons, layout);
     const onPrimary = display.showOnAllMonitors || MY_DISPLAY_ID === display.primaryDisplayId;
@@ -132,7 +141,7 @@ function SystemTrayInner() {
             startY: e.clientY,
             active: false,
             dropIndex: 0,
-            overCaret: false,
+            overHiddenIcons: false,
             lastX: e.clientX,
             lastY: e.clientY,
         };
@@ -153,13 +162,11 @@ function SystemTrayInner() {
         s.lastX = e.clientX;
         s.lastY = e.clientY;
         s.dropIndex = computeDropIndex(e.clientX);
-        const c = caretRef.current;
-        s.overCaret = !!c && (() => {
-            const r = c.getBoundingClientRect();
-            return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 6 && e.clientY <= r.bottom + 6;
-        })();
+        s.overHiddenIcons =
+            s.source === "visible" &&
+            (isPointWithin(caretRef.current, e.clientX, e.clientY, CARET_DROP_SLACK) || isPointWithin(overflowPanelRef.current, e.clientX, e.clientY));
         setDragPos({ x: e.clientX, y: e.clientY });
-        setOverCaret(s.overCaret);
+        setOverHiddenIcons(s.overHiddenIcons);
     }
 
     function onPointerUp() {
@@ -169,15 +176,15 @@ function SystemTrayInner() {
         dragRef.current = null;
         setDragId(null);
         setDragPos(null);
-        setOverCaret(false);
+        setOverHiddenIcons(false);
         if (!s) return;
         if (!s.active) {
             clickTray(s.id, "left", s.el);
             return;
         }
         if (s.source === "visible") {
-            window.topbar?.setActiveRegion?.(null);
-            if (s.overCaret) hideIcon(s.id);
+            rearmMenuRegion();
+            if (s.overHiddenIcons) hideIcon(s.id);
             else reorderTo(s.id, s.dropIndex);
         } else if (s.lastY <= BAR_DROP_Y) {
             showIcon(s.id);
@@ -212,13 +219,13 @@ function SystemTrayInner() {
                     trigger={
                         <div
                             ref={caretRef}
-                            className={`${TRAY_CARET_SLOT_CLASS} transition-opacity ${overCaret ? (darkText ? "bg-black/20" : "bg-white/30") : "hover:opacity-60"}`}
+                            className={`${TRAY_CARET_SLOT_CLASS} transition-opacity ${overHiddenIcons ? (darkText ? "bg-black/20" : "bg-white/30") : "hover:opacity-60"}`}
                         >
                             <TrayCaretGlyph darkText={darkText} />
                         </div>
                     }
                 >
-                    <TrayOverflow icons={overflow} darkText={darkText} dragId={dragId} onIconPointerDown={onPointerDown} />
+                    <TrayOverflow panelRef={overflowPanelRef} icons={overflow} darkText={darkText} dragId={dragId} onIconPointerDown={onPointerDown} />
                 </PopupMenu>
             )}
 
@@ -236,21 +243,23 @@ function SystemTrayInner() {
 }
 
 function TrayOverflow({
+    panelRef,
     icons,
     darkText,
     dragId,
     onIconPointerDown,
 }: {
+    panelRef: RefObject<HTMLDivElement | null>;
     icons: TrayIcon[];
     darkText: boolean;
     dragId: string | null;
     onIconPointerDown: (e: React.PointerEvent, id: string, source: DragSource) => void;
 }) {
     if (icons.length === 0) {
-        return <div className={`px-4 py-3 text-xs ${darkText ? "text-black/50" : "text-white/50"}`}>No hidden icons</div>;
+        return <div ref={panelRef} className={`px-4 py-3 text-xs ${darkText ? "text-black/50" : "text-white/50"}`}>No hidden icons</div>;
     }
     return (
-        <div className="grid grid-cols-6 gap-1 p-2 max-w-56">
+        <div ref={panelRef} className="grid grid-cols-6 gap-1 p-2 max-w-56">
             {icons.map((icon) => (
                 <button
                     key={icon.id}
