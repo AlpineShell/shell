@@ -51,6 +51,13 @@ function cornerPoints(rect: Rect): Point[] {
   ]
 }
 
+function afterNextPaint(callback: () => void) {
+  let frame = requestAnimationFrame(() => {
+    frame = requestAnimationFrame(callback)
+  })
+  return () => cancelAnimationFrame(frame)
+}
+
 function CursorGuides({ pointer }: { pointer: Point }) {
   return (
     <>
@@ -109,6 +116,24 @@ export default function ScreenshotOverlay() {
   const [selection, setSelection] = useState<Selection | null>(null)
   const [pointer, setPointer] = useState<Point | null>(null)
   const dragging = useRef(false)
+  const frozenFrameRef = useRef<HTMLImageElement>(null)
+
+  useEffect(() => {
+    if (!visible || !image) return
+    let cancelPaintWait = () => {}
+    let stopped = false
+    const decoded = frozenFrameRef.current?.decode() ?? Promise.resolve()
+    decoded
+      .catch(() => {})
+      .then(() => {
+        if (stopped) return
+        cancelPaintWait = afterNextPaint(() => void window.screenshot.painted())
+      })
+    return () => {
+      stopped = true
+      cancelPaintWait()
+    }
+  }, [visible, image])
 
   useEffect(() => {
     if (!visible) {
@@ -165,6 +190,7 @@ export default function ScreenshotOverlay() {
     >
       {image && (
         <img
+          ref={frozenFrameRef}
           src={image}
           alt=""
           draggable={false}

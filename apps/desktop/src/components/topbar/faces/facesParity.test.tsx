@@ -275,10 +275,12 @@ function faceMarkup(face: ReactElement | null) {
 beforeEach(() => {
   bar.fixture = freshFixture()
   ;(window as unknown as { shell: unknown }).shell = { network: {} }
+  ;(window as unknown as { screenshot: unknown }).screenshot = { onSaved: () => () => undefined }
 })
 
 afterEach(() => {
   delete (window as unknown as { shell?: unknown }).shell
+  delete (window as unknown as { screenshot?: unknown }).screenshot
 })
 
 describe.each(PARITY_CASES)('$name', ({ arrange, live, face }) => {

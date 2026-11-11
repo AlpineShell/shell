@@ -8,6 +8,7 @@ import ControlCenter from "./controlCenter";
 import PopupMenu from "../shared/popupMenu";
 import StatusFace from "../faces/statusFace";
 import { useDarkText } from "../../themeContext";
+import ScreenshotChip from "../screenshotChip";
 
 export default function StatusIndicator() {
     const darkText = useDarkText();
@@ -23,15 +24,18 @@ export default function StatusIndicator() {
     }
 
     return (
-        <PopupMenu
-            trigger={<StatusFace bluetooth={bluetooth} network={network} wifiRadio={wifi.radio} battery={battery} darkText={darkText} />}
-        >
-            <ControlCenter
-                battery={battery} network={network} bluetooth={bluetooth}
-                volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute}
-                monitors={monitors} setMonitorBrightness={setMonitorBrightness}
-                wifiState={wifi} onToggleWifiRadio={toggleWifiRadio}
-            />
-        </PopupMenu>
+        <>
+            <ScreenshotChip />
+            <PopupMenu
+                trigger={<StatusFace bluetooth={bluetooth} network={network} wifiRadio={wifi.radio} battery={battery} darkText={darkText} />}
+            >
+                <ControlCenter
+                    battery={battery} network={network} bluetooth={bluetooth}
+                    volume={volume} setVolume={setVolume} muted={muted} toggleMute={toggleMute}
+                    monitors={monitors} setMonitorBrightness={setMonitorBrightness}
+                    wifiState={wifi} onToggleWifiRadio={toggleWifiRadio}
+                />
+            </PopupMenu>
+        </>
     );
 }

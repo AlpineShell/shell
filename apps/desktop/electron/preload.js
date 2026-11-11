@@ -211,8 +211,15 @@ contextBridge.exposeInMainWorld('screenshot', {
     ipcRenderer.on('screenshot/hide', () => callback())
   },
   ready: () => ipcRenderer.invoke('screenshot/overlay-ready'),
+  painted: () => ipcRenderer.invoke('screenshot/painted'),
   regionSelected: (region) => ipcRenderer.invoke('screenshot/region-selected', region),
   cancel: () => ipcRenderer.invoke('screenshot/cancel'),
+  onSaved: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('screenshot/saved', handler)
+    return () => ipcRenderer.removeListener('screenshot/saved', handler)
+  },
+  reveal: (id) => ipcRenderer.invoke('screenshot/reveal', id),
 })
 
 contextBridge.exposeInMainWorld('windowSwitcher', {

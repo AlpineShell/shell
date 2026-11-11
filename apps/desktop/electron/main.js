@@ -803,7 +803,8 @@ function createScreenshotWindow() {
   loadAppURL(win, getURL('screenshot'))
 
   win.webContents.once('did-finish-load', () => {
-    win.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
+    const { width, height } = screen.getPrimaryDisplay().bounds
+    win.setBounds({ x: -10000, y: -10000, width, height })
   })
 
   return win
