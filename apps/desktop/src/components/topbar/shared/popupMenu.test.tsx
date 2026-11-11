@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import PopupMenu from "./popupMenu";
+import { rearmMenuRegion } from "./menuRegion";
 import { getChromeSurface, setChromeSurface } from "../chrome/chromeStore";
 
 let closeMenus: (() => void) | null = null;
@@ -93,5 +94,30 @@ describe("PopupMenu closing", () => {
 
         expect(getChromeSurface()).not.toBeNull();
         expect(lastRegion()).not.toBeNull();
+    });
+});
+
+describe("PopupMenu region", () => {
+    it("arms the open menu's region again after another surface borrowed it", () => {
+        const trigger = renderMenu();
+        fireEvent.mouseEnter(trigger);
+        const menuRegion = lastRegion();
+        setActiveRegion({ top: 0, bottom: 240, left: 0, right: 1920 });
+
+        rearmMenuRegion();
+
+        expect(menuRegion).not.toBeNull();
+        expect(lastRegion()).toEqual(menuRegion);
+    });
+
+    it("clears the region when no menu is open to take it back", () => {
+        const trigger = renderMenu();
+        fireEvent.mouseEnter(trigger);
+        act(() => closeMenus?.());
+        setActiveRegion({ top: 0, bottom: 240, left: 0, right: 1920 });
+
+        rearmMenuRegion();
+
+        expect(lastRegion()).toBeNull();
     });
 });
