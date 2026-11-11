@@ -42,6 +42,7 @@ const CHANNEL_VALUES: Record<string, unknown> = {
 }
 
 const CHANNEL_SUBSCRIPTIONS = [
+  'screenshot.onSaved',
   'topbar.onColorChanged',
   'topbar.onMediaVisualizerChanged',
   'shell.clock.onPrefsChanged',
@@ -106,7 +107,7 @@ const OTHER_BRIDGES = [
   'shell.tray.setSettings',
 ]
 
-const BRIDGE_ROOTS = ['shell', 'topbar', 'launcher', 'plugins', 'notice']
+const BRIDGE_ROOTS = ['shell', 'topbar', 'launcher', 'plugins', 'notice', 'screenshot']
 
 function installBridge(path: string, bridge: Mock) {
   const keys = path.split('.')

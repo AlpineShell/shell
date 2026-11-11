@@ -405,6 +405,16 @@ declare global {
   interface ScreenshotShowPayload {
     image: string
   }
+  interface ScreenshotSaved {
+    id: number
+    thumbnail: string | null
+    name: string
+    displayId: number | null
+  }
+  interface ScreenshotSavedSignal {
+    saved: ScreenshotSaved
+    sequence: number
+  }
   interface BatteryStatus {
     percent: number | null
     charging: boolean
@@ -2110,8 +2120,11 @@ declare global {
       onShow: (callback: (data: ScreenshotShowPayload) => void) => void
       onHide: (callback: () => void) => void
       ready: () => Promise<void>
+      painted: () => Promise<void>
       regionSelected: (region: { x: number; y: number; width: number; height: number }) => Promise<void>
       cancel: () => Promise<void>
+      onSaved: (callback: (saved: ScreenshotSaved) => void) => () => void
+      reveal: (id: number) => Promise<{ ok: boolean }>
     }
     windowSwitcher: {
       onShow: (callback: (data: SwitcherShowPayload) => void) => void
