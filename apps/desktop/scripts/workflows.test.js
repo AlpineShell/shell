@@ -154,6 +154,18 @@ describe('nightly workflow', () => {
     expect(nightly).toContain('main has not changed since')
   })
 
+  it('schedules catch-up runs off the top of the hour in case GitHub delays or drops one', () => {
+    const crons = [...nightly.matchAll(/^ {4}- cron: '(\S+) (\S+) \* \* \*'$/gm)]
+    expect(crons.length).toBeGreaterThan(1)
+    for (const [, minute] of crons) expect(minute).not.toBe('0')
+  })
+
+  it('lets a scheduled run cut only the first nightly of the day', () => {
+    const cutStep = stepBody(nightly, 'Cut the nightly pre-release')
+    expect(cutStep).toContain('if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "${VERSION##*.}" != "0" ]; then')
+    expect(cutStep.indexOf('GITHUB_EVENT_NAME')).toBeLessThan(cutStep.indexOf('gh release create'))
+  })
+
   it('keeps a read-only token by default and writes only from the job that cuts the release', () => {
     expect(nightly).toMatch(/^permissions:\n {2}contents: read\n/m)
     expect(nightly.match(/contents: write/g)).toHaveLength(1)
