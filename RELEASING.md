@@ -93,11 +93,14 @@ build on Windows, whenever a GitHub Release is published:
 
 1. For a stable release, create a full Release with a `MAJOR.MINOR.PATCH` tag greater than the last
    stable one, such as `v1.0.0`. Nightlies need nothing: `.github/workflows/nightly.yml` runs every
-   night at 02:00 UTC (or by hand from the Actions tab), skips the night when `main` has not moved
+   night at 02:17 UTC (or by hand from the Actions tab), skips the night when `main` has not moved
    since the last tag, and otherwise creates the next `-nightly.YYYYMMDD.N` pre-release with
    generated notes and starts this workflow on its tag with `gh workflow run`, because a release
-   created with `GITHUB_TOKEN` does not trigger `release: published`. The workflow strips the leading
-   `v`, writes the version into `apps/desktop/package.json` and picks the channel from the tag.
+   created with `GITHUB_TOKEN` does not trigger `release: published`. GitHub starts scheduled runs
+   late or drops them when Actions is busy, so the schedule also fires at 05:17 and 09:17 UTC; those
+   catch-up runs cut nothing once the day has a nightly, and a run started by hand always may. The
+   workflow strips the leading `v`, writes the version into `apps/desktop/package.json` and picks
+   the channel from the tag.
 2. The `verify` job runs `ci.yml` on the tagged commit: the frozen install, typecheck, lint and
    tests every pull request gets. Only when it passes does the build job install dependencies with
    `bun install --frozen-lockfile`, build the SDK, bake and check the licence config, build the
