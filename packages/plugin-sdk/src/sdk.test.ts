@@ -6,6 +6,7 @@ import {
   satisfiesRange,
   isSupportedApiVersion,
 } from './constants'
+import { PLUGIN_MANIFEST_FIELDS } from './manifest'
 import { isHttpsOrigin, isSemver, isValidId, normalizeRelPath, validateManifestShape } from './validate'
 
 describe('satisfiesRange', () => {
@@ -61,5 +62,8 @@ describe('schema/constants parity (anti-drift)', () => {
   const schema = JSON.parse(readFileSync(fileURLToPath(new URL('../schema/plugin-v1.json', import.meta.url)), 'utf8'))
   it('category enum equals MARKETPLACE_CATEGORIES', () => {
     expect(schema.properties.marketplace.properties.category.enum).toEqual([...MARKETPLACE_CATEGORIES])
+  })
+  it('top-level properties equal PLUGIN_MANIFEST_FIELDS', () => {
+    expect(Object.keys(schema.properties)).toEqual([...PLUGIN_MANIFEST_FIELDS])
   })
 })

@@ -40,3 +40,26 @@ export interface PluginManifest {
   contributes?: PluginContributions
   marketplace?: PluginMarketplaceMeta
 }
+
+type PluginManifestFieldTable = { [Field in keyof Required<PluginManifest>]: true }
+
+const PLUGIN_MANIFEST_FIELD_TABLE: PluginManifestFieldTable = {
+  $schema: true,
+  id: true,
+  name: true,
+  version: true,
+  apiVersion: true,
+  engines: true,
+  description: true,
+  author: true,
+  homepage: true,
+  repository: true,
+  license: true,
+  icon: true,
+  renderer: true,
+  main: true,
+  contributes: true,
+  marketplace: true,
+}
+
+export const PLUGIN_MANIFEST_FIELDS = Object.keys(PLUGIN_MANIFEST_FIELD_TABLE) as readonly (keyof PluginManifest)[]
