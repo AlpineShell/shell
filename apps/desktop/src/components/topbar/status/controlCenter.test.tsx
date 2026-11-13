@@ -25,12 +25,14 @@ vi.mock('../../../hooks/useAudioDevices', async (importOriginal) => ({
 const BUILT_IN: MonitorInfo = { id: 'internal', name: 'Built-in display', type: 'internal', brightness: 60, brightnessWritable: true }
 const DELL: MonitorInfo = { id: 'dell', name: 'DELL U2720Q', type: 'external', brightness: 40, brightnessWritable: true }
 
-function renderControlCenter(monitors: MonitorInfo[]) {
+const WIFI_OFF: WifiState = { radio: 'off', networks: [], scanning: false, operation: null, lastError: null, ethernet: false, offForEthernet: false, blockedByEthernet: false }
+
+function renderControlCenter(monitors: MonitorInfo[], wifiState: WifiState = WIFI_OFF) {
   const setMonitorBrightness = vi.fn()
   render(
     <ControlCenter
       battery={{ percent: 80, charging: false, onAcPower: true, hasBattery: false }}
-      network={{ signal: null, connected: false, type: 'wifi', ssid: null }}
+      network={{ signal: null, connected: false, type: 'wifi', ssid: null, wifi: { connected: false, ssid: null, signal: null } }}
       bluetooth={{ radio: { state: 'off', pending: null, error: null }, devices: [], devicesAvailable: false }}
       volume={50}
       setVolume={() => {}}
@@ -38,10 +40,7 @@ function renderControlCenter(monitors: MonitorInfo[]) {
       toggleMute={() => {}}
       monitors={monitors}
       setMonitorBrightness={setMonitorBrightness}
-      wifiNetworks={[]}
-      wifiScanning={false}
-      scanWifi={() => {}}
-      wifiRadio={false}
+      wifiState={wifiState}
       onToggleWifiRadio={() => {}}
     />,
   )
@@ -83,6 +82,34 @@ describe('brightness in the control center', () => {
     expect(screen.getByRole('slider', { name: 'DELL U2720Q (not responding)' })).toBeTruthy()
   })
 })
+
+describe('Wi-Fi in the control center', () => {
+  it('names Ethernet on the Wi-Fi tile while the radio is off and Ethernet is connected', () => {
+    renderControlCenter([BUILT_IN], { ...WIFI_OFF, ethernet: true, offForEthernet: true })
+    expect(screen.getByText('Wi-Fi')).toBeTruthy()
+    expect(screen.getByText('Ethernet')).toBeTruthy()
+  })
+
+  it('leaves the Wi-Fi tile without a sublabel while the radio is off without Ethernet', () => {
+    renderControlCenter([BUILT_IN])
+    expect(screen.queryByText('Ethernet')).toBeNull()
+  })
+
+  it('shows the Wi-Fi tile as inactive and names Ethernet while the firmware keeps Wi-Fi off for Ethernet', () => {
+    renderControlCenter([BUILT_IN], { ...WIFI_OFF, radio: 'on', ethernet: true, blockedByEthernet: true })
+    expect(screen.getByText('Ethernet')).toBeTruthy()
+    expect(wifiTileIconStroke()).toBe('rgba(255,255,255,0.6)')
+  })
+
+  it('shows the Wi-Fi tile as active while the radio is on and nothing blocks it', () => {
+    renderControlCenter([BUILT_IN], { ...WIFI_OFF, radio: 'on' })
+    expect(wifiTileIconStroke()).toBe('white')
+  })
+})
+
+function wifiTileIconStroke() {
+  return screen.getByText('Wi-Fi').parentElement?.parentElement?.querySelector('svg')?.getAttribute('stroke')
+}
 
 describe('sound in the control center', () => {
   function withAudioDevices(output: AudioDevice[], input: AudioDevice[]) {

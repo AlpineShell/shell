@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import touchpadGesturePolicy from './touchpadGesturePolicy.js'
 
-const { ENGAGE_DISTANCE, STEP_DISTANCE, IDLE_GESTURE, createFrameAssembler, nextGesture } = touchpadGesturePolicy
+const { ENGAGE_DISTANCE, STEP_DISTANCE, IDLE_GESTURE, nextGesture } = touchpadGesturePolicy
 
 function fingers(count, x, y = 0.5) {
-  return Array.from({ length: count }, (_, index) => ({ id: index, touching: true, x: x + index * 0.01, y }))
+  return Array.from({ length: count }, (_, index) => ({ id: index, x: x + index * 0.01, y }))
 }
 
 function runFrames(frames) {
@@ -17,33 +17,6 @@ function runFrames(frames) {
   }
   return { state, events }
 }
-
-describe('createFrameAssembler', () => {
-  it('returns the touching contacts of a frame sent in one report', () => {
-    const push = createFrameAssembler()
-    const frame = push({
-      contactCount: 2,
-      contacts: [
-        { id: 1, touching: true, x: 0.1, y: 0.2 },
-        { id: 2, touching: false, x: 0.3, y: 0.4 },
-        { id: 0, touching: false, x: 0, y: 0 },
-      ],
-    })
-    expect(frame).toEqual([{ id: 1, touching: true, x: 0.1, y: 0.2 }])
-  })
-
-  it('joins a frame the touchpad splits across reports', () => {
-    const push = createFrameAssembler()
-    const first = push({ contactCount: 3, contacts: fingers(2, 0.1) })
-    const second = push({ contactCount: 0, contacts: [{ id: 7, touching: true, x: 0.5, y: 0.5 }, ...fingers(1, 0.9)] })
-    expect(first).toBeNull()
-    expect(second.map((contact) => contact.id)).toEqual([0, 1, 7])
-  })
-
-  it('ignores a continuation report with no frame in progress', () => {
-    expect(createFrameAssembler()({ contactCount: 0, contacts: fingers(2, 0.1) })).toBeNull()
-  })
-})
 
 describe('nextGesture', () => {
   it('begins a swipe once three fingers travel sideways', () => {

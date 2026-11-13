@@ -90,6 +90,167 @@ describe("ChromeCanvas", () => {
         expect(context.stroke).toHaveBeenCalled();
     });
 
+    it("leaves the canvas alone when a window moves while no border is drawn", () => {
+        const { rerender } = render(
+            <ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />
+        );
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+        context.clearRect.mockClear();
+
+        rerender(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[WINDOW_UNDER_RIDGE]} />);
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(context.clearRect).not.toHaveBeenCalled();
+    });
+
+    it("draws the border over a window that moved in while the Ridge was not hovered once it is hovered", () => {
+        const { rerender } = render(
+            <ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />
+        );
+        rerender(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[WINDOW_UNDER_RIDGE]} />);
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+        expect(context.stroke).not.toHaveBeenCalled();
+
+        rerender(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={true} windowCoverage={[WINDOW_UNDER_RIDGE]} />);
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(painted).toEqual(["clip", "stroke", "restore"]);
+    });
+
+    it("repaints when a window moves while a surface is open", () => {
+        let now = 1000;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        const { rerender } = render(
+            <ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />
+        );
+        act(() => setChromeSurface(surface(90)));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+        context.stroke.mockClear();
+
+        rerender(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[WINDOW_UNDER_RIDGE]} />);
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(context.stroke).toHaveBeenCalled();
+    });
+
+    it("springs a centred surface open from its middle and an edge surface at its full width", () => {
+        let now = 1000;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        render(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />);
+        const widthAfterOpening = (anchor: ChromeSurface["anchor"]) => {
+            const content = document.createElement("div");
+            const under = document.createElement("div");
+            setSurfaceBackdrop(content, { bar: null, surface: under });
+            act(() => setChromeSurface({ ...surface(90), centerX: 340, bodyWidth: 320, anchor, contentEl: content }));
+            now += 40;
+            act(() => {
+                vi.advanceTimersToNextFrame();
+            });
+            const width = parseFloat(under.style.getPropertyValue("--chrome-width"));
+            act(() => setChromeSurface(null));
+            now += 2000;
+            act(() => {
+                vi.advanceTimersToNextFrame();
+            });
+            setSurfaceBackdrop(content, null);
+            return width;
+        };
+
+        expect(widthAfterOpening("center")).toBeLessThan(320);
+        expect(widthAfterOpening("left")).toBe(320);
+    });
+
+    it("carries the next menu's content along with the shape and fades it in when menus hand over", () => {
+        let now = 1000;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        render(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />);
+        act(() => setChromeSurface({ ...surface(120), centerX: 1200, bodyWidth: 300 }));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        const nextMenu = document.createElement("div");
+        act(() => setChromeSurface({ ...surface(260), centerX: 900, bodyWidth: 320, contentEl: nextMenu }));
+        now += 40;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        const midwayOpacity = Number(nextMenu.style.opacity);
+        const midwayShift = parseFloat(nextMenu.style.translate);
+        expect(midwayOpacity).toBeGreaterThan(0);
+        expect(midwayOpacity).toBeLessThan(1);
+        expect(midwayShift).toBeGreaterThan(0);
+
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(nextMenu.style.opacity).toBe("");
+        expect(parseFloat(nextMenu.style.translate)).toBe(0);
+    });
+
+    it("does not fade a menu that only changes its own size", () => {
+        let now = 1000;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        render(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />);
+        const menu = document.createElement("div");
+        const growing = { ...surface(120), centerX: 900, bodyWidth: 320, contentEl: menu };
+        act(() => setChromeSurface(growing));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        act(() => setChromeSurface({ ...growing, fullHeight: 300 }));
+        now += 40;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        expect(menu.style.opacity).toBe("");
+        expect(parseFloat(menu.style.translate)).toBe(0);
+    });
+
+    it("keeps a closing surface's content inside the narrowing shape", () => {
+        let now = 1000;
+        vi.spyOn(performance, "now").mockImplementation(() => now);
+        render(<ChromeCanvas barHeight={24} bg="#1f2020" barBorderColor="#333" hovered={false} windowCoverage={[]} />);
+        const content = document.createElement("div");
+        act(() => setChromeSurface({ ...surface(90), centerX: 340, bodyWidth: 320, contentEl: content }));
+        now += 2000;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        act(() => setChromeSurface(null));
+        now += 120;
+        act(() => {
+            vi.advanceTimersToNextFrame();
+        });
+
+        const insets = content.style.clipPath.match(/inset\(([^)]*?) round/)?.[1].split(" ").map(parseFloat) ?? [];
+        const [, rightHidden, , leftHidden] = insets;
+        expect(rightHidden).toBeGreaterThan(0);
+        expect(leftHidden).toBeGreaterThan(0);
+        expect(rightHidden).toBeCloseTo(leftHidden, 5);
+    });
+
     it("lays a registered backdrop over the bar and the surface shape, fading with the surface", () => {
         let now = 1000;
         vi.spyOn(performance, "now").mockImplementation(() => now);

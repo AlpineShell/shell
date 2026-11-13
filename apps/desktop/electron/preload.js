@@ -224,8 +224,15 @@ contextBridge.exposeInMainWorld('screenshot', {
     ipcRenderer.on('screenshot/hide', () => callback())
   },
   ready: () => ipcRenderer.invoke('screenshot/overlay-ready'),
+  painted: () => ipcRenderer.invoke('screenshot/painted'),
   regionSelected: (region) => ipcRenderer.invoke('screenshot/region-selected', region),
   cancel: () => ipcRenderer.invoke('screenshot/cancel'),
+  onSaved: (callback) => {
+    const handler = (_, data) => callback(data)
+    ipcRenderer.on('screenshot/saved', handler)
+    return () => ipcRenderer.removeListener('screenshot/saved', handler)
+  },
+  reveal: (id) => ipcRenderer.invoke('screenshot/reveal', id),
 })
 
 contextBridge.exposeInMainWorld('windowSwitcher', {
@@ -521,13 +528,13 @@ contextBridge.exposeInMainWorld('shell', {
       ipcRenderer.on('network/wifi-signal-changed', handler)
       return () => ipcRenderer.removeListener('network/wifi-signal-changed', handler)
     },
-    wifiScan: () => ipcRenderer.invoke('network/wifi-scan'),
-    wifiNetworks: () => ipcRenderer.invoke('network/wifi-networks'),
-    onWifiScanUpdated: (callback) => {
+    wifiState: () => ipcRenderer.invoke('network/wifi-state'),
+    onWifiChanged: (callback) => {
       const handler = (_, data) => callback(data)
-      ipcRenderer.on('network/wifi-scan-updated', handler)
-      return () => ipcRenderer.removeListener('network/wifi-scan-updated', handler)
+      ipcRenderer.on('network/wifi-changed', handler)
+      return () => ipcRenderer.removeListener('network/wifi-changed', handler)
     },
+    wifiScan: () => ipcRenderer.invoke('network/wifi-scan'),
     wifiConnect: (ssid, password) => ipcRenderer.invoke('network/wifi-connect', { ssid, password }),
     details: () => ipcRenderer.invoke('network/details'),
     onDetailsChanged: (callback) => {
@@ -536,7 +543,6 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('network/details-changed', handler)
     },
     wifiDisconnect: () => ipcRenderer.invoke('network/wifi-disconnect'),
-    wifiRadioGet: () => ipcRenderer.invoke('network/wifi-radio-get'),
     wifiRadioSet: (enabled) => ipcRenderer.invoke('network/wifi-radio-set', enabled),
   },
   system: {

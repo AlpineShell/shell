@@ -31,6 +31,16 @@ const BSS_ENTRY_BSSID_OFFSET = 40
 const BSS_ENTRY_RSSI_OFFSET = 56
 const BSS_ENTRY_CENTER_FREQUENCY_OFFSET = 92
 
+const MIB_IF_TABLE_HEADER_BYTES = 8
+const MIB_IF_ROW_BYTES = 1352
+const MIB_IF_ROW_TYPE_OFFSET = 1128
+const MIB_IF_ROW_FLAGS_OFFSET = 1152
+const MIB_IF_ROW_OPER_STATUS_OFFSET = 1156
+const MIB_IF_ROW_MEDIA_CONNECT_STATE_OFFSET = 1164
+const IF_TYPE_ETHERNET_CSMACD = 6
+const IF_OPER_STATUS_UP = 1
+const IF_MEDIA_CONNECT_STATE_CONNECTED = 1
+
 const AF_UNSPEC = 0
 const GAA_FLAG_SKIP_ALL_ADDRESSES = 0xf
 const ADAPTER_IF_INDEX_OFFSET = 4
@@ -51,6 +61,8 @@ let nativeApi = null
 let nativeApiUnavailable = false
 let wlanClientHandle = null
 let wlanClientUnavailable = false
+let wlanClientOpening = null
+let wlanClientDisposeRequested = false
 let adapterBuffer = null
 
 function loadNativeApi() {
@@ -63,12 +75,15 @@ function loadNativeApi() {
     const outVoidPointer = koffi.out(koffi.pointer(koffi.pointer('void')))
     nativeApi = {
       koffi,
+      wlanapi,
       WlanOpenHandle: wlanapi.func('__stdcall', 'WlanOpenHandle', 'uint32', ['uint32', 'uintptr_t', koffi.out(koffi.pointer('uint32')), koffi.out(koffi.pointer('uintptr_t'))]),
       WlanCloseHandle: wlanapi.func('__stdcall', 'WlanCloseHandle', 'uint32', ['uintptr_t', 'uintptr_t']),
       WlanEnumInterfaces: wlanapi.func('__stdcall', 'WlanEnumInterfaces', 'uint32', ['uintptr_t', 'uintptr_t', outVoidPointer]),
       WlanQueryInterface: wlanapi.func('__stdcall', 'WlanQueryInterface', 'uint32', ['uintptr_t', bytePointer, 'int32', 'uintptr_t', koffi.out(koffi.pointer('uint32')), outVoidPointer, 'uintptr_t']),
       WlanFreeMemory: wlanapi.func('__stdcall', 'WlanFreeMemory', 'void', ['void *']),
       WlanGetNetworkBssList: wlanapi.func('__stdcall', 'WlanGetNetworkBssList', 'uint32', ['uintptr_t', bytePointer, 'uintptr_t', 'int32', 'int32', 'uintptr_t', outVoidPointer]),
+      GetIfTable2: iphlpapi.func('__stdcall', 'GetIfTable2', 'uint32', [outVoidPointer]),
+      FreeMibTable: iphlpapi.func('__stdcall', 'FreeMibTable', 'void', ['void *']),
       GetAdaptersAddresses: iphlpapi.func('__stdcall', 'GetAdaptersAddresses', 'uint32', ['uint32', 'uint32', 'uintptr_t', 'void *', koffi.inout(koffi.pointer('uint32'))]),
     }
   } catch (e) {
@@ -80,6 +95,7 @@ function loadNativeApi() {
 
 function openWlanClient(api) {
   if (wlanClientHandle !== null || wlanClientUnavailable) return wlanClientHandle
+  if (wlanClientOpening) return null
   const negotiatedVersion = [0]
   const handle = [0]
   if (api.WlanOpenHandle(WLAN_CLIENT_VERSION, 0, negotiatedVersion, handle) !== ERROR_SUCCESS || !handle[0]) {
@@ -89,6 +105,41 @@ function openWlanClient(api) {
   }
   wlanClientHandle = handle[0]
   return wlanClientHandle
+}
+
+function openWlanClientAsync(api) {
+  if (wlanClientHandle !== null || wlanClientUnavailable) return Promise.resolve(wlanClientHandle)
+  if (wlanClientOpening) return wlanClientOpening
+  const negotiatedVersion = [0]
+  const handle = [0]
+  const opening = new Promise((resolve) => {
+    try {
+      api.WlanOpenHandle.async(WLAN_CLIENT_VERSION, 0, negotiatedVersion, handle, (error, status) => {
+        if (error || status !== ERROR_SUCCESS || !handle[0]) {
+          wlanClientUnavailable = true
+          console.error('[networkNative] WlanOpenHandle failed, Wi-Fi state falls back to PowerShell')
+          resolve(null)
+          return
+        }
+        wlanClientHandle = handle[0]
+        if (wlanClientDisposeRequested) {
+          api.WlanCloseHandle(wlanClientHandle, 0)
+          wlanClientHandle = null
+          wlanClientDisposeRequested = false
+        }
+        resolve(wlanClientHandle)
+      })
+    } catch (error) {
+      wlanClientUnavailable = true
+      console.error('[networkNative] WlanOpenHandle failed, Wi-Fi state falls back to PowerShell:', error.message)
+      resolve(null)
+    }
+  })
+  wlanClientOpening = opening
+  return opening.then((client) => {
+    if (wlanClientOpening === opening) wlanClientOpening = null
+    return client
+  })
 }
 
 function bytesAt(api, pointer, offset, length) {
@@ -158,30 +209,60 @@ function decodeBssEntry(buffer, bssid) {
   return null
 }
 
-function queryInterface(api, client, interfaceGuid, opCode) {
-  const dataSize = [0]
-  const data = [null]
-  if (api.WlanQueryInterface(client, interfaceGuid, opCode, 0, dataSize, data, 0) !== ERROR_SUCCESS) return null
+function decodeWiredConnection(tableBuffer) {
+  if (!tableBuffer || tableBuffer.length < MIB_IF_TABLE_HEADER_BYTES) return { connected: false }
+  const count = tableBuffer.readUInt32LE(0)
+  for (let index = 0; index < count; index += 1) {
+    const base = MIB_IF_TABLE_HEADER_BYTES + index * MIB_IF_ROW_BYTES
+    if (base + MIB_IF_ROW_BYTES > tableBuffer.length) break
+    const flags = tableBuffer.readUInt8(base + MIB_IF_ROW_FLAGS_OFFSET)
+    if (
+      tableBuffer.readUInt32LE(base + MIB_IF_ROW_TYPE_OFFSET) === IF_TYPE_ETHERNET_CSMACD &&
+      (flags & 1) !== 0 &&
+      (flags & 4) !== 0 &&
+      tableBuffer.readUInt32LE(base + MIB_IF_ROW_OPER_STATUS_OFFSET) === IF_OPER_STATUS_UP &&
+      tableBuffer.readUInt32LE(base + MIB_IF_ROW_MEDIA_CONNECT_STATE_OFFSET) === IF_MEDIA_CONNECT_STATE_CONNECTED
+    ) return { connected: true }
+  }
+  return { connected: false }
+}
+
+function callOffThread(nativeFunction, ...args) {
+  return new Promise((resolve) => {
+    nativeFunction.async(...args, (error, status) => resolve(error ? null : status))
+  })
+}
+
+async function readWiredConnection() {
+  const api = loadNativeApi()
+  if (!api) return null
+  const table = [null]
+  const status = await callOffThread(api.GetIfTable2, table)
+  if (!table[0]) return null
   try {
-    return bytesAt(api, data[0], 0, dataSize[0])
+    if (status !== ERROR_SUCCESS) return null
+    const tableBuffer = bytesAt(api, table[0], 0, MIB_IF_TABLE_HEADER_BYTES)
+    const count = tableBuffer.readUInt32LE(0)
+    const fullTable = bytesAt(api, table[0], 0, MIB_IF_TABLE_HEADER_BYTES + count * MIB_IF_ROW_BYTES)
+    return decodeWiredConnection(fullTable)
   } finally {
-    api.WlanFreeMemory(data[0])
+    api.FreeMibTable(table[0])
   }
 }
 
-function overWlanInterfaces(visit) {
+async function overWlanInterfacesOffThread(visit) {
   const api = loadNativeApi()
   if (!api) return null
   const client = openWlanClient(api)
   if (!client) return null
   const interfaceList = [null]
-  if (api.WlanEnumInterfaces(client, 0, interfaceList) !== ERROR_SUCCESS) return null
+  if (await callOffThread(api.WlanEnumInterfaces, client, 0, interfaceList) !== ERROR_SUCCESS) return null
   try {
     const count = bytesAt(api, interfaceList[0], 0, WLAN_INTERFACE_LIST_HEADER_BYTES).readUInt32LE(0)
     for (let index = 0; index < count; index += 1) {
       const guidOffset = WLAN_INTERFACE_LIST_HEADER_BYTES + index * WLAN_INTERFACE_INFO_BYTES
       const guid = bytesAt(api, interfaceList[0], guidOffset, WLAN_INTERFACE_GUID_BYTES)
-      const found = visit(api, client, guid)
+      const found = await visit(api, client, guid)
       if (found !== null) return found
     }
     return undefined
@@ -190,13 +271,15 @@ function overWlanInterfaces(visit) {
   }
 }
 
-function readWifiRadioState() {
-  const state = overWlanInterfaces((api, client, guid) => {
-    const buffer = queryInterface(api, client, guid, WLAN_INTF_OPCODE_RADIO_STATE)
-    if (!buffer || buffer.length < WLAN_PHY_COUNT_BYTES) return null
-    const decoded = decodeRadioState(buffer)
-    return decoded === 'unavailable' ? null : decoded
-  })
+async function readRadioStateOfInterface(api, client, guid) {
+  const buffer = await queryInterfaceBuffer(api, client, guid, WLAN_INTF_OPCODE_RADIO_STATE)
+  if (!buffer || buffer.length < WLAN_PHY_COUNT_BYTES) return null
+  const decoded = decodeRadioState(buffer)
+  return decoded === 'unavailable' ? null : decoded
+}
+
+async function readWifiRadioState() {
+  const state = await overWlanInterfacesOffThread(readRadioStateOfInterface)
   if (state === null) return null
   return state === undefined ? 'unavailable' : state
 }
@@ -352,7 +435,10 @@ function readInterfaceGeneration() {
 }
 
 function disposeNetworkNative() {
-  if (wlanClientHandle === null) return
+  if (wlanClientHandle === null) {
+    if (wlanClientOpening) wlanClientDisposeRequested = true
+    return
+  }
   const api = loadNativeApi()
   if (api) api.WlanCloseHandle(wlanClientHandle, 0)
   wlanClientHandle = null
@@ -360,13 +446,19 @@ function disposeNetworkNative() {
 
 module.exports = {
   buildInterfaceGeneration,
+  bytesAt,
   decodeBssEntry,
   decodeConnection,
   decodeConnectionDetails,
   decodeRadioState,
   decodeSsid,
+  decodeWiredConnection,
   disposeNetworkNative,
+  loadNativeApi,
+  openWlanClient,
+  openWlanClientAsync,
   readInterfaceGeneration,
+  readWiredConnection,
   readWifiConnection,
   readWifiLink,
   readWifiRadioState,

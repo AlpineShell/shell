@@ -1,8 +1,11 @@
 const { parentPort } = require('worker_threads')
 const bluetoothNative = require('./bluetoothNative')
+const { createUnchangedReadFilter } = require('./bluetoothReadChanges')
+
+const unchangedReads = createUnchangedReadFilter()
 
 const HANDLERS = {
-  'read-nodes': () => bluetoothNative.readBluetoothNodes(),
+  'read-nodes-if-changed': (request) => unchangedReads.answer(bluetoothNative.readBluetoothNodes(), request.knownReadId),
   'connect-device': (request) => bluetoothNative.connectDevice(request),
   'disconnect-device': (request) => bluetoothNative.disconnectDevice(request),
   'disconnect-link': (request) => bluetoothNative.disconnectClassicLink(request),

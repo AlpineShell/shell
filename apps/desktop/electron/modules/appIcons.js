@@ -513,12 +513,23 @@ $results -join '|'`
 }
 
 let genericIconUrl = null
+let genericIconAttempt = null
 
 const GENERIC_ICON_KEY = 'generic|shell32'
 const SHELL32_PATH = path.join(process.env.SystemRoot || '', 'System32', 'shell32.dll')
 
-async function ensureGenericIcon() {
-  if (genericIconUrl !== null) return genericIconUrl
+function ensureGenericIcon() {
+  if (genericIconUrl !== null) return Promise.resolve(genericIconUrl)
+  if (!genericIconAttempt) genericIconAttempt = resolveGenericIcon().catch(reportGenericIconFailure)
+  return genericIconAttempt
+}
+
+function reportGenericIconFailure(error) {
+  console.error('[appIcons] generic icon lookup failed:', error?.message ?? error)
+  return null
+}
+
+async function resolveGenericIcon() {
   const stamp = fileStamp(SHELL32_PATH) || ''
   const cached = cachedIconFor(GENERIC_ICON_KEY, stamp)
   if (cached) {

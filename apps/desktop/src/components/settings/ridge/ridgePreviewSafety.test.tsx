@@ -20,7 +20,7 @@ const CHANNEL_VALUES: Record<string, unknown> = {
   'shell.clock.prefs': { timeFormat: '24h', systemTimeFormat: '24h', calendarDays: 1, showTasks: true },
   'shell.system.battery': { percent: 64, charging: false, onAcPower: false, hasBattery: true },
   'shell.system.bluetooth': { radio: { state: 'on', pending: null, error: null }, devices: [], devicesAvailable: true },
-  'shell.network.wifiSignal': { signal: 80, connected: true, type: 'wifi', ssid: 'Home' },
+  'shell.network.wifiSignal': { signal: 80, connected: true, type: 'wifi', ssid: 'Home', wifi: { connected: true, ssid: 'Home', signal: 80 } },
   'shell.media.session': {
     title: 'Blue in Green',
     artist: 'Miles Davis',
@@ -42,6 +42,7 @@ const CHANNEL_VALUES: Record<string, unknown> = {
 }
 
 const CHANNEL_SUBSCRIPTIONS = [
+  'screenshot.onSaved',
   'topbar.onColorChanged',
   'topbar.onMediaVisualizerChanged',
   'shell.clock.onPrefsChanged',
@@ -67,7 +68,7 @@ const FORBIDDEN_BRIDGES = [
   'shell.tray.setLayout',
   'shell.system.subscribePeak',
   'shell.network.wifiScan',
-  'shell.network.wifiRadioGet',
+  'shell.network.wifiState',
   'shell.system.bluetoothRefresh',
   'shell.system.bluetoothConnect',
   'shell.system.bluetoothDisconnect',
@@ -93,7 +94,7 @@ const OTHER_BRIDGES = [
   'topbar.setMediaVisualizer',
   'shell.clock.setPrefs',
   'shell.network.wifiRadioSet',
-  'shell.network.onWifiScanUpdated',
+  'shell.network.onWifiChanged',
   'shell.system.unsubscribePeak',
   'shell.system.onAudioPeak',
   'shell.system.bluetoothSetRadio',
@@ -106,7 +107,7 @@ const OTHER_BRIDGES = [
   'shell.tray.setSettings',
 ]
 
-const BRIDGE_ROOTS = ['shell', 'topbar', 'launcher', 'plugins', 'notice']
+const BRIDGE_ROOTS = ['shell', 'topbar', 'launcher', 'plugins', 'notice', 'screenshot']
 
 function installBridge(path: string, bridge: Mock) {
   const keys = path.split('.')

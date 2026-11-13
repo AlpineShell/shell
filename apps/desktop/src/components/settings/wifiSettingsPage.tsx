@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { EthernetPort, Lock, RefreshCw, Wifi, WifiHigh, WifiLow, WifiZero } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { EthernetPort, Lock, RefreshCw, Wifi, WifiHigh, WifiLow, WifiOff, WifiZero } from 'lucide-react'
 import { Button, Card, EmptyState, ListRow, PageHeader, Row, Section, Spinner, TextField, Toggle } from '@alpine/ui'
 import { useNetworkStatus } from '../../hooks/useNetwork'
+import { useWifi } from '../../hooks/useWifi'
+import { useWifiJoin } from '../../hooks/useWifiJoin'
 import { useNetworkDetails } from '../../hooks/useNetworkDetails'
+import { ETHERNET_ONLY_TITLE, networkStatusLabel, wifiOffLabel } from '../../lib/wifiPresentation'
 import { settingsPage } from '../../settings/registry'
 import NetworkMap from './networkMap'
 import PageSpinner from './pageSpinner'
@@ -15,87 +18,28 @@ function SignalIcon({ signal, className, size }: { signal: number; className: st
 }
 
 export default function WifiSettingsPage() {
-  const [enabled, setEnabled] = useState(window.alpineBoot?.wifi()?.radio ?? true)
-  const [networks, setNetworks] = useState<WifiNetwork[]>([])
-  const [scanning, setScanning] = useState(true)
-  const [connecting, setConnecting] = useState<string | null>(null)
-  const [disconnecting, setDisconnecting] = useState<string | null>(null)
-  const [openSsid, setOpenSsid] = useState<string | null>(null)
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const state = useWifi()
+  const join = useWifiJoin()
   const networkStatus = useNetworkStatus()
   const details = useNetworkDetails()
+  const enabled = state.radio === 'on'
 
   useEffect(() => {
-    window.shell.network.wifiNetworks().then((cached) => {
-      if (cached.length > 0) setNetworks(cached)
-    })
-    window.shell.network.wifiRadioGet().then((r) => {
-      if (r.success) setEnabled(r.state === 'on')
-    })
-    const unsubscribe = window.shell.network.onWifiScanUpdated(setNetworks)
-    scan()
-    return unsubscribe
+    void window.shell.network.wifiScan().catch(() => {})
   }, [])
 
   function scan() {
-    setScanning(true)
-    window.shell.network.wifiScan().then((list) => {
-      if (list) setNetworks(list)
-      setScanning(false)
-    })
+    void window.shell.network.wifiScan().catch(() => {})
   }
 
-  async function toggleRadio(value: boolean) {
-    setEnabled(value)
-    if (!value) setNetworks([])
-    const result = await window.shell.network.wifiRadioSet(value)
-    if (result.success && value) {
-      setTimeout(() => scan(), 1500)
-    }
-  }
-
-  function closeRow() {
-    setOpenSsid(null)
-    setPassword('')
-  }
-
-  async function handleConnect(ssid: string, pwd?: string) {
-    setConnecting(ssid)
-    setError(null)
-    const result = await window.shell.network.wifiConnect(ssid, pwd)
-    if (result.needsPassword && !pwd) {
-      setConnecting(null)
-      setOpenSsid(ssid)
-      setPassword('')
-      return
-    }
-    if (!result.success) {
-      setConnecting(null)
-      setError(ssid)
-      return
-    }
-    closeRow()
-    await new Promise((r) => setTimeout(r, 1500))
-    setConnecting(null)
-    scan()
-  }
-
-  async function handleDisconnect(ssid: string) {
-    closeRow()
-    setDisconnecting(ssid)
-    await window.shell.network.wifiDisconnect()
-    await new Promise((r) => setTimeout(r, 1000))
-    const list = await window.shell.network.wifiScan()
-    if (list) setNetworks(list)
-    setDisconnecting(null)
+  function toggleRadio(value: boolean) {
+    void window.shell.network.wifiRadioSet(value).catch(() => {})
   }
 
   function activate(network: WifiNetwork) {
-    if (connecting || disconnecting) return
-    if (openSsid === network.ssid) closeRow()
-    else if (network.connected) setOpenSsid(network.ssid)
-    else handleConnect(network.ssid)
+    if (state.operation) return
+    if (join.passwordFor === network.ssid) join.cancelPassword()
+    else void join.activate(network)
   }
 
   const onEthernet = networkStatus.connected && networkStatus.type === 'ethernet'
@@ -103,49 +47,62 @@ export default function WifiSettingsPage() {
   return (
     <div className="flex w-full flex-col gap-section">
       <PageHeader variant="plain" title={settingsPage('wifi')?.label ?? ''}>
-        {enabled && (
-          <Button shape="square" variant="ghost" size="sm" icon={<RefreshCw size={14} />} busy={scanning} onClick={scan}>
+        {enabled && !state.blockedByEthernet && (
+          <Button shape="square" variant="ghost" size="sm" icon={<RefreshCw size={14} />} busy={state.scanning} onClick={scan}>
             Rescan
           </Button>
         )}
       </PageHeader>
 
-      <Card variant="group">
-        <Row label="Wi-Fi">
-          <Toggle variant="compact" label="Wi-Fi" checked={enabled} onChange={toggleRadio} />
-        </Row>
-      </Card>
+      {state.blockedByEthernet ? (
+        <Section variant="label" title="Ethernet">
+          <Card variant="list">
+            <ListRow
+              variant="plain"
+              icon={<EthernetPort size={16} className="text-ink-primary" />}
+              title={ETHERNET_ONLY_TITLE}
+            />
+          </Card>
+        </Section>
+      ) : (
+        <Card variant="group">
+          <Row label="Wi-Fi">
+            <Toggle variant="compact" label="Wi-Fi" checked={enabled} onChange={toggleRadio} />
+          </Row>
+        </Card>
+      )}
 
-      {details !== undefined && (
+      {details && (
         <Section variant="label" title="Connection">
-          {details ? <NetworkMap details={details} /> : <EmptyState variant="plain" title="Not connected" />}
+          <NetworkMap details={details} />
         </Section>
       )}
 
-      {enabled && (
+      {!state.blockedByEthernet && (
         <Section variant="label" title="Wi-Fi networks">
-          {scanning && networks.length === 0 ? (
+          {!enabled ? (
+            <EmptyState
+              variant="plain"
+              icon={state.ethernet ? <EthernetPort size={20} /> : <WifiOff size={20} />}
+              title={wifiOffLabel(state)}
+            />
+          ) : state.scanning && state.networks.length === 0 ? (
             <PageSpinner label="Scanning for networks" />
-          ) : networks.length === 0 ? (
+          ) : state.networks.length === 0 ? (
             <EmptyState variant="plain" title="No networks found" />
           ) : (
             <Card variant="list">
-              {networks.map((n) => (
+              {state.networks.map((n) => (
                 <NetworkRow
                   key={n.ssid}
                   network={n}
-                  connecting={connecting === n.ssid}
-                  disconnecting={disconnecting === n.ssid}
-                  error={error === n.ssid}
-                  open={openSsid === n.ssid}
-                  password={password}
+                  state={state}
+                  passwordFor={join.passwordFor}
+                  password={join.password}
+                  wrongPassword={join.wrongPasswordFor === n.ssid}
                   onActivate={() => activate(n)}
-                  onDisconnect={() => handleDisconnect(n.ssid)}
-                  onPasswordChange={(v) => {
-                    setPassword(v)
-                    setError(null)
-                  }}
-                  onPasswordSubmit={() => password.trim() && handleConnect(n.ssid, password)}
+                  onPasswordChange={join.setPassword}
+                  onPasswordSubmit={() => join.password.trim() && void join.submitPassword()}
                 />
               ))}
             </Card>
@@ -153,54 +110,45 @@ export default function WifiSettingsPage() {
         </Section>
       )}
 
-      <Section variant="label" title="Ethernet">
-        <Card variant="list">
-          <ListRow
-            variant="plain"
-            icon={<EthernetPort size={16} className={onEthernet ? 'text-ink-primary' : 'text-ink-quiet'} />}
-            title="Ethernet"
-            detail={onEthernet ? 'Connected' : 'Not connected'}
-          />
-        </Card>
-      </Section>
+      {onEthernet && !state.blockedByEthernet && (
+        <Section variant="label" title="Ethernet">
+          <Card variant="list">
+            <ListRow
+              variant="plain"
+              icon={<EthernetPort size={16} className="text-ink-primary" />}
+              title="Ethernet"
+              detail="Connected"
+            />
+          </Card>
+        </Section>
+      )}
     </div>
   )
 }
 
-function networkDetail(network: WifiNetwork, connecting: boolean, disconnecting: boolean, error: boolean): string | undefined {
-  if (disconnecting) return 'Disconnecting…'
-  if (connecting) return 'Connecting…'
-  if (network.connected) return 'Connected'
-  if (error) return "Couldn't connect"
-  return undefined
-}
-
 function NetworkRow({
   network,
-  connecting,
-  disconnecting,
-  error,
-  open,
+  state,
+  passwordFor,
   password,
+  wrongPassword,
   onActivate,
-  onDisconnect,
   onPasswordChange,
   onPasswordSubmit,
 }: {
   network: WifiNetwork
-  connecting: boolean
-  disconnecting: boolean
-  error: boolean
-  open: boolean
+  state: WifiState
+  passwordFor: string | null
   password: string
+  wrongPassword: boolean
   onActivate: () => void
-  onDisconnect: () => void
   onPasswordChange: (v: string) => void
   onPasswordSubmit: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const open = passwordFor === network.ssid
   const askingPassword = open && !network.connected
-  const detail = networkDetail(network, connecting, disconnecting, error)
+  const detail = networkStatusLabel(network, state)
 
   useEffect(() => {
     if (askingPassword) requestAnimationFrame(() => inputRef.current?.focus())
@@ -217,14 +165,14 @@ function NetworkRow({
         />
       }
       title={network.ssid}
-      detail={detail && <span className={error ? 'text-danger' : ''}>{detail}</span>}
+      detail={detail && <span className={wrongPassword || (state.lastError?.ssid === network.ssid && state.lastError.error !== 'wrong-password') ? 'text-danger' : ''}>{detail}</span>}
       onActivate={onActivate}
       activateLabel={network.connected ? network.ssid : `Connect to ${network.ssid}`}
-      expanded={network.connected ? open : undefined}
+      expanded={askingPassword ? true : undefined}
       actions={
         <>
-          {(connecting || disconnecting) && <Spinner size={13} />}
-          {network.security !== 'Open' && <Lock size={13} className="shrink-0 text-ink-quiet" />}
+          {state.operation?.ssid === network.ssid && <Spinner size={13} />}
+          {network.secured && <Lock size={13} className="shrink-0 text-ink-quiet" />}
         </>
       }
     >
@@ -234,28 +182,20 @@ function NetworkRow({
       >
         <div className="min-h-0 overflow-hidden" inert={!open}>
           <div className="flex items-center gap-2 pt-1 pr-3.5 pb-3 pl-[54px]">
-            {network.connected ? (
-              <Button shape="square" variant="soft" size="sm" onClick={onDisconnect}>
-                Disconnect
-              </Button>
-            ) : (
-              <>
-                <TextField
-                  ref={inputRef}
-                  type="password"
-                  label={`Password for ${network.ssid}`}
-                  placeholder="Password"
-                  value={password}
-                  invalid={error}
-                  onChange={onPasswordChange}
-                  onSubmit={onPasswordSubmit}
-                  className="max-w-xs flex-1"
-                />
-                <Button shape="square" size="sm" onClick={onPasswordSubmit}>
-                  Connect
-                </Button>
-              </>
-            )}
+            <TextField
+              ref={inputRef}
+              type="password"
+              label={`Password for ${network.ssid}`}
+              placeholder="Password"
+              value={password}
+              invalid={wrongPassword}
+              onChange={onPasswordChange}
+              onSubmit={onPasswordSubmit}
+              className="max-w-xs flex-1"
+            />
+            <Button shape="square" size="sm" onClick={onPasswordSubmit}>
+              Connect
+            </Button>
           </div>
         </div>
       </div>

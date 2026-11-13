@@ -22,7 +22,7 @@ import {
   trayCaretShown,
 } from './ridgeSamples'
 
-const WIFI_RADIO_ASSUMED_ON = true
+const WIFI_RADIO_ASSUMED_ON: WifiRadioState = 'on'
 const RESTING_PEAK = 0
 
 function asSample(face: ReactElement): ReactElement {
@@ -89,7 +89,7 @@ export function MicrophonePreview({ data, darkText }: RidgeItemPreviewProps) {
 
 export function StatusPreview({ data, darkText }: RidgeItemPreviewProps) {
   const { battery, bluetooth, network } = data.status
-  return <StatusFace battery={battery} bluetooth={bluetooth} network={network} radioOn={WIFI_RADIO_ASSUMED_ON} darkText={darkText} />
+  return <StatusFace battery={battery} bluetooth={bluetooth} network={network} wifiRadio={WIFI_RADIO_ASSUMED_ON} darkText={darkText} />
 }
 
 export function RightPluginsPreview({ data, darkText }: RidgeItemPreviewProps) {

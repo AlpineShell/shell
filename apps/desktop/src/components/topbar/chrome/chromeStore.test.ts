@@ -5,6 +5,9 @@ import {
   clearChromeSurface,
   getChromeSurface,
   subscribeChromeSurface,
+  setBarHovered,
+  isBarHovered,
+  subscribeBarHovered,
 } from './chromeStore'
 
 function surface(id: number) {
@@ -49,5 +52,30 @@ describe('chromeStore', () => {
     expect(getChromeSurface()).toBe(s)
     clearChromeSurface(s.id)
     expect(getChromeSurface()).toBeNull()
+  })
+})
+
+describe('bar hover', () => {
+  afterEach(() => {
+    setBarHovered(false)
+  })
+
+  it('remembers whether the pointer is over the bar', () => {
+    setBarHovered(true)
+    expect(isBarHovered()).toBe(true)
+    setBarHovered(false)
+    expect(isBarHovered()).toBe(false)
+  })
+
+  it('notifies only when the hover actually changes', () => {
+    const listener = vi.fn()
+    const unsubscribe = subscribeBarHovered(listener)
+    setBarHovered(true)
+    setBarHovered(true)
+    setBarHovered(false)
+    expect(listener).toHaveBeenCalledTimes(2)
+    unsubscribe()
+    setBarHovered(true)
+    expect(listener).toHaveBeenCalledTimes(2)
   })
 })

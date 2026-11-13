@@ -1,6 +1,6 @@
 const releaseVersions = require('../electron/releaseVersions')
 
-const FIRST_STABLE_VERSION = '0.1.0'
+const FIRST_STABLE_VERSION = '1.0.0'
 
 function versionOfTag(tag) {
   return tag.trim().replace(/^v/, '')

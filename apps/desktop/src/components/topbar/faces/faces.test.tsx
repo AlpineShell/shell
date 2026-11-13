@@ -42,8 +42,8 @@ const bluetoothState = (radio: BluetoothRadioState, connected: boolean, devicesA
 
 const status = (over: Partial<Omit<StatusFaceProps, "darkText">> = {}): Omit<StatusFaceProps, "darkText"> => ({
     bluetooth: bluetoothState("on", false),
-    network: { signal: 80, connected: true, type: "wifi" },
-    radioOn: true,
+    network: { signal: 80, connected: true, type: "wifi", ssid: "Home", wifi: { connected: true, ssid: "Home", signal: 80 } },
+    wifiRadio: 'on',
     battery: { percent: 64, charging: false, hasBattery: true },
     ...over,
 });
@@ -209,14 +209,14 @@ describe("StatusFace", () => {
         iconNames(render(<StatusFace {...status(over)} darkText={false} />).container);
 
     it.each([
-        ["ethernet, even with the radio off", { network: { signal: null, connected: true, type: "ethernet" }, radioOn: false }, "lucide-ethernet-port"],
-        ["the radio off", { radioOn: false }, "lucide-wifi-off"],
-        ["no connection", { network: { signal: 80, connected: false, type: "wifi" } }, "lucide-wifi-off"],
-        ["an unknown signal", { network: { signal: null, connected: true, type: "wifi" } }, "lucide-wifi"],
-        ["a signal of 70", { network: { signal: 70, connected: true, type: "wifi" } }, "lucide-wifi"],
-        ["a signal of 40", { network: { signal: 40, connected: true, type: "wifi" } }, "lucide-wifi-high"],
-        ["a signal of 10", { network: { signal: 10, connected: true, type: "wifi" } }, "lucide-wifi-low"],
-        ["a signal of 9", { network: { signal: 9, connected: true, type: "wifi" } }, "lucide-wifi-zero"],
+        ["ethernet, even with the radio off", { network: { signal: null, connected: true, type: "ethernet", ssid: null, wifi: { connected: false, ssid: null, signal: null } }, wifiRadio: 'off' }, "lucide-ethernet-port"],
+        ["the radio off", { wifiRadio: 'off' }, "lucide-wifi-off"],
+        ["no connection", { network: { signal: 80, connected: false, type: "wifi", ssid: null, wifi: { connected: false, ssid: null, signal: null } } }, "lucide-wifi-off"],
+        ["an unknown signal", { network: { signal: null, connected: true, type: "wifi", ssid: "Home", wifi: { connected: true, ssid: "Home", signal: null } } }, "lucide-wifi"],
+        ["a signal of 70", { network: { signal: 70, connected: true, type: "wifi", ssid: "Home", wifi: { connected: true, ssid: "Home", signal: 70 } } }, "lucide-wifi"],
+        ["a signal of 40", { network: { signal: 40, connected: true, type: "wifi", ssid: "Home", wifi: { connected: true, ssid: "Home", signal: 40 } } }, "lucide-wifi-high"],
+        ["a signal of 10", { network: { signal: 10, connected: true, type: "wifi", ssid: "Home", wifi: { connected: true, ssid: "Home", signal: 10 } } }, "lucide-wifi-low"],
+        ["a signal of 9", { network: { signal: 9, connected: true, type: "wifi", ssid: "Home", wifi: { connected: true, ssid: "Home", signal: 9 } } }, "lucide-wifi-zero"],
     ] as const)("draws the network for %s", (_, over, expected) => {
         expect(icons(over)[1]).toBe(expected);
     });

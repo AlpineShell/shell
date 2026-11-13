@@ -5,25 +5,6 @@ const HORIZONTAL_DOMINANCE = 1.2
 
 const IDLE_GESTURE = Object.freeze({ phase: 'idle' })
 
-function createFrameAssembler() {
-  let expected = 0
-  let collected = []
-
-  return function pushReport(report) {
-    if (report.contactCount > 0) {
-      expected = report.contactCount
-      collected = []
-    }
-    if (expected === 0) return null
-    collected.push(...report.contacts.slice(0, expected - collected.length))
-    if (collected.length < expected) return null
-    const frame = collected.filter((contact) => contact.touching)
-    expected = 0
-    collected = []
-    return frame
-  }
-}
-
 function centroid(contacts) {
   const sum = contacts.reduce((total, contact) => ({ x: total.x + contact.x, y: total.y + contact.y }), { x: 0, y: 0 })
   return { x: sum.x / contacts.length, y: sum.y / contacts.length }
@@ -62,9 +43,9 @@ function nextGesture(state, touching) {
 }
 
 module.exports = {
+  SWIPE_FINGER_COUNT,
   ENGAGE_DISTANCE,
   STEP_DISTANCE,
   IDLE_GESTURE,
-  createFrameAssembler,
   nextGesture,
 }

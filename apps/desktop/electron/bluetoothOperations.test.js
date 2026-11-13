@@ -377,3 +377,52 @@ describe('stateKey', () => {
     expect(stateKey(composeBluetoothState(stale))).not.toBe(stateKey(composeBluetoothState(base)))
   })
 })
+
+describe('repeated reads of an unchanged stack', () => {
+  it('keeps the same session when the same devices are read again with nothing pending', () => {
+    const devices = [device()]
+    const session = applyDeviceRead(createSession(), confirmedRead(devices), START)
+
+    expect(applyDeviceRead(session, confirmedRead(devices), START + 1000)).toBe(session)
+  })
+
+  it('still settles an operation when the same devices are read again', () => {
+    const devices = [device()]
+    const { session } = begin(applyDeviceRead(createSession(), confirmedRead(devices), START), 'headset', 'remove')
+    const repeated = applyDeviceRead(session, confirmedRead(devices), START + 1000)
+
+    expect(repeated).not.toBe(session)
+    expect(repeated.operations.headset.action).toBe('remove')
+  })
+
+  it('adopts the devices a stack change held back on the next read', () => {
+    const before = sessionWith([device()])
+    const transitional = applyDeviceRead(before, transitionalRead(before.devices), START + 1000)
+    const steady = applyDeviceRead(transitional, confirmedRead([device({ name: 'Renamed' })]), START + 2000)
+
+    expect(steady.devices[0].name).toBe('Renamed')
+  })
+
+  it('leaves an idle session untouched when nothing can expire', () => {
+    const session = sessionWith([device()])
+
+    expect(expireSession(session, START + DEVICE_OPERATION_DEADLINE_MS.repair * 10)).toBe(session)
+  })
+
+  it('still expires a radio change that ran past its deadline', () => {
+    const { session } = beginRadioChange(sessionWith([device()]), 'on', START)
+    const expired = expireSession(session, START + RADIO_CHANGE_DEADLINE_MS)
+
+    expect(expired.radio.pending).toBeNull()
+    expect(expired.radio.error.kind).toBe('set-failed')
+  })
+
+  it('composes the same state from a kept session as from a rebuilt one', () => {
+    const devices = [device()]
+    const session = applyDeviceRead(createSession(), confirmedRead(devices), START)
+    const rebuilt = { ...session, operations: {}, errors: {}, absentReads: {} }
+
+    expect(stateKey(composeBluetoothState(applyDeviceRead(session, confirmedRead(devices), START + 1000))))
+      .toBe(stateKey(composeBluetoothState(rebuilt)))
+  })
+})

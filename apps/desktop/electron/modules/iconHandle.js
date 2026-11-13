@@ -39,12 +39,12 @@ function hasVisiblePixels(pixels) {
   return false
 }
 
-function iconHandleToDataUrl(hIcon, size) {
-  if (!hIcon) return ''
+function renderIconPixels(hIcon, size) {
+  if (!hIcon) return null
   const native = loadBindings()
   const ppvBits = Buffer.alloc(8)
   const hbm = native.CreateDIBSection(0, topDownBitmapInfo(size), 0, ppvBits, 0, 0)
-  if (!hbm) return ''
+  if (!hbm) return null
   const bitsAddr = ppvBits.readBigUInt64LE(0)
   const memDC = native.CreateCompatibleDC(0)
   const old = native.SelectObject(memDC, hbm)
@@ -53,11 +53,9 @@ function iconHandleToDataUrl(hIcon, size) {
     native.GdiFlush()
     const pixels = Buffer.alloc(size * size * 4)
     native.RtlMoveMemory(pixels, bitsAddr, BigInt(pixels.length))
-    if (!hasVisiblePixels(pixels)) return ''
-    const { nativeImage } = require('electron')
-    return nativeImage.createFromBitmap(pixels, { width: size, height: size }).toDataURL()
+    return hasVisiblePixels(pixels) ? pixels : null
   } catch {
-    return ''
+    return null
   } finally {
     native.SelectObject(memDC, old)
     native.DeleteObject(hbm)
@@ -65,4 +63,24 @@ function iconHandleToDataUrl(hIcon, size) {
   }
 }
 
-module.exports = { iconHandleToDataUrl }
+function iconPixelsToDataUrl(pixels, size) {
+  if (!pixels) return ''
+  try {
+    const { nativeImage } = require('electron')
+    return nativeImage.createFromBitmap(pixels, { width: size, height: size }).toDataURL()
+  } catch {
+    return ''
+  }
+}
+
+function iconHandleToDataUrl(hIcon, size) {
+  return iconPixelsToDataUrl(renderIconPixels(hIcon, size), size)
+}
+
+function encodeIconPixelsReusing(previousEncoding, pixels, size) {
+  if (pixels && previousEncoding?.pixels && pixels.equals(previousEncoding.pixels)) return previousEncoding
+  const dataUrl = iconPixelsToDataUrl(pixels, size)
+  return { pixels: dataUrl ? pixels : null, dataUrl }
+}
+
+module.exports = { iconHandleToDataUrl, renderIconPixels, iconPixelsToDataUrl, encodeIconPixelsReusing }

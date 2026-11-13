@@ -17,7 +17,7 @@
         "zustand": "^5",
       },
       "devDependencies": {
-        "@alpine/ui": "file:vendor/alpine-ui-0.11.0.tgz",
+        "@alpine/ui": "file:vendor/alpine-ui-0.12.0.tgz",
         "@aws-sdk/client-s3": "^3.1153.0",
         "@aws-sdk/lib-storage": "^3.1153.0",
         "@electron/asar": "3.4.1",
@@ -78,7 +78,7 @@
   "packages": {
     "@alpine/plugin-sdk": ["@alpine/plugin-sdk@workspace:packages/plugin-sdk"],
 
-    "@alpine/ui": ["@alpine/ui@vendor/alpine-ui-0.11.0.tgz", { "dependencies": { "@base-ui/react": "^1.9.0", "lucide-react": "^0.575.0", "motion": "^14.4.0" }, "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" } }, "sha512-WVXxno28bsHYyNVXK7BeBj1T+ddWHHhkBnLU+cdNHoYqXoqEsM63Pt88lr67U1RF96cjgSTVhf/WGTDYIRYWlQ=="],
+    "@alpine/ui": ["@alpine/ui@vendor/alpine-ui-0.12.0.tgz", { "dependencies": { "@base-ui/react": "^1.9.0", "lucide-react": "^0.575.0", "motion": "^14.4.0" }, "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" } }, "sha512-mwCwy3iUFfglOe5SjVsw4hkBfp+hFn5kfe7ZPAVgVpG5U1M02w5flQNJuH3LpLr8f52KujedTdMqXTGtYf+4pQ=="],
 
     "@aws-sdk/checksums": ["@aws-sdk/checksums@3.1001.6", "", { "dependencies": { "@aws-sdk/core": "^3.978.6", "@aws-sdk/types": "^3.975.0", "@smithy/core": "^3.37.0", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-DSo+EqLq2PkS8gjit311LliRrYzydneP6vRhxMzDh9c8P3wWGzHf4fjmQN3d8sl4qh+aMqzn9+o+gZZo4+uqIQ=="],
 

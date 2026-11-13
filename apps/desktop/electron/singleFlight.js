@@ -2,17 +2,27 @@ function singleFlight(task) {
   let pending = null
   function guarded() {
     if (pending) return pending
-    pending = Promise.resolve(task()).then(
-      (value) => {
-        pending = null
-        return value
+    let resolveTask
+    let rejectTask
+    const flight = new Promise((resolve, reject) => {
+      resolveTask = resolve
+      rejectTask = reject
+    })
+    pending = flight
+    flight.then(
+      () => {
+        if (pending === flight) pending = null
       },
-      (error) => {
-        pending = null
-        throw error
+      () => {
+        if (pending === flight) pending = null
       }
     )
-    return pending
+    try {
+      Promise.resolve(task()).then(resolveTask, rejectTask)
+    } catch (error) {
+      rejectTask(error)
+    }
+    return flight
   }
   guarded.isPending = () => pending !== null
   return guarded

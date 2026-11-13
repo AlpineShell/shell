@@ -49,6 +49,7 @@ vi.mock('../../../hooks/useMicrophone', () => ({ useMicrophone: () => bar.fixtur
 vi.mock('../../../hooks/useBattery', () => ({ useBattery: () => bar.fixture.battery }))
 vi.mock('../../../hooks/useBluetooth', () => ({ useBluetooth: () => ({ state: bar.fixture.bluetooth }) }))
 vi.mock('../../../hooks/useNetwork', () => ({ useNetworkStatus: () => bar.fixture.network }))
+vi.mock('../../../hooks/useWifi', () => ({ useWifi: () => ({ radio: bar.fixture.wifiRadioState, networks: [], scanning: false, operation: null, lastError: null, ethernet: false, offForEthernet: false, blockedByEthernet: false }) }))
 vi.mock('../../../hooks/useVolume', () => ({ useVolume: () => ({ volume: 50, setVolume: () => {}, muted: false, toggleMute: () => {} }) }))
 vi.mock('../../../hooks/useMonitors', () => ({ useMonitors: () => ({ monitors: [], setBrightness: () => {} }) }))
 vi.mock('../../../hooks/useMediaSession', () => ({ useMediaSession: () => ({ ...bar.fixture.playback, control: () => {}, update: () => {} }) }))
@@ -109,7 +110,7 @@ function freshFixture(): BarFixture {
     microphone: { active: false, apps: [] },
     battery: { percent: 64, charging: false, onAcPower: false, hasBattery: true },
     bluetooth: CONNECTED_BLUETOOTH,
-    network: { signal: 55, connected: true, type: 'wifi', ssid: 'Home' },
+    network: { signal: 55, connected: true, type: 'wifi', ssid: 'Home', wifi: { connected: true, ssid: 'Home', signal: 55 } },
     wifiRadioState: 'on',
     playback: PLAYBACK,
     showVisualizer: true,
@@ -121,8 +122,8 @@ function freshFixture(): BarFixture {
 const statusFace = (darkText: boolean, over: Partial<Omit<StatusFaceProps, 'darkText'>> = {}) => (
   <StatusFace
     bluetooth={CONNECTED_BLUETOOTH}
-    network={{ signal: 55, connected: true, type: 'wifi' }}
-    radioOn
+    network={{ signal: 55, connected: true, type: 'wifi', ssid: 'Home', wifi: { connected: true, ssid: 'Home', signal: 55 } }}
+    wifiRadio="on"
     battery={{ percent: 64, charging: false, hasBattery: true }}
     darkText={darkText}
     {...over}
@@ -179,7 +180,7 @@ const PARITY_CASES: ParityCase[] = [
       fixture.wifiRadioState = 'off'
     },
     live: <StatusIndicator />,
-    face: (darkText) => statusFace(darkText, { radioOn: false }),
+    face: (darkText) => statusFace(darkText, { wifiRadio: 'off' }),
   },
   {
     name: 'StatusIndicator on a machine without a battery',
@@ -273,17 +274,13 @@ function faceMarkup(face: ReactElement | null) {
 
 beforeEach(() => {
   bar.fixture = freshFixture()
-  ;(window as unknown as { shell: unknown }).shell = {
-    network: {
-      wifiRadioGet: () => Promise.resolve({ success: true, state: bar.fixture.wifiRadioState }),
-      wifiScan: () => Promise.resolve([]),
-      onWifiScanUpdated: () => () => {},
-    },
-  }
+  ;(window as unknown as { shell: unknown }).shell = { network: {} }
+  ;(window as unknown as { screenshot: unknown }).screenshot = { onSaved: () => () => undefined }
 })
 
 afterEach(() => {
   delete (window as unknown as { shell?: unknown }).shell
+  delete (window as unknown as { screenshot?: unknown }).screenshot
 })
 
 describe.each(PARITY_CASES)('$name', ({ arrange, live, face }) => {

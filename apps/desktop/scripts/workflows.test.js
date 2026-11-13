@@ -131,6 +131,15 @@ describe('release workflow', () => {
     expect(buildJob.slice(stepIndex(buildJob, feedPublishStep) + 1)).not.toContain('- name: ')
   })
 
+  it('scans the installer with Microsoft Defender before it is kept or reaches the feed', () => {
+    const scanStep = 'Scan the installer with Microsoft Defender'
+    expect(stepIndex(release, 'Build installer')).toBeLessThan(stepIndex(release, scanStep))
+    expect(stepIndex(release, scanStep)).toBeLessThan(stepIndex(release, 'Keep the installer for the release'))
+    expect(stepIndex(release, scanStep)).toBeLessThan(stepIndex(release, feedPublishStep))
+    expect(stepBody(release, scanStep)).toContain('./scripts/scanInstaller.ps1 -InstallerDirectory release')
+    expect(stepBody(release, scanStep)).not.toContain('continue-on-error')
+  })
+
   it('replaces the installer artifact when the build job is re-run', () => {
     expect(stepBody(release, 'Keep the installer for the release')).toContain('overwrite: true')
   })
@@ -235,6 +244,18 @@ describe('nightly workflow', () => {
 
   it('skips the night when main has not moved', () => {
     expect(nightly).toContain('main has not changed since')
+  })
+
+  it('schedules catch-up runs off the top of the hour in case GitHub delays or drops one', () => {
+    const crons = [...nightly.matchAll(/^ {4}- cron: '(\S+) (\S+) \* \* \*'$/gm)]
+    expect(crons.length).toBeGreaterThan(1)
+    for (const [, minute] of crons) expect(minute).not.toBe('0')
+  })
+
+  it('lets a scheduled run cut only the first nightly of the day', () => {
+    const cutStep = stepBody(nightly, 'Cut the nightly pre-release')
+    expect(cutStep).toContain('if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "${VERSION##*.}" != "0" ]; then')
+    expect(cutStep.indexOf('GITHUB_EVENT_NAME')).toBeLessThan(cutStep.indexOf('gh release create'))
   })
 
   it('keeps a read-only token by default and writes only from the job that cuts the release', () => {

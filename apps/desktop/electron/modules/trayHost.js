@@ -1,7 +1,7 @@
 const { app } = require('electron')
 const koffi = require('koffi')
 const winFocus = require('./winFocus')
-const { iconHandleToDataUrl } = require('./iconHandle')
+const { renderIconPixels, encodeIconPixelsReusing } = require('./iconHandle')
 
 const user32 = koffi.load('user32.dll')
 const kernel32 = koffi.load('kernel32.dll')
@@ -151,8 +151,8 @@ function scheduleBroadcast() {
   }, 50)
 }
 
-function publicState() {
-  return [...icons.values()].map((r) => ({
+function publicIcon(r) {
+  return {
     id: r.id,
     hWnd: toNum(r.hWndRaw),
     uID: r.uID,
@@ -160,7 +160,16 @@ function publicState() {
     tooltip: r.tooltip,
     icon: r.iconUrl,
     version: r.version,
-  }))
+  }
+}
+
+function publicState() {
+  return [...icons.values()].map(publicIcon)
+}
+
+function samePublicIcon(a, b) {
+  if (!a || !b) return false
+  return Object.keys(a).every((field) => a[field] === b[field])
 }
 
 function computeId(guid, hWndRaw, uID) {
@@ -193,33 +202,41 @@ function handleTrayData(buf, cbData) {
   const id = computeId(guid, hWndRaw, uID)
 
   if (dwMessage === NIM_DELETE) {
-    icons.delete(id)
-    scheduleBroadcast()
+    if (icons.delete(id)) scheduleBroadcast()
     return
   }
 
-  let record = icons.get(id)
+  const previous = icons.get(id)
+  const publicBefore = previous ? publicIcon(previous) : null
+  const record = recordForMessage(previous, dwMessage, id, hWndRaw, uID, guid)
+  applyTrayMessage(record, dwMessage, uFlags, buf, base, O)
+  if (!samePublicIcon(publicBefore, publicIcon(record))) scheduleBroadcast()
+}
+
+function recordForMessage(previous, dwMessage, id, hWndRaw, uID, guid) {
+  let record = previous
   if (!record || dwMessage === NIM_ADD) {
-    record = { id, hWndRaw, uID, guid, tooltip: '', iconUrl: '', callbackMsg: 0, version: 0 }
+    record = { id, hWndRaw, uID, guid, tooltip: '', iconUrl: '', iconEncoding: previous?.iconEncoding ?? null, callbackMsg: 0, version: 0 }
     icons.set(id, record)
   }
   record.hWndRaw = hWndRaw
   record.uID = uID
   record.guid = guid
+  return record
+}
 
+function applyTrayMessage(record, dwMessage, uFlags, buf, base, O) {
   if (dwMessage === NIM_SETVERSION) {
     record.version = buf.readUInt32LE(base + O.uVersion)
-    scheduleBroadcast()
     return
   }
-
   if (uFlags & NIF_MESSAGE) record.callbackMsg = buf.readUInt32LE(base + O.uCallback)
   if (uFlags & NIF_TIP) record.tooltip = readWideString(buf, base + O.szTip, 128)
   if (uFlags & NIF_ICON) {
     const hIconRaw = O === OFF64 ? buf.readBigUInt64LE(base + O.hIcon) : BigInt(buf.readUInt32LE(base + O.hIcon))
-    record.iconUrl = iconHandleToDataUrl(hIconRaw, iconSize)
+    record.iconEncoding = encodeIconPixelsReusing(record.iconEncoding, renderIconPixels(hIconRaw, iconSize), iconSize)
+    record.iconUrl = record.iconEncoding.dataUrl
   }
-  scheduleBroadcast()
 }
 
 function trayWndProc(hwnd, msg, wParam, lParam) {

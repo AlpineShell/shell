@@ -1,8 +1,20 @@
-const { app, screen, clipboard, ClipboardItem } = require('electron')
+const { app, screen, clipboard, ClipboardItem, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { captureDisplay } = require('./displayCapture')
+const { disableWindowTransitions } = require('../windowTransitions')
+const winFocus = require('./winFocus')
+const { thumbnailSize, screenshotFileName, screenshotSavedEvent } = require('./screenshotSaved')
 
+const PARKED_X = -10000
+const PARKED_Y = -10000
+const PAINT_WAIT_MS = 250
+
+let toTopbars = null
+let markOverlayPainted = null
+let focusBeforeOverlay = 0
+let lastSaved = null
+let savedCount = 0
 let overlayWindow = null
 let overlayWindowFactory = null
 let overlayLoaded = null
@@ -26,7 +38,10 @@ function ensureOverlayWindow() {
   armRendererReady()
   overlayWindow = overlayWindowFactory()
   overlayLoaded = new Promise((resolve) => {
-    overlayWindow.webContents.once('did-finish-load', () => resolve())
+    overlayWindow.webContents.once('did-finish-load', () => {
+      keepOverlayShownOffScreen()
+      resolve()
+    })
   })
   overlayWindow.webContents.on('render-process-gone', () => armRendererReady())
   overlayWindow.webContents.on('did-start-loading', () => armRendererReady())
@@ -56,11 +71,45 @@ function resolvesWithinMs(promise, ms) {
   ])
 }
 
+function keepOverlayShownOffScreen() {
+  if (!overlayWindow || overlayWindow.isDestroyed() || active) return
+  disableWindowTransitions(overlayWindow)
+  overlayWindow.setIgnoreMouseEvents(true)
+  overlayWindow.setOpacity(0)
+  overlayWindow.setPosition(PARKED_X, PARKED_Y)
+  if (!overlayWindow.isVisible()) overlayWindow.showInactive()
+}
+
+function giveFocusBack() {
+  const previous = focusBeforeOverlay
+  focusBeforeOverlay = 0
+  if (previous) winFocus.forceForeground(previous)
+}
+
 function parkOverlay() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
   overlayWindow.setIgnoreMouseEvents(true)
-  overlayWindow.setBounds({ x: -10000, y: -10000, width: 1, height: 1 })
-  overlayWindow.hide()
+  overlayWindow.setOpacity(0)
+  overlayWindow.setPosition(PARKED_X, PARKED_Y)
+  giveFocusBack()
+}
+
+function overlayPainted() {
+  return new Promise((resolve) => {
+    const settle = () => {
+      if (markOverlayPainted === settle) markOverlayPainted = null
+      resolve()
+    }
+    markOverlayPainted = settle
+    setTimeout(settle, PAINT_WAIT_MS)
+  })
+}
+
+function sizeParkedOverlayFor(display) {
+  const { width, height } = display.bounds
+  const parked = overlayWindow.getBounds()
+  if (parked.width === width && parked.height === height) return
+  overlayWindow.setBounds({ x: PARKED_X, y: PARKED_Y, width, height })
 }
 
 async function showOverlay() {
@@ -71,9 +120,11 @@ async function showOverlay() {
     ensureOverlayWindow()
     if (!overlayWindow || overlayWindow.isDestroyed()) return
 
+    focusBeforeOverlay = winFocus.getForegroundWindow()
     const cursor = screen.getCursorScreenPoint()
     const display = screen.getDisplayNearestPoint(cursor)
     const { width, height } = display.bounds
+    sizeParkedOverlayFor(display)
 
     const frozenFrame = captureDisplay(display)
     if (!frozenFrame || frozenFrame.isEmpty()) {
@@ -98,13 +149,21 @@ async function showOverlay() {
     capturedImage = frozenFrame
 
     const { x, y } = display.bounds
+    overlayWindow.setOpacity(0)
+    overlayWindow.setBounds({ x, y, width, height })
+    overlayWindow.setAlwaysOnTop(true, 'screen-saver')
+    if (!overlayWindow.isVisible()) {
+      disableWindowTransitions(overlayWindow)
+      overlayWindow.showInactive()
+    }
+    const painted = overlayPainted()
     overlayWindow.webContents.send('screenshot/show', {
       image: `data:image/jpeg;base64,${frozenFrame.toJPEG(90).toString('base64')}`,
     })
+    await painted
+    if (!active || !overlayWindow || overlayWindow.isDestroyed()) return
+    overlayWindow.setOpacity(1)
     overlayWindow.setIgnoreMouseEvents(false)
-    overlayWindow.setBounds({ x, y, width, height })
-    overlayWindow.setAlwaysOnTop(true, 'screen-saver')
-    overlayWindow.show()
     overlayWindow.focus()
   } catch (err) {
     console.error('[screenshot] Failed to show overlay:', err)
@@ -148,29 +207,58 @@ function cropAndSave(region) {
   const cropped = capturedImage.crop({ x: sx, y: sy, width: sw, height: sh })
   const pngBuffer = cropped.toPNG()
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19)
-  const filename = `Screenshot_${timestamp}.png`
-  const filepath = path.join(getScreenshotsFolder(), filename)
+  const folder = getScreenshotsFolder()
+  const filename = screenshotFileName(new Date(), (name) => fs.existsSync(path.join(folder, name)))
+  const filepath = path.join(folder, filename)
   fs.writeFileSync(filepath, pngBuffer)
 
   copyPngToClipboard(pngBuffer)
 
   console.log(`[screenshot] Saved: ${filepath}`)
+  return { image: cropped, displayId: capturedDisplay.id, filepath }
+}
+
+function thumbnailDataUrl(image) {
+  const { width, height } = image.getSize()
+  const size = thumbnailSize(width, height)
+  return size ? image.resize({ ...size, quality: 'good' }).toDataURL() : null
+}
+
+function announceSaved({ image, displayId, filepath }) {
+  lastSaved = { id: ++savedCount, filepath }
+  if (!toTopbars) return
+  try {
+    toTopbars('screenshot/saved', screenshotSavedEvent(lastSaved.id, thumbnailDataUrl(image), filepath, displayId))
+  } catch (err) {
+    console.error('[screenshot] Failed to announce the capture:', err)
+  }
+}
+
+function revealSaved(id) {
+  if (!lastSaved || lastSaved.id !== id || !fs.existsSync(lastSaved.filepath)) return { ok: false }
+  shell.showItemInFolder(lastSaved.filepath)
+  return { ok: true }
 }
 
 module.exports = {
   handlers: {
     'screenshot/region-selected': (_event, region) => {
+      let saved = null
       try {
-        cropAndSave(region)
+        saved = cropAndSave(region)
       } catch (err) {
         console.error('[screenshot] Failed to save:', err)
       } finally {
         hideOverlay()
       }
+      if (saved) announceSaved(saved)
     },
     'screenshot/cancel': () => {
       hideOverlay()
+    },
+    'screenshot/reveal': (_event, id) => revealSaved(id),
+    'screenshot/painted': () => {
+      if (markOverlayPainted) markOverlayPainted()
     },
     'screenshot/overlay-ready': () => {
       if (rendererReadyResolve) rendererReadyResolve()
@@ -186,5 +274,7 @@ module.exports = {
   showOverlay,
   hideOverlay,
 
-  start() {},
+  start(_broadcast, broadcastToTopbars) {
+    toTopbars = typeof broadcastToTopbars === 'function' ? broadcastToTopbars : null
+  },
 }

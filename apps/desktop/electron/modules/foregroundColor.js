@@ -32,6 +32,7 @@ const sampledHwndPerDisplay = new Map()
 let startupIgnoreHwnd = null
 let displayRemovedListener = null
 let stopPolling = null
+let pollingAllowed = false
 let unsampledWindowsProvider = null
 let sampling = false
 
@@ -125,6 +126,22 @@ function clearAllDisplays(broadcast) {
   for (const displayId of displayIds) clearDisplay(displayId, broadcast)
 }
 
+function startPolling() {
+  if (stopPolling || !pollingAllowed || !adaptToApps) return
+  stopPolling = batterySaver.startAdaptivePolling(() => update(adaptBroadcast), POLL_INTERVAL_MS, BATTERY_SAVER_POLL_INTERVAL_MS)
+}
+
+function stopPollingTimer() {
+  if (!stopPolling) return
+  stopPolling()
+  stopPolling = null
+}
+
+function pollOnlyWhileAdapting() {
+  if (adaptToApps) startPolling()
+  else stopPollingTimer()
+}
+
 function setAdaptToApps(value) {
   adaptToApps = value === true
   saveAdaptToApps()
@@ -132,6 +149,7 @@ function setAdaptToApps(value) {
     if (!adaptToApps) clearAllDisplays(adaptBroadcast)
     adaptBroadcast('topbar/fg-color-adapt-changed', adaptToApps)
   }
+  pollOnlyWhileAdapting()
   return adaptToApps
 }
 
@@ -215,10 +233,8 @@ function stop() {
     screen.removeListener('display-removed', displayRemovedListener)
     displayRemovedListener = null
   }
-  if (stopPolling) {
-    stopPolling()
-    stopPolling = null
-  }
+  pollingAllowed = false
+  stopPollingTimer()
 }
 
 module.exports = {
@@ -244,7 +260,8 @@ module.exports = {
     if (initial && IsZoomed(initial)) startupIgnoreHwnd = initial
     displayRemovedListener = (_event, removed) => clearDisplay(removed.id, broadcast)
     screen.on('display-removed', displayRemovedListener)
-    stopPolling = batterySaver.startAdaptivePolling(() => update(broadcast), POLL_INTERVAL_MS, BATTERY_SAVER_POLL_INTERVAL_MS)
+    pollingAllowed = true
+    startPolling()
     app.on('will-quit', stop)
   },
 }

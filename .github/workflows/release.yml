@@ -53,7 +53,7 @@ jobs:
             echo "PUBLISH_TO_FEED=true" >> "$GITHUB_ENV"
           else
             echo "::error::Tag '${GITHUB_REF_NAME}' is neither a stable MAJOR.MINOR.PATCH version, the date-numbered bridge 0.YYYYMMDD.N, nor a nightly MAJOR.MINOR.PATCH-nightly.YYYYMMDD.N version (got '${VERSION}')."
-            echo "::error::electron-updater compares with semver, so a stable tag must be greater than the last stable release, e.g. v0.1.0 then v0.1.1."
+            echo "::error::electron-updater compares with semver, so a stable tag must be greater than the last stable release, e.g. v1.0.0 then v1.0.1."
             exit 1
           fi
 
@@ -195,6 +195,11 @@ jobs:
           foreach ($file in $notSigned) { Write-Output "::error::$($file.FullName) does not carry a valid signature." }
           if ($notSigned.Count -gt 0) { exit 1 }
           Write-Output "$($files.Count) files carry a valid signature."
+
+      - name: Scan the installer with Microsoft Defender
+        working-directory: apps/desktop
+        shell: pwsh
+        run: ./scripts/scanInstaller.ps1 -InstallerDirectory release
 
       - name: Keep the installer for the release
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
