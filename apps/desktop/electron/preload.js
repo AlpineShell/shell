@@ -137,6 +137,9 @@ contextBridge.exposeInMainWorld('topbar', {
 
 contextBridge.exposeInMainWorld('plugins', {
   list: () => ipcRenderer.invoke('plugins/list'),
+  logs: (id) => ipcRenderer.invoke('plugins/logs', id),
+  clearLogs: (id) => ipcRenderer.invoke('plugins/clear-logs', id),
+  reportWidgetError: (report) => ipcRenderer.invoke('plugins/report-widget-error', report),
   dir: () => ipcRenderer.invoke('plugins/dir'),
   openFolder: () => ipcRenderer.invoke('plugins/open-folder'),
   reload: () => ipcRenderer.invoke('plugins/reload'),
@@ -174,6 +177,11 @@ contextBridge.exposeInMainWorld('plugins', {
     const handler = () => callback()
     ipcRenderer.on('plugins/reload', handler)
     return () => ipcRenderer.removeListener('plugins/reload', handler)
+  },
+  onRuntimeError: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('plugins/runtime-error', handler)
+    return () => ipcRenderer.removeListener('plugins/runtime-error', handler)
   },
   settings: {
     get: (pluginId) => ipcRenderer.invoke('plugins/settings-get', pluginId),

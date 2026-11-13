@@ -8,6 +8,7 @@ import {
   Puzzle,
   RefreshCw,
   RotateCw,
+  ScrollText,
   Settings2,
   ShieldCheck,
   Store,
@@ -18,6 +19,7 @@ import { settingsPage } from '../../settings/registry'
 import { pluginLogoUrl } from '../../plugins/pluginAssets'
 import { pluginSettingsPage } from '../../plugins/pluginSettingsPages'
 import GithubInstallPanel from './githubInstallPanel'
+import PluginLogDialog from './pluginLogDialog'
 
 type PluginTab = 'installed' | 'browse'
 
@@ -56,11 +58,16 @@ function versionLabel(version?: string | null): string | null {
   return version && version !== '0.0.0' ? `v${version}` : null
 }
 
-function RowNotice({ message }: { message: string }) {
+function RowNotice({ message, action }: { message: string; action?: { label: string; onClick: () => void } }) {
   return (
     <div className="flex items-center gap-2 border-t border-line-hairline bg-warning/10 px-3 py-2 text-xs text-warning">
       <AlertTriangle size={12} className="shrink-0" />
-      {message}
+      <span className="flex-1">{message}</span>
+      {action && (
+        <button type="button" onClick={action.onClick} className="focus-ring cursor-pointer rounded-sm underline underline-offset-2">
+          {action.label}
+        </button>
+      )}
     </div>
   )
 }
@@ -89,6 +96,8 @@ function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onU
   const revoked = plugin.revoked ?? null
   const needsTrust = !revoked && Boolean(plugin.needsTrust) && loadsByManifest(plugin)
   const switchable = !revoked && !needsTrust
+  const [logOpen, setLogOpen] = useState(false)
+  const openLog = () => setLogOpen(true)
 
   return (
     <li>
@@ -106,6 +115,9 @@ function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onU
         detail={subtitle || plugin.id}
         actions={
           <>
+            <IconButton label={`${plugin.name} log`} onClick={openLog}>
+              <ScrollText size={16} />
+            </IconButton>
             {settingsRoute && (
               <IconButton label={`${plugin.name} settings`} onClick={() => onNavigate(settingsRoute)}>
                 <Settings2 size={16} />
@@ -136,8 +148,10 @@ function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onU
         ) : (
           !plugin.loadable && <RowNotice message={plugin.compat?.reason || (plugin.errors[0] ?? 'Cannot load this plugin.')} />
         )}
+        {plugin.runtimeError && <RowNotice message={plugin.runtimeError} action={{ label: 'View log', onClick: openLog }} />}
         {failure && <RowNotice message={failure} />}
       </ListRow>
+      <PluginLogDialog plugin={plugin} open={logOpen} onOpenChange={setLogOpen} />
     </li>
   )
 }
@@ -240,6 +254,8 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
   }, [refreshInstalled, loadBrowse])
 
   useEffect(() => window.plugins.onReload(() => void refreshInstalled()), [refreshInstalled])
+
+  useEffect(() => window.plugins.onRuntimeError(() => void refreshInstalled()), [refreshInstalled])
 
   const install = useCallback(
     async (plugin: MarketplacePlugin) => {

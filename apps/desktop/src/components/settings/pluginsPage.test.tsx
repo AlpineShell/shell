@@ -39,6 +39,8 @@ const RELEASE: GithubPluginRelease = {
 }
 
 let deliverDeepInstall: (request: DeepInstallRequest) => void = () => {}
+let deliverRuntimeError: () => void = () => {}
+let logLines: PluginLogLine[] = []
 
 function installBridges(records: PluginRecord[], marketplace: MarketplaceBridges = {}) {
   Object.assign(window, {
@@ -49,6 +51,12 @@ function installBridges(records: PluginRecord[], marketplace: MarketplaceBridges
       setEnabled: vi.fn(),
       trust: vi.fn().mockResolvedValue(true),
       onReload: vi.fn(() => () => {}),
+      onRuntimeError: vi.fn((callback: () => void) => {
+        deliverRuntimeError = callback
+        return () => {}
+      }),
+      logs: vi.fn().mockResolvedValue(logLines),
+      clearLogs: vi.fn().mockResolvedValue(undefined),
       github: {
         resolve: vi.fn(marketplace.githubResolve ?? (async () => ({ ok: true, token: 'confirm-token', release: RELEASE }))),
         install: vi.fn(async () => ({ ok: true, id: 'com.octo.notes', version: '1.2.0', repository: 'octo/notes', tag: 'v1.2.0', commit: RELEASE.commit, sha256: 'f'.repeat(64) })),
@@ -79,6 +87,7 @@ async function openPage(records: PluginRecord[], marketplace: MarketplaceBridges
 
 afterEach(() => {
   delete (window as unknown as { plugins?: unknown }).plugins
+  logLines = []
 })
 
 describe('the settings button on the Plugins page', () => {
@@ -213,5 +222,26 @@ describe('a plugin from a community publisher', () => {
     await openPage([], { listed: [{ ...NOTES, publisher: { slug: 'octo', name: 'Octo Labs' }, community: true }] })
     fireEvent.click(screen.getByRole('radio', { name: /Browse/ }))
     expect(screen.getByText(/by Octo Labs/)).toBeTruthy()
+  })
+})
+
+describe('a plugin that stopped with an error', () => {
+  const STOPPED = 'The widget stopped with an error.'
+
+  it('says so on its row and opens its log from there', async () => {
+    logLines = [{ at: 0, source: 'widget', level: 'error', message: 'forecast is undefined' }]
+    await openPage([ridgePluginRecord({ runtimeError: STOPPED })])
+    expect(screen.getByText(STOPPED)).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'View log' })))
+    expect(window.plugins.logs).toHaveBeenCalledWith('com.example.weather')
+    expect(screen.getByText('forecast is undefined')).toBeTruthy()
+  })
+
+  it('shows the error as soon as the main process reports one', async () => {
+    await openPage([ridgePluginRecord()])
+    expect(screen.queryByText(STOPPED)).toBeNull()
+    vi.mocked(window.plugins.list).mockResolvedValue([ridgePluginRecord({ runtimeError: STOPPED })])
+    await act(async () => deliverRuntimeError())
+    expect(screen.getByText(STOPPED)).toBeTruthy()
   })
 })

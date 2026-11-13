@@ -39,6 +39,7 @@ nodeRequire.cache[licenceConfigModuleId] = {
 
 const plugins = nodeRequire('./plugins.js')
 const { setTrustedWindowsAccessor, SETTINGS_WINDOW, UNTRUSTED_SENDER } = nodeRequire('../trustedSenders.js')
+const { pluginLogs, RUNTIME_ERROR_SUMMARIES } = nodeRequire('../pluginLogStore.js')
 
 const PLUGIN_ID = 'com.example.weather'
 const pluginDir = () => path.join(userDataDir, 'plugins', PLUGIN_ID)
@@ -329,5 +330,42 @@ describe('who may install, remove or switch plugins', () => {
     }
     expect(fs.existsSync(pluginDir())).toBe(true)
     expect(plugins.handlers['plugins/set-enabled'](fromSettings, { id: PLUGIN_ID, enabled: true })).toBe(true)
+  })
+})
+
+describe('a plugin that stopped with an error', () => {
+  const runtimeErrorInList = () => plugins.handlers['plugins/list']().find((record) => record.id === PLUGIN_ID).runtimeError
+
+  afterEach(() => {
+    pluginLogs.forget(PLUGIN_ID)
+  })
+
+  it('carries the error in the list the settings window reads', () => {
+    expect(runtimeErrorInList()).toBeNull()
+    pluginLogs.setRuntimeError(PLUGIN_ID, RUNTIME_ERROR_SUMMARIES.widget)
+    expect(runtimeErrorInList()).toBe('The widget stopped with an error.')
+  })
+
+  it('loses it when the plugins are reloaded', () => {
+    pluginLogs.setRuntimeError(PLUGIN_ID, RUNTIME_ERROR_SUMMARIES.backend)
+    expect(plugins.handlers['plugins/reload']()).toBe(true)
+    expect(runtimeErrorInList()).toBeNull()
+  })
+
+  it('loses it when it is turned off or on', () => {
+    pluginLogs.setRuntimeError(PLUGIN_ID, RUNTIME_ERROR_SUMMARIES.backend)
+    plugins.handlers['plugins/set-enabled'](fromSettings, { id: PLUGIN_ID, enabled: false })
+    expect(runtimeErrorInList()).toBeNull()
+    pluginLogs.setRuntimeError(PLUGIN_ID, RUNTIME_ERROR_SUMMARIES.backend)
+    plugins.handlers['plugins/set-enabled'](fromSettings, { id: PLUGIN_ID, enabled: true })
+    expect(runtimeErrorInList()).toBeNull()
+  })
+
+  it('loses the error and its log when it is uninstalled', async () => {
+    pluginLogs.add(PLUGIN_ID, { source: 'backend', level: 'error', message: 'boom' })
+    pluginLogs.setRuntimeError(PLUGIN_ID, RUNTIME_ERROR_SUMMARIES.backend)
+    await plugins.handlers['plugins/marketplace-uninstall'](fromSettings, PLUGIN_ID)
+    expect(pluginLogs.runtimeError(PLUGIN_ID)).toBeNull()
+    expect(pluginLogs.list(PLUGIN_ID)).toEqual([])
   })
 })
