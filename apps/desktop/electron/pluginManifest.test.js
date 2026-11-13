@@ -264,3 +264,25 @@ describe('contributes.settingsPages', () => {
     expect(record.valid).toBe(false)
   })
 })
+
+describe('compatibility with this app', () => {
+  it('loads a plugin made for the API this app supports', () => {
+    const record = write({ ...baseManifest(), apiVersion: 1, engines: { alpineShell: '>=0.1.0' } })
+    expect(record.compat).toEqual({ apiOk: true, engineOk: true, reason: null })
+  })
+
+  it('says a plugin made for a newer API needs a newer Alpine', () => {
+    const record = write({ ...baseManifest(), apiVersion: 2 })
+    expect(record.compat).toEqual({ apiOk: false, engineOk: true, reason: 'requires a newer Alpine' })
+  })
+
+  it('says a plugin made for an API this app no longer supports needs an update of its own', () => {
+    const record = write({ ...baseManifest(), apiVersion: 0 })
+    expect(record.compat).toEqual({ apiOk: false, engineOk: true, reason: 'made for an older Alpine; wait for an update to the plugin' })
+  })
+
+  it('names the Alpine versions a plugin asks for when this app is not one of them', () => {
+    const record = write({ ...baseManifest(), engines: { alpineShell: '>=2.0.0' } })
+    expect(record.compat).toEqual({ apiOk: true, engineOk: false, reason: 'requires Alpine >=2.0.0' })
+  })
+})

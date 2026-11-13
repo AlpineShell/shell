@@ -290,6 +290,7 @@ function installFromStore(payload) {
   if (existing && !existing.updatesFromStore) return Promise.resolve({ ok: false, error: 'installed-outside-store' })
   return marketplace.install(payload, {
     pluginsDir: getPluginsDir(),
+    appVersion: app.getVersion(),
     onChange: () => triggerReload(),
     onInstalled: ({ id: installedId, sha256 }) => trustStore().set(installedId, storeTrust({ sha256 })),
     withPluginStopped: (pluginId, work) => pluginStopper(pluginId, work),
@@ -386,8 +387,8 @@ module.exports = {
     'plugins/manifest': (_event, id) => listPlugins().find((p) => p.id === id) || null,
     'plugins/readme': (_event, id) => readPluginReadme(id),
     'plugins/marketplace-base': () => marketplace.getBase(),
-    'plugins/marketplace-list': () => marketplace.list(),
-    'plugins/marketplace-detail': (_event, id) => marketplace.detail(id),
+    'plugins/marketplace-list': () => marketplace.list({ appVersion: app.getVersion() }),
+    'plugins/marketplace-detail': (_event, id) => marketplace.detail(id, { appVersion: app.getVersion() }),
     'plugins/marketplace-open-web': (_event, id) => {
       if (typeof id !== 'string' || !SAFE_ID.test(id)) return false
       return shell.openExternal(`${MARKETPLACE_SITE_BASE}/plugins/${encodeURIComponent(id)}`)

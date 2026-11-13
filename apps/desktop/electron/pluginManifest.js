@@ -2,12 +2,11 @@ const fs = require('fs')
 const path = require('path')
 const {
   PLUGIN_API_VERSION,
-  isSupportedApiVersion,
-  satisfiesRange,
   MARKETPLACE_CATEGORIES,
   isSemver,
   validatePluginSettings,
 } = require('@alpine/plugin-sdk')
+const { pluginCompatibility } = require('./pluginCompat')
 
 const CATEGORY_SET = new Set(MARKETPLACE_CATEGORIES)
 const CONTRIBUTION_KEYS = [
@@ -306,13 +305,7 @@ function parseManifest(pluginDir, folderName, options) {
     else apiVersion = raw.apiVersion
   }
 
-  const compat = { apiOk: raw.apiVersion == null || isSupportedApiVersion(apiVersion), engineOk: true, reason: null }
-  const range = raw.engines && raw.engines.alpineShell
-  if (range && appVersion && !satisfiesRange(appVersion, range)) {
-    compat.engineOk = false
-    compat.reason = `requires Alpine ${range}`
-  }
-  if (!compat.apiOk) compat.reason = 'requires a newer Alpine'
+  const compat = pluginCompatibility({ apiVersion: raw.apiVersion == null ? null : apiVersion, engines: raw.engines }, appVersion)
 
   const renderer = raw.renderer != null ? raw.renderer : 'index.js'
   const rendererPath = confinedFile(realBase, renderer)

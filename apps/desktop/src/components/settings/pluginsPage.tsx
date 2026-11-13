@@ -30,7 +30,12 @@ const OUTSIDE_STORE_MESSAGE = 'Installed from outside the store. Uninstall it fi
 const TRUST_FAILED_MESSAGE = "Couldn't turn it on. Try again."
 const UNTRUSTED_FOLDER_MESSAGE = 'This plugin is not from the Alpine Shell store. Only turn it on if you trust who made it.'
 
-function installFailureMessage(error: string): string {
+function incompatibleMessage(reason: string): string {
+  return `Can't install: ${reason}.`
+}
+
+function installFailureMessage(error: string, reason: string | null): string {
+  if (error === 'incompatible' && reason) return incompatibleMessage(reason)
   if (error === 'unverified') return UNVERIFIED_MESSAGE
   if (error === 'installed-outside-store') return OUTSIDE_STORE_MESSAGE
   return INSTALL_FAILED_MESSAGE
@@ -164,6 +169,7 @@ type BrowseState =
 function BrowseCard({ plugin, installedVersion, updatesFromStore, installing, requested, failure, onInstall }: BrowsePluginCardProps) {
   const installed = installedVersion !== null
   const canUpdate = installed && updatesFromStore && semverGt(plugin.version, installedVersion)
+  const incompatibility = !installed || canUpdate ? plugin.compat.reason : null
   const anchor = useRef<HTMLLIElement>(null)
 
   useEffect(() => {
@@ -192,9 +198,13 @@ function BrowseCard({ plugin, installedVersion, updatesFromStore, installing, re
               <Badge>
                 <Spinner size={13} /> Installing…
               </Badge>
-            ) : installed && !canUpdate ? (
+            ) : installed && (!canUpdate || incompatibility) ? (
               <Badge tone="success">
                 <ShieldCheck size={13} /> Installed
+              </Badge>
+            ) : incompatibility ? (
+              <Badge tone="warning">
+                <AlertTriangle size={13} /> Not compatible
               </Badge>
             ) : (
               <Button shape="square" size="sm" onClick={() => onInstall(plugin)} icon={<Download size={13} />}>
@@ -204,6 +214,7 @@ function BrowseCard({ plugin, installedVersion, updatesFromStore, installing, re
           </>
         }
       >
+        {incompatibility && <RowNotice message={incompatibleMessage(incompatibility)} />}
         {failure && <RowNotice message={failure} />}
       </ListRow>
     </li>
@@ -271,7 +282,7 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
         return
       }
       console.error(`[plugins] install ${plugin.id} failed:`, res.error, res.detail)
-      recordFailure(plugin.id, installFailureMessage(res.error))
+      recordFailure(plugin.id, installFailureMessage(res.error, res.reason ?? null))
     },
     [installingId, recordFailure, refreshInstalled],
   )
