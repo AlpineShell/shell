@@ -750,6 +750,7 @@ declare global {
     revoked?: { reason: string } | null
     origin?: PluginOrigin | null
     updatesFromStore?: boolean
+    runtimeError?: string | null
   }
 
   type PluginSource = 'preset' | 'store' | 'github' | 'folder'
@@ -796,6 +797,25 @@ declare global {
   interface PluginTrustNoticeProps {
     plugin: PluginRecord
     onTrust: (plugin: PluginRecord) => void
+  }
+
+  interface PluginLogLine {
+    at: number
+    source: 'backend' | 'widget' | 'command' | 'settings'
+    level: 'info' | 'error'
+    message: string
+  }
+
+  interface PluginWidgetErrorReport {
+    id: string
+    message: string
+    stack?: string
+  }
+
+  interface PluginLogDialogProps {
+    plugin: PluginRecord
+    open: boolean
+    onOpenChange: (open: boolean) => void
   }
 
   type PluginListItem = PluginRecord
@@ -2064,6 +2084,9 @@ declare global {
     }
     plugins: {
       list: () => Promise<PluginRecord[]>
+      logs: (id: string) => Promise<PluginLogLine[]>
+      clearLogs: (id: string) => Promise<void>
+      reportWidgetError: (report: PluginWidgetErrorReport) => Promise<boolean>
       dir: () => Promise<string>
       openFolder: () => Promise<void>
       reload: () => Promise<boolean>
@@ -2088,6 +2111,7 @@ declare global {
       getData: <T = unknown>(channel: string) => Promise<T | null>
       onData: <T = unknown>(channel: string, callback: (data: T) => void) => () => void
       onReload: (callback: () => void) => () => void
+      onRuntimeError: (callback: () => void) => () => void
       settings: {
         get: (pluginId: string) => Promise<PluginSettingValues>
         set: (pluginId: string, key: string, value: PluginSettingValue) => Promise<PluginSettingWriteResult>

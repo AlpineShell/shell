@@ -21,6 +21,7 @@ const {
 } = require('../pluginTrust')
 const { REVOCATIONS_CACHE_FILE_NAME, REVOCATIONS_KEY, findRevocation, createRevocationWatcher } = require('../pluginRevocations')
 const { createGithubInstaller } = require('../githubPluginInstall')
+const { pluginLogs, withRuntimeError } = require('../pluginLogStore')
 
 const PLUGINS_DIR_NAME = 'plugins'
 const PLUGIN_DATA_DIR_NAME = 'plugin-data'
@@ -305,7 +306,10 @@ async function uninstallPlugin(id) {
         removePluginData(pluginId)
       }),
   })
-  if (result.ok) trustStore().remove(id)
+  if (result.ok) {
+    trustStore().remove(id)
+    pluginLogs.forget(id)
+  }
   return result
 }
 
@@ -351,6 +355,17 @@ function setEnabled(id, enabled) {
   if (enabled) disabled.delete(id)
   else disabled.add(id)
   writeDisabledIds()
+  pluginLogs.clearRuntimeError(id)
+  triggerReload()
+  return true
+}
+
+function listPluginsWithRuntimeErrors() {
+  return listPlugins().map((record) => withRuntimeError(record, pluginLogs))
+}
+
+function reloadAllPlugins() {
+  pluginLogs.clearAllRuntimeErrors()
   triggerReload()
   return true
 }
@@ -361,16 +376,13 @@ function mimeFor(extension) {
 
 module.exports = {
   handlers: {
-    'plugins/list': () => listPlugins(),
+    'plugins/list': () => listPluginsWithRuntimeErrors(),
     'plugins/dir': () => getPluginsDir(),
     'plugins/open-folder': () => {
       ensurePluginsDir()
       return shell.openPath(getPluginsDir())
     },
-    'plugins/reload': () => {
-      triggerReload()
-      return true
-    },
+    'plugins/reload': () => reloadAllPlugins(),
     'plugins/manifest': (_event, id) => listPlugins().find((p) => p.id === id) || null,
     'plugins/readme': (_event, id) => readPluginReadme(id),
     'plugins/marketplace-base': () => marketplace.getBase(),

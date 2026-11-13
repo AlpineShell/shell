@@ -1,6 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const { isValidPluginSettingValue } = require('@alpine/plugin-sdk')
+const { pluginLogs } = require('../pluginLogStore')
 
 const STORE_FILE = 'plugin-settings.json'
 const CHANGED_CHANNEL = 'plugins/settings-changed'
@@ -87,17 +88,28 @@ function notifyChanged(pluginId, values) {
   }
 }
 
+function settingValueText(value) {
+  return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
+function logChangedValue(pluginId, key, previous, value) {
+  if (Object.is(previous, value)) return
+  pluginLogs.add(pluginId, { source: 'settings', level: 'info', message: `${key} changed to ${settingValueText(value)}` })
+}
+
 function setValue(pluginId, key, value) {
   if (typeof pluginId !== 'string' || !pluginId) return { ok: false, error: 'No plugin was named.' }
   const settings = declaredSettings(pluginId)
   const setting = settings.find((candidate) => candidate.key === key)
   if (!setting) return { ok: false, error: 'This plugin has no such setting.' }
   if (!isValidPluginSettingValue(setting, value)) return { ok: false, error: 'That value is not one this setting takes.' }
+  const previous = resolveValues(settings, storedValues(pluginId))[key]
   const pluginValues = { ...storedValues(pluginId), [key]: value }
   const next = { ...currentStore(), [pluginId]: pluginValues }
   if (!writeStore(next)) return { ok: false, error: 'Alpine could not save that setting.' }
   storedByPlugin = next
   const values = resolveValues(settings, pluginValues)
+  logChangedValue(pluginId, key, previous, value)
   notifyChanged(pluginId, values)
   return { ok: true, values }
 }
