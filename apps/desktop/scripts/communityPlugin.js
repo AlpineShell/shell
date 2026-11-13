@@ -3,7 +3,9 @@ const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { parseArgs } = require('node:util')
+const { CONTRIBUTION_KEYS } = require('../electron/pluginManifest')
 const { extractZip } = require('../electron/pluginZip')
+const { assertAppLoadsPlugin } = require('./pluginAppCheck')
 const { packBundle, readIgnorePatterns, sha256 } = require('./pluginBundle')
 const { postCallback, reportFailure } = require('./pluginCallback')
 const { readManifestFile, assertPluginId, assertPluginVersion } = require('./pluginManifestFile')
@@ -20,6 +22,8 @@ const REVOCATIONS_KEY = 'plugins/revoked.json'
 const REVOCATIONS_VERSION = 1
 const REVOCATIONS_TIMEOUT_MS = 15000
 const PACKAGE_MANAGERS = new Set(['bun', 'npm'])
+const SHELL_SAFE_ARGUMENT = /^[A-Za-z0-9@._\/:=-]+$/
+const CONTRIBUTION_FIELDS = new Set(['settings', ...CONTRIBUTION_KEYS])
 const SUBMISSION_ID = /^[A-Za-z0-9_-]{1,128}$/
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 const COMMIT_SHA = /^[0-9a-f]{40}$/
@@ -28,12 +32,23 @@ const FAILURE_STAGES = new Set(['build', 'publish', 'revoke'])
 
 const stagingKey = (submissionId) => `plugins-staging/${submissionId}.alpineplugin`
 
+function needsShell(command) {
+  return process.platform === 'win32' && PACKAGE_MANAGERS.has(command)
+}
+
+function shellCommandLine(command, args) {
+  const unsafe = [command, ...args].find((part) => !SHELL_SAFE_ARGUMENT.test(part))
+  if (unsafe !== undefined) throw new Error(`Refusing to pass ${JSON.stringify(unsafe)} through the shell`)
+  return [command, ...args].join(' ')
+}
+
+function spawnCommand(command, args, options) {
+  if (needsShell(command)) return spawnSync(shellCommandLine(command, args), { ...options, shell: true })
+  return spawnSync(command, args, options)
+}
+
 function runCommand(command, args, cwd) {
-  const result = spawnSync(command, args, {
-    cwd,
-    stdio: 'inherit',
-    shell: process.platform === 'win32' && PACKAGE_MANAGERS.has(command),
-  })
+  const result = spawnCommand(command, args, { cwd, stdio: 'inherit' })
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}`)
 }
@@ -68,11 +83,24 @@ function runPluginBuild(checkoutDir, run) {
   run(packageManager, ['run', 'build'], checkoutDir)
 }
 
+function unknownFieldProblem(field) {
+  if (CONTRIBUTION_FIELDS.has(field)) return `"${field}" is not a top-level field, it belongs under "contributes"`
+  return `"${field}" is not a plugin.json field`
+}
+
+function assertKnownManifestFields(manifest) {
+  const { PLUGIN_MANIFEST_FIELDS } = require('@alpine/plugin-sdk')
+  const known = new Set(PLUGIN_MANIFEST_FIELDS)
+  const unknown = Object.keys(manifest).filter((field) => !known.has(field))
+  if (unknown.length > 0) throw new Error(`plugin.json is not valid: ${unknown.map(unknownFieldProblem).join('; ')}`)
+}
+
 function validateCommunityManifest(manifest) {
   const { isValidId, validateManifestShape } = require('@alpine/plugin-sdk')
   if (!manifest || typeof manifest !== 'object' || !isValidId(manifest.id)) {
-    throw new Error('plugin.json needs an "id" in lowercase reverse-DNS form, such as com.example.weather')
+    throw new Error(`plugin.json needs an "id" that is your developer organisation's slug, a dot and a name, such as example-labs.hello`)
   }
+  assertKnownManifestFields(manifest)
   const result = validateManifestShape(manifest)
   if (!result.ok) {
     const issues = result.issues.map((issue) => `${issue.path || 'plugin.json'}: ${issue.message}`)
@@ -96,6 +124,7 @@ async function build({ dir, out }, deps) {
   validateCommunityManifest(manifest)
   const { bundle, files } = packBundle(checkoutDir, [...COMMUNITY_IGNORES, ...readIgnorePatterns(checkoutDir)])
   assertBundleSize(bundle.length)
+  await withExtractedBundle(bundle, deps.tmpdir(), (bundleDir) => assertAppLoadsPlugin(bundleDir, manifest.id))
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(path.join(outDir, BUNDLE_FILE), bundle)
   writeJson(path.join(outDir, MANIFEST_FILE), manifest)

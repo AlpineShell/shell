@@ -14,7 +14,9 @@ const VERSION = '1.2.0'
 const SUBMISSION = 'sub_123'
 const CALLBACK = 'https://auth.example.test/internal/plugin-builds/sub_123'
 const TOKEN = 'test-callback-token'
-const MANIFEST = { id: PLUGIN_ID, name: 'Weather', version: VERSION, apiVersion: 1, main: 'main.js', verified: true }
+const MANIFEST = { id: PLUGIN_ID, name: 'Weather', version: VERSION, apiVersion: 1, main: 'main.js' }
+const RENDERER = 'export default function Weather() {}'
+const PLUGIN_FILES = { 'plugin.json': JSON.stringify(MANIFEST), 'index.js': RENDERER, 'main.js': 'module.exports = {}' }
 
 let workDir = ''
 let tmpRoot = ''
@@ -36,6 +38,7 @@ afterEach(() => {
 
 function writeFiles(root, files) {
   for (const [relativePath, content] of Object.entries(files)) {
+    if (content === undefined) continue
     const target = path.join(root, ...relativePath.split('/'))
     fs.mkdirSync(path.dirname(target), { recursive: true })
     fs.writeFileSync(target, content)
@@ -44,7 +47,7 @@ function writeFiles(root, files) {
 
 function makeCheckout(files = {}) {
   const checkoutDir = path.join(workDir, 'checkout')
-  writeFiles(checkoutDir, { 'plugin.json': JSON.stringify(MANIFEST), 'main.js': 'module.exports = {}', ...files })
+  writeFiles(checkoutDir, { ...PLUGIN_FILES, ...files })
   return checkoutDir
 }
 
@@ -122,7 +125,7 @@ describe('build', () => {
     await build({ dir: checkoutDir, out: outDir }, deps)
 
     const bundle = fs.readFileSync(path.join(outDir, 'bundle.alpineplugin'))
-    const expected = ['.alpineignore', 'dist/renderer.js', 'main.js', 'nested/secret.txt', 'plugin.json']
+    const expected = ['.alpineignore', 'dist/renderer.js', 'index.js', 'main.js', 'nested/secret.txt', 'plugin.json']
     expect(unzipToDir(bundle).files).toEqual(expected)
     const files = JSON.parse(fs.readFileSync(path.join(outDir, 'files.json'), 'utf8'))
     expect(files.map((file) => file.path)).toEqual(expected)
@@ -170,8 +173,114 @@ describe('build', () => {
     const checkoutDir = makeCheckout({ 'plugin.json': JSON.stringify({ ...MANIFEST, version: 'one' }) })
     await expect(build({ dir: checkoutDir, out: path.join(workDir, 'out') }, deps)).rejects.toThrow(/version: must be semver/)
     fs.writeFileSync(path.join(checkoutDir, 'plugin.json'), JSON.stringify({ ...MANIFEST, id: undefined }))
-    await expect(build({ dir: checkoutDir, out: path.join(workDir, 'out') }, deps)).rejects.toThrow(/needs an "id"/)
+    await expect(build({ dir: checkoutDir, out: path.join(workDir, 'out') }, deps)).rejects.toThrow(
+      `plugin.json needs an "id" that is your developer organisation's slug, a dot and a name, such as example-labs.hello`
+    )
     expect(fs.existsSync(path.join(workDir, 'out'))).toBe(false)
+  })
+
+  async function expectBuildRefused(files, message) {
+    const { deps } = makeDeps()
+    const outDir = path.join(workDir, 'out')
+    const checkoutDir = makeCheckout(files)
+    await expect(build({ dir: checkoutDir, out: outDir }, deps)).rejects.toThrow(message)
+    expect(fs.existsSync(outDir)).toBe(false)
+    expect(fs.readdirSync(tmpRoot)).toEqual([])
+    fs.rmSync(checkoutDir, { recursive: true, force: true })
+  }
+
+  function manifestWith(fields) {
+    return JSON.stringify({ ...MANIFEST, ...fields })
+  }
+
+  it('builds a plugin the app loads, with its widgets, settings page and readme', async () => {
+    const { deps } = makeDeps()
+    const outDir = path.join(workDir, 'out')
+    const manifest = {
+      ...MANIFEST,
+      renderer: 'dist/index.js',
+      icon: 'lucide:Cloud',
+      contributes: {
+        topbarWidgets: [{ slot: 'right' }, { slot: 'left', export: 'Forecast' }],
+        settingsPages: [{ label: 'Weather', icon: 'lucide:Cloud', export: 'WeatherSettings' }],
+        settings: [{ key: 'units', type: 'select', label: 'Units', default: 'metric', options: [{ value: 'metric', label: 'Metric' }] }],
+      },
+      marketplace: { readme: 'README.md', category: 'productivity' },
+    }
+    const checkoutDir = makeCheckout({
+      'index.js': undefined,
+      'plugin.json': JSON.stringify(manifest),
+      'dist/index.js': "export { Weather as default } from './widgets.js'\nexport * from './settings.js'\nexport const Forecast = () => null\n",
+      'dist/widgets.js': 'export function Weather() {}\n',
+      'dist/settings.js': 'export function WeatherSettings() {}\nexport default 1\n',
+      'README.md': '# Weather',
+    })
+
+    await build({ dir: checkoutDir, out: outDir }, deps)
+
+    expect(JSON.parse(fs.readFileSync(path.join(outDir, 'manifest.json'), 'utf8'))).toEqual(manifest)
+    expect(fs.readdirSync(tmpRoot)).toEqual([])
+  })
+
+  it('refuses a plugin without the renderer the app loads', async () => {
+    await expectBuildRefused({ 'index.js': undefined }, 'Alpine Shell would refuse this plugin: renderer: missing or escapes plugin dir')
+    await expectBuildRefused(
+      { 'plugin.json': manifestWith({ renderer: 'dist/index.js' }) },
+      'Alpine Shell would refuse this plugin: renderer: missing or escapes plugin dir'
+    )
+  })
+
+  it('checks the bundle, so a renderer that .alpineignore leaves out is refused', async () => {
+    await expectBuildRefused({ '.alpineignore': 'index.js\n' }, 'Alpine Shell would refuse this plugin: renderer: missing or escapes plugin dir')
+  })
+
+  it('refuses paths that leave the plugin folder', async () => {
+    writeFiles(workDir, { 'x/index.js': RENDERER, 'README.md': '# Outside' })
+    await expectBuildRefused(
+      { 'plugin.json': manifestWith({ renderer: '../x/index.js' }) },
+      'Alpine Shell would refuse this plugin: renderer: missing or escapes plugin dir'
+    )
+    await expectBuildRefused(
+      { 'plugin.json': manifestWith({ marketplace: { readme: '../README.md' } }) },
+      'Alpine Shell would refuse this plugin: marketplace.readme: missing/escapes plugin dir'
+    )
+  })
+
+  it('refuses a settings page icon that is neither a Lucide name nor a file in the plugin', async () => {
+    await expectBuildRefused(
+      { 'plugin.json': manifestWith({ contributes: { settingsPages: [{ label: 'Weather', icon: 'cloud.png' }] } }) },
+      "Alpine Shell would refuse this plugin: contributes.settingsPages: 'icon' must be 'lucide:<Name>' or a file inside the plugin folder"
+    )
+  })
+
+  it('refuses a widget or settings page whose export the built renderer does not have', async () => {
+    await expectBuildRefused(
+      { 'plugin.json': manifestWith({ contributes: { topbarWidgets: [{ slot: 'right', export: 'Clock' }] } }) },
+      'contributes.topbarWidgets names the export "Clock", but the renderer index.js has no such export'
+    )
+    await expectBuildRefused(
+      { 'plugin.json': manifestWith({ contributes: { settingsPages: [{ label: 'Weather', export: 'WeatherSettings' }] } }) },
+      'contributes.settingsPages names the export "WeatherSettings", but the renderer index.js has no such export'
+    )
+  })
+
+  it('refuses a widget without an export name when the renderer has no default export', async () => {
+    await expectBuildRefused(
+      { 'index.js': 'export function Weather() {}', 'plugin.json': manifestWith({ contributes: { topbarWidgets: [{ slot: 'right' }] } }) },
+      'contributes.topbarWidgets names the export "default", but the renderer index.js has no such export'
+    )
+  })
+
+  it('refuses unknown top-level fields and says where contributions belong', async () => {
+    await expectBuildRefused(
+      { 'plugin.json': manifestWith({ settingsPages: [{ label: 'Weather' }] }) },
+      'plugin.json is not valid: "settingsPages" is not a top-level field, it belongs under "contributes"'
+    )
+    await expectBuildRefused(
+      { 'plugin.json': manifestWith({ topbarWidgets: [], settings: [] }) },
+      'plugin.json is not valid: "topbarWidgets" is not a top-level field, it belongs under "contributes"; "settings" is not a top-level field, it belongs under "contributes"'
+    )
+    await expectBuildRefused({ 'plugin.json': manifestWith({ verified: true }) }, 'plugin.json is not valid: "verified" is not a plugin.json field')
   })
 })
 
@@ -199,6 +308,7 @@ describe('stage', () => {
       size: bundle.length,
       manifest: MANIFEST,
       files: [
+        { path: 'index.js', size: Buffer.byteLength(RENDERER) },
         { path: 'main.js', size: Buffer.byteLength('module.exports = {}') },
         { path: 'plugin.json', size: Buffer.byteLength(JSON.stringify(MANIFEST)) },
       ],
@@ -215,7 +325,7 @@ describe('stage', () => {
     await stage({ submission: SUBMISSION, out: outDir, callback: CALLBACK, store: storeDir }, deps)
 
     expect(calls[0].body.manifest.id).toBe(PLUGIN_ID)
-    expect(calls[0].body.files).toHaveLength(2)
+    expect(calls[0].body.files).toHaveLength(3)
   })
 
   it('refuses a submission id that would leave the staging folder', async () => {
@@ -264,7 +374,7 @@ describe('local-build', () => {
   function cloningRun(files = {}) {
     return vi.fn((command, args) => {
       if (command === 'git' && args[0] === 'clone') {
-        writeFiles(args[3], { 'plugin.json': JSON.stringify(MANIFEST), 'main.js': 'module.exports = {}', ...files })
+        writeFiles(args[3], { ...PLUGIN_FILES, ...files })
       }
     })
   }

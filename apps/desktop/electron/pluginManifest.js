@@ -358,4 +358,4 @@ function parseManifest(pluginDir, folderName, options) {
   return { ok: errors.length === 0, record }
 }
 
-module.exports = { parseManifest }
+module.exports = { CONTRIBUTION_KEYS, parseManifest }
