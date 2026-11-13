@@ -1,7 +1,17 @@
 {
   "name": "@alpine/plugin-sdk",
   "version": "0.1.0",
-  "private": true,
+  "description": "Build plugins for Alpine Shell.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlpineShell/shell.git",
+    "directory": "packages/plugin-sdk"
+  },
+  "homepage": "https://github.com/AlpineShell/shell/tree/main/packages/plugin-sdk",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {

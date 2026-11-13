@@ -4,9 +4,11 @@ import {
   Download,
   ExternalLink,
   FolderOpen,
+  Github,
   Puzzle,
   RefreshCw,
   RotateCw,
+  ScrollText,
   Settings2,
   ShieldCheck,
   Store,
@@ -16,15 +18,30 @@ import { Avatar, Badge, Button, Card, ConfirmButton, EmptyState, IconButton, Lis
 import { settingsPage } from '../../settings/registry'
 import { pluginLogoUrl } from '../../plugins/pluginAssets'
 import { pluginSettingsPage } from '../../plugins/pluginSettingsPages'
+import GithubInstallPanel from './githubInstallPanel'
+import PluginLogDialog from './pluginLogDialog'
 
 type PluginTab = 'installed' | 'browse'
 
 const UNVERIFIED_MESSAGE = 'Not installed: its signature could not be verified.'
 const INSTALL_FAILED_MESSAGE = "Couldn't install. Try again."
 const UNINSTALL_FAILED_MESSAGE = "Couldn't uninstall. Try again."
+const OUTSIDE_STORE_MESSAGE = 'Installed from outside the store. Uninstall it first.'
+const TRUST_FAILED_MESSAGE = "Couldn't turn it on. Try again."
+const UNTRUSTED_FOLDER_MESSAGE = 'This plugin is not from the Alpine Shell store. Only turn it on if you trust who made it.'
 
 function installFailureMessage(error: string): string {
-  return error === 'unverified' ? UNVERIFIED_MESSAGE : INSTALL_FAILED_MESSAGE
+  if (error === 'unverified') return UNVERIFIED_MESSAGE
+  if (error === 'installed-outside-store') return OUTSIDE_STORE_MESSAGE
+  return INSTALL_FAILED_MESSAGE
+}
+
+function revokedMessage(reason: string): string {
+  return reason ? `Turned off by Alpine Shell: ${reason}` : 'Turned off by Alpine Shell.'
+}
+
+function loadsByManifest(plugin: PluginRecord): boolean {
+  return plugin.valid && plugin.compat.apiOk && plugin.compat.engineOk
 }
 
 function semverGt(a: string, b: string): boolean {
@@ -41,20 +58,46 @@ function versionLabel(version?: string | null): string | null {
   return version && version !== '0.0.0' ? `v${version}` : null
 }
 
-function RowNotice({ message }: { message: string }) {
+function RowNotice({ message, action }: { message: string; action?: { label: string; onClick: () => void } }) {
   return (
     <div className="flex items-center gap-2 border-t border-line-hairline bg-warning/10 px-3 py-2 text-xs text-warning">
       <AlertTriangle size={12} className="shrink-0" />
-      {message}
+      <span className="flex-1">{message}</span>
+      {action && (
+        <button type="button" onClick={action.onClick} className="focus-ring cursor-pointer rounded-sm underline underline-offset-2">
+          {action.label}
+        </button>
+      )}
     </div>
   )
 }
 
-function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onUninstall, onNavigate }: InstalledPluginCardProps) {
+function PluginTrustNotice({ plugin, onTrust }: PluginTrustNoticeProps) {
+  return (
+    <div className="flex items-center gap-2 border-t border-line-hairline bg-warning/10 px-3 py-2 text-xs text-warning">
+      <AlertTriangle size={12} className="shrink-0" />
+      <span className="flex-1">{UNTRUSTED_FOLDER_MESSAGE}</span>
+      <ConfirmButton
+        shape="square"
+        confirmVariant="primary"
+        label="Turn on"
+        confirmLabel={`Turn on ${plugin.name}`}
+        onConfirm={() => onTrust(plugin)}
+      />
+    </div>
+  )
+}
+
+function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onUninstall, onTrust, onNavigate }: InstalledPluginCardProps) {
   const enabled = plugin.enabled !== false
   const logo = pluginLogoUrl(plugin)
   const subtitle = plugin.marketplace?.shortDescription || plugin.description
   const version = versionLabel(plugin.version)
+  const revoked = plugin.revoked ?? null
+  const needsTrust = !revoked && Boolean(plugin.needsTrust) && loadsByManifest(plugin)
+  const switchable = !revoked && !needsTrust
+  const [logOpen, setLogOpen] = useState(false)
+  const openLog = () => setLogOpen(true)
 
   return (
     <li>
@@ -66,11 +109,15 @@ function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onU
           <>
             {version && <Badge>{version}</Badge>}
             {plugin.preset && <Badge>Preset</Badge>}
+            {plugin.source === 'github' && <Badge>GitHub</Badge>}
           </>
         }
         detail={subtitle || plugin.id}
         actions={
           <>
+            <IconButton label={`${plugin.name} log`} onClick={openLog}>
+              <ScrollText size={16} />
+            </IconButton>
             {settingsRoute && (
               <IconButton label={`${plugin.name} settings`} onClick={() => onNavigate(settingsRoute)}>
                 <Settings2 size={16} />
@@ -88,13 +135,23 @@ function InstalledCard({ plugin, settingsRoute, removing, failure, onToggle, onU
                 busy={removing}
               />
             )}
-            <Toggle variant="compact" label={`Enable ${plugin.name}`} checked={enabled} onChange={() => onToggle(plugin)} />
+            {switchable && (
+              <Toggle variant="compact" label={`Enable ${plugin.name}`} checked={enabled} onChange={() => onToggle(plugin)} />
+            )}
           </>
         }
       >
-        {!plugin.loadable && <RowNotice message={plugin.compat?.reason || (plugin.errors[0] ?? 'Cannot load this plugin.')} />}
+        {revoked ? (
+          <RowNotice message={revokedMessage(revoked.reason)} />
+        ) : needsTrust ? (
+          <PluginTrustNotice plugin={plugin} onTrust={onTrust} />
+        ) : (
+          !plugin.loadable && <RowNotice message={plugin.compat?.reason || (plugin.errors[0] ?? 'Cannot load this plugin.')} />
+        )}
+        {plugin.runtimeError && <RowNotice message={plugin.runtimeError} action={{ label: 'View log', onClick: openLog }} />}
         {failure && <RowNotice message={failure} />}
       </ListRow>
+      <PluginLogDialog plugin={plugin} open={logOpen} onOpenChange={setLogOpen} />
     </li>
   )
 }
@@ -104,9 +161,9 @@ type BrowseState =
   | { status: 'error'; message: string; base: string }
   | { status: 'ready'; plugins: MarketplacePlugin[]; base: string }
 
-function BrowseCard({ plugin, installedVersion, installing, requested, failure, onInstall }: BrowsePluginCardProps) {
+function BrowseCard({ plugin, installedVersion, updatesFromStore, installing, requested, failure, onInstall }: BrowsePluginCardProps) {
   const installed = installedVersion !== null
-  const canUpdate = installed && semverGt(plugin.version, installedVersion)
+  const canUpdate = installed && updatesFromStore && semverGt(plugin.version, installedVersion)
   const anchor = useRef<HTMLLIElement>(null)
 
   useEffect(() => {
@@ -120,7 +177,12 @@ function BrowseCard({ plugin, installedVersion, installing, requested, failure, 
         icon={<Avatar src={plugin.iconUrl} alt={plugin.name} fallback={<Puzzle size={16} />} />}
         title={plugin.name}
         badges={<Badge>v{plugin.version}</Badge>}
-        detail={plugin.shortDescription || plugin.id}
+        detail={
+          <>
+            {plugin.shortDescription || plugin.id}
+            {plugin.publisher && <span className="text-ink-faint"> · by {plugin.publisher.name}</span>}
+          </>
+        }
         actions={
           <>
             <IconButton label="View on the web" onClick={() => window.plugins.marketplace.openWeb(plugin.id)}>
@@ -157,6 +219,7 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [requested, setRequested] = useState<MarketplacePlugin | null>(null)
   const [failures, setFailures] = useState<Record<string, string>>({})
+  const [githubOpen, setGithubOpen] = useState(false)
 
   const installedById = new Map(plugins.map((p) => [p.id, p]))
 
@@ -189,6 +252,10 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
     refreshInstalled()
     loadBrowse()
   }, [refreshInstalled, loadBrowse])
+
+  useEffect(() => window.plugins.onReload(() => void refreshInstalled()), [refreshInstalled])
+
+  useEffect(() => window.plugins.onRuntimeError(() => void refreshInstalled()), [refreshInstalled])
 
   const install = useCallback(
     async (plugin: MarketplacePlugin) => {
@@ -240,6 +307,18 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
     }
   }
 
+  async function trust(plugin: PluginRecord) {
+    recordFailure(plugin.id, null)
+    const accepted = await window.plugins.trust(plugin.id).catch(() => false)
+    if (!accepted) recordFailure(plugin.id, TRUST_FAILED_MESSAGE)
+    await refreshInstalled()
+  }
+
+  async function installedFromGithub() {
+    setGithubOpen(false)
+    await refreshInstalled()
+  }
+
   async function uninstall(plugin: PluginRecord) {
     if (removingId) return
     setRemovingId(plugin.id)
@@ -285,6 +364,9 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
       <PageHeader variant="plain" title={settingsPage('plugins')?.label ?? ''}>
         {tab === 'installed' ? (
           <>
+            <Button shape="square" variant="ghost" size="sm" icon={<Github size={14} />} onClick={() => setGithubOpen(true)}>
+              Install from GitHub
+            </Button>
             <Button shape="square" variant="ghost" size="sm" icon={<FolderOpen size={14} />} onClick={() => window.plugins.openFolder()}>
               Open plugins folder
             </Button>
@@ -302,6 +384,8 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
       <div>
         <Segmented variant="filled" label="Plugin view" options={tabs} value={tab} onChange={setTab} />
       </div>
+
+      {tab === 'installed' && githubOpen && <GithubInstallPanel onInstalled={installedFromGithub} onClose={() => setGithubOpen(false)} />}
 
       {tab === 'installed' ? (
         plugins.length === 0 ? (
@@ -326,6 +410,7 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
                   failure={failures[plugin.id] ?? null}
                   onToggle={toggle}
                   onUninstall={uninstall}
+                  onTrust={trust}
                   onNavigate={onNavigate}
                 />
               ))}
@@ -356,6 +441,7 @@ export default function PluginsPage({ onNavigate }: PluginsPageProps) {
                 key={plugin.id}
                 plugin={plugin}
                 installedVersion={installedById.get(plugin.id)?.version ?? null}
+                updatesFromStore={installedById.get(plugin.id)?.updatesFromStore !== false}
                 installing={installingId === plugin.id}
                 requested={requested?.id === plugin.id}
                 failure={failures[plugin.id] ?? null}

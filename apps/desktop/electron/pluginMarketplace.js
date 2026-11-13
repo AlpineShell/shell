@@ -5,6 +5,7 @@ const { getPluginsBase } = require('./marketplaceConfig')
 const { extractZip } = require('./pluginZip')
 const { verifyPackage } = require('./pluginSignature')
 const { loadLicenceConfig } = require('./licenceConfig')
+const { readCappedBody } = require('./cappedBody')
 
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/
 const FETCH_TIMEOUT_MS = 20000
@@ -84,7 +85,16 @@ function toCard(raw) {
       ).verified === true,
     apiVersion: typeof raw.apiVersion === 'number' ? raw.apiVersion : 1,
     size: typeof raw.size === 'number' ? raw.size : null,
+    publisher: publisherOf(raw.publisher),
+    community: raw.community === true,
   }
+}
+
+function publisherOf(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const name = typeof raw.name === 'string' ? raw.name.trim() : ''
+  const slug = typeof raw.slug === 'string' ? raw.slug.trim() : ''
+  return name ? { slug, name } : null
 }
 
 async function list() {
@@ -169,20 +179,6 @@ function removeQuietly(dir) {
   }
 }
 
-async function readCappedBody(res, maxBytes) {
-  const declared = Number(res.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > maxBytes) return null
-  if (!res.body) return Buffer.alloc(0)
-  const chunks = []
-  let total = 0
-  for await (const chunk of res.body) {
-    total += chunk.length
-    if (total > maxBytes) return null
-    chunks.push(Buffer.from(chunk))
-  }
-  return Buffer.concat(chunks)
-}
-
 function removeBackupIfPluginInPlace(finalDir, backup) {
   if (fs.existsSync(finalDir)) removeQuietly(backup)
 }
@@ -205,7 +201,7 @@ async function swapIntoPlace(staging, finalDir, backup) {
   }
 }
 
-async function install(payload, { pluginsDir, onChange, withPluginStopped = runDirectly, requireSignature = signatureRequired() } = {}) {
+async function install(payload, { pluginsDir, onChange, onInstalled, withPluginStopped = runDirectly, requireSignature = signatureRequired() } = {}) {
   const id = payload && typeof payload === 'object' ? payload.id : payload
   if (typeof id !== 'string' || !SAFE_ID.test(id)) return { ok: false, error: 'invalid-id' }
   if (!pluginsDir) return { ok: false, error: 'no-plugins-dir' }
@@ -247,37 +243,60 @@ async function install(payload, { pluginsDir, onChange, withPluginStopped = runD
   const digest = crypto.createHash('sha256').update(buf).digest('hex')
   if (digest !== sha256) return { ok: false, error: 'digest-mismatch' }
 
+  const installed = await installBundle(buf, { pluginsDir, withPluginStopped, expectedId: id, expectedVersion: version })
+  if (!installed.ok) return installed
+
+  if (typeof onInstalled === 'function') onInstalled({ id, version, sha256 })
+  if (typeof onChange === 'function') onChange()
+  return { ok: true, id, version, verified, reason: sig.reason }
+}
+
+function readStagedManifest(staging) {
+  const manifestPath = path.join(staging, 'plugin.json')
+  if (!fs.existsSync(manifestPath)) return { error: 'no-manifest' }
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8').replace(/^\uFEFF/, ''))
+    return manifest && typeof manifest === 'object' ? { manifest } : { error: 'bad-manifest' }
+  } catch {
+    return { error: 'bad-manifest' }
+  }
+}
+
+async function installBundle(buf, { pluginsDir, withPluginStopped = runDirectly, expectedId = null, expectedVersion = null, accept = () => null } = {}) {
+  if (!pluginsDir) return { ok: false, error: 'no-plugins-dir' }
+  if (!Buffer.isBuffer(buf) || buf.length === 0) return { ok: false, error: 'empty-bundle' }
   fs.mkdirSync(pluginsDir, { recursive: true })
-  const finalDir = path.join(pluginsDir, id)
-  const staging = path.join(pluginsDir, `.installing-${id}-${process.pid}`)
-  const backup = path.join(pluginsDir, `.backup-${id}-${process.pid}`)
+  const stagingName = expectedId || `bundle-${crypto.randomBytes(6).toString('hex')}`
+  const staging = path.join(pluginsDir, `.installing-${stagingName}-${process.pid}`)
+  let finalDir = null
+  let backup = null
   try {
     fs.rmSync(staging, { recursive: true, force: true })
     fs.mkdirSync(staging, { recursive: true })
 
     extractZip(buf, staging)
 
-    const manifestPath = path.join(staging, 'plugin.json')
-    if (!fs.existsSync(manifestPath)) return { ok: false, error: 'no-manifest' }
-    let manifest
-    try {
-      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8').replace(/^﻿/, ''))
-    } catch {
-      return { ok: false, error: 'bad-manifest' }
-    }
-    if (manifest.id !== id) return { ok: false, error: 'id-mismatch' }
-    if (manifest.version !== version) return { ok: false, error: 'version-mismatch' }
+    const staged = readStagedManifest(staging)
+    if (staged.error) return { ok: false, error: staged.error }
+    const { manifest } = staged
+    if (expectedId !== null && manifest.id !== expectedId) return { ok: false, error: 'id-mismatch' }
+    if (expectedVersion !== null && manifest.version !== expectedVersion) return { ok: false, error: 'version-mismatch' }
+    const id = manifest.id
+    if (typeof id !== 'string' || !SAFE_ID.test(id)) return { ok: false, error: 'invalid-id' }
+    const version = typeof manifest.version === 'string' ? manifest.version : '0.0.0'
+    const refusal = accept({ id, version, manifest })
+    if (refusal) return { ok: false, error: refusal }
 
+    finalDir = path.join(pluginsDir, id)
+    backup = path.join(pluginsDir, `.backup-${id}-${process.pid}`)
     await withPluginStopped(id, () => swapIntoPlace(staging, finalDir, backup))
+    return { ok: true, id, version }
   } catch (e) {
     return { ok: false, error: 'install-failed', detail: String((e && e.message) || e) }
   } finally {
     removeQuietly(staging)
-    removeBackupIfPluginInPlace(finalDir, backup)
+    if (finalDir) removeBackupIfPluginInPlace(finalDir, backup)
   }
-
-  if (typeof onChange === 'function') onChange()
-  return { ok: true, id, version, verified, reason: sig.reason }
 }
 
 async function uninstall(id, { pluginsDir, onChange, withPluginStopped = runDirectly } = {}) {
@@ -299,4 +318,4 @@ async function uninstall(id, { pluginsDir, onChange, withPluginStopped = runDire
   return { ok: true, id }
 }
 
-module.exports = { list, detail, install, uninstall, getBase: base }
+module.exports = { list, detail, install, installBundle, uninstall, getBase: base, MAX_BUNDLE_BYTES }

@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import { reportPluginWidgetError } from '../../plugins/reportPluginWidgetError'
 
 export default class PluginPageBoundary extends Component<PluginPageBoundaryProps, { failed: boolean }> {
   state = { failed: false }
@@ -9,6 +10,7 @@ export default class PluginPageBoundary extends Component<PluginPageBoundaryProp
 
   componentDidCatch(error: unknown) {
     console.error(`[settings] plugin page "${this.props.id}" crashed:`, error)
+    reportPluginWidgetError(this.props.id, error)
   }
 
   render() {

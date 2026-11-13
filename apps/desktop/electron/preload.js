@@ -137,12 +137,20 @@ contextBridge.exposeInMainWorld('topbar', {
 
 contextBridge.exposeInMainWorld('plugins', {
   list: () => ipcRenderer.invoke('plugins/list'),
+  logs: (id) => ipcRenderer.invoke('plugins/logs', id),
+  clearLogs: (id) => ipcRenderer.invoke('plugins/clear-logs', id),
+  reportWidgetError: (report) => ipcRenderer.invoke('plugins/report-widget-error', report),
   dir: () => ipcRenderer.invoke('plugins/dir'),
   openFolder: () => ipcRenderer.invoke('plugins/open-folder'),
   reload: () => ipcRenderer.invoke('plugins/reload'),
   setEnabled: (id, enabled) => ipcRenderer.invoke('plugins/set-enabled', { id, enabled }),
   manifest: (id) => ipcRenderer.invoke('plugins/manifest', id),
   readme: (id) => ipcRenderer.invoke('plugins/readme', id),
+  trust: (id) => ipcRenderer.invoke('plugins/trust', id),
+  github: {
+    resolve: (releaseUrl) => ipcRenderer.invoke('plugins/github-resolve', releaseUrl),
+    install: (token) => ipcRenderer.invoke('plugins/github-install', token),
+  },
   marketplace: {
     base: () => ipcRenderer.invoke('plugins/marketplace-base'),
     list: () => ipcRenderer.invoke('plugins/marketplace-list'),
@@ -169,6 +177,11 @@ contextBridge.exposeInMainWorld('plugins', {
     const handler = () => callback()
     ipcRenderer.on('plugins/reload', handler)
     return () => ipcRenderer.removeListener('plugins/reload', handler)
+  },
+  onRuntimeError: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('plugins/runtime-error', handler)
+    return () => ipcRenderer.removeListener('plugins/runtime-error', handler)
   },
   settings: {
     get: (pluginId) => ipcRenderer.invoke('plugins/settings-get', pluginId),

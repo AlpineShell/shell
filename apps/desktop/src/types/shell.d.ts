@@ -758,6 +758,77 @@ declare global {
     errors: string[]
     enabled: boolean
     loadable: boolean
+    source?: PluginSource
+    needsTrust?: { source: 'folder' } | null
+    revoked?: { reason: string } | null
+    origin?: PluginOrigin | null
+    updatesFromStore?: boolean
+    runtimeError?: string | null
+  }
+
+  type PluginSource = 'preset' | 'store' | 'github' | 'folder'
+
+  interface PluginOrigin {
+    repository: string
+    tag: string
+    commit: string
+  }
+
+  interface GithubPluginRelease {
+    owner: string
+    repo: string
+    tag: string
+    commit: string
+    assetName: string
+    size: number | null
+  }
+
+  type GithubResolveResult = { ok: true; token: string; release: GithubPluginRelease } | { ok: false; error: string }
+
+  type GithubInstallResult =
+    | { ok: true; id: string; version: string; repository: string; tag: string; commit: string; sha256: string }
+    | { ok: false; error: string; detail?: string }
+
+  type GithubInstallStep =
+    | { step: 'link'; url: string; busy: boolean; error: string | null }
+    | { step: 'confirm'; url: string; token: string; release: GithubPluginRelease; busy: boolean; error: string | null }
+
+  interface GithubInstallPanelProps {
+    onInstalled: () => void
+    onClose: () => void
+  }
+
+  interface GithubReleaseFactProps {
+    label: string
+    value: string
+  }
+
+  interface InlineInstallErrorProps {
+    message: string
+  }
+
+  interface PluginTrustNoticeProps {
+    plugin: PluginRecord
+    onTrust: (plugin: PluginRecord) => void
+  }
+
+  interface PluginLogLine {
+    at: number
+    source: 'backend' | 'widget' | 'command' | 'settings'
+    level: 'info' | 'error'
+    message: string
+  }
+
+  interface PluginWidgetErrorReport {
+    id: string
+    message: string
+    stack?: string
+  }
+
+  interface PluginLogDialogProps {
+    plugin: PluginRecord
+    open: boolean
+    onOpenChange: (open: boolean) => void
   }
 
   type PluginListItem = PluginRecord
@@ -833,6 +904,7 @@ declare global {
     failure: string | null
     onToggle: (plugin: PluginRecord) => void
     onUninstall: (plugin: PluginRecord) => void
+    onTrust: (plugin: PluginRecord) => void
     onNavigate: (path: string) => void
   }
 
@@ -885,6 +957,13 @@ declare global {
     verified: boolean
     apiVersion: number
     size: number | null
+    publisher?: MarketplacePublisher | null
+    community?: boolean
+  }
+
+  interface MarketplacePublisher {
+    slug: string
+    name: string
   }
 
   interface MarketplaceDetail extends MarketplacePlugin {
@@ -897,6 +976,7 @@ declare global {
   interface BrowsePluginCardProps {
     plugin: MarketplacePlugin
     installedVersion: string | null
+    updatesFromStore: boolean
     installing: boolean
     requested: boolean
     failure: string | null
@@ -2017,12 +2097,20 @@ declare global {
     }
     plugins: {
       list: () => Promise<PluginRecord[]>
+      logs: (id: string) => Promise<PluginLogLine[]>
+      clearLogs: (id: string) => Promise<void>
+      reportWidgetError: (report: PluginWidgetErrorReport) => Promise<boolean>
       dir: () => Promise<string>
       openFolder: () => Promise<void>
       reload: () => Promise<boolean>
       setEnabled: (id: string, enabled: boolean) => Promise<boolean>
       manifest: (id: string) => Promise<PluginRecord | null>
       readme: (id: string) => Promise<string | null>
+      trust: (id: string) => Promise<boolean>
+      github: {
+        resolve: (releaseUrl: string) => Promise<GithubResolveResult>
+        install: (token: string) => Promise<GithubInstallResult>
+      }
       marketplace: {
         base: () => Promise<string>
         list: () => Promise<MarketplaceIndex>
@@ -2036,6 +2124,7 @@ declare global {
       getData: <T = unknown>(channel: string) => Promise<T | null>
       onData: <T = unknown>(channel: string, callback: (data: T) => void) => () => void
       onReload: (callback: () => void) => () => void
+      onRuntimeError: (callback: () => void) => () => void
       settings: {
         get: (pluginId: string) => Promise<PluginSettingValues>
         set: (pluginId: string, key: string, value: PluginSettingValue) => Promise<PluginSettingWriteResult>

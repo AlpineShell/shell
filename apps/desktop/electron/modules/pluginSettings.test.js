@@ -160,6 +160,20 @@ describe('writing plugin settings', () => {
     expect(setValue(pluginSettings, 'com.example.missing', 'unit', 'f')).toMatchObject({ ok: false })
   })
 
+  it('writes a changed value to the plugin log', async () => {
+    const { pluginSettings } = await startModule()
+    const { pluginLogs } = nodeRequire('../pluginLogStore.js')
+    pluginLogs.forget(WEATHER)
+    setValue(pluginSettings, WEATHER, 'unit', 'f')
+    setValue(pluginSettings, WEATHER, 'unit', 'f')
+    setValue(pluginSettings, WEATHER, 'show-wind', true)
+    setValue(pluginSettings, WEATHER, 'refresh', 61)
+    expect(pluginLogs.list(WEATHER).map(({ source, level, message }) => ({ source, level, message }))).toEqual([
+      { source: 'settings', level: 'info', message: 'unit changed to f' },
+      { source: 'settings', level: 'info', message: 'show-wind changed to true' },
+    ])
+  })
+
   it('gives the next session what the last one saved', async () => {
     const first = await startModule()
     setValue(first.pluginSettings, WEATHER, 'unit', 'f')

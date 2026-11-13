@@ -7,7 +7,7 @@ import path from 'path'
 const marketplaceKeys = crypto.generateKeyPairSync('ed25519')
 process.env.ALPINE_MARKETPLACE_PUBKEY = marketplaceKeys.publicKey.export({ type: 'spki', format: 'pem' }).toString()
 
-const { install, uninstall } = await import('./pluginMarketplace.js')
+const { install, uninstall, list } = await import('./pluginMarketplace.js')
 
 const PLUGIN_ID = 'com.example.demo'
 const BUNDLE_KEY = `plugins/${PLUGIN_ID}/1.2.0/${PLUGIN_ID}-1.2.0.alpineplugin`
@@ -111,6 +111,21 @@ function signedWithMarketplaceKey(bundle) {
   const digest = crypto.createHash('sha256').update(bundle).digest()
   return crypto.sign(null, digest, marketplaceKeys.privateKey).toString('base64')
 }
+
+describe('the marketplace catalog', () => {
+  it('names the publisher of a community plugin', async () => {
+    const catalog = {
+      plugins: [
+        { id: 'com.octo.notes', name: 'Notes', version: '1.0.0', publisher: { slug: 'octo', name: 'Octo Labs' }, community: true },
+        { id: PLUGIN_ID, name: 'Demo', version: '1.0.0', publisher: { slug: 'nameless' } },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(catalog))))
+    const { plugins } = await list()
+    expect(plugins[0]).toMatchObject({ publisher: { slug: 'octo', name: 'Octo Labs' }, community: true })
+    expect(plugins[1]).toMatchObject({ publisher: null, community: false })
+  })
+})
 
 describe('installing from the marketplace', () => {
   it('refuses an unsigned bundle when signatures are required, without downloading it', async () => {

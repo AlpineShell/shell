@@ -98,6 +98,7 @@ const winEvents = require('./modules/winEvents')
 const { EVENT_OBJECT_SHOW } = require('./modules/winEventDispatch')
 const plugins = require('./modules/plugins')
 const pluginSettings = require('./modules/pluginSettings')
+const pluginLogs = require('./modules/pluginLogs')
 const pluginBackendHost = require('./pluginBackendHost')
 const pluginWindows = require('./pluginWindows')
 const { launchCommand } = require('./shellLaunch')
@@ -1248,7 +1249,7 @@ async function startApp() {
 
   displayIdentify.setBadgeWindowFactory(createDisplayIdentifyWindow)
 
-  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, touchpadGestures, displayModePicker, smartScreenPrompt, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, shellShortcuts, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, displayIdentify, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
+  ipc.register(wallpaper, network, bluetooth, openApps, topbarColor, foregroundColor, volume, brightness, power, keyboardHook, windowSwitcher, touchpadGestures, displayModePicker, smartScreenPrompt, setup, mediaSession, microphone, battery, batterySaver, systemInfo, screenshot, launcher, appCatalog, appLaunch, minimizeAll, virtualDesktops, frecency, runCommand, launcherHotkey, shellShortcuts, launcherPrefs, trayLayout, trayHost, topbarLayout, appManager, tiling, minimizeToTopbar, windowCorners, openWithPlacement, windowCoverage, displayConfig, displayIdentify, updater, windowsUpdate, clockPrefs, theme, keyboardLayout, googleCalendar, bookmarks, browserTabs, plugins, pluginSettings, pluginLogs, pluginBackendHost, shellNotice, fileHandlers, gpuPreference, colorMode, clipboardHistory, dateTime, licence)
 
   theme.followColorMode(colorMode)
   theme.onThemeChange(repaintSettingsChrome)

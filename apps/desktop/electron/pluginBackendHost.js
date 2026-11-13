@@ -1,9 +1,9 @@
 const path = require('path')
-const { utilityProcess } = require('electron')
 const plugins = require('./modules/plugins')
 const pluginSettings = require('./modules/pluginSettings')
 const pluginWindows = require('./pluginWindows')
 const { launchCommand } = require('./shellLaunch')
+const { pluginLogs, RUNTIME_ERROR_SUMMARIES } = require('./pluginLogStore')
 
 const RUNTIME_ENTRY = path.join(__dirname, 'pluginBackendRuntime.js')
 const COMMAND_TIMEOUT_MS = 30000
@@ -18,6 +18,27 @@ const heldForFileChange = new Set()
 
 function isEligible(record) {
   return record.enabled !== false && record.loadable === true && record.hasBackend === true
+}
+
+function logBackend(pluginId, level, message) {
+  pluginLogs.add(pluginId, { source: 'backend', level, message })
+}
+
+function logFailedCommand(pluginId, name, error) {
+  pluginLogs.add(pluginId, { source: 'command', level: 'error', message: `${name}: ${error}` })
+}
+
+function logArgs(args) {
+  return Array.isArray(args) ? args.map((arg) => (typeof arg === 'string' ? arg : String(arg))).join(' ') : ''
+}
+
+function recordUnexpectedExit(pluginId, code) {
+  if (!code) {
+    logBackend(pluginId, 'info', 'The backend exited.')
+    return
+  }
+  logBackend(pluginId, 'error', `The backend exited with code ${code}.`)
+  pluginLogs.setRuntimeError(pluginId, RUNTIME_ERROR_SUMMARIES.backend)
 }
 
 function forgetChannels(state) {
@@ -35,6 +56,7 @@ function startBackend(record) {
     return
   }
   pluginWindows.closeAll(record.id)
+  const { utilityProcess } = require('electron')
   let proc
   try {
     proc = utilityProcess.fork(RUNTIME_ENTRY, [], { serviceName: `alpine-plugin-${record.id}` })
@@ -62,19 +84,25 @@ function startBackend(record) {
       if (settle) {
         state.pending.delete(msg.callId)
         clearTimeout(settle.timer)
+        if (!msg.ok) logFailedCommand(record.id, settle.name, msg.error || 'command failed')
         settle.resolve(msg.ok ? { ok: true, value: msg.value } : { ok: false, error: msg.error || 'command failed' })
       }
     } else if (msg.type === 'window-open') {
       const result = pluginWindows.open(record.id, path.dirname(entry), msg.request)
-      if (!result.ok) console.error(`[plugin-backend:${record.id}] window open refused: ${result.error}`)
+      if (!result.ok) {
+        console.error(`[plugin-backend:${record.id}] window open refused: ${result.error}`)
+        logBackend(record.id, 'error', `Window open refused: ${result.error}`)
+      }
     } else if (msg.type === 'window-close') {
       pluginWindows.close(record.id, msg.id)
     } else if (msg.type === 'window-send') {
       pluginWindows.send(record.id, msg.id, msg.channel, msg.data)
     } else if (msg.type === 'log') {
       console.log(`[plugin-backend:${record.id}]`, ...(Array.isArray(msg.args) ? msg.args : []))
+      logBackend(record.id, 'info', logArgs(msg.args))
     } else if (msg.type === 'error') {
       console.error(`[plugin-backend:${record.id}]`, msg.message)
+      logBackend(record.id, 'error', String(msg.message))
     }
   })
 
@@ -82,7 +110,9 @@ function startBackend(record) {
     if (code) console.error(`[plugin-backend] "${record.id}" exited with code ${code}`)
     rejectPending(state, 'backend exited')
     forgetChannels(state)
-    if (running.get(record.id) === state) running.delete(record.id)
+    if (running.get(record.id) !== state) return
+    running.delete(record.id)
+    recordUnexpectedExit(record.id, code)
   })
 
   proc.postMessage({
@@ -131,9 +161,10 @@ function sendCommand(id, name, payload, options) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       state.pending.delete(callId)
+      logFailedCommand(id, name, 'command timed out')
       resolve({ ok: false, error: 'command timed out' })
     }, timeoutMs)
-    state.pending.set(callId, { resolve, timer })
+    state.pending.set(callId, { resolve, timer, name })
     try {
       state.proc.postMessage({ type: 'command', callId, name, payload })
     } catch (e) {
@@ -166,6 +197,7 @@ function stopBackend(id) {
 
 async function withPluginStopped(id, work) {
   heldForFileChange.add(id)
+  pluginLogs.clearRuntimeError(id)
   try {
     pluginWindows.closeAll(id)
     await stopBackend(id)
