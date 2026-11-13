@@ -724,6 +724,12 @@ declare global {
     centerOversized: boolean
   }
 
+  interface PluginCompat {
+    apiOk: boolean
+    engineOk: boolean
+    reason: string | null
+  }
+
   interface PluginRecord {
     id: string
     name: string
@@ -753,7 +759,7 @@ declare global {
     preset: boolean
     legacy?: boolean
     verified: boolean
-    compat: { apiOk: boolean; engineOk: boolean; reason: string | null }
+    compat: PluginCompat
     valid: boolean
     errors: string[]
     enabled: boolean
@@ -956,6 +962,8 @@ declare global {
     author: string | null
     verified: boolean
     apiVersion: number
+    engines?: { alpineShell: string } | null
+    compat: PluginCompat
     size: number | null
     publisher?: MarketplacePublisher | null
     community?: boolean
@@ -990,7 +998,7 @@ declare global {
 
   type InstallResult =
     | { ok: true; id: string; version: string; verified: boolean; reason?: string | null }
-    | { ok: false; error: string; detail?: string }
+    | { ok: false; error: string; detail?: string; reason?: string | null }
 
   interface DeepInstallRequest {
     id: string

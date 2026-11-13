@@ -18,8 +18,11 @@ const NOTES: MarketplacePlugin = {
   author: null,
   verified: true,
   apiVersion: 1,
+  compat: { apiOk: true, engineOk: true, reason: null },
   size: null,
 }
+
+const NEWER_NOTES: MarketplacePlugin = { ...NOTES, apiVersion: 2, compat: { apiOk: false, engineOk: true, reason: 'requires a newer Alpine' } }
 
 interface MarketplaceBridges {
   listed?: MarketplacePlugin[]
@@ -162,6 +165,33 @@ describe('install and uninstall failures', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Uninstall Weather' })))
     expect(window.plugins.marketplace.uninstall).toHaveBeenCalledWith('com.example.weather')
     expect(screen.getByText("Couldn't uninstall. Try again.")).toBeTruthy()
+  })
+})
+
+describe('a store plugin made for another Alpine', () => {
+  it('shows it as not compatible, with the reason, instead of an Install button', async () => {
+    await openPage([], { listed: [NEWER_NOTES] })
+    fireEvent.click(screen.getByRole('radio', { name: /Browse/ }))
+    expect(screen.getByText('Not compatible')).toBeTruthy()
+    expect(screen.getByText("Can't install: requires a newer Alpine.")).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
+  })
+
+  it('keeps the installed copy and offers no update made for another Alpine', async () => {
+    await openPage([ridgePluginRecord({ id: NOTES.id, name: 'Notes', version: '1.0.0' })], { listed: [NEWER_NOTES] })
+    fireEvent.click(screen.getByRole('radio', { name: /Browse/ }))
+    const row = screen.getByText("Can't install: requires a newer Alpine.").closest('li')
+    expect(row?.textContent).toContain('Installed')
+    expect(row?.textContent).not.toContain('Not compatible')
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
+  })
+
+  it('says why when the store refuses the install', async () => {
+    const refusal = { ok: false as const, error: 'incompatible', reason: 'made for an older Alpine; wait for an update to the plugin' }
+    await openPage([], { listed: [NOTES], install: async () => refusal })
+    fireEvent.click(screen.getByRole('radio', { name: /Browse/ }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Install' })))
+    expect(screen.getByText("Can't install: made for an older Alpine; wait for an update to the plugin.")).toBeTruthy()
   })
 })
 

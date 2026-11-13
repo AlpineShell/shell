@@ -95,12 +95,20 @@ function assertKnownManifestFields(manifest) {
   if (unknown.length > 0) throw new Error(`plugin.json is not valid: ${unknown.map(unknownFieldProblem).join('; ')}`)
 }
 
+function assertSupportedApiVersion(manifest) {
+  const { SUPPORTED_API_VERSIONS, isSupportedApiVersion } = require('@alpine/plugin-sdk')
+  const { apiVersion } = manifest
+  if (!Number.isInteger(apiVersion) || isSupportedApiVersion(apiVersion)) return
+  throw new Error(`plugin.json has "apiVersion": ${apiVersion}, but Alpine Shell supports apiVersion ${SUPPORTED_API_VERSIONS.join(', ')}`)
+}
+
 function validateCommunityManifest(manifest) {
   const { isValidId, validateManifestShape } = require('@alpine/plugin-sdk')
   if (!manifest || typeof manifest !== 'object' || !isValidId(manifest.id)) {
     throw new Error(`plugin.json needs an "id" that is your developer organisation's slug, a dot and a name, such as example-labs.hello`)
   }
   assertKnownManifestFields(manifest)
+  assertSupportedApiVersion(manifest)
   const result = validateManifestShape(manifest)
   if (!result.ok) {
     const issues = result.issues.map((issue) => `${issue.path || 'plugin.json'}: ${issue.message}`)

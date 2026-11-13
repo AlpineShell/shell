@@ -52,10 +52,10 @@ function demoBundle(version) {
   })
 }
 
-function serveCatalog({ bundle, signature = null, sha256 = crypto.createHash('sha256').update(bundle).digest('hex'), version = '1.2.0' }) {
+function serveCatalog({ bundle, signature = null, sha256 = crypto.createHash('sha256').update(bundle).digest('hex'), version = '1.2.0', entry = {} }) {
   const fetchMock = vi.fn(async (url) => {
     if (url.endsWith(`/plugins/${PLUGIN_ID}/latest.json`)) {
-      return new Response(JSON.stringify({ id: PLUGIN_ID, version, url: BUNDLE_KEY, sha256, signature }))
+      return new Response(JSON.stringify({ id: PLUGIN_ID, version, url: BUNDLE_KEY, sha256, signature, ...entry }))
     }
     if (url.endsWith(BUNDLE_KEY)) return new Response(bundle)
     return new Response(null, { status: 404 })
@@ -124,6 +124,62 @@ describe('the marketplace catalog', () => {
     const { plugins } = await list()
     expect(plugins[0]).toMatchObject({ publisher: { slug: 'octo', name: 'Octo Labs' }, community: true })
     expect(plugins[1]).toMatchObject({ publisher: null, community: false })
+  })
+})
+
+describe('plugins the catalog offers for another Alpine', () => {
+  const COMPATIBLE = { apiOk: true, engineOk: true, reason: null }
+
+  it('marks each catalog entry with whether this app can run it', async () => {
+    const catalog = {
+      plugins: [
+        { id: 'com.example.current', version: '1.0.0', apiVersion: 1, engines: { alpineShell: '>=0.1.0' } },
+        { id: 'com.example.newer', version: '1.0.0', apiVersion: 2 },
+        { id: 'com.example.older', version: '1.0.0', apiVersion: 0 },
+        { id: 'com.example.later', version: '1.0.0', apiVersion: 1, engines: { alpineShell: '>=2.0.0' } },
+        { id: 'com.example.unlabelled', version: '1.0.0' },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(catalog))))
+    const { plugins } = await list({ appVersion: '1.0.0' })
+    expect(plugins.map((plugin) => plugin.compat)).toEqual([
+      COMPATIBLE,
+      { apiOk: false, engineOk: true, reason: 'requires a newer Alpine' },
+      { apiOk: false, engineOk: true, reason: 'made for an older Alpine; wait for an update to the plugin' },
+      { apiOk: true, engineOk: false, reason: 'requires Alpine >=2.0.0' },
+      COMPATIBLE,
+    ])
+    expect(plugins[0].engines).toEqual({ alpineShell: '>=0.1.0' })
+    expect(plugins[4].engines).toBeNull()
+  })
+
+  it('refuses a plugin made for a newer API without downloading it', async () => {
+    const fetchMock = serveCatalog({ bundle: demoBundle('1.2.0'), entry: { apiVersion: 2 } })
+    const result = await install({ id: PLUGIN_ID }, { pluginsDir, appVersion: '1.0.0', requireSignature: false })
+    expect(result).toEqual({ ok: false, error: 'incompatible', reason: 'requires a newer Alpine' })
+    expect(bundleRequests(fetchMock)).toHaveLength(0)
+    expect(fs.readdirSync(pluginsDir)).toEqual([])
+  })
+
+  it('refuses a plugin that asks for another Alpine version without downloading it', async () => {
+    const fetchMock = serveCatalog({ bundle: demoBundle('1.2.0'), entry: { engines: { alpineShell: '>=2.0.0' } } })
+    const result = await install({ id: PLUGIN_ID }, { pluginsDir, appVersion: '1.0.0', requireSignature: false })
+    expect(result).toEqual({ ok: false, error: 'incompatible', reason: 'requires Alpine >=2.0.0' })
+    expect(bundleRequests(fetchMock)).toHaveLength(0)
+  })
+
+  it('keeps the installed copy when the update is made for an older API', async () => {
+    installOldVersion(pluginsDir)
+    serveCatalog({ bundle: demoBundle('1.2.0'), entry: { apiVersion: 0 } })
+    const result = await install({ id: PLUGIN_ID }, { pluginsDir, appVersion: '1.0.0', requireSignature: false })
+    expect(result).toEqual({ ok: false, error: 'incompatible', reason: 'made for an older Alpine; wait for an update to the plugin' })
+    expect(installedManifest(pluginsDir).version).toBe('1.1.0')
+  })
+
+  it('installs a plugin whose catalog entry says nothing about compatibility', async () => {
+    serveCatalog({ bundle: demoBundle('1.2.0') })
+    const result = await install({ id: PLUGIN_ID }, { pluginsDir, appVersion: '1.0.0', requireSignature: false })
+    expect(result).toMatchObject({ ok: true, id: PLUGIN_ID, version: '1.2.0' })
   })
 })
 

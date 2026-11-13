@@ -6,6 +6,7 @@ const { extractZip } = require('./pluginZip')
 const { verifyPackage } = require('./pluginSignature')
 const { loadLicenceConfig } = require('./licenceConfig')
 const { readCappedBody } = require('./cappedBody')
+const { engineRangeOf, pluginCompatibility } = require('./pluginCompat')
 
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/
 const FETCH_TIMEOUT_MS = 20000
@@ -48,7 +49,16 @@ function assetUrl(id, rel) {
   return `${base()}/${key.replace(/^\/+/, '')}`
 }
 
-function toCard(raw) {
+function catalogCompatibility(raw, appVersion) {
+  return pluginCompatibility({ apiVersion: typeof raw.apiVersion === 'number' ? raw.apiVersion : null, engines: raw.engines }, appVersion)
+}
+
+function catalogEngines(raw) {
+  const alpineShell = engineRangeOf(raw.engines)
+  return alpineShell ? { alpineShell } : null
+}
+
+function toCard(raw, appVersion) {
   if (!raw || typeof raw !== 'object') return null
   const id = typeof raw.id === 'string' ? raw.id : null
   if (!id || !SAFE_ID.test(id)) return null
@@ -84,6 +94,8 @@ function toCard(raw) {
         typeof raw.signature === 'string' ? raw.signature : null,
       ).verified === true,
     apiVersion: typeof raw.apiVersion === 'number' ? raw.apiVersion : 1,
+    engines: catalogEngines(raw),
+    compat: catalogCompatibility(raw, appVersion),
     size: typeof raw.size === 'number' ? raw.size : null,
     publisher: publisherOf(raw.publisher),
     community: raw.community === true,
@@ -97,17 +109,17 @@ function publisherOf(raw) {
   return name ? { slug, name } : null
 }
 
-async function list() {
+async function list({ appVersion } = {}) {
   const json = await fetchJson(`${base()}/plugins/index.json`)
-  const plugins = json && Array.isArray(json.plugins) ? json.plugins.map(toCard).filter(Boolean) : []
+  const plugins = json && Array.isArray(json.plugins) ? json.plugins.map((raw) => toCard(raw, appVersion)).filter(Boolean) : []
   return { base: base(), plugins }
 }
 
-async function detail(id) {
+async function detail(id, { appVersion } = {}) {
   if (typeof id !== 'string' || !SAFE_ID.test(id)) return null
   const json = await fetchJson(`${base()}/plugins/${id}/latest.json`)
   if (!json) return null
-  const card = toCard(json)
+  const card = toCard(json, appVersion)
   if (!card) return null
   return {
     ...card,
@@ -201,7 +213,7 @@ async function swapIntoPlace(staging, finalDir, backup) {
   }
 }
 
-async function install(payload, { pluginsDir, onChange, onInstalled, withPluginStopped = runDirectly, requireSignature = signatureRequired() } = {}) {
+async function install(payload, { pluginsDir, appVersion, onChange, onInstalled, withPluginStopped = runDirectly, requireSignature = signatureRequired() } = {}) {
   const id = payload && typeof payload === 'object' ? payload.id : payload
   if (typeof id !== 'string' || !SAFE_ID.test(id)) return { ok: false, error: 'invalid-id' }
   if (!pluginsDir) return { ok: false, error: 'no-plugins-dir' }
@@ -213,6 +225,8 @@ async function install(payload, { pluginsDir, onChange, onInstalled, withPluginS
     return { ok: false, error: 'catalog-unreachable', detail: String((e && e.message) || e) }
   }
   if (!src) return { ok: false, error: 'not-found' }
+  const compat = catalogCompatibility(src, appVersion)
+  if (compat.reason) return { ok: false, error: 'incompatible', reason: compat.reason }
 
   const bundleRel = typeof src.url === 'string' ? src.url : null
   const sha256 = typeof src.sha256 === 'string' ? src.sha256.toLowerCase() : null

@@ -282,6 +282,11 @@ describe('build', () => {
     )
     await expectBuildRefused({ 'plugin.json': manifestWith({ verified: true }) }, 'plugin.json is not valid: "verified" is not a plugin.json field')
   })
+
+  it('refuses a plugin made for an API version this app does not support, naming the ones it does', async () => {
+    await expectBuildRefused({ 'plugin.json': manifestWith({ apiVersion: 2 }) }, 'plugin.json has "apiVersion": 2, but Alpine Shell supports apiVersion 1')
+    await expectBuildRefused({ 'plugin.json': manifestWith({ apiVersion: 0 }) }, 'plugin.json has "apiVersion": 0, but Alpine Shell supports apiVersion 1')
+  })
 })
 
 describe('stage', () => {
@@ -453,7 +458,7 @@ describe('publish', () => {
   it('signs the reviewed bundle and lists it with its publisher as a community plugin', async () => {
     const { deps, calls } = makeDeps()
     const bundle = await buildAndStage(deps, {
-      'plugin.json': JSON.stringify({ ...MANIFEST, marketplace: { readme: 'README.md' } }),
+      'plugin.json': JSON.stringify({ ...MANIFEST, engines: { alpineShell: '>=0.1.0' }, marketplace: { readme: 'README.md' } }),
       'icon.png': 'png-bytes',
       'README.md': '# Weather',
     })
@@ -475,6 +480,8 @@ describe('publish', () => {
       verified: false,
       publisher: { slug: 'example', name: 'Example Labs' },
       community: true,
+      apiVersion: 1,
+      engines: { alpineShell: '>=0.1.0' },
     })
     const publicKey = fs.readFileSync(path.join(storeDir, 'dev-public-key.pem'), 'utf8')
     expect(crypto.verify(null, Buffer.from(latest.sha256, 'hex'), publicKey, Buffer.from(latest.signature, 'base64'))).toBe(true)
@@ -485,6 +492,8 @@ describe('publish', () => {
       verified: false,
       publisher: { slug: 'example', name: 'Example Labs' },
       community: true,
+      apiVersion: 1,
+      engines: { alpineShell: '>=0.1.0' },
     })
     expect(calls.map((call) => call.body)).toEqual([{ stage: 'publish', ok: true, runUrl: 'https://github.test/runs/2' }])
   })
