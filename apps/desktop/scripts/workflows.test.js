@@ -199,10 +199,11 @@ describe('community plugin workflow', () => {
     expect(stage).not.toContain('inputs.repository')
     expect(stage).not.toContain('inputs.commit')
     expect(stage).not.toContain('communityPlugin.js build')
-    expect(stage).not.toMatch(/bun (?:run|x)\b|bunx/)
+    expect(stage.replace('run: bun run sdk:build\n', '')).not.toMatch(/bun (?:run|x)\b|bunx/)
     const installs = bunInstallCommands(stage)
     expect(installs).toEqual(['bun install --frozen-lockfile --ignore-scripts'])
-    expect(stepIndex(stage, 'Install dependencies')).toBeLessThan(stepIndex(stage, 'Download the bundle'))
+    expect(stepIndex(stage, 'Install dependencies')).toBeLessThan(stepIndex(stage, 'Build the plugin SDK'))
+    expect(stepIndex(stage, 'Build the plugin SDK')).toBeLessThan(stepIndex(stage, 'Download the bundle'))
     expect(stepBody(stage, 'Stage the bundle for review')).toContain('communityPlugin.js stage')
   })
 
@@ -210,6 +211,17 @@ describe('community plugin workflow', () => {
     expect(reportBuildFailure).toContain('needs: [build, stage]\n')
     expect(reportBuildFailure).toContain('if: failure()')
     expect(reportBuildFailure).toContain('report-failure --stage build')
+    expect(bunInstallCommands(reportBuildFailure)).toEqual(['bun install --frozen-lockfile --ignore-scripts'])
+    expect(stepIndex(reportBuildFailure, 'Build the plugin SDK')).toBeLessThan(
+      stepIndex(reportBuildFailure, 'Report the failed build'),
+    )
+  })
+
+  it('builds the plugin SDK before every store job loads communityPlugin.js', () => {
+    for (const job of [stage, reportBuildFailure, publish, revoke]) {
+      expect(stepIndex(job, 'Build the plugin SDK')).toBeGreaterThan(stepIndex(job, 'Install dependencies'))
+      expect(stepBody(job, 'Build the plugin SDK')).toContain('run: bun run sdk:build\n')
+    }
   })
 
   it('signs only the bundle that was reviewed', () => {
