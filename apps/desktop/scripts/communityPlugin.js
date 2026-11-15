@@ -8,6 +8,7 @@ const { extractZip } = require('../electron/pluginZip')
 const { assertAppLoadsPlugin } = require('./pluginAppCheck')
 const { packBundle, readIgnorePatterns, sha256 } = require('./pluginBundle')
 const { postCallback, reportFailure } = require('./pluginCallback')
+const { reportPluginRunFailure } = require('./reportPluginRunFailure')
 const { readManifestFile, assertPluginId, assertPluginVersion } = require('./pluginManifestFile')
 const { NO_CACHE, publishBundle } = require('./pluginPublisher')
 const { resolveSigningKey, signDocument } = require('./pluginSigning')
@@ -28,8 +29,6 @@ const SUBMISSION_ID = /^[A-Za-z0-9_-]{1,128}$/
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 const COMMIT_SHA = /^[0-9a-f]{40}$/
 const SHA256_HEX = /^[0-9a-f]{64}$/
-const FAILURE_STAGES = new Set(['build', 'publish', 'revoke'])
-
 const stagingKey = (submissionId) => `plugins-staging/${submissionId}.alpineplugin`
 
 function needsShell(command) {
@@ -281,12 +280,6 @@ async function revoke(options, deps) {
   console.log(`Published the revocation list (${document.revoked.length} revoked)`)
 }
 
-async function reportFailureCommand({ stage: failedStage, callback, runUrl, error }, deps) {
-  if (!FAILURE_STAGES.has(failedStage)) throw new Error(`Invalid stage: ${failedStage}`)
-  const payload = { ok: false, runUrl: runUrl || null, error: error || `The ${failedStage} job failed` }
-  await postCallback(callback, failedStage === 'revoke' ? payload : { stage: failedStage, ...payload }, deps)
-}
-
 const stringFlag = { type: 'string' }
 
 const COMMANDS = {
@@ -345,7 +338,7 @@ const COMMANDS = {
     options: { stage: stringFlag, callback: stringFlag, 'run-url': stringFlag, error: stringFlag },
     required: ['stage', 'callback'],
     run: (values, deps) =>
-      reportFailureCommand({ stage: values.stage, callback: values.callback, runUrl: values['run-url'], error: values.error }, deps),
+      reportPluginRunFailure({ stage: values.stage, callback: values.callback, runUrl: values['run-url'], error: values.error }, deps),
   },
 }
 
