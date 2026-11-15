@@ -60,3 +60,62 @@ describe('publishing a first-party plugin', () => {
     expect(latest.readmeUrl).toBeUndefined()
   })
 })
+
+describe('publishing the images a readme shows', () => {
+  const storeFile = (relativePath) => path.join(storeDir, 'plugins', PLUGIN_ID, ...relativePath.split('/'))
+
+  function writePluginFile(relativePath, contents) {
+    const target = path.join(pluginDir, ...relativePath.split('/'))
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(target, contents)
+  }
+
+  async function publishWithReadme(readme) {
+    writePluginFile('README.md', readme)
+    await publishFirstParty({ id: PLUGIN_ID, name: 'Clock', version: '1.0.0', marketplace: { readme: 'README.md' } })
+  }
+
+  it('uploads the bundled images next to the readme, where the store page looks for them', async () => {
+    writePluginFile('assets/icon.png', 'png bytes')
+    writePluginFile('docs/popup shot.jpg', 'jpg bytes')
+    writePluginFile('preview.webp', 'webp bytes')
+    await publishWithReadme(
+      [
+        '![Icon](assets/icon.png)',
+        '![Popup](<docs/popup shot.jpg> "The popup")',
+        '<img alt="Preview" src="./preview.webp?raw=true" width="300">',
+      ].join('\n'),
+    )
+
+    expect(fs.readFileSync(storeFile('assets/icon.png'), 'utf8')).toBe('png bytes')
+    expect(fs.readFileSync(storeFile('docs/popup shot.jpg'), 'utf8')).toBe('jpg bytes')
+    expect(fs.readFileSync(storeFile('preview.webp'), 'utf8')).toBe('webp bytes')
+  })
+
+  it('leaves remote, missing, non-image and outside images alone', async () => {
+    fs.writeFileSync(path.join(workDir, 'outside.png'), 'secret')
+    writePluginFile('script.svg', '<svg onload="alert(1)"/>')
+    writePluginFile('notes.txt', 'text')
+    await publishWithReadme(
+      [
+        '![Remote](https://example.com/shot.png)',
+        '![Rooted](/shot.png)',
+        '![Missing](missing.png)',
+        '![Outside](../outside.png)',
+        '![Vector](script.svg)',
+        '![Text](notes.txt)',
+      ].join('\n'),
+    )
+
+    const published = fs.readdirSync(path.join(storeDir, 'plugins', PLUGIN_ID)).sort()
+    expect(published).toEqual(['1.0.0', 'README.md', 'latest.json'])
+    expect(fs.existsSync(path.join(storeDir, 'outside.png'))).toBe(false)
+  })
+
+  it('keeps the store icon when the readme shows a file with the same name', async () => {
+    writePluginFile('icon.png', 'store icon')
+    await publishWithReadme('![Same name](icon.png)')
+
+    expect(fs.readFileSync(storeFile('icon.png'), 'utf8')).toBe('store icon')
+  })
+})

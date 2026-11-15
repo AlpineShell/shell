@@ -9,6 +9,15 @@ const CATALOG_SCHEMA_VERSION = 1
 const IMMUTABLE = 'public, max-age=31536000, immutable'
 const NO_CACHE = 'no-cache'
 const IMAGE_CONTENT_TYPES = { '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }
+const README_IMAGE_CONTENT_TYPES = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+}
+const README_IMAGE_LIMIT = 50
+const README_IMAGE_REFERENCE = /!\[[^\]]*\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+["'][^"']*["'])?\s*\)|<img\b[^>]*?\ssrc\s*=\s*["']([^"']+)["']/gi
 
 const bundleKey = (id, version) => `plugins/${id}/${version}/${id}-${version}${PACKAGE_EXT}`
 const latestKey = (id) => `plugins/${id}/latest.json`
@@ -43,11 +52,37 @@ async function uploadIcon(storage, pluginDir, manifest) {
   return iconUrl
 }
 
+function bundledImagePath(reference) {
+  if (/^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(reference)) return null
+  const relativePath = path.posix.normalize(reference.split(/[?#]/)[0])
+  if (relativePath.startsWith('..') || !README_IMAGE_CONTENT_TYPES[path.posix.extname(relativePath).toLowerCase()]) return null
+  return relativePath
+}
+
+function readmeImagePaths(readmeText) {
+  const paths = new Set()
+  for (const match of readmeText.matchAll(README_IMAGE_REFERENCE)) {
+    const relativePath = bundledImagePath(match[1] || match[2] || match[3])
+    if (relativePath) paths.add(relativePath)
+  }
+  return [...paths].slice(0, README_IMAGE_LIMIT)
+}
+
+async function uploadReadmeImages(storage, pluginDir, manifest, readmeText) {
+  for (const relativePath of readmeImagePaths(readmeText)) {
+    const imagePath = confinedAsset(pluginDir, relativePath)
+    if (!imagePath) continue
+    const contentType = README_IMAGE_CONTENT_TYPES[path.extname(imagePath).toLowerCase()]
+    await storage.put(`plugins/${manifest.id}/${relativePath}`, fs.readFileSync(imagePath), contentType, NO_CACHE)
+  }
+}
+
 async function uploadReadme(storage, pluginDir, manifest) {
   const readmePath = confinedAsset(pluginDir, (manifest.marketplace || {}).readme)
   if (!readmePath) return { readmeUrl: undefined, readmeText: null }
   const readmeText = fs.readFileSync(readmePath, 'utf8')
   const readmeUrl = `plugins/${manifest.id}/README.md`
+  await uploadReadmeImages(storage, pluginDir, manifest, readmeText)
   await storage.put(readmeUrl, Buffer.from(readmeText), 'text/markdown', NO_CACHE)
   return { readmeUrl, readmeText }
 }
@@ -139,8 +174,8 @@ async function publishBundle({ storage, pluginDir, bundle, manifest, signingKey,
     publishedAt: new Date().toISOString(),
   }
   await storage.put(url, bundle, 'application/zip', IMMUTABLE)
-  release.iconUrl = await uploadIcon(storage, pluginDir, manifest)
   Object.assign(release, await uploadReadme(storage, pluginDir, manifest))
+  release.iconUrl = await uploadIcon(storage, pluginDir, manifest)
   const latest = latestDocument(manifest, release, listing)
   await storage.put(latestKey(manifest.id), JSON.stringify(latest, null, 2), 'application/json', NO_CACHE)
   await updateCatalog(storage, catalogCard(manifest, release, listing))
