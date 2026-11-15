@@ -143,23 +143,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.3.12
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Build the plugin SDK
-        run: bun run sdk:build
-
       - name: Report the failed build
         env:
           PLUGIN_BUILD_CALLBACK_TOKEN: ${{ secrets.PLUGIN_BUILD_CALLBACK_TOKEN }}
           CALLBACK_URL: ${{ inputs.callback_url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node apps/desktop/scripts/communityPlugin.js report-failure --stage build --callback "$CALLBACK_URL" --run-url "$RUN_URL" --error "The build failed. The run log has the details."
+        run: node apps/desktop/scripts/reportPluginRunFailure.js --stage build --callback "$CALLBACK_URL" --run-url "$RUN_URL" --error "The build failed. The run log has the details."
 
   publish:
     if: inputs.action == 'publish'
@@ -218,7 +207,7 @@ jobs:
           PLUGIN_BUILD_CALLBACK_TOKEN: ${{ secrets.PLUGIN_BUILD_CALLBACK_TOKEN }}
           CALLBACK_URL: ${{ inputs.callback_url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node apps/desktop/scripts/communityPlugin.js report-failure --stage publish --callback "$CALLBACK_URL" --run-url "$RUN_URL" --error "The publish job failed before it could publish. The run log has the details."
+        run: node apps/desktop/scripts/reportPluginRunFailure.js --stage publish --callback "$CALLBACK_URL" --run-url "$RUN_URL" --error "The publish job failed before it could publish. The run log has the details."
 
   revoke:
     if: inputs.action == 'revoke'
@@ -270,4 +259,4 @@ jobs:
           PLUGIN_BUILD_CALLBACK_TOKEN: ${{ secrets.PLUGIN_BUILD_CALLBACK_TOKEN }}
           CALLBACK_URL: ${{ inputs.callback_url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node apps/desktop/scripts/communityPlugin.js report-failure --stage revoke --callback "$CALLBACK_URL" --run-url "$RUN_URL" --error "The revoke job failed before it could publish the list. The run log has the details."
+        run: node apps/desktop/scripts/reportPluginRunFailure.js --stage revoke --callback "$CALLBACK_URL" --run-url "$RUN_URL" --error "The revoke job failed before it could publish the list. The run log has the details."

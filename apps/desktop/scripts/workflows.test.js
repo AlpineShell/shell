@@ -210,15 +210,26 @@ describe('community plugin workflow', () => {
   it('reports a failed build or stage back to the account service', () => {
     expect(reportBuildFailure).toContain('needs: [build, stage]\n')
     expect(reportBuildFailure).toContain('if: failure()')
-    expect(reportBuildFailure).toContain('report-failure --stage build')
-    expect(bunInstallCommands(reportBuildFailure)).toEqual(['bun install --frozen-lockfile --ignore-scripts'])
-    expect(stepIndex(reportBuildFailure, 'Build the plugin SDK')).toBeLessThan(
-      stepIndex(reportBuildFailure, 'Report the failed build'),
-    )
+    expect(reportBuildFailure).toContain('reportPluginRunFailure.js --stage build')
+    expect(reportBuildFailure).not.toContain('bun install')
   })
 
-  it('builds the plugin SDK before every store job loads communityPlugin.js', () => {
-    for (const job of [stage, reportBuildFailure, publish, revoke]) {
+  it('reports every failure with the script that needs no installed package', () => {
+    expect(communityPlugin).not.toContain('communityPlugin.js report-failure')
+    expect(communityPlugin.match(/reportPluginRunFailure\.js --stage (\w+)/g)).toEqual([
+      'reportPluginRunFailure.js --stage build',
+      'reportPluginRunFailure.js --stage publish',
+      'reportPluginRunFailure.js --stage revoke',
+    ])
+  })
+
+  it('builds the plugin SDK in every job that installs without scripts and loads communityPlugin.js', () => {
+    const jobNames = [...communityPlugin.matchAll(/^ {2}([\w-]+):\n/gm)].map((match) => match[1])
+    const scriptlessJobs = jobNames
+      .map((name) => jobBody(communityPlugin, name))
+      .filter((job) => job.includes('--ignore-scripts') && job.includes('communityPlugin.js'))
+    expect(scriptlessJobs).toEqual([stage, publish, revoke])
+    for (const job of scriptlessJobs) {
       expect(stepIndex(job, 'Build the plugin SDK')).toBeGreaterThan(stepIndex(job, 'Install dependencies'))
       expect(stepBody(job, 'Build the plugin SDK')).toContain('run: bun run sdk:build\n')
     }
