@@ -1,3 +1,5 @@
+import VolumeFill from "./volumeFill";
+
 const BAR_BASES = [0.4, 0.8, 0.55, 1.0, 0.5];
 const BAR_OFFSETS = [0.15, 0.05, 0.1, 0.0, 0.12];
 const MIN_H = 2;
@@ -37,13 +39,22 @@ export function MusicBarsGlyph({ peak, color }: MusicBarsGlyphProps) {
     );
 }
 
-export default function MediaFace({ title, appIcon, peak, darkText }: MediaFaceProps) {
+const QUIETEST_AUDIBLE_GAIN = 0.3;
+
+function audiblePeak(peak: number, volume: MediaFaceVolume | undefined) {
+    if (!volume) return peak;
+    if (volume.level <= 0) return 0;
+    return peak * (QUIETEST_AUDIBLE_GAIN + (1 - QUIETEST_AUDIBLE_GAIN) * Math.min(1, volume.level));
+}
+
+export default function MediaFace({ title, appIcon, peak, darkText, volume }: MediaFaceProps) {
     return (
-        <div className={`${darkText ? "bg-black/5" : "bg-white/10"} flex ${appIcon ? "pl-0.5 pr-2" : "px-2"} rounded-full h-4.5 items-center gap-1.5`}>
+        <div className={`${darkText ? "bg-black/5" : "bg-white/10"} relative isolate overflow-hidden flex ${appIcon ? "pl-0.5 pr-2" : "px-2"} rounded-full h-4.5 items-center gap-1.5`}>
+            {volume && <VolumeFill volume={volume} darkText={darkText} />}
             {appIcon ? (
                 <img src={`data:image/png;base64,${appIcon}`} alt="" className="w-3.5 h-3.5 shrink-0 rounded-[3px]" draggable={false} />
             ) : (
-                <MusicBarsGlyph peak={peak} color={darkText ? "black" : "white"} />
+                <MusicBarsGlyph peak={audiblePeak(peak, volume)} color={darkText ? "black" : "white"} />
             )}
             <span className={`text-[12px] leading-none max-w-24 truncate ${darkText ? "text-black" : "text-white"}`}>
                 {title}

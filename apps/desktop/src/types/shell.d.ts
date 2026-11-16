@@ -1129,10 +1129,31 @@ declare global {
     color: string
   }
 
+  interface MediaFaceVolume {
+    level: number
+    showing: boolean
+  }
+
   interface MediaFaceProps {
     title: string
     appIcon: string | null
     peak: number
+    darkText: boolean
+    volume?: MediaFaceVolume
+  }
+
+  interface VolumeFillProps {
+    volume: MediaFaceVolume
+    darkText: boolean
+  }
+
+  interface VolumeFaceProps {
+    level: number
+    darkText: boolean
+  }
+
+  interface VolumeStatusProps {
+    volume: MediaFaceVolume
     darkText: boolean
   }
 
