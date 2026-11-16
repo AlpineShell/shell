@@ -9,6 +9,7 @@ import MediaFace, { MusicBarsGlyph } from "./mediaFace";
 import MicrophoneFace from "./microphoneFace";
 import StatusFace from "./statusFace";
 import ClockFace from "./clockFace";
+import VolumeFace from "./volumeFace";
 
 const PNG_BASE64 = "iVBORw0KGgo=";
 const TRAY_ICON_URL = `data:image/png;base64,${PNG_BASE64}`;
@@ -201,6 +202,59 @@ describe("MediaFace", () => {
         expect(container.querySelector("img")).toBeNull();
         expect(barHeights(container)).toHaveLength(5);
         expect(container.firstElementChild?.classList).toContain("px-2");
+    });
+
+    const volumeFill = (container: HTMLElement) => container.querySelector<HTMLElement>("[data-volume-fill]");
+
+    it("draws no volume fill when it is not given the volume", () => {
+        const { container } = render(<MediaFace title="Blue in Green" appIcon={null} peak={1} darkText={false} />);
+        expect(volumeFill(container)).toBeNull();
+    });
+
+    it("fills up to the volume and shows the fill only while the volume is changing", () => {
+        const shown = render(<MediaFace title="Blue in Green" appIcon={null} peak={1} darkText={false} volume={{ level: 0.64, showing: true }} />).container;
+        const hidden = render(<MediaFace title="Blue in Green" appIcon={null} peak={1} darkText={false} volume={{ level: 0.64, showing: false }} />).container;
+        expect(volumeFill(shown)?.style.width).toBe("64%");
+        expect(volumeFill(shown)?.style.opacity).toBe("1");
+        expect(volumeFill(hidden)?.style.width).toBe("64%");
+        expect(volumeFill(hidden)?.style.opacity).toBe("0");
+    });
+
+    it("fills behind the app icon too", () => {
+        const { container } = render(<MediaFace title="Blue in Green" appIcon={PNG_BASE64} peak={0} darkText={false} volume={{ level: 0.3, showing: true }} />);
+        expect(volumeFill(container)?.style.width).toBe("30%");
+    });
+
+    it("keeps the music bars as they are at full volume", () => {
+        const plain = render(<MediaFace title="Blue in Green" appIcon={null} peak={0.6} darkText={false} />).container;
+        const atFullVolume = render(<MediaFace title="Blue in Green" appIcon={null} peak={0.6} darkText={false} volume={{ level: 1, showing: false }} />).container;
+        expect(barHeights(atFullVolume)).toEqual(barHeights(plain));
+    });
+
+    it("lowers the music bars with the volume and rests them while muted", () => {
+        const loud = barHeights(render(<MediaFace title="Blue in Green" appIcon={null} peak={0.8} darkText={false} volume={{ level: 0.9, showing: false }} />).container);
+        const quiet = barHeights(render(<MediaFace title="Blue in Green" appIcon={null} peak={0.8} darkText={false} volume={{ level: 0.2, showing: false }} />).container);
+        const muted = barHeights(render(<MediaFace title="Blue in Green" appIcon={null} peak={0.8} darkText={false} volume={{ level: 0, showing: true }} />).container);
+        quiet.forEach((height, i) => expect(height).toBeLessThan(loud[i]));
+        expect(muted).toEqual([2, 2, 2, 2, 2]);
+    });
+});
+
+describe("VolumeFace", () => {
+    it.each([
+        [0, "lucide-volume-x"],
+        [0.2, "lucide-volume1"],
+        [0.8, "lucide-volume2"],
+    ])("shows the speaker for a level of %s", (level, icon) => {
+        const { container } = render(<VolumeFace level={level} darkText={false} />);
+        expect(iconNames(container)).toEqual([icon]);
+    });
+
+    it("fills up to the level, always shown", () => {
+        const { container } = render(<VolumeFace level={0.46} darkText={true} />);
+        const fill = container.querySelector<HTMLElement>("[data-volume-fill]");
+        expect(fill?.style.width).toBe("46%");
+        expect(fill?.style.opacity).toBe("1");
     });
 });
 

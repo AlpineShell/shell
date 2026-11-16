@@ -13,6 +13,7 @@ vi.mock('../../../hooks/useMediaSession', () => ({
 }))
 vi.mock('../../../hooks/useMediaVisualizer', () => ({ useMediaVisualizer: () => media.showVisualizer }))
 vi.mock('../../../hooks/useMediaTimeline', () => ({ useMediaTimeline: () => null }))
+vi.mock('../../../hooks/useVolumeFeedback', () => ({ useVolumeFeedback: () => ({ level: 1, showing: false }) }))
 vi.mock('../shared/popupMenu', () => ({ default: ({ trigger }: { trigger: ReactNode }) => <>{trigger}</> }))
 
 const APP_ICON = 'iVBORw0KGgo='

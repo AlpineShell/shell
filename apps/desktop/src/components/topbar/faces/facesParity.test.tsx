@@ -37,6 +37,7 @@ interface ParityCase {
 }
 
 const bar = vi.hoisted(() => ({ fixture: {} as BarFixture }))
+const LIVE_VOLUME = vi.hoisted(() => ({ level: 0.5, showing: false }))
 
 vi.mock('../shared/popupMenu', () => ({ default: ({ trigger }: { trigger: ReactNode }) => <>{trigger}</> }))
 vi.mock('../calendar/calendarFlyout', () => ({ default: () => null }))
@@ -56,6 +57,7 @@ vi.mock('../../../hooks/useMediaSession', () => ({ useMediaSession: () => ({ ...
 vi.mock('../../../hooks/useMediaVisualizer', () => ({ useMediaVisualizer: () => bar.fixture.showVisualizer }))
 vi.mock('../../../hooks/useMediaTimeline', () => ({ useMediaTimeline: () => null }))
 vi.mock('../../../hooks/useAudioPeak', () => ({ useAudioPeak: () => bar.fixture.peak }))
+vi.mock('../../../hooks/useVolumeFeedback', () => ({ useVolumeFeedback: () => LIVE_VOLUME }))
 vi.mock('../../../hooks/useShellNotice', () => ({ useShellNotice: () => bar.fixture.notice }))
 
 const APP_ICON = 'iVBORw0KGgo='
@@ -210,7 +212,7 @@ const PARITY_CASES: ParityCase[] = [
     name: 'MediaStatus drawing the music bars',
     arrange: () => {},
     live: <MediaStatus />,
-    face: (darkText) => <MediaFace title="Blue in Green" appIcon={null} peak={0.6} darkText={darkText} />,
+    face: (darkText) => <MediaFace title="Blue in Green" appIcon={null} peak={0.6} darkText={darkText} volume={LIVE_VOLUME} />,
   },
   {
     name: 'MediaStatus showing the app icon',
@@ -218,7 +220,7 @@ const PARITY_CASES: ParityCase[] = [
       fixture.showVisualizer = false
     },
     live: <MediaStatus />,
-    face: (darkText) => <MediaFace title="Blue in Green" appIcon={APP_ICON} peak={0.6} darkText={darkText} />,
+    face: (darkText) => <MediaFace title="Blue in Green" appIcon={APP_ICON} peak={0.6} darkText={darkText} volume={LIVE_VOLUME} />,
   },
   {
     name: 'MediaStatus with nothing playing',
