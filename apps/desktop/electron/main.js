@@ -61,6 +61,7 @@ try { require('node:module').enableCompileCache(path.join(app.getPath('userData'
 
 protocol.registerSchemesAsPrivileged(PRIVILEGED_SCHEMES)
 const ipc = require('./ipc')
+ipc.setFailureRecorder((kind, { label, error }) => crashLog.record(kind, { label, error: describeError(error) }))
 const wallpaper = require('./modules/wallpaper')
 const { startWallpaperScaling } = require('./modules/wallpaperScaling')
 const network = require('./modules/network')
@@ -1117,10 +1118,8 @@ ipc.handle('windows/set-settings-page', (_event, name) => {
 })
 
 const { SETTINGS_ICON_DATA_URL } = require('./settingsIcon')
-ipcMain.on('windows/settings-icon', (e) => { e.returnValue = SETTINGS_ICON_DATA_URL })
-ipcMain.on('windows/settings-init', (e) => {
-  e.returnValue = pendingSettingsPage
-})
+ipc.answerSync('windows/settings-icon', () => SETTINGS_ICON_DATA_URL)
+ipc.answerSync('windows/settings-init', () => pendingSettingsPage)
 const SETTINGS_APP_PATH = 'alpine:settings'
 openApps.setShellAppsProvider(() => {
   if (!settingsWin || settingsWin.isDestroyed()) return []

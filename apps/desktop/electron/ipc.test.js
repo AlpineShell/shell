@@ -4,6 +4,7 @@ import { createRequire } from 'module'
 const nodeRequire = createRequire(import.meta.url)
 const electronModuleId = nodeRequire.resolve('electron')
 let openWindows = []
+const syncListeners = new Map()
 
 nodeRequire.cache[electronModuleId] = {
   id: electronModuleId,
@@ -11,11 +12,11 @@ nodeRequire.cache[electronModuleId] = {
   loaded: true,
   exports: {
     BrowserWindow: { getAllWindows: () => openWindows },
-    ipcMain: { handle: () => {} },
+    ipcMain: { handle: () => {}, on: (channel, listener) => syncListeners.set(channel, listener) },
   },
 }
 
-const { broadcast, broadcastToTopbars, parsePageMode, pageModeHearsChannel } = nodeRequire('./ipc.js')
+const { answerSync, broadcast, broadcastToTopbars, pageModeHearsChannel, parsePageMode, register, setFailureRecorder } = nodeRequire('./ipc.js')
 
 const PACKAGED_PAGE = 'file:///opt/alpine-shell/resources/app.asar/dist/index.html'
 const DEV_PAGE = 'http://localhost:5173/'
@@ -126,5 +127,69 @@ describe('broadcast', () => {
     for (const win of [desktop, screenshot, settings, setup, plugin, loading, closed]) {
       expect(win.received).toEqual([])
     }
+  })
+})
+
+describe('answering a renderer that waits synchronously', () => {
+  let failures
+
+  beforeEach(() => {
+    syncListeners.clear()
+    failures = []
+    setFailureRecorder((kind, detail) => failures.push({ kind, ...detail }))
+  })
+
+  function askSync(channel) {
+    const event = {}
+    syncListeners.get(channel)(event)
+    return event
+  }
+
+  it('replies with what the reader returns at the time of asking', () => {
+    let wallpaper = null
+    answerSync('windows/wallpaper-init', () => wallpaper)
+    wallpaper = 'alpine-wallpaper://image?p=bloom.jpg'
+    expect(askSync('windows/wallpaper-init').returnValue).toBe('alpine-wallpaper://image?p=bloom.jpg')
+    expect(failures).toEqual([])
+  })
+
+  it('still replies, with null, when the reader throws, and records why', () => {
+    answerSync('windows/wallpaper-init', () => {
+      throw new Error('stat failed')
+    })
+    const event = askSync('windows/wallpaper-init')
+    expect(event).toHaveProperty('returnValue', null)
+    expect(failures).toHaveLength(1)
+    expect(failures[0]).toMatchObject({ kind: 'sync-reply-failed', label: 'windows/wallpaper-init' })
+    expect(failures[0].error.message).toBe('stat failed')
+  })
+})
+
+describe('starting a module', () => {
+  let failures
+
+  beforeEach(() => {
+    failures = []
+    setFailureRecorder((kind, detail) => failures.push({ kind, ...detail }))
+  })
+
+  it('records a module whose start throws and keeps starting the rest', () => {
+    let laterStarted = false
+    register(
+      { handlers: { 'windows/wallpaper': () => null }, start: () => { throw new Error('registry unavailable') } },
+      { handlers: { 'clock/prefs-get': () => null }, start: () => { laterStarted = true } },
+    )
+    expect(laterStarted).toBe(true)
+    expect(failures).toHaveLength(1)
+    expect(failures[0]).toMatchObject({ kind: 'module-start-failed', label: 'windows' })
+    expect(failures[0].error.message).toBe('registry unavailable')
+  })
+
+  it('records a module whose asynchronous start rejects', async () => {
+    register({ handlers: { 'network/wifi-state': () => null }, start: () => Promise.reject(new Error('wlan unavailable')) })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(failures).toHaveLength(1)
+    expect(failures[0]).toMatchObject({ kind: 'module-start-failed', label: 'network' })
   })
 })

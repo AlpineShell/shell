@@ -1,7 +1,8 @@
-const { dialog, app, ipcMain, nativeImage } = require('electron')
+const { dialog, app, nativeImage } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const koffi = require('koffi')
+const { answerSync } = require('../ipc')
 const { readCurrentUserStringValue, watchCurrentUserStringValue } = require('../registryWatch')
 const { isWallpaperFile, removedPresetReplacement } = require('./wallpaperPresets')
 
@@ -271,6 +272,7 @@ module.exports = {
 
   start(broadcast) {
     broadcastFn = broadcast
+    answerSync('windows/wallpaper-init', () => encode(lastPath))
     const saved = loadPref()
     if (saved && fs.existsSync(saved)) {
       lastPath = saved
@@ -290,9 +292,5 @@ module.exports = {
     app.on('will-quit', desktopWallpaperWatch.stop)
     if (!lastPath) lastPath = readDesktopWallpaperPath()
     replaceRemovedPreset(lastPath || saved)
-
-    ipcMain.on('windows/wallpaper-init', (event) => {
-      event.returnValue = encode(lastPath)
-    })
   },
 }

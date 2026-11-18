@@ -8,6 +8,7 @@ const bluetoothNative = require('../bluetoothNative')
 const { groupDevices, inStableOrder, reconcileDeviceRead } = require('../bluetoothDevices')
 const operations = require('../bluetoothOperations')
 const batterySaver = require('./batterySaver')
+const { answerSync } = require('../ipc')
 
 const POLL_INTERVAL_MS = 1000
 const BATTERY_SAVER_POLL_INTERVAL_MS = 5000
@@ -396,10 +397,7 @@ function guarded(action) {
 }
 
 function registerInitChannel() {
-  const { ipcMain } = require('electron')
-  ipcMain.on('system/bluetooth-init', (event) => {
-    event.returnValue = currentState()
-  })
+  answerSync('system/bluetooth-init', currentState)
 }
 
 function subscribeToWake() {
