@@ -1,3 +1,5 @@
+const { answerSync } = require('../ipc')
+
 const GROUND_COLORS = {
   light: '#f7f7f7',
   dark: '#1f2020',
@@ -81,10 +83,7 @@ module.exports = {
   },
   start(b) {
     broadcast = b
-    const { ipcMain } = require('electron')
+    answerSync('theme/init', getTheme)
     lastBroadcast = getTheme()
-    ipcMain.on('theme/init', (event) => {
-      event.returnValue = getTheme()
-    })
   },
 }

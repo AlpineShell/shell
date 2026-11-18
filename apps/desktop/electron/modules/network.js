@@ -29,6 +29,7 @@ const wifiSession = require('../wifiSession')
 const { readEthernetSwitchesWifiOff } = require('../wifiSwitching')
 const batterySaver = require('./batterySaver')
 const { readNetworkDetails } = require('./networkDetails')
+const { answerSync } = require('../ipc')
 
 const NETWORK_REFRESH_INTERVAL_MS = 5000
 const BATTERY_SAVER_NETWORK_REFRESH_INTERVAL_MS = 60000
@@ -537,10 +538,8 @@ module.exports = {
 
   start(broadcast) {
     broadcastFn = broadcast
-    const { app, ipcMain } = require('electron')
-    ipcMain.on('network/wifi-init', (event) => {
-      event.returnValue = { status: cachedStatus, radio: cachedRadioEnabled }
-    })
+    const { app } = require('electron')
+    answerSync('network/wifi-init', () => ({ status: cachedStatus, radio: cachedRadioEnabled }))
     refreshNetworkStatusQuietly()
     stopPolling = batterySaver.startAdaptivePolling(
       refreshNetworkStatusQuietly,

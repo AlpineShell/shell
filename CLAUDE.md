@@ -31,6 +31,8 @@ Each backend module in `electron/modules/` exports:
 
 Modules are registered in `electron/main.js` via `ipc.register(...)`.
 
+The preload asks the main process for boot data with `ipcRenderer.sendSync` before any page renders, and a sync message nobody answers blocks that renderer for good: the desktop stays its bare `#1a1a2e` and the Ridge never appears. Answer every sync channel with `ipc.answerSync(channel, read)`, which replies `null` when `read` throws, and register it first in `start`, before anything that can fail. A `start` that throws and a reply that fails are written to `<userData>/crash-log.json`.
+
 ### Hook Pattern (Frontend)
 React hooks in `src/hooks/` follow a consistent pattern:
 - Use `useShellState` for read-only state (fetch initial value, subscribe to changes)

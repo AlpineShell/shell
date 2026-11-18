@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const { answerSync } = require('../ipc')
 
 const STORE_FILE = 'topbar-layout.json'
 const SLOTS = ['left', 'center', 'right']
@@ -78,10 +79,7 @@ module.exports = {
 
   start(broadcast) {
     broadcastRef = broadcast
+    answerSync('topbar/layout-init', getLayout)
     load()
-    const { ipcMain } = require('electron')
-    ipcMain.on('topbar/layout-init', (event) => {
-      event.returnValue = getLayout()
-    })
   },
 }

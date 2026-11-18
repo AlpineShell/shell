@@ -90,16 +90,45 @@ function registerHandlers(label, handlers) {
   }
 }
 
+let recordFailure = () => {}
+
+function setFailureRecorder(recorder) {
+  recordFailure = typeof recorder === 'function' ? recorder : () => {}
+}
+
+function reportFailure(kind, label, error) {
+  try {
+    recordFailure(kind, { label, error })
+  } catch {}
+}
+
+function replySync(event, channel, read) {
+  try {
+    event.returnValue = read(event)
+  } catch (e) {
+    console.error(`[ipc] sync reply for '${channel}' failed:`, e?.message ?? e)
+    reportFailure('sync-reply-failed', channel, e)
+    event.returnValue = null
+  }
+}
+
+function answerSync(channel, read) {
+  const { ipcMain } = require('electron')
+  ipcMain.on(channel, (event) => replySync(event, channel, read))
+}
+
 function startModule(label, mod) {
   try {
     const result = mod.start?.(broadcast, broadcastToTopbars)
     if (result && typeof result.catch === 'function') {
       result.catch((e) => {
         console.error(`[ipc] ${label} start rejected:`, e?.message ?? e)
+        reportFailure('module-start-failed', label, e)
       })
     }
   } catch (e) {
     console.error(`[ipc] ${label} start failed:`, e?.message ?? e)
+    reportFailure('module-start-failed', label, e)
   }
 }
 
@@ -116,4 +145,4 @@ function register(...modules) {
   }
 }
 
-module.exports = { register, handle, broadcast, broadcastToTopbars, parsePageMode, pageModeHearsChannel }
+module.exports = { register, handle, answerSync, setFailureRecorder, broadcast, broadcastToTopbars, parsePageMode, pageModeHearsChannel }

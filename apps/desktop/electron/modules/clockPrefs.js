@@ -1,7 +1,8 @@
-const { app, ipcMain } = require('electron')
+const { app } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { runPowerShell } = require('../powershell')
+const { answerSync } = require('../ipc')
 
 const STORE_FILE = 'clock-prefs.json'
 const TIME_FORMATS = ['auto', '12h', '24h']
@@ -93,10 +94,8 @@ module.exports = {
   },
   start(b) {
     broadcast = b
+    answerSync('clock/prefs-init', getPrefs)
     load()
-    ipcMain.on('clock/prefs-init', (event) => {
-      event.returnValue = getPrefs()
-    })
     detectSystemTimeFormat()
   },
 }
