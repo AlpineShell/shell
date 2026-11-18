@@ -81,11 +81,12 @@ const SETTINGS_FOLDED_INTO_RIDGE = [
 const PERSONAL_SIDEBAR: SettingsPageId[] = ['wallpaper', 'ridge', 'appearance']
 
 const SECTION_PAGE_LISTS: Record<SettingsSectionId, SettingsPageId[]> = {
-  home: ['home', 'revert'],
+  home: ['home'],
+  devices: ['wifi', 'bluetooth', 'sound', 'displays', 'battery'],
   personalization: PERSONAL_SIDEBAR,
   desktop: ['search', 'tiling', 'shortcuts'],
-  devices: ['displays', 'wifi', 'bluetooth', 'sound', 'battery', 'input'],
-  system: ['apps', 'date-time', 'plugins', 'updates'],
+  system: ['date-time', 'input', 'apps', 'updates', 'revert'],
+  plugins: ['plugins'],
 }
 
 function pageList(section: SettingsSectionId): SettingsPageId[] {
@@ -189,17 +190,18 @@ describe('settings pages', () => {
     expect(pageList('personalization')).toEqual(PERSONAL_SIDEBAR)
   })
 
-  it('lists each section in the order the section bar shows it', () => {
+  it('lists each section in the order the sidebar shows it', () => {
     expect([...SETTINGS_SECTIONS].sort((a, b) => a.order - b.order).map((section) => section.id)).toEqual([
       'home',
+      'devices',
       'personalization',
       'desktop',
-      'devices',
       'system',
+      'plugins',
     ])
   })
 
-  it('lists every section with its own pages, Revert to Windows under Home', () => {
+  it('lists every section with its own pages, Revert to Windows last under System', () => {
     for (const section of SETTINGS_SECTIONS) expect(pageList(section.id), section.id).toEqual(SECTION_PAGE_LISTS[section.id])
   })
 

@@ -914,16 +914,24 @@ declare global {
     onNavigate: (path: string) => void
   }
 
-  interface SettingsNavButtonProps {
-    label: string
+  interface SettingsSidebarItemIconProps {
+    item: SettingsSidebarItem
     active: boolean
-    icon: import('react').ReactNode
-    onClick: () => void
   }
 
-  interface PluginPagesNavProps {
-    pages: PluginSettingsPageEntry[]
+  interface SettingsSidebarGroupProps {
+    sidebarSection: SettingsSidebarSection
+    open: boolean
     activeRoute: string | null
+    onToggle: () => void
+    onNavigate: (path: string) => void
+  }
+
+  interface SettingsSidebarItemButtonProps {
+    item: SettingsSidebarItem
+    label: string
+    active: boolean
+    nested: boolean
     onNavigate: (path: string) => void
   }
 
@@ -943,12 +951,6 @@ declare global {
     enabled: boolean
     onClick: () => void
     children: import('react').ReactNode
-  }
-
-  interface SettingsSectionTabProps {
-    label: string
-    active: boolean
-    onClick: () => void
   }
 
   interface MarketplacePlugin {
@@ -1362,7 +1364,9 @@ declare global {
 
   type SettingsApplies = 'instant' | 'confirm' | 'restart' | 'draft'
 
-  type SettingsSectionId = 'home' | 'personalization' | 'desktop' | 'devices' | 'system'
+  type SettingsSectionId = 'home' | 'personalization' | 'desktop' | 'devices' | 'system' | 'plugins'
+
+  type SettingsSidebarPlacement = 'pages' | 'group'
 
   type SettingsPageId =
     | 'home'
@@ -1398,6 +1402,7 @@ declare global {
     label: string
     icon: SettingsIcon
     order: number
+    sidebar: SettingsSidebarPlacement
   }
 
   interface SettingsPage {
@@ -1408,8 +1413,18 @@ declare global {
     keywords: string[]
     icon: SettingsIcon
     section: SettingsSectionId | null
+    groupLabel?: string
     kind: SettingsPageKind
     order: number
+  }
+
+  type SettingsSidebarItem =
+    | { kind: 'page'; route: string; page: SettingsPage }
+    | { kind: 'plugin-page'; route: string; page: PluginSettingsPageEntry }
+
+  interface SettingsSidebarSection {
+    section: SettingsSection
+    items: SettingsSidebarItem[]
   }
 
   interface SettingsToggleControl {

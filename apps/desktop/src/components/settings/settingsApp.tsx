@@ -1,9 +1,14 @@
-import { Component, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, ChevronLeft, Puzzle } from 'lucide-react'
+import { Component, Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Puzzle } from 'lucide-react'
 import { SearchField } from '@alpine/ui'
-import { SETTINGS_PAGES, SETTINGS_SECTIONS, settingsPageByRoute } from '../../settings/registry'
+import { SETTINGS_SECTIONS, settingsPageByRoute } from '../../settings/registry'
+import {
+  groupHoldingRoute,
+  settingsSidebarSections,
+  showsAsGroup,
+  sidebarItemLabel,
+} from '../../settings/settingsSidebar'
 import { SETTINGS_SEARCH_LIMIT, searchSettings } from '../../settings/settingsSearch'
-import { pluginIdFromSettingsRoute } from '../../plugins/pluginSettingsPages'
 import { SETTINGS_ROUTE_PAGES, settingsRouteView } from './settingsRoutes'
 import SettingsSearchResults from './settingsSearchResults'
 import { highlightSetting } from '../../hooks/useHighlightedSetting'
@@ -17,29 +22,29 @@ const titleBarArea = { height: 'env(titlebar-area-height, 40px)', width: 'env(ti
 
 const NO_PLUGIN_PAGES: PluginSettingsPageEntry[] = []
 
-const PLUGIN_NAV_LABEL = 'Plugins'
+const OPEN_GROUPS_KEY = 'settings.openGroups'
 
-const PLUGIN_PAGES_SECTION: SettingsSectionId = 'system'
+const SECTION_IDS = new Set<string>(SETTINGS_SECTIONS.map((section) => section.id))
 
-const FALLBACK_SECTION: SettingsSectionId = 'home'
-
-interface NavSection {
-  id: SettingsSectionId
-  label: string
-  pages: SettingsPage[]
+function isSectionId(value: unknown): value is SettingsSectionId {
+  return typeof value === 'string' && SECTION_IDS.has(value)
 }
 
-function navSections(): NavSection[] {
-  return [...SETTINGS_SECTIONS]
-    .sort((a, b) => a.order - b.order)
-    .map((section) => ({
-      id: section.id,
-      label: section.label,
-      pages: SETTINGS_PAGES.filter(
-        (page) => page.section === section.id && page.route !== null && !page.route.includes('/')
-      ).sort((a, b) => a.order - b.order),
-    }))
-    .filter((section) => section.pages.length > 0)
+function readOpenGroups(): SettingsSectionId[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY) ?? '[]')
+    return Array.isArray(parsed) ? parsed.filter(isSectionId) : []
+  } catch {
+    return []
+  }
+}
+
+function writeOpenGroups(groups: ReadonlySet<SettingsSectionId>) {
+  try {
+    localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify([...groups]))
+  } catch {
+    return
+  }
 }
 
 function routeLabel(route: string, pluginPages: PluginSettingsPageEntry[]): string {
@@ -51,10 +56,10 @@ function pageShownAt(path: string): SettingsPage | null {
   return settingsPageByRoute(aliased ?? path) ?? settingsPageByRoute(path.split('/')[0])
 }
 
-function sectionOfPath(path: string): SettingsSectionId {
-  const section = pageShownAt(path)?.section
-  if (section) return section
-  return pluginIdFromSettingsRoute(path) === null ? FALLBACK_SECTION : PLUGIN_PAGES_SECTION
+function sidebarRouteOf(path: string, sidebar: SettingsSidebarSection[]): string | null {
+  if (sidebar.some((sidebarSection) => sidebarSection.items.some((item) => item.route === path))) return path
+  const route = pageShownAt(path)?.route
+  return route ? route.split('/')[0] : null
 }
 
 function parentPath(path: string): string | null {
@@ -74,33 +79,29 @@ export default function SettingsApp() {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const [runFailure, setRunFailure] = useState<SettingsSearchRunFailure | null>(null)
-  const lastPathInSection = useRef<Partial<Record<SettingsSectionId, string>>>({})
+  const sidebar = useMemo(() => settingsSidebarSections(pluginPages), [pluginPages])
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<SettingsSectionId>>(() => {
+    const opened = new Set(readOpenGroups())
+    const initialGroup = groupHoldingRoute(sidebarRouteOf(history[history.length - 1], sidebar), sidebar)
+    if (initialGroup) opened.add(initialGroup)
+    return opened
+  })
 
   const currentPath = history[historyIndex]
-  const topSegment = currentPath.split('/')[0]
-  const activeSectionId = sectionOfPath(currentPath)
   const canBack = historyIndex > 0
   const canForward = historyIndex < history.length - 1
-  const sections = navSections()
-  const activeSection = sections.find((section) => section.id === activeSectionId) ?? sections[0]
-  const sidebarPluginPages = pluginPages.filter((page) => page.topLevel)
-  const pagePluginList = activeSectionId === PLUGIN_PAGES_SECTION ? sidebarPluginPages : NO_PLUGIN_PAGES
 
   const ranked = useMemo(() => searchSettings(query), [query])
   const matches = useMemo(() => ranked.slice(0, SETTINGS_SEARCH_LIMIT), [ranked])
   const searching = query.trim().length > 0
   const selected = matches.length === 0 ? -1 : Math.min(activeIndex, matches.length - 1)
-  const pluginPageActive = !searching && sidebarPluginPages.some((page) => page.route === currentPath)
+  const activeRoute = searching ? null : sidebarRouteOf(currentPath, sidebar)
 
   const searchRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const listId = useId()
   const rowBase = useId()
   const rowId = (index: number) => `${rowBase}-${index}`
-
-  useEffect(() => {
-    lastPathInSection.current[activeSectionId] = currentPath
-  }, [activeSectionId, currentPath])
 
   function clearSearch() {
     setQuery('')
@@ -115,27 +116,45 @@ export default function SettingsApp() {
     })
   }
 
+  function changeOpenGroups(next: ReadonlySet<SettingsSectionId>) {
+    setOpenGroups(next)
+    writeOpenGroups(next)
+  }
+
+  function toggleGroup(id: SettingsSectionId) {
+    const next = new Set(openGroups)
+    if (!next.delete(id)) next.add(id)
+    changeOpenGroups(next)
+  }
+
+  function revealInSidebar(path: string) {
+    const group = groupHoldingRoute(sidebarRouteOf(path, sidebar), sidebar)
+    if (group && !openGroups.has(group)) changeOpenGroups(new Set([...openGroups, group]))
+  }
+
   function navigate(path: string) {
     clearSearch()
     if (path === currentPath) return
+    revealInSidebar(path)
     const next = history.slice(0, historyIndex + 1)
     next.push(path)
     setHistory(next)
     setHistoryIndex(next.length - 1)
   }
 
-  function openSection(section: NavSection) {
-    navigate(lastPathInSection.current[section.id] ?? (section.pages[0].route as string))
+  function moveInHistory(index: number) {
+    revealInSidebar(history[index])
+    setHistoryIndex(index)
   }
 
   function back() {
     clearSearch()
-    if (canBack) setHistoryIndex(historyIndex - 1)
+    if (canBack) moveInHistory(historyIndex - 1)
   }
 
   function forward() {
     clearSearch()
-    if (canForward) setHistoryIndex(historyIndex + 1)
+    if (canForward) moveInHistory(historyIndex + 1)
   }
 
   function activateMatch(target: SettingsSearchTarget) {
@@ -227,16 +246,6 @@ export default function SettingsApp() {
             <ArrowRight size={15} />
           </HistoryButton>
         </div>
-        <nav aria-label="Sections" className="ml-2 flex items-center gap-0.5" style={noDragRegion}>
-          {sections.map((section) => (
-            <SectionTab
-              key={section.id}
-              label={section.label}
-              active={!searching && section.id === activeSection.id}
-              onClick={() => openSection(section)}
-            />
-          ))}
-        </nav>
         <div className="ml-auto mr-2 w-64 min-w-0 shrink" style={noDragRegion}>
           <SearchField
             ref={searchRef}
@@ -257,21 +266,33 @@ export default function SettingsApp() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav aria-label={activeSection.label} className="flex w-56 shrink-0 flex-col gap-0.5 overflow-auto px-2 pt-1 pb-3">
-          {activeSection.pages.map((page) => {
-            const Icon = page.icon
-            const active = page.route === topSegment && !searching && !pluginPageActive
-            return (
-              <SettingsNavButton
-                key={page.id}
-                label={page.label}
-                active={active}
-                icon={<Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />}
-                onClick={() => navigate(page.route as string)}
+        <nav aria-label="Settings" className="flex w-56 shrink-0 flex-col gap-0.5 overflow-auto px-2 pt-1 pb-3">
+          {sidebar.map((sidebarSection) =>
+            showsAsGroup(sidebarSection) ? (
+              <SidebarGroup
+                key={sidebarSection.section.id}
+                sidebarSection={sidebarSection}
+                open={openGroups.has(sidebarSection.section.id)}
+                activeRoute={activeRoute}
+                onToggle={() => toggleGroup(sidebarSection.section.id)}
+                onNavigate={navigate}
               />
+            ) : (
+              <Fragment key={sidebarSection.section.id}>
+                {sidebarSection.items.map((item) => (
+                  <SidebarItem
+                    key={item.route}
+                    item={item}
+                    label={sidebarItemLabel(item, false)}
+                    active={item.route === activeRoute}
+                    nested={false}
+                    onNavigate={navigate}
+                  />
+                ))}
+                {sidebarSection.section.sidebar === 'pages' && <div aria-hidden className="h-2.5 shrink-0" />}
+              </Fragment>
             )
-          })}
-          <PluginPagesNav pages={pagePluginList} activeRoute={searching ? null : currentPath} onNavigate={navigate} />
+          )}
         </nav>
 
         <main
@@ -318,54 +339,57 @@ function HistoryButton({ label, enabled, onClick, children }: SettingsHistoryBut
   )
 }
 
-function SectionTab({ label, active, onClick }: SettingsSectionTabProps) {
+function SidebarGroup({ sidebarSection, open, activeRoute, onToggle, onNavigate }: SettingsSidebarGroupProps) {
+  const { section, items } = sidebarSection
+  const Icon = section.icon
+  const holdsActivePage = !open && items.some((item) => item.route === activeRoute)
   return (
-    <button
-      onClick={onClick}
-      aria-current={active ? 'page' : undefined}
-      className={`focus-ring h-7 cursor-pointer rounded-field px-3 text-dense transition-colors ${
-        active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
-      }`}
-    >
-      {label}
-    </button>
-  )
-}
-
-function SettingsNavButton({ label, active, icon, onClick }: SettingsNavButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      aria-current={active ? 'page' : undefined}
-      className={`focus-ring flex h-9 shrink-0 cursor-pointer items-center gap-2.5 rounded-field px-3 text-left text-dense transition-colors ${
-        active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  )
-}
-
-function PluginPagesNav({ pages, activeRoute, onNavigate }: PluginPagesNavProps) {
-  if (pages.length === 0) return null
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="px-3 pt-3 pb-1 text-eyebrow uppercase text-ink-faint select-none">{PLUGIN_NAV_LABEL}</span>
-      {pages.map((page) => {
-        const active = page.route === activeRoute
-        return (
-          <SettingsNavButton
-            key={page.route}
-            label={page.label}
-            active={active}
-            icon={<PluginPageIcon page={page} active={active} />}
-            onClick={() => onNavigate(page.route)}
+    <>
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className={`focus-ring flex h-9 shrink-0 cursor-pointer items-center gap-2.5 rounded-field pr-2 pl-3 text-left text-dense transition-colors hover:bg-fill-ghost hover:text-ink-primary ${
+          holdsActivePage ? 'font-medium text-ink-primary' : 'text-ink-secondary'
+        }`}
+      >
+        <Icon size={15} className={holdsActivePage ? 'opacity-90' : 'opacity-60'} />
+        {section.label}
+        <ChevronRight size={13} className={`ml-auto text-ink-faint transition-transform duration-150 ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open &&
+        items.map((item) => (
+          <SidebarItem
+            key={item.route}
+            item={item}
+            label={sidebarItemLabel(item, true)}
+            active={item.route === activeRoute}
+            nested
+            onNavigate={onNavigate}
           />
-        )
-      })}
-    </div>
+        ))}
+    </>
   )
+}
+
+function SidebarItem({ item, label, active, nested, onNavigate }: SettingsSidebarItemButtonProps) {
+  return (
+    <button
+      onClick={() => onNavigate(item.route)}
+      aria-current={active ? 'page' : undefined}
+      className={`focus-ring flex shrink-0 cursor-pointer items-center gap-2.5 rounded-field pr-3 text-left text-dense transition-colors ${
+        nested ? 'h-8 pl-[37px]' : 'h-9 pl-3'
+      } ${active ? 'bg-surface-3 font-medium text-ink-primary' : 'text-ink-quiet hover:bg-fill-ghost hover:text-ink-primary'}`}
+    >
+      {!nested && <SidebarItemIcon item={item} active={active} />}
+      {label}
+    </button>
+  )
+}
+
+function SidebarItemIcon({ item, active }: SettingsSidebarItemIconProps) {
+  if (item.kind === 'plugin-page') return <PluginPageIcon page={item.page} active={active} />
+  const Icon = item.page.icon
+  return <Icon size={15} className={active ? 'opacity-90' : 'opacity-60'} />
 }
 
 function PluginPageIcon({ page, active }: PluginPageIconProps) {
