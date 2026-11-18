@@ -69,11 +69,12 @@ import { resolveTimeFormat } from '../components/topbar/calendar/calendarLayout'
 export const SETTINGS_PAGE_GROUP = 'Page'
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
-  { id: 'home', label: 'Home', icon: House, order: 0 },
-  { id: 'personalization', label: 'Personal', icon: Paintbrush, order: 1 },
-  { id: 'desktop', label: 'Desktop', icon: Layers, order: 2 },
-  { id: 'devices', label: 'Devices', icon: Plug, order: 3 },
-  { id: 'system', label: 'System', icon: MonitorCog, order: 4 },
+  { id: 'home', label: 'Home', icon: House, order: 0, sidebar: 'pages' },
+  { id: 'devices', label: 'Devices', icon: Plug, order: 1, sidebar: 'pages' },
+  { id: 'personalization', label: 'Personal', icon: Paintbrush, order: 2, sidebar: 'group' },
+  { id: 'desktop', label: 'Desktop', icon: Layers, order: 3, sidebar: 'group' },
+  { id: 'system', label: 'System', icon: MonitorCog, order: 4, sidebar: 'group' },
+  { id: 'plugins', label: 'Plugins', icon: Puzzle, order: 5, sidebar: 'group' },
 ]
 
 const INPUT_KEYWORDS = [
@@ -132,9 +133,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: 'Switch back to Windows Explorer',
     keywords: ['revert', 'uninstall shell', 'delete', 'remove', 'explorer', 'windows'],
     icon: RotateCcw,
-    section: 'home',
+    section: 'system',
     kind: 'manager',
-    order: 1,
+    order: 8,
   },
   {
     id: 'wallpaper',
@@ -187,9 +188,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: 'Your languages, the keyboard layouts attached to them, and the default input method',
     keywords: INPUT_KEYWORDS,
     icon: Keyboard,
-    section: 'devices',
+    section: 'system',
     kind: 'settings',
-    order: 5,
+    order: 1,
   },
   {
     id: 'date-time',
@@ -200,7 +201,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: CalendarClock,
     section: 'system',
     kind: 'settings',
-    order: 5,
+    order: 0,
   },
   {
     id: 'tray-icons',
@@ -255,7 +256,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Volume2,
     section: 'devices',
     kind: 'settings',
-    order: 3,
+    order: 2,
   },
   {
     id: 'displays',
@@ -266,7 +267,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Monitor,
     section: 'devices',
     kind: 'manager',
-    order: 0,
+    order: 3,
   },
   {
     id: 'wifi',
@@ -277,7 +278,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Wifi,
     section: 'devices',
     kind: 'manager',
-    order: 1,
+    order: 0,
   },
   {
     id: 'bluetooth',
@@ -288,7 +289,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Bluetooth,
     section: 'devices',
     kind: 'manager',
-    order: 2,
+    order: 1,
   },
   {
     id: 'apps',
@@ -299,7 +300,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: AppWindow,
     section: 'system',
     kind: 'hub',
-    order: 0,
+    order: 2,
   },
   {
     id: 'apps-installed',
@@ -310,7 +311,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Package,
     section: 'system',
     kind: 'manager',
-    order: 1,
+    order: 3,
   },
   {
     id: 'apps-startup',
@@ -321,7 +322,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Power,
     section: 'system',
     kind: 'manager',
-    order: 2,
+    order: 4,
   },
   {
     id: 'apps-running',
@@ -332,7 +333,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: Activity,
     section: 'system',
     kind: 'manager',
-    order: 3,
+    order: 5,
   },
   {
     id: 'apps-defaults',
@@ -343,7 +344,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     icon: FileType,
     section: 'system',
     kind: 'manager',
-    order: 4,
+    order: 6,
   },
   {
     id: 'plugins',
@@ -352,9 +353,10 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: 'Install, enable and remove plugins',
     keywords: ['plugins', 'extensions', 'add-ons', 'addons', 'marketplace'],
     icon: Puzzle,
-    section: 'system',
+    section: 'plugins',
+    groupLabel: 'Manage plugins',
     kind: 'manager',
-    order: 6,
+    order: 0,
   },
   {
     id: 'updates',
