@@ -87,9 +87,16 @@ async function uploadReadme(storage, pluginDir, manifest) {
   return { readmeUrl, readmeText }
 }
 
+const OFFICIAL_PUBLISHER_SLUGS = new Set(['alpine', 'alpine-shell', 'alpineshell'])
+
+function isOfficialPublisher(publisher) {
+  return Boolean(publisher && OFFICIAL_PUBLISHER_SLUGS.has(publisher.slug))
+}
+
 function listingFields(listing) {
   if (!listing) return {}
-  return { verified: false, publisher: listing.publisher, community: true }
+  const official = isOfficialPublisher(listing.publisher)
+  return { verified: official, publisher: listing.publisher, community: !official }
 }
 
 function latestDocument(manifest, release, listing) {
