@@ -498,6 +498,24 @@ describe('publish', () => {
     expect(calls.map((call) => call.body)).toEqual([{ stage: 'publish', ok: true, runUrl: 'https://github.test/runs/2' }])
   })
 
+  it('omits the community flag when publishing for the official alpine-shell organisation', async () => {
+    const { deps } = makeDeps()
+    const bundle = await buildAndStage(deps)
+
+    await publish(
+      publishOptions({ sha256: sha256Hex(bundle), publisherSlug: 'alpine-shell', publisherName: 'Alpine Shell' }),
+      deps,
+    )
+
+    const latest = readStoreJson(`plugins/${PLUGIN_ID}/latest.json`)
+    const entry = readStoreJson('plugins/index.json').plugins.find((plugin) => plugin.id === PLUGIN_ID)
+    for (const document of [latest, entry]) {
+      expect(document.verified).toBe(true)
+      expect(document.community).toBe(false)
+      expect(document.publisher).toEqual({ slug: 'alpine-shell', name: 'Alpine Shell' })
+    }
+  })
+
   it('refuses a staged bundle whose sha256 differs from the reviewed one, before signing anything', async () => {
     const { deps, calls } = makeDeps()
     await buildAndStage(deps)

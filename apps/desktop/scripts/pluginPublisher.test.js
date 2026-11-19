@@ -31,11 +31,11 @@ function readStoreJson(key) {
   return JSON.parse(fs.readFileSync(path.join(storeDir, ...key.split('/')), 'utf8'))
 }
 
-async function publishFirstParty(manifest) {
+async function publishFirstParty(manifest, listing) {
   fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify(manifest))
   const { privateKey } = crypto.generateKeyPairSync('ed25519')
   const { bundle } = packBundle(pluginDir)
-  await publishBundle({ storage: createStorage(storeDir), pluginDir, bundle, manifest, signingKey: privateKey })
+  await publishBundle({ storage: createStorage(storeDir), pluginDir, bundle, manifest, signingKey: privateKey, listing })
 }
 
 describe('publishing a first-party plugin', () => {
@@ -48,6 +48,21 @@ describe('publishing a first-party plugin', () => {
       expect(document.verified).toBe(true)
       expect(document).not.toHaveProperty('publisher')
       expect(document).not.toHaveProperty('community')
+    }
+  })
+
+  it('lists plugins from the official alpine-shell organisation as verified and not community', async () => {
+    await publishFirstParty(
+      { id: PLUGIN_ID, name: 'Clock', version: '1.0.0' },
+      { publisher: { slug: 'alpine-shell', name: 'Alpine Shell' } },
+    )
+
+    const latest = readStoreJson(`plugins/${PLUGIN_ID}/latest.json`)
+    const entry = readStoreJson('plugins/index.json').plugins[0]
+    for (const document of [latest, entry]) {
+      expect(document.verified).toBe(true)
+      expect(document.community).toBe(false)
+      expect(document.publisher).toEqual({ slug: 'alpine-shell', name: 'Alpine Shell' })
     }
   })
 
