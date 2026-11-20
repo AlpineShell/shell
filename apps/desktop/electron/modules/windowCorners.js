@@ -3,6 +3,7 @@ const winEvents = require('./winEvents')
 const {
   DWMWCP_ROUNDSMALL,
   shouldApplyCornerPreference,
+  shouldRestoreCornerPreference,
   deadTrackedWindows,
   restorableTrackedWindows,
 } = require('./windowCornerPolicy')
@@ -121,11 +122,26 @@ function pruneClosedWindows() {
   }
 }
 
+function restoreTrackedWindow(hwnd) {
+  const preference = originalPreferences.get(hwnd)
+  if (preference === undefined) return
+  if (writeCornerPreference(hwnd, preference)) originalPreferences.delete(hwnd)
+}
+
 function roundWindow(hwndRaw) {
   if (!cornerApiAvailable) return
   const hwnd = toNum(hwndRaw)
-  if (!hwnd || originalPreferences.has(hwnd)) return
-  if (!isManageableWindow(hwnd)) return
+  if (!hwnd || !isManageableWindow(hwnd)) return
+
+  const bounds = getWindowBounds(hwnd)
+  const monitorBounds = getMonitorBounds(hwnd)
+
+  if (originalPreferences.has(hwnd)) {
+    if (shouldRestoreCornerPreference({ manageable: true, bounds, monitorBounds })) {
+      restoreTrackedWindow(hwnd)
+    }
+    return
+  }
 
   const preference = readCornerPreference(hwnd)
   if (preference === null) return
@@ -134,8 +150,8 @@ function roundWindow(hwndRaw) {
     manageable: true,
     maximized: !!IsZoomed(hwnd),
     preference,
-    bounds: getWindowBounds(hwnd),
-    monitorBounds: getMonitorBounds(hwnd),
+    bounds,
+    monitorBounds,
   }
   if (!shouldApplyCornerPreference(candidate, CORNER_TARGET)) return
 

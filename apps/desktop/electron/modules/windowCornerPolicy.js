@@ -18,6 +18,11 @@ function shouldApplyCornerPreference(window, target) {
   return window.preference !== target
 }
 
+function shouldRestoreCornerPreference(window) {
+  if (!window || !window.manageable) return false
+  return coversMonitor(window.bounds, window.monitorBounds)
+}
+
 function deadTrackedWindows(tracked, isAlive) {
   const dead = []
   for (const hwnd of tracked.keys()) {
@@ -41,6 +46,7 @@ module.exports = {
   DWMWCP_ROUNDSMALL,
   coversMonitor,
   shouldApplyCornerPreference,
+  shouldRestoreCornerPreference,
   deadTrackedWindows,
   restorableTrackedWindows,
 }

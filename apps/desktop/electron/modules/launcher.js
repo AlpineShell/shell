@@ -1,7 +1,8 @@
 const { BrowserWindow } = require('electron')
 const fs = require('fs')
 const path = require('path')
-const { forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow, insertText, pasteInto } = require('./winFocus')
+const { activateWindow, forceForeground, getForegroundWindow, minimizeWindow, maximizeWindow, closeWindow, insertText, pasteInto } = require('./winFocus')
+const { focusTargetOnHide, captureFocusTarget } = require('./launcherFocusPolicy')
 const appActivator = require('../appActivator')
 const appCatalog = require('./appCatalog')
 const appLaunch = require('./appLaunch')
@@ -15,6 +16,8 @@ let activeTopBar = null
 let hideTimeout = null
 let hideTimeoutTopBar = null
 let lastUserForeground = 0
+let focusReturnTarget = 0
+let tookFocus = false
 let switcherCloser = null
 let emojiCaptureControl = null
 let screenshotStarter = null
@@ -60,8 +63,15 @@ function flushPendingHide(keepTopBar) {
   if (topBar && topBar !== keepTopBar) finishHide(topBar)
 }
 
-function animatedHide() {
+function animatedHide(options) {
   if (!activeTopBar || activeTopBar.isDestroyed()) return
+  const returnTarget = focusTargetOnHide({
+    restoreFocus: Boolean(options && options.restoreFocus),
+    tookFocus,
+    previousForeground: focusReturnTarget,
+  })
+  tookFocus = false
+  focusReturnTarget = 0
   endEmojiCapture()
   activeTopBar.webContents.send('launcher/start-close')
   const topBar = activeTopBar
@@ -74,9 +84,12 @@ function animatedHide() {
     hideTimeoutTopBar = null
     finishHide(topBar)
   }, CLOSE_ANIMATION_MS)
+  if (returnTarget) activateWindow(returnTarget)
 }
 
 function hideForOverlay() {
+  tookFocus = false
+  focusReturnTarget = 0
   endEmojiCapture()
   if (!activeTopBar || activeTopBar.isDestroyed()) {
     activeTopBar = null
@@ -103,7 +116,15 @@ function showLauncher(displayId, mode) {
   try {
     const fg = getForegroundWindow()
     if (fg && !shellSurfaces.isShellSurface(fg)) lastUserForeground = fg
-  } catch {}
+    focusReturnTarget = captureFocusTarget({
+      wasActive: Boolean(activeTopBar),
+      currentTarget: focusReturnTarget,
+      foreground: fg,
+      isShellSurface: shellSurfaces.isShellSurface,
+    })
+  } catch {
+    if (!activeTopBar) focusReturnTarget = 0
+  }
 
   flushPendingHide(topBar)
 
@@ -134,6 +155,7 @@ function showLauncher(displayId, mode) {
 
   activeDisplayId = displayId
   activeTopBar = topBar
+  tookFocus = true
 }
 
 function pickDisplay() {
@@ -143,7 +165,7 @@ function pickDisplay() {
 
 function showFromHotkey() {
   if (activeTopBar) {
-    animatedHide()
+    animatedHide({ restoreFocus: true })
     return
   }
   showLauncher(pickDisplay().id)
@@ -151,7 +173,7 @@ function showFromHotkey() {
 
 function showClipboardHistory() {
   if (activeTopBar) {
-    animatedHide()
+    animatedHide({ restoreFocus: true })
     return
   }
   showLauncher(pickDisplay().id, 'clipboard')
@@ -186,6 +208,8 @@ function showEmoji() {
 
   activeDisplayId = display.id
   activeTopBar = topBar
+  tookFocus = false
+  focusReturnTarget = 0
   setEmojiCapture(true, target)
 }
 
@@ -240,7 +264,7 @@ module.exports = {
       const display = win ? screen.getDisplayMatching(win.getBounds()) : screen.getPrimaryDisplay()
       showLauncher(display.id)
     },
-    'launcher/hide': () => animatedHide(),
+    'launcher/hide': (_event, options) => animatedHide(options),
     'launcher/panel-bottom': (event, bottom) => {
       if (!activeTopBar || activeTopBar.isDestroyed()) return
       if (event.sender !== activeTopBar.webContents) return

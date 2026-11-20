@@ -137,6 +137,7 @@ const fixedSurfaceKeys = require('./modules/fixedSurfaceKeys')
 const touchpadGestures = require('./modules/touchpadGestures')
 const switcherWindows = require('./modules/switcherWindows')
 const shellSurfaces = require('./modules/shellSurfaces')
+const { sinkPassiveTopBar, isTopBarCoveredByFullscreenApp } = require('./modules/topBarZOrder')
 const activeDisplay = require('./modules/activeDisplay')
 const minimizeAll = require('./modules/minimizeAll')
 const virtualDesktops = require('./modules/virtualDesktops')
@@ -349,7 +350,9 @@ function evaluateTopBarInteraction(win, state, knownCursor = null) {
   if (state.activeRegion) {
     inInteractive = inBarRow || isPointInMenuHotZone(cursor, bounds, state.activeRegion)
   } else {
-    inInteractive = inBarRow && isCursorInInteractiveZone(cursor.x - bounds.x, state.interactiveZones, bounds.width)
+    inInteractive = inBarRow
+      && isCursorInInteractiveZone(cursor.x - bounds.x, state.interactiveZones, bounds.width)
+      && !isTopBarCoveredByFullscreenApp(win, shellSurfaces.isShellSurface)
   }
 
   if (inInteractive) {
@@ -499,12 +502,27 @@ function reloadDesktopWallpapers() {
   }
 }
 
+function shellForTopBar(win) {
+  for (const shell of shells.values()) {
+    if (shell.topBar === win) return shell
+  }
+  return null
+}
+
+function sinkTopBar(shell) {
+  sinkPassiveTopBar(shell, shellWindow ? shellWindow.windowHandle() : 0)
+}
+
 function forceShellBounds(shell) {
   if (!shell) return
   placeDesktopWindow(shell)
   if (shell.topBar.isDestroyed()) return
-  if (isTopBarRaised(shell)) shell.topBar.keepRaisedOnOwnDisplay()
-  else shell.topBar.restoreFullBounds()
+  if (isTopBarRaised(shell)) {
+    shell.topBar.keepRaisedOnOwnDisplay()
+  } else {
+    shell.topBar.restoreFullBounds()
+    sinkTopBar(shell)
+  }
   shell.topBar.refreshBarBounds()
 }
 
@@ -578,6 +596,7 @@ function createTopBarWindow(display) {
     win.watchInputWhileRegionArmed(false)
     win.setAlwaysOnTop(false)
     win.restoreFullBounds()
+    sinkTopBar(shellForTopBar(win))
     state.ignoring = true
     win.setIgnoreMouseEvents(true)
     evaluateTopBarInteraction(win, state)
@@ -644,6 +663,7 @@ function createTopBarWindow(display) {
       state.activeRegion = null
       win.setAlwaysOnTop(false)
       win.restoreFullBounds()
+      sinkTopBar(shellForTopBar(win))
     }
     win.watchInputWhileRegionArmed(Boolean(region))
     evaluateTopBarInteraction(win, state)
@@ -692,6 +712,7 @@ function createShellForDisplay(display) {
   const shell = { desktop, topBar, display, topBarState: topBar.topBarState, desktopHosted: false }
   shells.set(display.id, shell)
   hostDesktopInShellWindow(shell)
+  sinkTopBar(shell)
   return { desktop, topBar }
 }
 
@@ -986,7 +1007,7 @@ function createSettingsWindow() {
     for (const shell of shells.values()) {
       const tb = shell.topBar
       if (tb && !tb.isDestroyed()) {
-        try { tb.moveTop() } catch {}
+        if (!isTopBarRaised(shell)) sinkTopBar(shell)
         try { tb.webContents.invalidate() } catch {}
       }
     }

@@ -328,6 +328,10 @@ function releaseHostedDesktopWindows() {
   hostedDesktopWindows.clear()
 }
 
+function windowHandle() {
+  return toNum(progman) || 0
+}
+
 function destroy() {
   releaseHostedDesktopWindows()
   for (const handle of [listview, defview, workerw, progman]) {
@@ -342,4 +346,4 @@ function destroy() {
   registered = false
 }
 
-module.exports = { register, destroy, onAppCommand, fitToVirtualScreen, hostDesktopWindow, placeHostedDesktopWindow, resyncHostedDesktopWindowSize, forgetHostedDesktopWindow, isLiveWallpaperWindow, sendHostedDesktopWindowsToBottom }
+module.exports = { register, destroy, windowHandle, onAppCommand, fitToVirtualScreen, hostDesktopWindow, placeHostedDesktopWindow, resyncHostedDesktopWindowSize, forgetHostedDesktopWindow, isLiveWallpaperWindow, sendHostedDesktopWindowsToBottom }

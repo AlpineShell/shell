@@ -246,9 +246,15 @@ describe("LauncherPanel", () => {
     expect(launcher.launch).toHaveBeenCalledWith(1)
   })
 
-  it("hides on Escape", async () => {
+  it("hides and restores focus on Escape", async () => {
     const input = await openLauncher()
     press(input, "Escape")
-    expect(launcher.hide).toHaveBeenCalled()
+    expect(launcher.hide).toHaveBeenCalledWith({ restoreFocus: true })
+  })
+
+  it("hides without restoring focus on window blur", async () => {
+    await openLauncher()
+    window.dispatchEvent(new Event("blur"))
+    expect(launcher.hide).toHaveBeenCalledWith()
   })
 })

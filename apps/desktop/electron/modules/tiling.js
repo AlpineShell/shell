@@ -4,7 +4,7 @@ const fs = require('fs')
 const koffi = require('koffi')
 const winEvents = require('./winEvents')
 const { isExposedOwnWindow } = require('./exposedOwnWindows')
-const { isCrossDisplayMove, allowsWindow, snapHotkeyConfigured, acceptsSnapHotkey } = require('./tilingPolicy')
+const { isCrossDisplayMove, allowsWindow, isManagedWindowBounds, snapHotkeyConfigured, acceptsSnapHotkey } = require('./tilingPolicy')
 const windowRules = require('./windowRules')
 
 const user32 = koffi.load('user32.dll')
@@ -27,6 +27,8 @@ const GetWindowLongW = user32.func('__stdcall', 'GetWindowLongW', 'int32', ['uin
 const GetWindowTextLengthW = user32.func('__stdcall', 'GetWindowTextLengthW', 'int', ['uintptr_t'])
 const GetWindowThreadProcessId = user32.func('__stdcall', 'GetWindowThreadProcessId', 'uint32', ['uintptr_t', 'void *'])
 const GetWindow = user32.func('__stdcall', 'GetWindow', 'uintptr_t', ['uintptr_t', 'uint32'])
+const MonitorFromWindow = user32.func('__stdcall', 'MonitorFromWindow', 'uintptr_t', ['uintptr_t', 'uint32'])
+const GetMonitorInfoW = user32.func('__stdcall', 'GetMonitorInfoW', 'int', ['uintptr_t', 'void *'])
 const SendMessageTimeoutW = user32.func('__stdcall', 'SendMessageTimeoutW', 'intptr_t', ['uintptr_t', 'uint32', 'uintptr_t', 'void *', 'uint32', 'uint32', 'void *'])
 
 let DwmGetWindowAttribute = null
@@ -53,6 +55,8 @@ const SWP_FRAMECHANGED = 0x0020
 const SWP_ASYNCWINDOWPOS = 0x4000
 const DWMWA_CLOAKED = 14
 const DWMWA_EXTENDED_FRAME_BOUNDS = 9
+const MONITOR_DEFAULTTONEAREST = 2
+const MONITORINFO_SIZE = 40
 const EVENT_SYSTEM_FOREGROUND = 0x0003
 const EVENT_SYSTEM_MOVESIZESTART = 0x000A
 const EVENT_SYSTEM_MOVESIZEEND = 0x000B
@@ -285,6 +289,20 @@ function isTileable(hwnd) {
   })
 }
 
+function monitorBoundsForWindow(hwnd) {
+  const monitor = toNum(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
+  if (!monitor) return null
+  const info = Buffer.alloc(MONITORINFO_SIZE)
+  info.writeUInt32LE(MONITORINFO_SIZE, 0)
+  if (!GetMonitorInfoW(monitor, info)) return null
+  return {
+    left: info.readInt32LE(4),
+    top: info.readInt32LE(8),
+    right: info.readInt32LE(12),
+    bottom: info.readInt32LE(16),
+  }
+}
+
 function isManageable(hwnd) {
   if (!isTileable(hwnd)) return false
   if (!IsWindowVisible(hwnd)) return false
@@ -298,6 +316,7 @@ function isManageable(hwnd) {
   if (exStyle & WS_EX_NOACTIVATE) return false
   if (toNum(GetWindow(hwnd, GW_OWNER)) !== 0) return false
   if (isCloaked(hwnd)) return false
+  if (!isManagedWindowBounds(readRect(hwnd), monitorBoundsForWindow(hwnd))) return false
   return true
 }
 

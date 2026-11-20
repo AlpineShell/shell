@@ -2215,7 +2215,7 @@ declare global {
     launcher: {
       index: () => Promise<LauncherItem[]>
       show: () => Promise<void>
-      hide: () => Promise<void>
+      hide: (options?: { restoreFocus?: boolean }) => Promise<void>
       reportPanelBottom: (bottom: number) => Promise<void>
       launch: (id: number) => Promise<{ success: boolean }>
       launchAdmin: (id: number) => Promise<{ success: boolean }>

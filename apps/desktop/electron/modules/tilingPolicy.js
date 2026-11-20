@@ -1,3 +1,5 @@
+const { coversMonitor } = require('./windowCornerPolicy')
+
 function isCrossDisplayMove(direction, shift) {
   return !!shift && (direction === 'left' || direction === 'right')
 }
@@ -6,6 +8,10 @@ function allowsWindow(target) {
   if (!target || !target.exists) return false
   if (!target.ownProcess) return true
   return !!target.exposed
+}
+
+function isManagedWindowBounds(windowBounds, monitorBounds) {
+  return !coversMonitor(windowBounds, monitorBounds)
 }
 
 function snapHotkeyConfigured(config, direction, shift) {
@@ -21,4 +27,4 @@ function acceptsSnapHotkey(config, direction, shift, target) {
   return true
 }
 
-module.exports = { isCrossDisplayMove, allowsWindow, snapHotkeyConfigured, acceptsSnapHotkey }
+module.exports = { isCrossDisplayMove, allowsWindow, isManagedWindowBounds, snapHotkeyConfigured, acceptsSnapHotkey }
