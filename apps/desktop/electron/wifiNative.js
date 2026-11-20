@@ -26,6 +26,7 @@ const WLAN_AVAILABLE_NETWORK_FLAGS_OFFSET = 620
 const DOT11_SSID_MAX_BYTES = 32
 const DOT11_BSS_TYPE_INFRASTRUCTURE = 1
 const ERROR_SUCCESS = 0
+const WLAN_SET_EAPHOST_DATA_CURRENT_USER = 0
 const WLAN_INTERFACE_STATES = [
   'not-ready',
   'connected',
@@ -98,6 +99,7 @@ function loadWifiApi() {
       WlanGetAvailableNetworkList: api.wlanapi.func('__stdcall', 'WlanGetAvailableNetworkList', 'uint32', ['uintptr_t', bytePointer, 'uint32', 'uintptr_t', outVoidPointer]),
       WlanScan: api.wlanapi.func('__stdcall', 'WlanScan', 'uint32', ['uintptr_t', bytePointer, 'uintptr_t', 'uintptr_t', 'uintptr_t']),
       WlanSetProfile: api.wlanapi.func('__stdcall', 'WlanSetProfile', 'uint32', ['uintptr_t', bytePointer, 'uint32', 'str16', 'str16', 'int32', 'uintptr_t', outUint32]),
+      WlanSetProfileEapXmlUserData: api.wlanapi.func('__stdcall', 'WlanSetProfileEapXmlUserData', 'uint32', ['uintptr_t', bytePointer, 'str16', 'uint32', 'str16', 'uintptr_t']),
       WlanConnect: api.wlanapi.func('__stdcall', 'WlanConnect', 'uint32', ['uintptr_t', bytePointer, koffi.pointer(connectionParameters), 'uintptr_t']),
       WlanDisconnect: api.wlanapi.func('__stdcall', 'WlanDisconnect', 'uint32', ['uintptr_t', bytePointer, 'uintptr_t']),
       WlanDeleteProfile: api.wlanapi.func('__stdcall', 'WlanDeleteProfile', 'uint32', ['uintptr_t', bytePointer, 'str16', 'uintptr_t']),
@@ -219,6 +221,17 @@ async function setProfile(xml) {
   }
 }
 
+async function setProfileEapUserData(profileName, xml) {
+  try {
+    const context = await getClientAndInterface()
+    if (!context) return null
+    const status = await callAsync(context.api.WlanSetProfileEapXmlUserData, context.client, context.guid, profileName, WLAN_SET_EAPHOST_DATA_CURRENT_USER, xml, 0)
+    return status === null ? null : status === ERROR_SUCCESS
+  } catch {
+    return null
+  }
+}
+
 async function connectProfile(profileName) {
   try {
     const context = await getClientAndInterface()
@@ -287,4 +300,5 @@ module.exports = {
   readInterfaceState,
   requestScan,
   setProfile,
+  setProfileEapUserData,
 }

@@ -21,8 +21,10 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
   const enabled = state.radio === 'on'
   const networks = state.networks
   const [selected, setSelected] = useState(0)
+  const usernameRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const busy = state.operation !== null
 
   const itemCount = 1 + (enabled ? networks.length : 0)
   const current = Math.min(selected, itemCount - 1)
@@ -32,8 +34,9 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
   }, [])
 
   useEffect(() => {
-    if (join.passwordFor) requestAnimationFrame(() => passwordRef.current?.focus())
-  }, [join.passwordFor])
+    if (!join.passwordFor) return
+    requestAnimationFrame(() => (join.needsUsername ? usernameRef : passwordRef).current?.focus())
+  }, [join.passwordFor, join.needsUsername])
 
   useEffect(() => {
     const element = listRef.current?.querySelector(`[data-idx="${current}"]`) as HTMLElement | null
@@ -127,22 +130,63 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
                 {network.secured && <Lock size={12} className={`shrink-0 ${colors.dim}`} />}
               </button>
               {join.passwordFor === network.ssid && !network.connected && (
-                <div className="flex gap-2 px-2.5 py-1.5 items-center">
-                  <input
-                    ref={passwordRef}
-                    type="password"
-                    value={join.password}
-                    onChange={(event) => join.setPassword(event.target.value)}
-                    onKeyDown={(event) => {
-                      event.stopPropagation()
-                      if (event.key === "Enter") { if (join.password.trim()) void join.submitPassword() }
-                      else if (event.key === "Escape") join.cancelPassword()
-                    }}
-                    placeholder="Password"
-                    autoFocus
-                    className={`flex-1 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${join.wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
-                  />
-                  <button type="button" onClick={() => { if (join.password.trim()) void join.submitPassword() }} className={`text-[12px] px-2 py-1 rounded-md cursor-pointer ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}>Join</button>
+                <div className="flex flex-col gap-1.5 px-2.5 py-1.5">
+                  {join.needsUsername && (
+                    <input
+                      ref={usernameRef}
+                      type="text"
+                      value={join.username}
+                      onChange={(event) => join.setUsername(event.target.value)}
+                      onKeyDown={(event) => {
+                        event.stopPropagation()
+                        if (event.key === "Enter") {
+                          if (!busy && join.canSubmit) void (join.untrustedServerFor === network.ssid ? join.connectAnyway() : join.submitPassword())
+                          else passwordRef.current?.focus()
+                        } else if (event.key === "Escape") {
+                          join.cancelPassword()
+                        }
+                      }}
+                      placeholder="Username"
+                      autoFocus
+                      className={`w-full text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${join.wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
+                    />
+                  )}
+                  <div className="flex gap-2 items-center">
+                    <input
+                      ref={passwordRef}
+                      type="password"
+                      value={join.password}
+                      onChange={(event) => join.setPassword(event.target.value)}
+                      onKeyDown={(event) => {
+                        event.stopPropagation()
+                        if (event.key === "Enter") { if (!busy && join.canSubmit) void (join.untrustedServerFor === network.ssid ? join.connectAnyway() : join.submitPassword()) }
+                        else if (event.key === "Escape") join.cancelPassword()
+                      }}
+                      placeholder="Password"
+                      autoFocus={!join.needsUsername}
+                      className={`flex-1 min-w-0 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${join.wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
+                    />
+                    {join.untrustedServerFor !== network.ssid && (
+                      <button
+                        type="button"
+                        disabled={busy || !join.canSubmit}
+                        onClick={() => { if (!busy && join.canSubmit) void join.submitPassword() }}
+                        className={`text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}
+                      >
+                        Join
+                      </button>
+                    )}
+                  </div>
+                  {join.untrustedServerFor === network.ssid && (
+                    <button
+                      type="button"
+                      disabled={busy || !join.canSubmit}
+                      onClick={() => { if (!busy && join.canSubmit) void join.connectAnyway() }}
+                      className={`w-full text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}
+                    >
+                      Connect anyway
+                    </button>
+                  )}
                 </div>
               )}
             </div>

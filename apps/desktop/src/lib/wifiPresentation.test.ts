@@ -47,6 +47,10 @@ describe('networkStatusLabel', () => {
     expect(networkStatusLabel(network, { ...state, lastError: { ssid: 'Home', error: 'unsupported-security' } })).toBe('Not supported')
   })
 
+  it('labels an unverified enterprise server', () => {
+    expect(networkStatusLabel(network, { ...state, lastError: { ssid: 'Home', error: 'untrusted-server' } })).toBe("Can't verify this network")
+  })
+
   it('returns no label without a status', () => {
     expect(networkStatusLabel(network, state)).toBeUndefined()
   })

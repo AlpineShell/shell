@@ -92,10 +92,11 @@ interface WifiConnection { connected: boolean; ssid: string | null; signal: numb
 type WifiRadioState = 'on' | 'off' | 'unavailable' | 'unknown'
 type WifiSecurity = 'open' | 'owe' | 'wep' | 'wpa-personal' | 'wpa2-personal' | 'wpa3-personal' | 'enterprise' | 'unknown'
 interface WifiNetwork { ssid: string; signal: number; security: WifiSecurity; secured: boolean; saved: boolean; connected: boolean; connectable: boolean }
-type WifiConnectError = 'wrong-password' | 'invalid-password' | 'unsupported-security' | 'timed-out' | 'not-found' | 'failed'
+type WifiConnectError = 'wrong-password' | 'invalid-password' | 'unsupported-security' | 'untrusted-server' | 'timed-out' | 'not-found' | 'failed'
 interface WifiOperation { kind: 'connect' | 'disconnect'; ssid: string }
 interface WifiState { radio: WifiRadioState; networks: WifiNetwork[]; scanning: boolean; operation: WifiOperation | null; lastError: { ssid: string; error: WifiConnectError } | null; ethernet: boolean; offForEthernet: boolean; blockedByEthernet: boolean }
-interface WifiConnectResult { success: boolean; needsPassword?: boolean; error?: WifiConnectError }
+interface WifiConnectResult { success: boolean; needsPassword?: boolean; needsUsername?: boolean; error?: WifiConnectError }
+interface WifiConnectOptions { username?: string; trustServer?: boolean }
 
 interface WifiLinkDetails {
   ssid: string | null
@@ -2413,7 +2414,7 @@ declare global {
         wifiState: () => Promise<WifiState>
         onWifiChanged: (callback: (data: WifiState) => void) => () => void
         wifiScan: () => Promise<WifiState>
-        wifiConnect: (ssid: string, password?: string) => Promise<WifiConnectResult>
+        wifiConnect: (ssid: string, password?: string, options?: WifiConnectOptions) => Promise<WifiConnectResult>
         details: () => Promise<NetworkDetails | null>
         onDetailsChanged: (callback: (details: NetworkDetails | null) => void) => () => void
         wifiDisconnect: () => Promise<{ success: boolean }>

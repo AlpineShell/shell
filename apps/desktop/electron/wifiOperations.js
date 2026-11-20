@@ -1,11 +1,17 @@
-const { buildProfileXml, isValidPassphrase } = require('./wifiProfiles.js')
+const {
+  buildEnterpriseCredentialsXml,
+  buildEnterpriseProfileXml,
+  buildProfileXml,
+  enterpriseAuthenticationFor,
+  isValidPassphrase,
+} = require('./wifiProfiles.js')
 
 const CONNECT_DEADLINE_MS = 25000
 const IDLE_FAILURE_MS = 6000
 const CONNECT_POLL_MS = 250
 const ERROR_VISIBLE_MS = 8000
 const DISCONNECT_SETTLE_MS = 750
-const SUPPORTED_SECURITIES = new Set(['open', 'owe', 'wpa-personal', 'wpa2-personal', 'wpa3-personal'])
+const SUPPORTED_SECURITIES = new Set(['open', 'owe', 'wpa-personal', 'wpa2-personal', 'wpa3-personal', 'enterprise'])
 const TRANSITION_STATES = new Set(['associating', 'discovering', 'authenticating'])
 
 function securityOf(authAlgorithm, cipherAlgorithm, securityEnabled) {
@@ -88,6 +94,7 @@ function networkEntryFor(rawNetworks, ssid) {
   const security = securityOf(selected.authAlgorithm, selected.cipherAlgorithm, selected.securityEnabled)
   return {
     profileName: selected.hasProfile ? selected.profileName || null : null,
+    authAlgorithm: selected.authAlgorithm,
     cipherAlgorithm: selected.cipherAlgorithm,
     security,
   }
@@ -97,7 +104,28 @@ function reject(error) {
   return { action: 'reject', error }
 }
 
-function connectPlan({ network, profileName, cipherAlgorithm, password }) {
+function hasEnterpriseCredentials(username, password) {
+  return typeof username === 'string' && username.trim().length > 0 && typeof password === 'string' && password.length > 0
+}
+
+function enterpriseConnectPlan({ network, profileName, authAlgorithm, cipherAlgorithm, username, password, trustServer }) {
+  const credentialsGiven = hasEnterpriseCredentials(username, password)
+  if (!credentialsGiven && profileName) return { action: 'use-profile', profileName }
+  if (!enterpriseAuthenticationFor(authAlgorithm)) return reject('unsupported-security')
+  if (!credentialsGiven) return { action: 'needs-password', needsUsername: true }
+  const validatesServer = trustServer !== true
+  return {
+    action: 'create-profile',
+    xml: buildEnterpriseProfileXml({ ssid: network.ssid, authAlgorithm, cipherAlgorithm, validateServer: validatesServer }),
+    credentialsXml: buildEnterpriseCredentialsXml({ username: username.trim(), password }),
+    withPassword: true,
+    validatesServer,
+  }
+}
+
+function connectPlan(input) {
+  const { network, profileName, cipherAlgorithm, password } = input
+  if (network.security === 'enterprise') return enterpriseConnectPlan(input)
   const passwordGiven = typeof password === 'string' && password.length > 0
   const secured = isSecured(network.security)
   if (passwordGiven && secured) {
@@ -156,13 +184,28 @@ function classifyAttempt(input) {
   return 'pending'
 }
 
+function attemptError(plan, outcome) {
+  if (plan.validatesServer && (outcome === 'wrong-password' || outcome === 'timed-out')) return 'untrusted-server'
+  return outcome
+}
+
+function connectFailure(security, error) {
+  const enterprise = security === 'enterprise'
+  if (error === 'wrong-password' || (enterprise && error === 'timed-out')) {
+    return { success: false, needsPassword: true, needsUsername: enterprise, error }
+  }
+  return { success: false, error }
+}
+
 module.exports = {
   CONNECT_DEADLINE_MS,
   CONNECT_POLL_MS,
   DISCONNECT_SETTLE_MS,
   ERROR_VISIBLE_MS,
   IDLE_FAILURE_MS,
+  attemptError,
   classifyAttempt,
+  connectFailure,
   connectPlan,
   isSecured,
   isSupportedSecurity,

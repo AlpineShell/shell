@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildProfileXml, isValidPassphrase } from './wifiProfiles.js'
+import {
+  buildEnterpriseCredentialsXml,
+  buildEnterpriseProfileXml,
+  buildProfileXml,
+  enterpriseAuthenticationFor,
+  isValidPassphrase,
+} from './wifiProfiles.js'
 
 describe('buildProfileXml', () => {
   it.each([
@@ -60,5 +66,65 @@ describe('isValidPassphrase', () => {
   it('rejects non-string values', () => {
     expect(isValidPassphrase(undefined)).toBe(false)
     expect(isValidPassphrase(12345678)).toBe(false)
+  })
+})
+
+describe('enterpriseAuthenticationFor', () => {
+  it.each([
+    [3, 'WPA'],
+    [6, 'WPA2'],
+    [11, 'WPA3ENT'],
+    [8, null],
+    [7, null],
+  ])('maps auth algorithm %i to %s', (authAlgorithm, expected) => {
+    expect(enterpriseAuthenticationFor(authAlgorithm)).toBe(expected)
+  })
+})
+
+describe('buildEnterpriseProfileXml', () => {
+  it.each([
+    [3, 2, '<authentication>WPA</authentication><encryption>TKIP</encryption><useOneX>true</useOneX>'],
+    [6, 4, '<authentication>WPA2</authentication><encryption>AES</encryption><useOneX>true</useOneX>'],
+    [11, 4, '<authentication>WPA3ENT</authentication><encryption>AES</encryption><useOneX>true</useOneX>'],
+  ])('builds a PEAP-MSCHAPv2 profile for auth %i and cipher %i', (authAlgorithm, cipherAlgorithm, expected) => {
+    const xml = buildEnterpriseProfileXml({ ssid: 'BBW_BMSW', authAlgorithm, cipherAlgorithm, validateServer: true })
+
+    expect(xml).toContain(expected)
+    expect(xml).toContain('<cacheUserData>true</cacheUserData>')
+    expect(xml).toContain('<authMode>user</authMode>')
+    expect(xml).toContain('<DisableUserPromptForServerValidation>true</DisableUserPromptForServerValidation>')
+    expect(xml).toContain('<PerformServerValidation xmlns="http://www.microsoft.com/provisioning/MsPeapConnectionPropertiesV2">true</PerformServerValidation>')
+    expect(xml).toContain('<UseWinLogonCredentials>false</UseWinLogonCredentials>')
+    expect(xml).not.toContain('<sharedKey>')
+  })
+
+  it('disables server validation when trusting the server explicitly', () => {
+    const xml = buildEnterpriseProfileXml({ ssid: 'BBW_BMSW', authAlgorithm: 6, cipherAlgorithm: 4, validateServer: false })
+
+    expect(xml).toContain('<DisableUserPromptForServerValidation>true</DisableUserPromptForServerValidation>')
+    expect(xml).toContain('<PerformServerValidation xmlns="http://www.microsoft.com/provisioning/MsPeapConnectionPropertiesV2">false</PerformServerValidation>')
+  })
+
+  it('rejects unsupported enterprise auth algorithms', () => {
+    expect(() => buildEnterpriseProfileXml({ ssid: 'Gov', authAlgorithm: 8, cipherAlgorithm: 4, validateServer: true })).toThrow('Unsupported Wi-Fi security')
+  })
+})
+
+describe('buildEnterpriseCredentialsXml', () => {
+  it('writes a plain username with an empty logon domain', () => {
+    const xml = buildEnterpriseCredentialsXml({ username: 'student@bbw.ch', password: 'secret&<1>' })
+
+    expect(xml).toContain('<MsPeap:RoutingIdentity>student@bbw.ch</MsPeap:RoutingIdentity>')
+    expect(xml).toContain('<MsChapV2:Username>student@bbw.ch</MsChapV2:Username>')
+    expect(xml).toContain('<MsChapV2:Password>secret&amp;&lt;1&gt;</MsChapV2:Password>')
+    expect(xml).toContain('<MsChapV2:LogonDomain></MsChapV2:LogonDomain>')
+  })
+
+  it('splits a domain-qualified username into logon domain and user', () => {
+    const xml = buildEnterpriseCredentialsXml({ username: 'CORP\\alice', password: 'pw' })
+
+    expect(xml).toContain('<MsPeap:RoutingIdentity>CORP\\alice</MsPeap:RoutingIdentity>')
+    expect(xml).toContain('<MsChapV2:Username>alice</MsChapV2:Username>')
+    expect(xml).toContain('<MsChapV2:LogonDomain>CORP</MsChapV2:LogonDomain>')
   })
 })
