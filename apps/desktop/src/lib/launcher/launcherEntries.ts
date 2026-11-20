@@ -24,6 +24,10 @@ function term(text: string, penalty = 0, minScore = 0): LauncherSearchTerm {
   return { text, penalty, minScore }
 }
 
+function wordPrefixTerm(text: string, penalty = 0): LauncherSearchTerm {
+  return { text, penalty, minScore: WORD_PREFIX_SCORE, wordPrefixOnly: true }
+}
+
 function keywordTerm(keyword: string): LauncherSearchTerm {
   return term(keyword, KEYWORD_PENALTY)
 }
@@ -82,7 +86,7 @@ export function windowEntries(openApps: OpenApp[], apps: LauncherEntry[]): Launc
   return openApps.map((app) => {
     const installed = installedFor(app)
     const launchItem = installed && installed.kind === "app" ? installed.item : null
-    const titleTerms = app.title && app.title !== app.name ? [term(app.title, 0, WORD_PREFIX_SCORE)] : []
+    const titleTerms = app.title && app.title !== app.name ? [wordPrefixTerm(app.title)] : []
     return {
       kind: "window",
       id: `window:${app.hwnd}`,
@@ -104,8 +108,8 @@ export function tabEntries(tabs: BrowserTab[], meta: ReadonlyMap<string, Browser
   return tabs.map((tab) => {
     const known = meta.get(`${tab.hwnd}:${tab.index}`)
     const host = known?.host ?? tab.host ?? null
-    const terms = [term(tab.title, 0, WORD_PREFIX_SCORE)]
-    if (host) terms.push(term(host, TAB_HOST_PENALTY, WORD_PREFIX_SCORE))
+    const terms = [wordPrefixTerm(tab.title)]
+    if (host) terms.push(wordPrefixTerm(host, TAB_HOST_PENALTY))
     return {
       kind: "tab",
       id: `tab:${tab.hwnd}:${tab.index}`,

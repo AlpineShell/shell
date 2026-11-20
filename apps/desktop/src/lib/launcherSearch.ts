@@ -134,6 +134,26 @@ export function scoreField(query: string, target: string, fieldPenalty = 0): num
   return tier * TIER_GAP + fine
 }
 
+export function scoreWordPrefix(query: string, target: string, fieldPenalty = 0): number {
+  if (query.length === 0) return TIER_SCATTERED * TIER_GAP
+  if (target.length === 0) return -1
+  const lowerQuery = query.toLowerCase()
+  const lowerTarget = target.toLowerCase()
+  let tier: number
+  let start = 0
+  if (lowerTarget === lowerQuery) tier = TIER_EXACT
+  else if (target.startsWith(query)) tier = TIER_PREFIX_EXACT
+  else if (lowerTarget.startsWith(lowerQuery)) tier = TIER_PREFIX
+  else {
+    start = wordStartOccurrence(lowerQuery, lowerTarget, target)
+    if (start < 0) return -1
+    tier = TIER_WORD_PREFIX
+  }
+  const idx = Array.from({ length: lowerQuery.length }, (_unused, offset) => start + offset)
+  const fine = Math.max(0, fineScore(query, target, idx) - fieldPenalty)
+  return tier * TIER_GAP + fine
+}
+
 const FIELD_PENALTY = {
   name: 0,
   alias: 2,

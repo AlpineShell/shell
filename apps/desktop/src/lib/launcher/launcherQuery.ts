@@ -1,4 +1,4 @@
-import { TIER_GAP, scoreField, scoreItem } from "../launcherSearch"
+import { TIER_GAP, scoreField, scoreItem, scoreWordPrefix } from "../launcherSearch"
 import { rankScore } from "../launcherRanking"
 import { calculate } from "./launcherCalculator"
 
@@ -56,8 +56,8 @@ function containedPhraseScore(entry: LauncherEntry, queryWords: string[]): numbe
 
 export function lexicalScore(entry: LauncherEntry, query: string): number {
   let best = entry.fields ? scoreItem(query, entry.fields) : -1
-  for (const { text, penalty, minScore } of entry.terms) {
-    const score = scoreField(query, text)
+  for (const { text, penalty, minScore, wordPrefixOnly } of entry.terms) {
+    const score = wordPrefixOnly ? scoreWordPrefix(query, text) : scoreField(query, text)
     if (score >= minScore) best = Math.max(best, score - penalty)
   }
   return Math.max(best, containedPhraseScore(entry, searchWords(query)))

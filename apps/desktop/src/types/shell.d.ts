@@ -2000,6 +2000,7 @@ declare global {
     text: string
     penalty: number
     minScore: number
+    wordPrefixOnly?: boolean
   }
 
   type PowerCommandAction = 'shutdown' | 'restart' | 'logout' | 'lock' | 'sleep' | 'hibernate'
