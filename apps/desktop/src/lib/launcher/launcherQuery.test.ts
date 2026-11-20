@@ -87,6 +87,22 @@ describe("searchLauncher", () => {
     expect(rowIds(sections)[0]).toBe(`app:${appResultKey("C:\\Windows\\System32\\cmd.exe")}`)
   })
 
+  it("does not pin windows or tabs whose titles only match scattered word initials", () => {
+    const commandPrompt = appEntries([item(5, "Command Prompt", "C:\\Windows\\System32\\cmd.exe")])
+    const windows = windowEntries(
+      [openWindow(17, "Microsoft Teams", "Chat | Appic - Klatsch & Tratsch | Migros | Marc.Blattmann@digitecgalaxus.ch | Microsoft Teams", "C:\\Teams\\ms-teams.exe")],
+      commandPrompt
+    )
+    const tabs = tabEntries(
+      [{ hwnd: 22, browser: "chrome", index: 0, title: "Chat · Migros · Digitec", selected: false, host: "teams.microsoft.com" }],
+      new Map(),
+      []
+    )
+    const sections = searchLauncher([...commandPrompt, ...windows, ...tabs], "cmd", context())
+    expect(sectionIds(sections)).not.toContain("windows")
+    expect(rowIds(sections)[0]).toBe(`app:${appResultKey("C:\\Windows\\System32\\cmd.exe")}`)
+  })
+
   it("still finds a window by a word that starts in its title", () => {
     const windows = windowEntries([openWindow(16, "Microsoft Teams", "Chat | Simon Unger | Microsoft Teams", "C:\\Teams\\ms-teams.exe")], apps)
     expect(rowIds(searchLauncher([...apps, ...windows], "simon", context()))[0]).toBe("window:16")

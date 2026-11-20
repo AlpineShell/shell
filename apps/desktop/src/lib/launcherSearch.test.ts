@@ -3,6 +3,7 @@ import {
   deriveFields,
   scoreItem,
   scoreField,
+  scoreWordPrefix,
   exeBasename,
   frecencyBoost,
   frecencyKey,
@@ -150,5 +151,19 @@ describe("a whole word inside a name beats letters scattered across it", () => {
 
   it("still ranks a true prefix above a later word", () => {
     expect(scoreField("micro", "Microsoft Teams")).toBeGreaterThan(scoreField("teams", "Microsoft Teams"))
+  })
+})
+
+describe("scoreWordPrefix requires a contiguous prefix at a word start", () => {
+  it("matches exact, leading prefix, and later word-start substrings", () => {
+    expect(scoreWordPrefix("teams", "teams")).toBeGreaterThan(scoreWordPrefix("team", "Teams"))
+    expect(scoreWordPrefix("team", "Teams")).toBeGreaterThan(scoreWordPrefix("simon", "Chat | Simon Unger | Microsoft Teams"))
+    expect(scoreWordPrefix("simon", "Chat | Simon Unger | Microsoft Teams")).toBeGreaterThanOrEqual(3 * TIER_GAP)
+  })
+
+  it("rejects scattered word initials across unrelated words", () => {
+    const teamsTitle = "Chat | Appic - Klatsch & Tratsch | Migros | Marc.Blattmann@digitecgalaxus.ch | Microsoft Teams"
+    expect(scoreWordPrefix("cmd", teamsTitle)).toBe(-1)
+    expect(scoreWordPrefix("vsc", "Visual Studio Code")).toBe(-1)
   })
 })
