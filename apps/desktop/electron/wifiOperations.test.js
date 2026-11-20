@@ -5,7 +5,9 @@ import {
   DISCONNECT_SETTLE_MS,
   ERROR_VISIBLE_MS,
   IDLE_FAILURE_MS,
+  attemptError,
   classifyAttempt,
+  connectFailure,
   connectPlan,
   isSecured,
   isSupportedSecurity,
@@ -87,7 +89,7 @@ describe('security predicates', () => {
     ['wpa-personal', true],
     ['wpa2-personal', true],
     ['wpa3-personal', true],
-    ['enterprise', false],
+    ['enterprise', true],
     ['unknown', false],
   ])('reports whether %s is supported', (security, expected) => {
     expect(isSupportedSecurity(security)).toBe(expected)
@@ -152,6 +154,7 @@ describe('networkEntryFor', () => {
 
     expect(networkEntryFor(entries, 'Home')).toEqual({
       profileName: 'Connected Home',
+      authAlgorithm: 9,
       cipherAlgorithm: 8,
       security: 'wpa3-personal',
     })
@@ -162,12 +165,12 @@ describe('networkEntryFor', () => {
     expect(networkEntryFor([
       rawEntry({ profileName: 'Saved Home', hasProfile: true, signal: 30 }),
       rawEntry({ signal: 90, authAlgorithm: 9, cipherAlgorithm: 8 }),
-    ], 'Home')).toEqual({ profileName: 'Saved Home', cipherAlgorithm: 4, security: 'wpa2-personal' })
+    ], 'Home')).toEqual({ profileName: 'Saved Home', authAlgorithm: 7, cipherAlgorithm: 4, security: 'wpa2-personal' })
 
     expect(networkEntryFor([
       rawEntry({ signal: 30 }),
       rawEntry({ signal: 90, authAlgorithm: 9, cipherAlgorithm: 8 }),
-    ], 'Home')).toEqual({ profileName: null, cipherAlgorithm: 8, security: 'wpa3-personal' })
+    ], 'Home')).toEqual({ profileName: null, authAlgorithm: 9, cipherAlgorithm: 8, security: 'wpa3-personal' })
   })
 })
 
@@ -207,7 +210,7 @@ describe('connectPlan', () => {
     })
   })
 
-  it.each(['enterprise', 'wep', 'unknown'])('rejects unsaved %s networks as unsupported', (security) => {
+  it.each(['wep', 'unknown'])('rejects unsaved %s networks as unsupported', (security) => {
     expect(connectPlan({ network: network({ security, secured: true }), profileName: null, cipherAlgorithm: 4 })).toEqual({
       action: 'reject',
       error: 'unsupported-security',
@@ -215,9 +218,98 @@ describe('connectPlan', () => {
   })
 
   it('rejects a valid password for an unsupported secured network', () => {
-    expect(connectPlan({ network: network({ security: 'enterprise' }), profileName: null, cipherAlgorithm: 4, password: 'password123' })).toEqual({
+    expect(connectPlan({ network: network({ security: 'wep' }), profileName: null, cipherAlgorithm: 4, password: 'password123' })).toEqual({
       action: 'reject',
       error: 'unsupported-security',
+    })
+  })
+
+  it('asks for username and password for an unsaved enterprise network', () => {
+    expect(connectPlan({
+      network: network({ ssid: 'BBW_BMSW', security: 'enterprise' }),
+      profileName: null,
+      authAlgorithm: 6,
+      cipherAlgorithm: 4,
+    })).toEqual({ action: 'needs-password', needsUsername: true })
+  })
+
+  it('uses a saved profile for an enterprise network when no credentials are supplied', () => {
+    expect(connectPlan({
+      network: network({ ssid: 'BBW_BMSW', security: 'enterprise', saved: true }),
+      profileName: 'BBW_BMSW',
+      authAlgorithm: 6,
+      cipherAlgorithm: 4,
+    })).toEqual({ action: 'use-profile', profileName: 'BBW_BMSW' })
+  })
+
+  it('creates an enterprise PEAP profile validating the server by default and relaxing it when trusted', () => {
+    const verified = connectPlan({
+      network: network({ ssid: 'BBW_BMSW', security: 'enterprise' }),
+      profileName: null,
+      authAlgorithm: 6,
+      cipherAlgorithm: 4,
+      username: ' student@bbw.ch ',
+      password: 'pw',
+    })
+    expect(verified.action).toBe('create-profile')
+    expect(verified.validatesServer).toBe(true)
+    expect(verified.xml).toContain('<PerformServerValidation xmlns="http://www.microsoft.com/provisioning/MsPeapConnectionPropertiesV2">true</PerformServerValidation>')
+    expect(verified.credentialsXml).toContain('<MsChapV2:Username>student@bbw.ch</MsChapV2:Username>')
+
+    const trusted = connectPlan({
+      network: network({ ssid: 'BBW_BMSW', security: 'enterprise' }),
+      profileName: null,
+      authAlgorithm: 6,
+      cipherAlgorithm: 4,
+      username: 'student@bbw.ch',
+      password: 'pw',
+      trustServer: true,
+    })
+    expect(trusted.action).toBe('create-profile')
+    expect(trusted.validatesServer).toBe(false)
+    expect(trusted.xml).toContain('<PerformServerValidation xmlns="http://www.microsoft.com/provisioning/MsPeapConnectionPropertiesV2">false</PerformServerValidation>')
+  })
+
+  it('rejects unsupported enterprise auth algorithms such as WPA3-Enterprise 192-bit', () => {
+    expect(connectPlan({
+      network: network({ ssid: 'Gov', security: 'enterprise' }),
+      profileName: null,
+      authAlgorithm: 8,
+      cipherAlgorithm: 4,
+    })).toEqual({ action: 'reject', error: 'unsupported-security' })
+  })
+})
+
+describe('attemptError and connectFailure', () => {
+  it('reports an untrusted server when a server-validating enterprise attempt fails authentication or times out', () => {
+    expect(attemptError({ validatesServer: true }, 'wrong-password')).toBe('untrusted-server')
+    expect(attemptError({ validatesServer: true }, 'timed-out')).toBe('untrusted-server')
+    expect(attemptError({ validatesServer: true }, 'failed')).toBe('failed')
+    expect(attemptError({ validatesServer: false }, 'wrong-password')).toBe('wrong-password')
+  })
+
+  it('asks for enterprise credentials again on wrong password or saved-profile timeout', () => {
+    expect(connectFailure('enterprise', 'wrong-password')).toEqual({
+      success: false,
+      needsPassword: true,
+      needsUsername: true,
+      error: 'wrong-password',
+    })
+    expect(connectFailure('enterprise', 'timed-out')).toEqual({
+      success: false,
+      needsPassword: true,
+      needsUsername: true,
+      error: 'timed-out',
+    })
+    expect(connectFailure('enterprise', 'untrusted-server')).toEqual({
+      success: false,
+      error: 'untrusted-server',
+    })
+    expect(connectFailure('wpa2-personal', 'wrong-password')).toEqual({
+      success: false,
+      needsPassword: true,
+      needsUsername: false,
+      error: 'wrong-password',
     })
   })
 })

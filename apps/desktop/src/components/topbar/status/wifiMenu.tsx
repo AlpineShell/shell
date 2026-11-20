@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ChevronLeft, EthernetPort, Loader2, Lock, Wifi, WifiHigh, WifiLow, WifiZero, WifiOff, RefreshCw } from "lucide-react";
 import { useWifiJoin } from "../../../hooks/useWifiJoin";
 import { ETHERNET_ONLY_TITLE, networkStatusLabel, wifiOffLabel } from "../../../lib/wifiPresentation";
@@ -43,9 +43,11 @@ function ToggleSwitch({ checked, onChange, darkText }: { checked: boolean; onCha
 }
 
 export default function WifiMenu({ state, onToggleRadio, onBack, darkText }: WifiMenuProps) {
-    const { passwordFor, password, setPassword, activate, submitPassword, cancelPassword, wrongPasswordFor } = useWifiJoin();
+    const { passwordFor, password, setPassword, username, setUsername, needsUsername, canSubmit, activate, submitPassword, connectAnyway, cancelPassword, wrongPasswordFor, untrustedServerFor } = useWifiJoin();
+    const passwordRef = useRef<HTMLInputElement>(null);
     const enabled = state.radio === 'on';
     const networks = state.networks;
+    const busy = state.operation !== null;
 
     useEffect(() => {
         void window.shell.network.wifiScan().catch(() => {});
@@ -119,22 +121,61 @@ export default function WifiMenu({ state, onToggleRadio, onBack, darkText }: Wif
                                 </div>
                             </div>
                             {passwordFor === network.ssid && !network.connected && (
-                                <div className={`flex gap-2 px-2 py-1.5 items-center`}>
-                                    <input
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === "Enter") void submitPassword(); }}
-                                        placeholder="Password"
-                                        autoFocus
-                                        className={`flex-1 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
-                                    />
-                                    <button
-                                        onClick={() => { if (password.trim()) void submitPassword(); }}
-                                        className={`text-[12px] px-2 py-1 rounded-md cursor-pointer ${darkText ? "bg-black/10 text-black hover:bg-black/15" : "bg-white/15 text-white hover:bg-white/20"} transition-colors`}
-                                    >
-                                        Join
-                                    </button>
+                                <div className="flex flex-col gap-1.5 px-2 py-1.5">
+                                    {needsUsername && (
+                                        <input
+                                            type="text"
+                                            value={username}
+                                            onChange={(e) => setUsername(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                    if (!busy && canSubmit) void submitPassword();
+                                                    else passwordRef.current?.focus();
+                                                } else if (e.key === "Escape") {
+                                                    cancelPassword();
+                                                }
+                                            }}
+                                            placeholder="Username"
+                                            autoFocus
+                                            className={`w-full text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
+                                        />
+                                    )}
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            ref={passwordRef}
+                                            type="password"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                    if (!busy && canSubmit) void submitPassword();
+                                                } else if (e.key === "Escape") {
+                                                    cancelPassword();
+                                                }
+                                            }}
+                                            placeholder="Password"
+                                            autoFocus={!needsUsername}
+                                            className={`flex-1 min-w-0 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
+                                        />
+                                        <button
+                                            type="button"
+                                            disabled={busy || !canSubmit}
+                                            onClick={() => { if (!busy && canSubmit) void submitPassword(); }}
+                                            className={`text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black hover:bg-black/15" : "bg-white/15 text-white hover:bg-white/20"} transition-colors`}
+                                        >
+                                            Join
+                                        </button>
+                                    </div>
+                                    {untrustedServerFor === network.ssid && (
+                                        <button
+                                            type="button"
+                                            disabled={busy || !canSubmit}
+                                            onClick={() => { if (!busy && canSubmit) void connectAnyway(); }}
+                                            className={`text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black hover:bg-black/15" : "bg-white/15 text-white hover:bg-white/20"} transition-colors`}
+                                        >
+                                            Connect anyway
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>

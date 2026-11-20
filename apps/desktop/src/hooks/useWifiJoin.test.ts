@@ -16,7 +16,7 @@ const CONNECTED_NETWORK: WifiNetwork = { ...OPEN_NETWORK, connected: true }
 
 function installShell() {
   const network = {
-    wifiConnect: vi.fn<(...args: [string, string?]) => Promise<WifiConnectResult>>(() => Promise.resolve({ success: true })),
+    wifiConnect: vi.fn<(...args: [string, string?, WifiConnectOptions?]) => Promise<WifiConnectResult>>(() => Promise.resolve({ success: true })),
     wifiDisconnect: vi.fn(() => Promise.resolve({ success: true })),
   }
   ;(window as unknown as { shell: unknown }).shell = { network }
@@ -82,5 +82,42 @@ describe('useWifiJoin', () => {
     expect(network.wifiConnect).toHaveBeenNthCalledWith(2, 'Open network', 'password123')
     expect(result.current.passwordFor).toBeNull()
     expect(result.current.password).toBe('')
+  })
+
+  it('collects enterprise credentials and retries without server verification on connectAnyway', async () => {
+    const enterpriseNetwork: WifiNetwork = { ...OPEN_NETWORK, ssid: 'BBW_BMSW', security: 'enterprise', secured: true }
+    const network = installShell()
+    network.wifiConnect
+      .mockResolvedValueOnce({ success: false, needsPassword: true, needsUsername: true })
+      .mockResolvedValueOnce({ success: false, error: 'untrusted-server' })
+      .mockResolvedValueOnce({ success: false, needsPassword: true, needsUsername: true, error: 'wrong-password' })
+      .mockResolvedValueOnce({ success: true })
+    const { result } = renderHook(() => useWifiJoin())
+
+    await act(async () => result.current.activate(enterpriseNetwork))
+    expect(result.current.passwordFor).toBe('BBW_BMSW')
+    expect(result.current.needsUsername).toBe(true)
+    expect(result.current.canSubmit).toBe(false)
+
+    act(() => {
+      result.current.setUsername('student@bbw.ch')
+      result.current.setPassword('wrong')
+    })
+    expect(result.current.canSubmit).toBe(true)
+
+    await act(async () => result.current.submitPassword())
+    expect(network.wifiConnect).toHaveBeenNthCalledWith(2, 'BBW_BMSW', 'wrong', { username: 'student@bbw.ch', trustServer: false })
+    expect(result.current.untrustedServerFor).toBe('BBW_BMSW')
+
+    await act(async () => result.current.connectAnyway())
+    expect(network.wifiConnect).toHaveBeenNthCalledWith(3, 'BBW_BMSW', 'wrong', { username: 'student@bbw.ch', trustServer: true })
+    expect(result.current.untrustedServerFor).toBeNull()
+    expect(result.current.wrongPasswordFor).toBe('BBW_BMSW')
+
+    act(() => result.current.setPassword('correct'))
+    await act(async () => result.current.submitPassword())
+    expect(network.wifiConnect).toHaveBeenNthCalledWith(4, 'BBW_BMSW', 'correct', { username: 'student@bbw.ch', trustServer: true })
+    expect(result.current.passwordFor).toBeNull()
+    expect(result.current.username).toBe('')
   })
 })

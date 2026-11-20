@@ -9,6 +9,7 @@ export function networkStatusLabel(network: WifiNetwork, state: WifiState): stri
   if (state.lastError?.ssid !== network.ssid) return undefined
   if (state.lastError.error === 'wrong-password') return 'Wrong password'
   if (state.lastError.error === 'unsupported-security') return 'Not supported'
+  if (state.lastError.error === 'untrusted-server') return "Can't verify this network"
   return "Couldn't connect"
 }
 

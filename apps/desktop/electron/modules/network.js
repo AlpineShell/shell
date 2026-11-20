@@ -15,12 +15,15 @@ const {
   readInterfaceState,
   requestScan,
   setProfile,
+  setProfileEapUserData,
 } = require('../wifiNative')
 const {
   CONNECT_DEADLINE_MS,
   CONNECT_POLL_MS,
   ERROR_VISIBLE_MS,
+  attemptError,
   classifyAttempt,
+  connectFailure,
   connectPlan,
   networkEntryFor,
   toWifiNetworks,
@@ -323,6 +326,7 @@ async function executeConnectionPlan(ssid, plan, secured) {
       profileMayExist = true
       const profile = await setProfile(plan.xml)
       if (!profile?.ok) return { outcome: 'failed', profileMayExist }
+      if (plan.credentialsXml && !(await setProfileEapUserData(ssid, plan.credentialsXml))) return { outcome: 'failed', profileMayExist }
     }
     const profileName = plan.action === 'use-profile' ? plan.profileName : ssid
     const connectionStartedAt = Date.now()
@@ -333,7 +337,7 @@ async function executeConnectionPlan(ssid, plan, secured) {
   }
 }
 
-async function executeWifiConnect({ ssid, password }) {
+async function executeWifiConnect({ ssid, password, username, trustServer }) {
   if (cachedWifiState.operation) return { success: false, error: 'failed' }
   clearLastError()
   let rawNetworks
@@ -356,14 +360,17 @@ async function executeWifiConnect({ ssid, password }) {
   const plan = connectPlan({
     network,
     profileName: entry.profileName,
+    authAlgorithm: entry.authAlgorithm,
     cipherAlgorithm: entry.cipherAlgorithm,
     password,
+    username,
+    trustServer,
   })
   if (plan.action === 'reject') {
     setLastError(ssid, plan.error)
     return { success: false, error: plan.error }
   }
-  if (plan.action === 'needs-password') return { success: false, needsPassword: true }
+  if (plan.action === 'needs-password') return { success: false, needsPassword: true, needsUsername: plan.needsUsername === true }
 
   setOperation({ kind: 'connect', ssid })
   let result = { success: false, error: 'failed' }
@@ -375,11 +382,9 @@ async function executeWifiConnect({ ssid, password }) {
       result = { success: true }
       return result
     }
-    const error = attempt.outcome
+    const error = attemptError(plan, attempt.outcome)
     setLastError(ssid, error)
-    result = error === 'wrong-password'
-      ? { success: false, needsPassword: true, error }
-      : { success: false, error }
+    result = connectFailure(network.security, error)
     return result
   } catch (error) {
     logNetworkFailure(error)
@@ -530,7 +535,7 @@ module.exports = {
     'network/wifi-signal': () => cachedStatus,
     'network/wifi-state': () => cachedWifiState,
     'network/wifi-scan': () => scanWifiNetworks(),
-    'network/wifi-connect': (_event, { ssid, password }) => connectWifi({ ssid, password }),
+    'network/wifi-connect': (_event, { ssid, password, username, trustServer }) => connectWifi({ ssid, password, username, trustServer: trustServer === true }),
     'network/wifi-disconnect': () => disconnectWifi(),
     'network/wifi-radio-set': (_event, enabled) => setWifiRadio(enabled),
     'network/details': () => networkDetails(),

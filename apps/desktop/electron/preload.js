@@ -535,7 +535,7 @@ contextBridge.exposeInMainWorld('shell', {
       return () => ipcRenderer.removeListener('network/wifi-changed', handler)
     },
     wifiScan: () => ipcRenderer.invoke('network/wifi-scan'),
-    wifiConnect: (ssid, password) => ipcRenderer.invoke('network/wifi-connect', { ssid, password }),
+    wifiConnect: (ssid, password, options) => ipcRenderer.invoke('network/wifi-connect', { ssid, password, username: options?.username, trustServer: options?.trustServer === true }),
     details: () => ipcRenderer.invoke('network/details'),
     onDetailsChanged: (callback) => {
       const handler = (_, data) => callback(data)

@@ -98,11 +98,17 @@ export default function WifiSettingsPage() {
                   network={n}
                   state={state}
                   passwordFor={join.passwordFor}
+                  username={join.username}
                   password={join.password}
+                  needsUsername={join.needsUsername}
+                  canSubmit={join.canSubmit}
                   wrongPassword={join.wrongPasswordFor === n.ssid}
+                  untrustedServer={join.untrustedServerFor === n.ssid}
                   onActivate={() => activate(n)}
+                  onUsernameChange={join.setUsername}
                   onPasswordChange={join.setPassword}
-                  onPasswordSubmit={() => join.password.trim() && void join.submitPassword()}
+                  onPasswordSubmit={() => { if (!state.operation && join.canSubmit) void join.submitPassword() }}
+                  onConnectAnyway={() => { if (!state.operation && join.canSubmit) void join.connectAnyway() }}
                 />
               ))}
             </Card>
@@ -130,29 +136,43 @@ function NetworkRow({
   network,
   state,
   passwordFor,
+  username,
   password,
+  needsUsername,
+  canSubmit,
   wrongPassword,
+  untrustedServer,
   onActivate,
+  onUsernameChange,
   onPasswordChange,
   onPasswordSubmit,
+  onConnectAnyway,
 }: {
   network: WifiNetwork
   state: WifiState
   passwordFor: string | null
+  username: string
   password: string
+  needsUsername: boolean
+  canSubmit: boolean
   wrongPassword: boolean
+  untrustedServer: boolean
   onActivate: () => void
+  onUsernameChange: (v: string) => void
   onPasswordChange: (v: string) => void
   onPasswordSubmit: () => void
+  onConnectAnyway: () => void
 }) {
+  const usernameRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const open = passwordFor === network.ssid
   const askingPassword = open && !network.connected
   const detail = networkStatusLabel(network, state)
+  const busy = state.operation !== null
 
   useEffect(() => {
-    if (askingPassword) requestAnimationFrame(() => inputRef.current?.focus())
-  }, [askingPassword])
+    if (askingPassword) requestAnimationFrame(() => (needsUsername ? usernameRef : inputRef).current?.focus())
+  }, [askingPassword, needsUsername])
 
   return (
     <ListRow
@@ -181,21 +201,46 @@ function NetworkRow({
         style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}
       >
         <div className="min-h-0 overflow-hidden" inert={!open}>
-          <div className="flex items-center gap-2 pt-1 pr-3.5 pb-3 pl-[54px]">
-            <TextField
-              ref={inputRef}
-              type="password"
-              label={`Password for ${network.ssid}`}
-              placeholder="Password"
-              value={password}
-              invalid={wrongPassword}
-              onChange={onPasswordChange}
-              onSubmit={onPasswordSubmit}
-              className="max-w-xs flex-1"
-            />
-            <Button shape="square" size="sm" onClick={onPasswordSubmit}>
-              Connect
-            </Button>
+          <div className="flex flex-col gap-2 pt-1 pr-3.5 pb-3 pl-[54px]">
+            {needsUsername && (
+              <TextField
+                ref={usernameRef}
+                type="text"
+                label={`Username for ${network.ssid}`}
+                placeholder="Username"
+                value={username}
+                invalid={wrongPassword}
+                onChange={onUsernameChange}
+                onSubmit={() => {
+                  if (canSubmit) onPasswordSubmit()
+                  else inputRef.current?.focus()
+                }}
+                className="max-w-xs"
+              />
+            )}
+            <div className="flex items-center gap-2">
+              <TextField
+                ref={inputRef}
+                type="password"
+                label={`Password for ${network.ssid}`}
+                placeholder="Password"
+                value={password}
+                invalid={wrongPassword}
+                onChange={onPasswordChange}
+                onSubmit={onPasswordSubmit}
+                className="max-w-xs flex-1"
+              />
+              <Button shape="square" size="sm" disabled={busy || !canSubmit} onClick={onPasswordSubmit}>
+                Connect
+              </Button>
+            </div>
+            {untrustedServer && (
+              <div>
+                <Button shape="square" size="sm" variant="outline" disabled={busy || !canSubmit} onClick={onConnectAnyway}>
+                  Connect anyway
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
