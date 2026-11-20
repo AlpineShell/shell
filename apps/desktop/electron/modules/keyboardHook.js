@@ -161,6 +161,7 @@ function setKeyHandlers(handlers) {
 
 module.exports = {
   setKeyHandlers,
+  stop: uninstallHook,
 
   start() {
     const { app } = require('electron')

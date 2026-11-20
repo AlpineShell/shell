@@ -2,7 +2,7 @@ import path from 'path'
 import { describe, expect, it } from 'vitest'
 import wallpaperPresets from './wallpaperPresets.js'
 
-const { isWallpaperFile, isInsideDirectory, removedPresetReplacement } = wallpaperPresets
+const { isWallpaperFile, isInsideDirectory, remapMovedPreset, removedPresetReplacement } = wallpaperPresets
 
 const PRESETS_DIR = path.resolve(path.join(path.sep, 'Alpine Shell', 'resources', 'wallpapers'))
 const MINE_DIR = path.resolve(path.join(path.sep, 'AppData', 'alpine-shell', 'wallpapers'))
@@ -78,6 +78,28 @@ describe('removedPresetReplacement', () => {
       presetsDir: PRESETS_DIR,
       presetNames: ['CREDITS.md'],
       exists: nothingExists,
+    })).toBeNull()
+  })
+})
+
+describe('remapMovedPreset', () => {
+  it('remaps a preset saved under an earlier version directory to the active presets folder', () => {
+    const oldPresetsDir = path.resolve(path.join(path.sep, 'Programs', 'alpine-shell', 'versions', '1.0.0', 'resources', 'wallpapers'))
+    const newPresetsDir = path.resolve(path.join(path.sep, 'Programs', 'alpine-shell', 'versions', '1.0.1', 'resources', 'wallpapers'))
+    const target = path.join(newPresetsDir, 'Grainy Valley.jpeg')
+
+    expect(remapMovedPreset({
+      wallpaperPath: path.join(oldPresetsDir, 'Grainy Valley.jpeg'),
+      presetsDir: newPresetsDir,
+      exists: (candidate) => candidate === target,
+    })).toBe(target)
+  })
+
+  it('leaves user wallpapers outside resources/wallpapers untouched', () => {
+    expect(remapMovedPreset({
+      wallpaperPath: path.join(MINE_DIR, 'Grainy Valley.jpeg'),
+      presetsDir: PRESETS_DIR,
+      exists: () => true,
     })).toBeNull()
   })
 })

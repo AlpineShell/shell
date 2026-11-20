@@ -40,6 +40,12 @@ function inject(moduleId, exports) {
   nodeRequire.cache[moduleId] = { id: moduleId, filename: moduleId, loaded: true, exports }
 }
 
+const stageInstallerMock = vi.fn()
+const startBrandedUpdateMock = vi.fn(() => false)
+const startStagedSwapMock = vi.fn(() => true)
+const installDir = path.join(userDataDir, 'install-root')
+const installedExePath = path.join(installDir, 'Alpine Shell.exe')
+
 inject(nodeRequire.resolve('electron'), {
   app: { getPath: () => userDataDir, isPackaged: true, getVersion: () => appVersion, exit: () => undefined },
 })
@@ -52,8 +58,15 @@ inject(nodeRequire.resolve('./licence.js'), {
   },
 })
 inject(nodeRequire.resolve('./installer.js'), {
-  startBrandedUpdate: () => false,
+  getInstallDir: () => installDir,
+  getInstalledExePath: () => installedExePath,
+  startBrandedUpdate: (...args) => startBrandedUpdateMock(...args),
+  startStagedSwap: (...args) => startStagedSwapMock(...args),
   ensureUpdaterExeAsync: () => Promise.resolve(),
+})
+inject(nodeRequire.resolve('./stagedUpdate.js'), {
+  canStageVersion: (target, current) => target !== current,
+  stageInstaller: (...args) => stageInstallerMock(...args),
 })
 inject(nodeRequire.resolve('./frecency.js'), { flush: () => undefined })
 inject(nodeRequire.resolve('./appIcons.js'), { flushDiskCache: () => undefined })
@@ -284,5 +297,59 @@ describe('the update channel', () => {
     expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'not-available', error: null })
     expect(logMessages().at(-1)).toBe('No nightly build yet')
     updater.handlers['updates/set-preferences'](null, { channel: 'stable' })
+  })
+})
+
+describe('background staging and instant swap', () => {
+  beforeEach(() => {
+    stageInstallerMock.mockReset()
+    startBrandedUpdateMock.mockReset()
+    startStagedSwapMock.mockReset()
+    startStagedSwapMock.mockReturnValue(true)
+    updater.setSwapHandler(null)
+  })
+
+  it('stages a downloaded update in the background and swaps via swapHandler without showing the update screen', async () => {
+    const stagedExe = path.join(installDir, 'versions', '1.3.0', 'Alpine Shell.exe')
+    fs.mkdirSync(path.dirname(stagedExe), { recursive: true })
+    fs.writeFileSync(stagedExe, '')
+    let resolveStage
+    stageInstallerMock.mockReturnValue(new Promise((resolve) => { resolveStage = resolve }))
+
+    updaterListeners.get('update-downloaded')({ version: '1.3.0', downloadedFile: path.join(userDataDir, 'setup.exe') })
+    expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'preparing', availableVersion: '1.3.0', progressPercent: 100 })
+    expect(updater.isUpdatePending()).toBe(true)
+
+    resolveStage({ ok: true, exePath: stagedExe, versionDir: path.dirname(stagedExe) })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'downloaded', availableVersion: '1.3.0', progressPercent: 100 })
+
+    const swapHandler = vi.fn(() => true)
+    updater.setSwapHandler(swapHandler)
+    updater.handlers['updates/install']()
+
+    expect(swapHandler).toHaveBeenCalledWith({ targetExePath: stagedExe, targetVersion: '1.3.0' })
+    expect(startBrandedUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the branded installer when staging fails', async () => {
+    const downloadedPath = path.join(userDataDir, 'setup-fail.exe')
+    stageInstallerMock.mockResolvedValue({ ok: false, reason: 'extract-failed' })
+    startBrandedUpdateMock.mockReturnValue(true)
+
+    updaterListeners.get('update-downloaded')({ version: '1.3.1', downloadedFile: downloadedPath })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(updater.handlers['updates/get-state']()).toMatchObject({ status: 'downloaded', availableVersion: '1.3.1' })
+
+    const swapHandler = vi.fn(() => true)
+    updater.setSwapHandler(swapHandler)
+    updater.handlers['updates/install']()
+
+    expect(swapHandler).not.toHaveBeenCalled()
+    expect(startBrandedUpdateMock).toHaveBeenCalledWith(downloadedPath, '1.3.1')
   })
 })

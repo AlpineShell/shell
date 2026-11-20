@@ -238,6 +238,57 @@ describe('the branded update hand-off', () => {
   })
 })
 
+describe('the staged instant update swap', () => {
+  const RUN_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'
+  const ALPINE_SHELL = process.execPath
+  let stagedExe = ''
+
+  beforeEach(() => {
+    electronApp.isPackaged = true
+    electronApp.getVersion = () => '1.0.0'
+    stagedExe = path.join(tempDir, 'versions', '1.0.1', 'Alpine Shell.exe')
+    fs.mkdirSync(path.dirname(stagedExe), { recursive: true })
+    fs.writeFileSync(stagedExe, '')
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), ALPINE_SHELL)
+    registry.set(registryKey(RUN_KEY, 'AlpineShell'), `"${ALPINE_SHELL}" --autostart`)
+  })
+
+  afterEach(() => {
+    electronApp.isPackaged = false
+    delete electronApp.getVersion
+  })
+
+  it('switches Winlogon directly to the staged exe without bouncing through Explorer and launches it with wait-pid', () => {
+    const ok = installer.startStagedSwap({ targetExePath: stagedExe, targetVersion: '1.0.1' })
+
+    expect(ok).toBe(true)
+    expect(registry.get(registryKey(WINLOGON_KEY, 'Shell'))).toBe(stagedExe)
+    expect(registry.get(registryKey(RUN_KEY, 'AlpineShell'))).toBe(`"${stagedExe}" --autostart`)
+    expect(spawnMock).toHaveBeenCalledWith(
+      stagedExe,
+      ['--update-swap', '--wait-pid', String(process.pid)],
+      expect.objectContaining({ detached: true, cwd: path.dirname(stagedExe) })
+    )
+    expect(fs.existsSync(path.join(userDataDir, 'pending-swap.json'))).toBe(true)
+  })
+
+  it('leaves Explorer registered when Alpine was not the shell before the swap', () => {
+    registry.set(registryKey(WINLOGON_KEY, 'Shell'), 'explorer.exe')
+
+    expect(installer.startStagedSwap({ targetExePath: stagedExe, targetVersion: '1.0.1' })).toBe(true)
+    expect(registry.get(registryKey(WINLOGON_KEY, 'Shell'))).toBe('explorer.exe')
+  })
+
+  it('restores the previous shell registration and clears pending swap state when launch fails', () => {
+    spawnMock.mockImplementation(() => ({ pid: undefined, on: () => {}, unref: () => {} }))
+
+    expect(installer.startStagedSwap({ targetExePath: stagedExe, targetVersion: '1.0.1' })).toBe(false)
+    expect(registry.get(registryKey(WINLOGON_KEY, 'Shell'))).toBe(ALPINE_SHELL)
+    expect(registry.get(registryKey(RUN_KEY, 'AlpineShell'))).toBe(`"${ALPINE_SHELL}" --autostart`)
+    expect(fs.existsSync(path.join(userDataDir, 'pending-swap.json'))).toBe(false)
+  })
+})
+
 describe('the startup apps sign-in record', () => {
   it('remembers that the startup apps ran in this sign-in', () => {
     installer.recordAutostartLogon()

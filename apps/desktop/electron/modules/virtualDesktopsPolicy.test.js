@@ -12,6 +12,7 @@ const {
   planMoveWindow,
   allStashedWindows,
   windowsToRecover,
+  restoreSwapState,
 } = virtualDesktopsPolicy
 
 const EDITOR = { hwnd: 0x101, processId: 11 }
@@ -193,5 +194,26 @@ describe('windowsToRecover', () => {
   it('ignores a file that is not a list of windows', () => {
     expect(windowsToRecover(null, probe())).toEqual([])
     expect(windowsToRecover([null, { hwnd: 'x' }, 7], probe())).toEqual([])
+  })
+})
+
+describe('restoreSwapState', () => {
+  function probe({ gone = [], visible = [], reused = [] } = {}) {
+    return {
+      exists: (hwnd) => !gone.includes(hwnd),
+      isVisible: (hwnd) => visible.includes(hwnd),
+      processId: (hwnd) => (reused.includes(hwnd) ? 999 : [EDITOR, BROWSER, TERMINAL, MUSIC].find((window) => window.hwnd === hwnd).processId),
+    }
+  }
+
+  it('restores the active desktop and hidden windows while pruning gone, visible or reused handles', () => {
+    const saved = desktops([[EDITOR, BROWSER], [], [TERMINAL, MUSIC]], 1)
+    const restored = restoreSwapState(saved, probe({ gone: [BROWSER.hwnd], reused: [MUSIC.hwnd] }))
+    expect(restored).toEqual(desktops([[EDITOR], [], [TERMINAL]], 1))
+  })
+
+  it('returns null for missing or malformed swap state', () => {
+    expect(restoreSwapState(null, probe())).toBeNull()
+    expect(restoreSwapState({ stashed: [], current: 0 }, probe())).toBeNull()
   })
 })

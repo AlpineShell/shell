@@ -51,8 +51,12 @@ export default function UpdatesPage() {
   const alpineActionable =
     alpine.state.status === 'available' ||
     alpine.state.status === 'downloading' ||
+    alpine.state.status === 'preparing' ||
     alpine.state.status === 'downloaded'
-  const alpineBusy = alpine.state.status === 'downloading' || alpine.state.status === 'downloaded'
+  const alpineBusy =
+    alpine.state.status === 'downloading' ||
+    alpine.state.status === 'preparing' ||
+    alpine.state.status === 'downloaded'
   const showWindowsList = windows.state.status === 'available' || installing
   const windowsRows = showWindowsList ? windows.state.updates : []
 
@@ -197,6 +201,7 @@ function alpineDetail(state: UpdateState): string {
   if (state.status === 'checking') return 'Checking for updates…'
   if (state.status === 'available') return `Version ${state.availableVersion ?? ''} available`
   if (state.status === 'downloading') return `Downloading version ${state.availableVersion ?? ''}`
+  if (state.status === 'preparing') return `Preparing version ${state.availableVersion ?? ''}…`
   if (state.status === 'downloaded') return `Version ${state.availableVersion ?? ''} ready to install`
   if (state.status === 'error') return "Couldn't check for updates"
   return 'Up to date'
@@ -222,6 +227,14 @@ function AlpineAction({
     return <ProgressBar percent={state.progressPercent} />
   }
 
+  if (state.status === 'preparing') {
+    return (
+      <Button shape="square" size="sm" disabled busy>
+        Preparing
+      </Button>
+    )
+  }
+
   if (state.status === 'downloaded') {
     return (
       <Button
@@ -232,7 +245,7 @@ function AlpineAction({
         busy={pending}
         icon={<RotateCcw size={14} />}
       >
-        Restart &amp; install
+        Update now
       </Button>
     )
   }

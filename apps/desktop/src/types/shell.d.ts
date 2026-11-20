@@ -224,7 +224,7 @@ interface DisplayWindowCoverage {
 }
 
 declare global {
-  type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+  type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'preparing' | 'downloaded' | 'error'
 
   interface UpdateState {
     status: UpdateStatus

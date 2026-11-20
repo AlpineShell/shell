@@ -3,6 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
 const installer = require('./modules/installer')
+const stagedUpdate = require('./modules/stagedUpdate')
 const explorerShell = require('./modules/explorerShell')
 const bootRecovery = require('./bootRecovery')
 const { createCrashLog, createRepeatFilter, describeError, truncateText } = require('./crashLog')
@@ -13,18 +14,42 @@ const crashLog = createCrashLog()
 const BOOT_ATTEMPTS_PATH = bootRecovery.bootAttemptsPath(app.getPath('userData'))
 const HAND_BACK_CONFIRM_DELAY_MS = 1200
 const EXPLORER_GUARD_INTERVAL_MS = 5000
+const SWAP_SINGLE_INSTANCE_RETRIES = 20
+const SWAP_SINGLE_INSTANCE_RETRY_MS = 25
+
+function acquireSingleInstanceLock() {
+  const waitPid = stagedUpdate.parseWaitPidArg(process.argv)
+  if (waitPid !== null) stagedUpdate.waitForProcessExitSync(waitPid)
+  if (app.requestSingleInstanceLock()) return true
+  if (!stagedUpdate.isUpdateSwapLaunch(process.argv)) return false
+  for (let attempt = 0; attempt < SWAP_SINGLE_INSTANCE_RETRIES; attempt++) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, SWAP_SINGLE_INSTANCE_RETRY_MS)
+    if (app.requestSingleInstanceLock()) return true
+  }
+  return false
+}
 
 const bypassSingleInstance =
   process.argv.includes('--uninstall') ||
   process.argv.includes('--uninstall-cleanup') ||
   installer.isPortableRun()
-const gotSingleInstanceLock = bypassSingleInstance ? true : app.requestSingleInstanceLock()
+const gotSingleInstanceLock = bypassSingleInstance ? true : acquireSingleInstanceLock()
 if (!gotSingleInstanceLock) app.quit()
 
 let bootCountedBeforeThisLaunch = null
 
 function guardsThisLaunch() {
   return bootRecovery.guardsLaunch({ packaged: app.isPackaged, portable: installer.isPortableRun(), argv: process.argv })
+}
+
+function tryRollbackStagedSwap() {
+  if (!app.isPackaged) return false
+  const rolledBack = stagedUpdate.rollbackPendingSwap({
+    userDataDir: app.getPath('userData'),
+    currentExePath: process.execPath,
+  })
+  if (rolledBack) forgetBootAttempts()
+  return rolledBack
 }
 
 function guardShellBoot() {
@@ -36,6 +61,10 @@ function guardShellBoot() {
     shellHostedByExplorer: () => explorerShell.shellHostedByExplorer(),
   })
   if (plan.action === bootRecovery.FALL_BACK_TO_EXPLORER) {
+    if (tryRollbackStagedSwap()) {
+      console.error('[main] Rolled back failed update swap to the previous Alpine Shell version')
+      process.exit(1)
+    }
     console.error(`[main] Alpine Shell did not finish starting ${plan.unfinishedBoots} times in a row, so Explorer takes the shell`)
     crashLog.record('fell-back-to-explorer', { unfinishedBoots: plan.unfinishedBoots, startedExplorer: plan.startExplorer })
     bootRecovery.fallBackToExplorer(plan)
@@ -57,7 +86,7 @@ function uncountThisLaunch() {
 
 if (gotSingleInstanceLock) guardShellBoot()
 
-try { require('node:module').enableCompileCache(path.join(app.getPath('userData'), 'v8-cache')) } catch {}
+try { require('node:module').enableCompileCache(path.join(app.getPath('userData'), 'v8-cache', app.getVersion())) } catch {}
 
 protocol.registerSchemesAsPrivileged(PRIVILEGED_SCHEMES)
 const ipc = require('./ipc')
@@ -1219,9 +1248,14 @@ function recoverFromFailedStart(error) {
   crashLog.record('startup-failed', describeError(error))
   try { if (shellWindow) shellWindow.destroy() } catch {}
   try { unregisterAll() } catch {}
+  if (tryRollbackStagedSwap()) {
+    console.error('[main] Rolled back failed update swap to the previous Alpine Shell version')
+    app.exit(1)
+    return
+  }
   const plan = bootRecovery.planFailedStart({
     guarded: guardsThisLaunch(),
-    updaterAwaitsReady: isUpdateRestart() && !updateReadySignalled,
+    updaterAwaitsReady: getUpdateReadyMarkerPath() !== null && !updateReadySignalled,
     get explorerHostsShell() { return explorerShell.shellHostedByExplorer() },
     get optedOut() { return installer.isShellOptedOut() },
   })
@@ -1338,6 +1372,7 @@ async function startApp() {
   theme.onThemeChange(repaintSettingsChrome)
 
   setup.setShellShutdown(gracefulShutdown)
+  updater.setSwapHandler(performInstantUpdateSwap)
 
   launcherHotkey.setTriggerCallback(() => launcher.showFromHotkey())
 
@@ -1423,8 +1458,35 @@ function getUpdateReadyMarkerPath() {
   return value && value.length > 0 ? value : null
 }
 
+let stagedUpdateFinalized = false
+
 function isUpdateRestart() {
-  return getUpdateReadyMarkerPath() !== null
+  return getUpdateReadyMarkerPath() !== null || stagedUpdate.isUpdateSwapLaunch(process.argv)
+}
+
+function finalizeStagedUpdateOnce() {
+  if (stagedUpdateFinalized || !app.isPackaged || installer.isPortableRun()) return
+  stagedUpdateFinalized = true
+  try {
+    const result = stagedUpdate.finalizeSwap({
+      userDataDir: app.getPath('userData'),
+      installRoot: installer.getInstallDir(),
+      currentVersion: app.getVersion(),
+      currentExePath: process.execPath,
+    })
+    if (result.completedSwap) {
+      shellNotice.show({
+        id: 'alpine-updated',
+        title: 'Alpine Shell',
+        message: `Updated to version ${app.getVersion()}`,
+        tone: 'success',
+        pill: true,
+        timeoutMs: 5000,
+      })
+    }
+  } catch (e) {
+    console.error('[main] Failed to finalize staged update:', e?.message ?? e)
+  }
 }
 
 function markTopBarSettled(win) {
@@ -1433,7 +1495,10 @@ function markTopBarSettled(win) {
 }
 
 function reviewTopBarsSettled() {
-  if (areAllTopBarsSettled()) forgetBootAttempts()
+  if (areAllTopBarsSettled()) {
+    forgetBootAttempts()
+    finalizeStagedUpdateOnce()
+  }
   if (topBarSettleListener) topBarSettleListener()
 }
 
@@ -1698,6 +1763,29 @@ function guardDesktopAgainstExplorer() {
     clearInterval(explorerGuardTimer)
     gracefulShutdown()
   }, EXPLORER_GUARD_INTERVAL_MS)
+}
+
+function performInstantUpdateSwap({ targetExePath, targetVersion }) {
+  const reopenSettingsPage = settingsWin && !settingsWin.isDestroyed() ? (currentSettingsPage || 'updates') : null
+  const virtualDesktopsState = virtualDesktops.snapshotState()
+  try { frecency.flush() } catch {}
+  try { appIcons.flushDiskCache() } catch {}
+  const launched = installer.startStagedSwap({
+    targetExePath,
+    targetVersion,
+    virtualDesktopsState,
+    reopenSettingsPage,
+  })
+  if (!launched) return false
+  if (explorerGuardTimer) clearInterval(explorerGuardTimer)
+  explorerGuardTimer = null
+  try { keyboardHook.stop() } catch {}
+  try { smartScreenPrompt.declineAll() } catch {}
+  try { smartScreenHost.stop() } catch {}
+  try { if (trayHost) trayHost.destroy() } catch {}
+  try { if (shellWindow) shellWindow.destroy() } catch {}
+  app.exit(0)
+  return true
 }
 
 function gracefulShutdown() {

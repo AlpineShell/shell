@@ -370,6 +370,17 @@ function reapDeadOwners() {
   if (changed) scheduleBroadcast()
 }
 
+function destroyHost() {
+  try {
+    if (reaper) clearInterval(reaper)
+    reaper = null
+    if (notifyHwnd) DestroyWindow(notifyHwnd)
+    notifyHwnd = 0
+    if (trayHwnd) DestroyWindow(trayHwnd)
+    trayHwnd = 0
+  } catch {}
+}
+
 module.exports = {
   handlers: {
     'tray/icons': () => publicState(),
@@ -379,6 +390,7 @@ module.exports = {
   },
 
   announceTaskbar,
+  destroy: destroyHost,
 
   start(broadcast) {
     broadcastRef = broadcast
@@ -391,13 +403,7 @@ module.exports = {
         console.error('[trayHost] start error:', e.message)
         return
       }
-      app.on('will-quit', () => {
-        try {
-          if (reaper) clearInterval(reaper)
-          if (notifyHwnd) DestroyWindow(notifyHwnd)
-          if (trayHwnd) DestroyWindow(trayHwnd)
-        } catch {}
-      })
+      app.on('will-quit', destroyHost)
     })
   },
 }
