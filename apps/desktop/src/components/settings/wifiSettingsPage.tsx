@@ -201,46 +201,47 @@ function NetworkRow({
         style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}
       >
         <div className="min-h-0 overflow-hidden" inert={!open}>
-          <div className="flex flex-col gap-2 pt-1 pr-3.5 pb-3 pl-[54px]">
-            {needsUsername && (
-              <TextField
-                ref={usernameRef}
-                type="text"
-                label={`Username for ${network.ssid}`}
-                placeholder="Username"
-                value={username}
-                invalid={wrongPassword}
-                onChange={onUsernameChange}
-                onSubmit={() => {
-                  if (canSubmit) onPasswordSubmit()
-                  else inputRef.current?.focus()
-                }}
-                className="max-w-xs"
-              />
-            )}
-            <div className="flex items-center gap-2">
-              <TextField
-                ref={inputRef}
-                type="password"
-                label={`Password for ${network.ssid}`}
-                placeholder="Password"
-                value={password}
-                invalid={wrongPassword}
-                onChange={onPasswordChange}
-                onSubmit={onPasswordSubmit}
-                className="max-w-xs flex-1"
-              />
-              <Button shape="square" size="sm" disabled={busy || !canSubmit} onClick={onPasswordSubmit}>
-                Connect
-              </Button>
-            </div>
-            {untrustedServer && (
-              <div>
-                <Button shape="square" size="sm" variant="outline" disabled={busy || !canSubmit} onClick={onConnectAnyway}>
+          <div className="pt-1 pr-3.5 pb-3 pl-[54px]">
+            <div className="flex max-w-xs flex-col gap-2">
+              {needsUsername && (
+                <TextField
+                  ref={usernameRef}
+                  type="text"
+                  label={`Username for ${network.ssid}`}
+                  placeholder="Username"
+                  value={username}
+                  invalid={wrongPassword}
+                  onChange={onUsernameChange}
+                  onSubmit={() => {
+                    if (canSubmit) (untrustedServer ? onConnectAnyway : onPasswordSubmit)()
+                    else inputRef.current?.focus()
+                  }}
+                />
+              )}
+              <div className="flex items-center gap-2">
+                <TextField
+                  ref={inputRef}
+                  type="password"
+                  label={`Password for ${network.ssid}`}
+                  placeholder="Password"
+                  value={password}
+                  invalid={wrongPassword}
+                  onChange={onPasswordChange}
+                  onSubmit={untrustedServer ? onConnectAnyway : onPasswordSubmit}
+                  className="min-w-0 flex-1"
+                />
+                {!untrustedServer && (
+                  <Button shape="square" size="sm" disabled={busy || !canSubmit} onClick={onPasswordSubmit}>
+                    Connect
+                  </Button>
+                )}
+              </div>
+              {untrustedServer && (
+                <Button shape="square" size="sm" disabled={busy || !canSubmit} onClick={onConnectAnyway} className="w-full justify-center">
                   Connect anyway
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>

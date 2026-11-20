@@ -67,6 +67,16 @@ export function useWifiJoin() {
     return submitCredentials(true)
   }
 
+  function updatePassword(value: string): void {
+    setPassword(value)
+    setUntrustedServerFor(null)
+  }
+
+  function updateUsername(value: string): void {
+    setUsername(value)
+    setUntrustedServerFor(null)
+  }
+
   function cancelPassword(): void {
     resetForm()
   }
@@ -74,9 +84,9 @@ export function useWifiJoin() {
   return {
     passwordFor,
     password,
-    setPassword,
+    setPassword: updatePassword,
     username,
-    setUsername,
+    setUsername: updateUsername,
     needsUsername,
     canSubmit,
     activate,

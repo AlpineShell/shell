@@ -120,4 +120,24 @@ describe('useWifiJoin', () => {
     expect(result.current.passwordFor).toBeNull()
     expect(result.current.username).toBe('')
   })
+
+  it('clears the untrusted server prompt when credentials are edited', async () => {
+    const enterpriseNetwork: WifiNetwork = { ...OPEN_NETWORK, ssid: 'BBW_BMSW', security: 'enterprise', secured: true }
+    const network = installShell()
+    network.wifiConnect
+      .mockResolvedValueOnce({ success: false, needsPassword: true, needsUsername: true })
+      .mockResolvedValueOnce({ success: false, error: 'untrusted-server' })
+    const { result } = renderHook(() => useWifiJoin())
+
+    await act(async () => result.current.activate(enterpriseNetwork))
+    act(() => {
+      result.current.setUsername('student@bbw.ch')
+      result.current.setPassword('pw')
+    })
+    await act(async () => result.current.submitPassword())
+    expect(result.current.untrustedServerFor).toBe('BBW_BMSW')
+
+    act(() => result.current.setPassword('pw2'))
+    expect(result.current.untrustedServerFor).toBeNull()
+  })
 })

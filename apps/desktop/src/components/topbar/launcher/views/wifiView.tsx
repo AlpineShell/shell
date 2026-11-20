@@ -140,7 +140,7 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
                       onKeyDown={(event) => {
                         event.stopPropagation()
                         if (event.key === "Enter") {
-                          if (!busy && join.canSubmit) void join.submitPassword()
+                          if (!busy && join.canSubmit) void (join.untrustedServerFor === network.ssid ? join.connectAnyway() : join.submitPassword())
                           else passwordRef.current?.focus()
                         } else if (event.key === "Escape") {
                           join.cancelPassword()
@@ -159,28 +159,30 @@ export function WifiView({ darkText, onBack }: { darkText: boolean; onBack: () =
                       onChange={(event) => join.setPassword(event.target.value)}
                       onKeyDown={(event) => {
                         event.stopPropagation()
-                        if (event.key === "Enter") { if (!busy && join.canSubmit) void join.submitPassword() }
+                        if (event.key === "Enter") { if (!busy && join.canSubmit) void (join.untrustedServerFor === network.ssid ? join.connectAnyway() : join.submitPassword()) }
                         else if (event.key === "Escape") join.cancelPassword()
                       }}
                       placeholder="Password"
                       autoFocus={!join.needsUsername}
                       className={`flex-1 min-w-0 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${join.wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
                     />
-                    <button
-                      type="button"
-                      disabled={busy || !join.canSubmit}
-                      onClick={() => { if (!busy && join.canSubmit) void join.submitPassword() }}
-                      className={`text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}
-                    >
-                      Join
-                    </button>
+                    {join.untrustedServerFor !== network.ssid && (
+                      <button
+                        type="button"
+                        disabled={busy || !join.canSubmit}
+                        onClick={() => { if (!busy && join.canSubmit) void join.submitPassword() }}
+                        className={`text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}
+                      >
+                        Join
+                      </button>
+                    )}
                   </div>
                   {join.untrustedServerFor === network.ssid && (
                     <button
                       type="button"
                       disabled={busy || !join.canSubmit}
                       onClick={() => { if (!busy && join.canSubmit) void join.connectAnyway() }}
-                      className={`text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}
+                      className={`w-full text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black" : "bg-white/15 text-white"}`}
                     >
                       Connect anyway
                     </button>

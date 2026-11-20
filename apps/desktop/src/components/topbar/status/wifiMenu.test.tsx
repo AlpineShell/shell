@@ -81,6 +81,7 @@ describe('WifiMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join' }))
 
     const connectAnyway = await screen.findByRole('button', { name: 'Connect anyway' })
+    expect(screen.queryByRole('button', { name: 'Join' })).toBeNull()
     fireEvent.click(connectAnyway)
 
     expect(wifiConnect).toHaveBeenNthCalledWith(2, 'BBW_BMSW', 'secret', { username: 'student@bbw.ch', trustServer: false })

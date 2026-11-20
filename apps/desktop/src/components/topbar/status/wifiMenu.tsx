@@ -129,7 +129,7 @@ export default function WifiMenu({ state, onToggleRadio, onBack, darkText }: Wif
                                             onChange={(e) => setUsername(e.target.value)}
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter") {
-                                                    if (!busy && canSubmit) void submitPassword();
+                                                    if (!busy && canSubmit) void (untrustedServerFor === network.ssid ? connectAnyway() : submitPassword());
                                                     else passwordRef.current?.focus();
                                                 } else if (e.key === "Escape") {
                                                     cancelPassword();
@@ -148,7 +148,7 @@ export default function WifiMenu({ state, onToggleRadio, onBack, darkText }: Wif
                                             onChange={(e) => setPassword(e.target.value)}
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter") {
-                                                    if (!busy && canSubmit) void submitPassword();
+                                                    if (!busy && canSubmit) void (untrustedServerFor === network.ssid ? connectAnyway() : submitPassword());
                                                 } else if (e.key === "Escape") {
                                                     cancelPassword();
                                                 }
@@ -157,21 +157,23 @@ export default function WifiMenu({ state, onToggleRadio, onBack, darkText }: Wif
                                             autoFocus={!needsUsername}
                                             className={`flex-1 min-w-0 text-[13px] px-2 py-1 rounded-md outline-none ${darkText ? "bg-black/5 text-black placeholder:text-black/30" : "bg-white/10 text-white placeholder:text-white/30"} ${wrongPasswordFor === network.ssid ? "ring-1 ring-red-400" : ""}`}
                                         />
-                                        <button
-                                            type="button"
-                                            disabled={busy || !canSubmit}
-                                            onClick={() => { if (!busy && canSubmit) void submitPassword(); }}
-                                            className={`text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black hover:bg-black/15" : "bg-white/15 text-white hover:bg-white/20"} transition-colors`}
-                                        >
-                                            Join
-                                        </button>
+                                        {untrustedServerFor !== network.ssid && (
+                                            <button
+                                                type="button"
+                                                disabled={busy || !canSubmit}
+                                                onClick={() => { if (!busy && canSubmit) void submitPassword(); }}
+                                                className={`text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black hover:bg-black/15" : "bg-white/15 text-white hover:bg-white/20"} transition-colors`}
+                                            >
+                                                Join
+                                            </button>
+                                        )}
                                     </div>
                                     {untrustedServerFor === network.ssid && (
                                         <button
                                             type="button"
                                             disabled={busy || !canSubmit}
                                             onClick={() => { if (!busy && canSubmit) void connectAnyway(); }}
-                                            className={`text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black hover:bg-black/15" : "bg-white/15 text-white hover:bg-white/20"} transition-colors`}
+                                            className={`w-full text-[12px] px-2 py-1 rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-default ${darkText ? "bg-black/10 text-black hover:bg-black/15" : "bg-white/15 text-white hover:bg-white/20"} transition-colors`}
                                         >
                                             Connect anyway
                                         </button>
