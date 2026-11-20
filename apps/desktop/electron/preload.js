@@ -70,6 +70,7 @@ ipcRenderer.on('theme/changed', (_, data) => { bootTheme = data })
 
 contextBridge.exposeInMainWorld('topbar', {
   setActiveRegion: (region) => ipcRenderer.send('topbar/set-active-region', region),
+  setMenuFocus: (focused) => ipcRenderer.send('topbar/set-menu-focus', Boolean(focused)),
   setInteractiveZones: (zones) => ipcRenderer.send('topbar/set-interactive-zones', zones),
   color: () => ipcRenderer.invoke('topbar/color'),
   onColorChanged: (callback) => {

@@ -104,6 +104,7 @@ const pluginBackendHost = require('./pluginBackendHost')
 const pluginWindows = require('./pluginWindows')
 const { launchCommand } = require('./shellLaunch')
 const { isPointInMenuHotZone, shouldClickCloseMenu } = require('./menuHotZone')
+const { planMenuBlur, planMenuFocusChange, shouldAutoCloseMenu } = require('./menuFocusPolicy')
 const { sanitizeInteractiveZones, isCursorInInteractiveZone } = require('./topbarInteractiveZones')
 const shellNotice = require('./modules/shellNotice')
 
@@ -321,7 +322,7 @@ function closeActiveMenu(win, state) {
 }
 
 function scheduleMenuClose(win, state) {
-  if (!state.activeRegion || state.closeGraceTimer) return
+  if (!shouldAutoCloseMenu(state) || state.closeGraceTimer) return
   state.closeGraceTimer = setTimeout(() => {
     state.closeGraceTimer = null
     closeActiveMenu(win, state)
@@ -557,8 +558,47 @@ function createTopBarWindow(display) {
   win.setIgnoreMouseEvents(true)
   loadAppURL(win, getURL('topbar', display.id))
 
-  const state = { ignoring: true, activeRegion: null, interactiveZones: null, bounds: win.getBounds(), closeGraceTimer: null }
+  const state = {
+    ignoring: true,
+    activeRegion: null,
+    interactiveZones: null,
+    bounds: win.getBounds(),
+    closeGraceTimer: null,
+    menuFocusable: false,
+    menuFocusReturnTarget: 0,
+  }
   win.topBarState = state
+
+  const applyMenuFocus = (requested, { restorePrevious = true } = {}) => {
+    let foreground = 0
+    if (requested) {
+      try { foreground = winFocus.getForegroundWindow() } catch {}
+    }
+    const plan = planMenuFocusChange({
+      currentFocusable: state.menuFocusable,
+      currentReturnTarget: state.menuFocusReturnTarget,
+      requested: Boolean(requested),
+      hasActiveRegion: Boolean(state.activeRegion),
+      foreground,
+      isShellSurface: shellSurfaces.isShellSurface,
+    })
+    state.menuFocusable = plan.focusable
+    state.menuFocusReturnTarget = plan.returnTarget
+    if (plan.takeFocus) {
+      clearCloseGrace(state)
+      win.setFocusable(true)
+      try {
+        const hwnd = win.getNativeWindowHandle().readUInt32LE(0)
+        winFocus.forceForeground(hwnd)
+      } catch (e) {
+        console.error('[main] topbar menu forceForeground error:', e.message)
+      }
+      win.focus()
+    } else if (plan.releaseFocus) {
+      win.setFocusable(false)
+      if (restorePrevious && plan.restoreTarget) winFocus.activateWindow(plan.restoreTarget)
+    }
+  }
 
   win.refreshBarBounds = () => {
     if (win.isDestroyed()) return
@@ -593,6 +633,9 @@ function createTopBarWindow(display) {
     if (hookSurfaceOwnsTopBar(win)) return
     clearCloseGrace(state)
     state.activeRegion = null
+    state.menuFocusable = false
+    state.menuFocusReturnTarget = 0
+    win.setFocusable(false)
     win.watchInputWhileRegionArmed(false)
     win.setAlwaysOnTop(false)
     win.restoreFullBounds()
@@ -661,6 +704,7 @@ function createTopBarWindow(display) {
     } else {
       clearCloseGrace(state)
       state.activeRegion = null
+      applyMenuFocus(false)
       win.setAlwaysOnTop(false)
       win.restoreFullBounds()
       sinkTopBar(shellForTopBar(win))
@@ -670,6 +714,16 @@ function createTopBarWindow(display) {
   }
   ipcMain.on('topbar/set-active-region', onSetActiveRegion)
 
+  const onSetMenuFocus = (event, focused) => {
+    if (win.isDestroyed()) return
+    if (launcher.isLauncherActive(win)) return
+    if (hookSurfaceOwnsTopBar(win)) return
+    if (event.sender !== win.webContents) return
+    applyMenuFocus(Boolean(focused))
+    evaluateTopBarInteraction(win, state)
+  }
+  ipcMain.on('topbar/set-menu-focus', onSetMenuFocus)
+
   const onSetInteractiveZones = (event, zones) => {
     if (win.isDestroyed()) return
     if (event.sender !== win.webContents) return
@@ -678,10 +732,19 @@ function createTopBarWindow(display) {
   }
   ipcMain.on('topbar/set-interactive-zones', onSetInteractiveZones)
 
-  win.on('blur', () => launcher.handleBlur(win))
+  win.on('blur', () => {
+    if (launcher.isLauncherActive(win)) {
+      launcher.handleBlur(win)
+      return
+    }
+    const blurPlan = planMenuBlur(state)
+    if (blurPlan.releaseFocus) applyMenuFocus(false, { restorePrevious: false })
+    if (blurPlan.closeMenu) closeActiveMenu(win, state)
+  })
   win.on('closed', () => {
     clearCloseGrace(state)
     ipcMain.removeListener('topbar/set-active-region', onSetActiveRegion)
+    ipcMain.removeListener('topbar/set-menu-focus', onSetMenuFocus)
     ipcMain.removeListener('topbar/set-interactive-zones', onSetInteractiveZones)
     settledTopBars.delete(win)
   })

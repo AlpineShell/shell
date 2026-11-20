@@ -95,6 +95,7 @@ const FORBIDDEN_BRIDGES = [
   'shell.system.setVolume',
   'shell.system.setMonitorBrightness',
   'topbar.setActiveRegion',
+  'topbar.setMenuFocus',
   'topbar.setInteractiveZones',
 ]
 

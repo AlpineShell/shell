@@ -44,14 +44,33 @@ function ToggleSwitch({ checked, onChange, darkText }: { checked: boolean; onCha
 
 export default function WifiMenu({ state, onToggleRadio, onBack, darkText }: WifiMenuProps) {
     const { passwordFor, password, setPassword, username, setUsername, needsUsername, canSubmit, activate, submitPassword, connectAnyway, cancelPassword, wrongPasswordFor, untrustedServerFor } = useWifiJoin();
+    const usernameRef = useRef<HTMLInputElement>(null);
     const passwordRef = useRef<HTMLInputElement>(null);
     const enabled = state.radio === 'on';
     const networks = state.networks;
     const busy = state.operation !== null;
+    const askingCredentials = passwordFor !== null && networks.some((network) => network.ssid === passwordFor && !network.connected);
 
     useEffect(() => {
         void window.shell.network.wifiScan().catch(() => {});
     }, []);
+
+    useEffect(() => {
+        if (!askingCredentials) return;
+        window.topbar?.setMenuFocus?.(true);
+        const focusInput = () => {
+            const active = document.activeElement;
+            if (active === usernameRef.current || active === passwordRef.current) return;
+            (needsUsername ? usernameRef : passwordRef).current?.focus();
+        };
+        const frame = requestAnimationFrame(focusInput);
+        window.addEventListener("focus", focusInput);
+        return () => {
+            cancelAnimationFrame(frame);
+            window.removeEventListener("focus", focusInput);
+            window.topbar?.setMenuFocus?.(false);
+        };
+    }, [askingCredentials, needsUsername]);
 
     const color = darkText ? "black" : "white";
     const dimColor = darkText ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)";
@@ -124,8 +143,10 @@ export default function WifiMenu({ state, onToggleRadio, onBack, darkText }: Wif
                                 <div className="flex flex-col gap-1.5 px-2 py-1.5">
                                     {needsUsername && (
                                         <input
+                                            ref={usernameRef}
                                             type="text"
                                             value={username}
+                                            onMouseDown={() => window.topbar?.setMenuFocus?.(true)}
                                             onChange={(e) => setUsername(e.target.value)}
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter") {
@@ -145,6 +166,7 @@ export default function WifiMenu({ state, onToggleRadio, onBack, darkText }: Wif
                                             ref={passwordRef}
                                             type="password"
                                             value={password}
+                                            onMouseDown={() => window.topbar?.setMenuFocus?.(true)}
                                             onChange={(e) => setPassword(e.target.value)}
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter") {
