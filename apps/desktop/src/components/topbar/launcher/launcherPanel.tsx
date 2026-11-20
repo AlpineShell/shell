@@ -264,7 +264,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     if (notice) {
       if (event.key === "Escape") {
         event.preventDefault()
-        window.launcher.hide()
+        window.launcher.hide({ restoreFocus: true })
       }
       return
     }
@@ -272,7 +272,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
       event.preventDefault()
       if (actionsOpen) closeActions()
       else if (view.kind !== "search" && !openedOnView) exitView()
-      else window.launcher.hide()
+      else window.launcher.hide({ restoreFocus: true })
       return
     }
     if (view.kind !== "search") {
@@ -346,7 +346,7 @@ export default function LauncherPanel({ mode }: { mode?: string }) {
     <div
       className="fixed inset-0 z-50"
       style={superseded ? { visibility: "hidden", pointerEvents: "none" } : undefined}
-      onMouseDown={() => window.launcher.hide()}
+      onMouseDown={() => window.launcher.hide({ restoreFocus: true })}
     >
       <div
         ref={panelRef}

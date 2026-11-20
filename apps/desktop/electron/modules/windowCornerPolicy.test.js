@@ -8,6 +8,7 @@ const {
   DWMWCP_ROUNDSMALL,
   coversMonitor,
   shouldApplyCornerPreference,
+  shouldRestoreCornerPreference,
   deadTrackedWindows,
   restorableTrackedWindows,
 } = windowCornerPolicy
@@ -84,6 +85,22 @@ describe('shouldApplyCornerPreference', () => {
   it('skips unmanageable windows', () => {
     expect(shouldApplyCornerPreference(candidate({ manageable: false }), TARGET)).toBe(false)
     expect(shouldApplyCornerPreference(null, TARGET)).toBe(false)
+  })
+})
+
+describe('shouldRestoreCornerPreference', () => {
+  it('restores a tracked window once it covers the whole monitor', () => {
+    expect(shouldRestoreCornerPreference(candidate({ bounds: MONITOR }))).toBe(true)
+  })
+
+  it('keeps rounding a tracked window that stays inside the work area', () => {
+    expect(shouldRestoreCornerPreference(candidate({ bounds: WORK_AREA_FILL }))).toBe(false)
+    expect(shouldRestoreCornerPreference(candidate({ bounds: FLOATING }))).toBe(false)
+  })
+
+  it('ignores unmanageable or missing windows', () => {
+    expect(shouldRestoreCornerPreference(candidate({ manageable: false, bounds: MONITOR }))).toBe(false)
+    expect(shouldRestoreCornerPreference(null)).toBe(false)
   })
 })
 

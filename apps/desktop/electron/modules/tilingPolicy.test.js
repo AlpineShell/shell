@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import tilingPolicy from './tilingPolicy.js'
 
-const { isCrossDisplayMove, allowsWindow, snapHotkeyConfigured, acceptsSnapHotkey } = tilingPolicy
+const { isCrossDisplayMove, allowsWindow, isManagedWindowBounds, snapHotkeyConfigured, acceptsSnapHotkey } = tilingPolicy
 
 const SNAP_ON = { enabled: true, hotkeys: true, mode: 'snap' }
 
@@ -29,6 +29,39 @@ describe('allowsWindow', () => {
   it('refuses a handle that is no longer a window', () => {
     expect(allowsWindow(target({ exists: false }))).toBe(false)
     expect(allowsWindow(null)).toBe(false)
+  })
+})
+
+describe('isManagedWindowBounds', () => {
+  const MONITOR = { left: 0, top: 0, right: 1920, bottom: 1080 }
+
+  it('excludes a borderless window filling the whole monitor', () => {
+    expect(isManagedWindowBounds(MONITOR, MONITOR)).toBe(false)
+  })
+
+  it('excludes an overhanging borderless fullscreen window', () => {
+    expect(isManagedWindowBounds({ left: -8, top: -8, right: 1928, bottom: 1088 }, MONITOR)).toBe(false)
+  })
+
+  it('excludes a window spanning beyond its monitor', () => {
+    expect(isManagedWindowBounds({ left: 0, top: 0, right: 3840, bottom: 1080 }, MONITOR)).toBe(false)
+  })
+
+  it('allows a window filling only the work area', () => {
+    expect(isManagedWindowBounds({ left: 0, top: 24, right: 1920, bottom: 1080 }, MONITOR)).toBe(true)
+  })
+
+  it('allows a maximized window whose invisible border sits below the monitor top', () => {
+    expect(isManagedWindowBounds({ left: -8, top: 16, right: 1928, bottom: 1088 }, MONITOR)).toBe(true)
+  })
+
+  it('allows a floating window', () => {
+    expect(isManagedWindowBounds({ left: 200, top: 120, right: 1400, bottom: 900 }, MONITOR)).toBe(true)
+  })
+
+  it('allows a window when either rect is unavailable', () => {
+    expect(isManagedWindowBounds(null, MONITOR)).toBe(true)
+    expect(isManagedWindowBounds(MONITOR, null)).toBe(true)
   })
 })
 
