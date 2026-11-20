@@ -2281,6 +2281,7 @@ declare global {
     }
     topbar: {
       setActiveRegion: (region: TopbarActiveRegion | null) => void
+      setMenuFocus: (focused: boolean) => void
       setInteractiveZones: (zones: TopbarInteractiveZone[]) => void
       color: () => Promise<TopBarColor | null>
       onColorChanged: (callback: (color: TopBarColor) => void) => () => void

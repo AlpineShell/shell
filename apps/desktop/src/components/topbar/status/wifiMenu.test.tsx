@@ -26,10 +26,12 @@ const WIFI_ON: WifiState = {
 
 let wifiScan: ReturnType<typeof vi.fn>
 let wifiConnect: ReturnType<typeof vi.fn>
+let setMenuFocus: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   wifiScan = vi.fn(() => Promise.resolve(WIFI_ON))
   wifiConnect = vi.fn(() => Promise.resolve({ success: true }))
+  setMenuFocus = vi.fn()
   ;(window as unknown as { shell: unknown }).shell = {
     network: {
       wifiScan,
@@ -37,6 +39,7 @@ beforeEach(() => {
       wifiDisconnect: vi.fn(() => Promise.resolve({ success: true })),
     },
   }
+  ;(window as unknown as { topbar: unknown }).topbar = { setMenuFocus }
 })
 
 function renderMenu(state: WifiState) {
@@ -82,9 +85,25 @@ describe('WifiMenu', () => {
 
     const connectAnyway = await screen.findByRole('button', { name: 'Connect anyway' })
     expect(screen.queryByRole('button', { name: 'Join' })).toBeNull()
+    expect(setMenuFocus).toHaveBeenCalledWith(true)
     fireEvent.click(connectAnyway)
 
     expect(wifiConnect).toHaveBeenNthCalledWith(2, 'BBW_BMSW', 'secret', { username: 'student@bbw.ch', trustServer: false })
     expect(wifiConnect).toHaveBeenNthCalledWith(3, 'BBW_BMSW', 'secret', { username: 'student@bbw.ch', trustServer: true })
+  })
+
+  it('requests Ridge keyboard focus while entering a Wi-Fi password and releases it on Escape', async () => {
+    wifiConnect.mockResolvedValueOnce({ success: false, needsPassword: true })
+
+    renderMenu(WIFI_ON)
+    expect(setMenuFocus).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByText('Home'))
+    const password = await screen.findByPlaceholderText('Password')
+    expect(setMenuFocus).toHaveBeenLastCalledWith(true)
+
+    fireEvent.keyDown(password, { key: 'Escape' })
+    expect(screen.queryByPlaceholderText('Password')).toBeNull()
+    expect(setMenuFocus).toHaveBeenLastCalledWith(false)
   })
 })
