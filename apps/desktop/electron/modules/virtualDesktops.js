@@ -14,7 +14,9 @@ const {
   planMoveWindow,
   allStashedWindows,
   windowsToRecover,
+  restoreSwapState,
 } = require('./virtualDesktopsPolicy')
+const stagedUpdate = require('./stagedUpdate')
 
 const user32 = koffi.load('user32.dll')
 const IsWindow = user32.func('__stdcall', 'IsWindow', 'int', ['uintptr_t'])
@@ -137,13 +139,34 @@ function revealAll() {
   saveStash()
 }
 
-function recoverWindowsLeftHidden() {
-  const probe = {
+function windowProbe() {
+  return {
     exists: (hwnd) => IsWindow(hwnd) !== 0,
     isVisible: (hwnd) => IsWindowVisible(hwnd) !== 0,
     processId: (hwnd) => windowEnum.windowProcessId(hwnd),
   }
-  for (const hwnd of windowsToRecover(readStash(), probe)) ShowWindowAsync(hwnd, SW_SHOWNA)
+}
+
+function snapshotState() {
+  return {
+    current: state.current,
+    stashed: state.stashed.map((windows) => windows.map((window) => ({ hwnd: window.hwnd, processId: window.processId }))),
+  }
+}
+
+function restoreFromPendingSwap() {
+  if (!stagedUpdate.isUpdateSwapLaunch(process.argv)) return false
+  const { app } = require('electron')
+  const saved = stagedUpdate.takePendingVirtualDesktops(app.getPath('userData'))
+  const restored = restoreSwapState(saved, windowProbe())
+  if (!restored) return false
+  state = restored
+  saveStash()
+  return true
+}
+
+function recoverWindowsLeftHidden() {
+  for (const hwnd of windowsToRecover(readStash(), windowProbe())) ShowWindowAsync(hwnd, SW_SHOWNA)
   saveStash()
 }
 
@@ -165,10 +188,11 @@ module.exports = {
   closeDesktop,
   moveForegroundWindow,
   revealAll,
+  snapshotState,
 
   start(broadcast) {
     broadcastRef = broadcast
     loadPrefs()
-    recoverWindowsLeftHidden()
+    if (!restoreFromPendingSwap()) recoverWindowsLeftHidden()
   },
 }

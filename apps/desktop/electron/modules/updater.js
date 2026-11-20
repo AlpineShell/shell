@@ -1,6 +1,7 @@
 const path = require('path')
 const fs = require('fs')
 const installer = require('./installer')
+const stagedUpdate = require('./stagedUpdate')
 const frecency = require('./frecency')
 const appIcons = require('./appIcons')
 const licence = require('./licence')
@@ -8,7 +9,6 @@ const releaseVersions = require('../releaseVersions')
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const INITIAL_CHECK_DELAY_MS = 10000
-const UPDATER_PRECOMPILE_DELAY_MS = 60000
 const MAX_LOG_ENTRIES = 50
 const RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 5 * 60 * 1000]
 const DOWNLOAD_STALL_TIMEOUT_MS = 60 * 1000
@@ -35,6 +35,9 @@ let pendingVersion = null
 let announceResult = false
 let broadcastChanged = null
 let downloadedFile = null
+let stagedUpdateInfo = null
+let stageGeneration = 0
+let swapHandler = null
 let retryTimer = null
 let retryAttempt = 0
 let allowRetryForCurrentCheck = false
@@ -191,7 +194,7 @@ function reportChecksOff(announce) {
 }
 
 function runCheck(announce, allowRetry = false) {
-  if (state.status === 'downloading' || state.status === 'downloaded') return
+  if (isUpdatePending()) return
   if (!electronApp().isPackaged) {
     if (announce) {
       pushLog('info', 'Checking for updates…')
@@ -253,7 +256,9 @@ function abandonDownloadForPreference() {
 
 function dropUpdateFromPreviousChannel() {
   abandonDownloadForPreference()
+  stageGeneration += 1
   downloadedFile = null
+  stagedUpdateInfo = null
   setState({ status: 'idle', availableVersion: null, progressPercent: 0, error: null })
 }
 
@@ -278,6 +283,8 @@ function setPreferences(partial) {
   }
   if (!checksChanged) return preferences()
   abandonDownloadForPreference()
+  stageGeneration += 1
+  stagedUpdateInfo = null
   pushLog('info', UPDATE_CHECKS_OFF_MESSAGE)
   if (state.status !== 'downloaded') setState({ status: 'not-available', availableVersion: null, progressPercent: 0, error: null })
   return preferences()
@@ -298,6 +305,38 @@ function startDownload() {
   downloadCancellation = new (updaterLibrary().CancellationToken)()
   armDownloadStallTimer()
   autoUpdater().downloadUpdate(downloadCancellation).catch(() => {})
+}
+
+function stageDownloadedUpdate(filePath, version, generation) {
+  const exeName = path.basename(installer.getInstalledExePath())
+  const currentDir = path.dirname(installer.getInstalledExePath())
+  stagedUpdate.stageInstaller({
+    installerPath: filePath,
+    version,
+    currentVersion: state.currentVersion,
+    installRoot: installer.getInstallDir(),
+    currentDir,
+    exeName,
+  }).then((result) => {
+    if (generation !== stageGeneration) return
+    if (result.ok) {
+      stagedUpdateInfo = { version, exePath: result.exePath, versionDir: result.versionDir }
+      pushLog('info', `Version ${version} ready — click Update now to switch`)
+    } else {
+      stagedUpdateInfo = null
+      pushLog('info', `Downloaded version ${version} — ready to install`)
+    }
+    setState({ status: 'downloaded', availableVersion: version, progressPercent: 100 })
+  }).catch(() => {
+    if (generation !== stageGeneration) return
+    stagedUpdateInfo = null
+    pushLog('info', `Downloaded version ${version} — ready to install`)
+    setState({ status: 'downloaded', availableVersion: version, progressPercent: 100 })
+  })
+}
+
+function setSwapHandler(handler) {
+  swapHandler = typeof handler === 'function' ? handler : null
 }
 
 function bindAutoUpdater(updater) {
@@ -331,8 +370,16 @@ function bindAutoUpdater(updater) {
   updater.on('update-downloaded', (info) => {
     clearDownloadWatch()
     downloadedFile = info.downloadedFile ?? null
-    pushLog('info', `Downloaded version ${info.version} — ready to install`)
-    setState({ status: 'downloaded', availableVersion: info.version, progressPercent: 100 })
+    stagedUpdateInfo = null
+    const generation = ++stageGeneration
+    if (!downloadedFile || !stagedUpdate.canStageVersion(info.version, state.currentVersion)) {
+      pushLog('info', `Downloaded version ${info.version} — ready to install`)
+      setState({ status: 'downloaded', availableVersion: info.version, progressPercent: 100 })
+      return
+    }
+    pushLog('info', `Preparing version ${info.version}…`)
+    setState({ status: 'preparing', availableVersion: info.version, progressPercent: 100 })
+    stageDownloadedUpdate(downloadedFile, info.version, generation)
   })
 
   updater.on('error', (err) => {
@@ -359,7 +406,7 @@ function bindAutoUpdater(updater) {
 }
 
 function isUpdatePending() {
-  return state.status === 'downloading' || state.status === 'downloaded'
+  return state.status === 'downloading' || state.status === 'preparing' || state.status === 'downloaded'
 }
 
 function reportPendingVersionOutcome() {
@@ -375,6 +422,7 @@ function reportPendingVersionOutcome() {
 
 module.exports = {
   isUpdatePending,
+  setSwapHandler,
   INITIAL_CHECK_DELAY_MS,
   CHECK_INTERVAL_MS,
   SIGN_IN_FOR_UPDATES_MESSAGE,
@@ -413,6 +461,20 @@ module.exports = {
       const app = electronApp()
       if (app.isPackaged) {
         pendingVersion = state.availableVersion
+        if (stagedUpdateInfo && fs.existsSync(stagedUpdateInfo.exePath)) {
+          pushLog('info', `Switching to version ${state.availableVersion ?? ''}…`)
+          const swapped = swapHandler
+            ? swapHandler({ targetExePath: stagedUpdateInfo.exePath, targetVersion: state.availableVersion })
+            : installer.startStagedSwap({ targetExePath: stagedUpdateInfo.exePath, targetVersion: state.availableVersion })
+          if (swapped) {
+            if (!swapHandler) {
+              try { frecency.flush() } catch {}
+              try { appIcons.flushDiskCache() } catch {}
+              app.exit(0)
+            }
+            return undefined
+          }
+        }
         pushLog('info', `Installing version ${state.availableVersion ?? ''} — Alpine Shell will restart…`)
         if (downloadedFile && installer.startBrandedUpdate(downloadedFile, state.availableVersion)) {
           try { frecency.flush() } catch {}
@@ -441,8 +503,6 @@ module.exports = {
       clearRetry()
       runCheck(true, true)
     }, INITIAL_CHECK_DELAY_MS)
-
-    setTimeout(() => { installer.ensureUpdaterExeAsync().catch(() => {}) }, UPDATER_PRECOMPILE_DELAY_MS)
 
     setInterval(() => {
       clearRetry()

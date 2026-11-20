@@ -7,6 +7,7 @@ const crypto = require('crypto')
 const os = require('os')
 const revertScript = require('./revertScript')
 const shellExclusivity = require('./shellExclusivity')
+const stagedUpdate = require('./stagedUpdate')
 const logonSession = require('../logonSession')
 const { regQuery } = require('../registryRead')
 const { GPU_PREFERENCES_KEY } = require('./gpuPreference')
@@ -14,6 +15,9 @@ const { GPU_PREFERENCES_KEY } = require('./gpuPreference')
 const PRODUCT_NAME = 'Alpine Shell'
 const INSTALL_DIR_NAME = 'alpine-shell'
 const WINLOGON_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
+const RUN_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'
+const RUN_VALUE_NAME = 'AlpineShell'
+const AUTOSTART_LAUNCH_ARG = '--autostart'
 const UPDATER_CACHE_DIR_NAME = `${INSTALL_DIR_NAME}-updater`
 const SHELL_OPT_OUT_FILE = '.shell-opt-out'
 const SHELL_HANDOFF_FILE = '.shell-handoff'
@@ -41,7 +45,9 @@ function getCanonicalInstallDir() {
 }
 
 function getInstallDir() {
-  if (electronApp().isPackaged && !isPortableRun()) return path.dirname(process.execPath)
+  if (electronApp().isPackaged && !isPortableRun()) {
+    return stagedUpdate.resolveInstallRoot(process.execPath, getCanonicalInstallDir())
+  }
   return getCanonicalInstallDir()
 }
 
@@ -611,6 +617,58 @@ function abandonBrandedUpdate(previousShell) {
   clearUpdateHandoff()
 }
 
+function abandonStagedSwap(previousShell, previousRun) {
+  if (previousShell) {
+    try { regAdd(WINLOGON_KEY, 'Shell', previousShell) } catch {}
+  }
+  if (previousRun) {
+    try { regAdd(RUN_KEY, RUN_VALUE_NAME, previousRun) } catch {}
+  }
+  stagedUpdate.clearPendingSwap(electronApp().getPath('userData'))
+}
+
+function startStagedSwap({ targetExePath, targetVersion, virtualDesktopsState = null, reopenSettingsPage = null }) {
+  if (!electronApp().isPackaged) return false
+  if (!targetExePath || !fs.existsSync(targetExePath)) return false
+  const previousShell = regQuery(WINLOGON_KEY, 'Shell')
+  const previousRun = regQuery(RUN_KEY, RUN_VALUE_NAME)
+  const handShellBack = shellExclusivity.updateHandsShellBackToAlpine({ previousShell, optedOut: isShellOptedOut() })
+  const recorded = stagedUpdate.writePendingSwap(electronApp().getPath('userData'), {
+    fromVersion: typeof electronApp().getVersion === 'function' ? electronApp().getVersion() : '',
+    fromExe: getInstalledExePath(),
+    toVersion: targetVersion || '',
+    toExe: targetExePath,
+    handShellBack,
+    previousShell,
+    virtualDesktops: virtualDesktopsState,
+    reopenSettingsPage,
+  })
+  if (!recorded) {
+    console.error('[installer] Could not write pending swap state — leaving the running shell alone')
+    return false
+  }
+  try {
+    if (handShellBack) {
+      regAdd(WINLOGON_KEY, 'Shell', targetExePath)
+      regAdd(RUN_KEY, RUN_VALUE_NAME, `"${targetExePath}" ${AUTOSTART_LAUNCH_ARG}`)
+    }
+    const nextShell = spawn(
+      targetExePath,
+      [stagedUpdate.UPDATE_SWAP_FLAG, stagedUpdate.WAIT_PID_FLAG, String(process.pid)],
+      { detached: true, stdio: 'ignore', cwd: path.dirname(targetExePath) }
+    )
+    nextShell.on('error', (e) => console.error('[installer] Staged shell failed to start:', e.message))
+    nextShell.unref()
+    if (nextShell.pid) return true
+    abandonStagedSwap(previousShell, previousRun)
+    return false
+  } catch (e) {
+    abandonStagedSwap(previousShell, previousRun)
+    console.error('[installer] Failed to start staged update swap:', e.message)
+    return false
+  }
+}
+
 module.exports = {
   getInstallDir,
   getInstalledExePath,
@@ -641,6 +699,7 @@ module.exports = {
   startExplorerWhenAlpineExits,
   relaunchFromInstalled,
   startBrandedUpdate,
+  startStagedSwap,
   ensureUpdaterExe,
   ensureUpdaterExeAsync,
 }

@@ -99,17 +99,33 @@ function allStashedWindows(state) {
   return state.stashed.flat()
 }
 
-function windowsToRecover(saved, probe) {
-  if (!Array.isArray(saved)) return []
-  return saved.filter((window) =>
-    window !== null
+function isRecoverableWindow(window, probe) {
+  return window !== null
     && typeof window === 'object'
     && Number.isInteger(window.hwnd)
     && Number.isInteger(window.processId)
     && probe.exists(window.hwnd)
     && !probe.isVisible(window.hwnd)
     && probe.processId(window.hwnd) === window.processId
-  ).map((window) => window.hwnd)
+}
+
+function windowsToRecover(saved, probe) {
+  if (!Array.isArray(saved)) return []
+  return saved.filter((window) => isRecoverableWindow(window, probe)).map((window) => window.hwnd)
+}
+
+function restoreSwapState(saved, probe) {
+  if (!saved || typeof saved !== 'object' || !Array.isArray(saved.stashed) || saved.stashed.length === 0 || saved.stashed.length > MAX_DESKTOPS) {
+    return null
+  }
+  const current = Number.isInteger(saved.current) && saved.current >= 0 && saved.current < saved.stashed.length ? saved.current : 0
+  const stashed = saved.stashed.map((desktopWindows, index) => {
+    if (index === current || !Array.isArray(desktopWindows)) return []
+    return desktopWindows
+      .filter((window) => isRecoverableWindow(window, probe))
+      .map((window) => ({ hwnd: window.hwnd, processId: window.processId }))
+  })
+  return { stashed, current }
 }
 
 module.exports = {
@@ -123,4 +139,5 @@ module.exports = {
   planMoveWindow,
   allStashedWindows,
   windowsToRecover,
+  restoreSwapState,
 }

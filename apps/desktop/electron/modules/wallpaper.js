@@ -4,7 +4,7 @@ const path = require('path')
 const koffi = require('koffi')
 const { answerSync } = require('../ipc')
 const { readCurrentUserStringValue, watchCurrentUserStringValue } = require('../registryWatch')
-const { isWallpaperFile, removedPresetReplacement } = require('./wallpaperPresets')
+const { isWallpaperFile, remapMovedPreset, removedPresetReplacement } = require('./wallpaperPresets')
 
 const DESKTOP_REGISTRY_KEY = 'Control Panel\\Desktop'
 const WALLPAPER_REGISTRY_VALUE = 'Wallpaper'
@@ -159,6 +159,15 @@ function listPresetNames(presetsDir) {
 
 function replaceRemovedPreset(wallpaperPath) {
   const presetsDir = getPresetsDir()
+  const remapped = remapMovedPreset({
+    wallpaperPath,
+    presetsDir,
+    exists: fs.existsSync,
+  })
+  if (remapped) {
+    setWallpaper(remapped)
+    return
+  }
   const replacement = removedPresetReplacement({
     wallpaperPath,
     presetsDir,
