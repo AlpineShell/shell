@@ -85,6 +85,10 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
 
     useLayoutEffect(() => {
         if (!open || !shape || pendingClose.current) return;
+        if (superseded) {
+            clearTimeout(shrinkTimer.current);
+            return;
+        }
         if (clipRef.current) {
             clipRef.current.style.height = `${shape.bodyHeight}px`;
             clipRef.current.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
@@ -115,7 +119,7 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
                 armMenuRegion(settled);
             }, REGION_SHRINK_DELAY_MS);
         }
-    }, [open, shape]);
+    }, [open, shape, superseded]);
 
     useEffect(() => {
         if (!open || !shape) return;

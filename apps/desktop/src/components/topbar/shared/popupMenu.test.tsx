@@ -110,6 +110,40 @@ describe("PopupMenu region", () => {
         expect(lastRegion()).toEqual(menuRegion);
     });
 
+    it("takes the chrome and its region back when the surface that superseded it goes away", () => {
+        const trigger = renderMenu();
+        fireEvent.mouseEnter(trigger);
+        const menuSurfaceId = getChromeSurface()?.id;
+        const menuRegion = lastRegion();
+
+        act(() =>
+            setChromeSurface({ id: 9999, centerX: 100, bodyWidth: 100, fullHeight: 60, anchor: "center", contentEl: null }),
+        );
+        setActiveRegion({ top: 24, bottom: 84, left: 0, right: 200 });
+        act(() => {
+            setChromeSurface(null);
+            setActiveRegion(null);
+        });
+
+        expect(getChromeSurface()?.id).toBe(menuSurfaceId);
+        expect(lastRegion()).toEqual(menuRegion);
+    });
+
+    it("leaves the superseding surface's region alone while it is hidden", () => {
+        const trigger = renderMenu();
+        fireEvent.mouseEnter(trigger);
+        growMenuBody(60);
+
+        act(() =>
+            setChromeSurface({ id: 9999, centerX: 100, bodyWidth: 100, fullHeight: 60, anchor: "center", contentEl: null }),
+        );
+        const noticeRegion = { top: 24, bottom: 84, left: 0, right: 200 };
+        setActiveRegion(noticeRegion);
+        act(() => vi.advanceTimersByTime(1000));
+
+        expect(lastRegion()).toEqual(noticeRegion);
+    });
+
     it("clears the region when no menu is open to take it back", () => {
         const trigger = renderMenu();
         fireEvent.mouseEnter(trigger);
