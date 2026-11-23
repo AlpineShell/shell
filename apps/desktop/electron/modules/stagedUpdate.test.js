@@ -8,6 +8,7 @@ const {
   UPDATE_SWAP_FLAG,
   WAIT_PID_FLAG,
   UPDATE_ROLLBACK_FLAG,
+  loadRawFs,
   isSafeVersionName,
   canStageVersion,
   resolveInstallRoot,
@@ -54,6 +55,30 @@ beforeEach(() => {
 
 afterEach(() => {
   fs.rmSync(tempRoot, { recursive: true, force: true })
+})
+
+describe('raw filesystem loading', () => {
+  it('prefers Electron original-fs so staging never triggers ASAR interception', () => {
+    const rawFs = { kind: 'original-fs' }
+    const patchedFs = { kind: 'fs' }
+    const requireModule = vi.fn((id) => (id === 'original-fs' ? rawFs : patchedFs))
+
+    expect(loadRawFs(requireModule)).toBe(rawFs)
+    expect(requireModule).toHaveBeenCalledWith('original-fs')
+    expect(requireModule).not.toHaveBeenCalledWith('fs')
+  })
+
+  it('falls back to fs when original-fs is unavailable outside Electron', () => {
+    const fallbackFs = { kind: 'fs' }
+    const requireModule = vi.fn((id) => {
+      if (id === 'original-fs') throw new Error('Cannot find module original-fs')
+      return fallbackFs
+    })
+
+    expect(loadRawFs(requireModule)).toBe(fallbackFs)
+    expect(requireModule).toHaveBeenCalledWith('original-fs')
+    expect(requireModule).toHaveBeenCalledWith('fs')
+  })
 })
 
 describe('version names and path resolution', () => {
