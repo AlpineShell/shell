@@ -179,6 +179,7 @@ function replaceRemovedPreset(wallpaperPath) {
 
 module.exports = {
   resolveWallpaperPath,
+  onWallpaperPathChange,
   handlers: {
     'windows/wallpaper': () => encode(lastPath),
     'windows/wallpaper-set': async (_event, filePath) => {

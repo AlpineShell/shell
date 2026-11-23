@@ -1,4 +1,12 @@
-const fs = require('fs')
+function loadRawFs(requireModule = require) {
+  try {
+    return requireModule('original-fs')
+  } catch {
+    return requireModule('fs')
+  }
+}
+
+const fs = loadRawFs()
 const path = require('path')
 const crypto = require('crypto')
 const { execFile, execFileSync, spawn } = require('child_process')
@@ -12,6 +20,8 @@ const PENDING_SWAP_FILE = 'pending-swap.json'
 const PENDING_SWAP_MAX_AGE_MS = 5 * 60 * 1000
 const STAGE_TIMEOUT_MS = 5 * 60 * 1000
 const HARDLINK_MIN_BYTES = 64 * 1024
+const HASH_CHUNK_BYTES = 1024 * 1024
+const REMOVE_DIR_OPTIONS = { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }
 const WAIT_POLL_MS = 25
 const DEFAULT_WAIT_PID_TIMEOUT_MS = 8000
 const WINLOGON_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
@@ -83,7 +93,22 @@ function isCompleteVersionDir(dirPath, exeName, fileSystem = fs) {
 }
 
 function hashFileSha256(filePath, fileSystem = fs) {
-  return crypto.createHash('sha256').update(fileSystem.readFileSync(filePath)).digest('hex')
+  const hash = crypto.createHash('sha256')
+  if (typeof fileSystem.openSync !== 'function' || typeof fileSystem.readSync !== 'function' || typeof fileSystem.closeSync !== 'function') {
+    return hash.update(fileSystem.readFileSync(filePath)).digest('hex')
+  }
+  const fd = fileSystem.openSync(filePath, 'r')
+  const buffer = Buffer.allocUnsafe(HASH_CHUNK_BYTES)
+  try {
+    for (;;) {
+      const bytesRead = fileSystem.readSync(fd, buffer, 0, buffer.length, null)
+      if (bytesRead <= 0) break
+      hash.update(bytesRead === buffer.length ? buffer : buffer.subarray(0, bytesRead))
+    }
+  } finally {
+    fileSystem.closeSync(fd)
+  }
+  return hash.digest('hex')
 }
 
 function collectRelativeFiles(rootDir, currentRelative = '', fileSystem = fs) {
@@ -193,19 +218,19 @@ async function stageInstaller({
   const stagingDir = stagingDirFor(installRoot, version)
   try {
     fileSystem.mkdirSync(versionsDirFor(installRoot), { recursive: true })
-    fileSystem.rmSync(stagingDir, { recursive: true, force: true })
+    fileSystem.rmSync(stagingDir, REMOVE_DIR_OPTIONS)
     fileSystem.mkdirSync(stagingDir, { recursive: true })
     await runExtractor(installerPath, stagingDir)
     if (!isCompleteVersionDir(stagingDir, exeName, fileSystem)) {
-      fileSystem.rmSync(stagingDir, { recursive: true, force: true })
+      fileSystem.rmSync(stagingDir, REMOVE_DIR_OPTIONS)
       return { ok: false, reason: 'incomplete-staging' }
     }
     deduplicateWithHardlinks(currentDir, stagingDir, { fileSystem })
-    fileSystem.rmSync(targetDir, { recursive: true, force: true })
+    fileSystem.rmSync(targetDir, REMOVE_DIR_OPTIONS)
     await renameDirWithRetry(stagingDir, targetDir, fileSystem, renameRetryDelayMs)
     return { ok: true, exePath, versionDir: targetDir, reused: false }
   } catch (error) {
-    try { fileSystem.rmSync(stagingDir, { recursive: true, force: true }) } catch {}
+    try { fileSystem.rmSync(stagingDir, REMOVE_DIR_OPTIONS) } catch {}
     return { ok: false, reason: error && error.message ? error.message : 'stage-failed' }
   }
 }
@@ -319,7 +344,7 @@ function pruneOldVersions(installRoot, { currentVersion, previousVersion, fileSy
   for (const name of stale) {
     const dirPath = path.join(versionsRoot, name)
     try {
-      fileSystem.rmSync(dirPath, { recursive: true, force: true })
+      fileSystem.rmSync(dirPath, REMOVE_DIR_OPTIONS)
       if (!fileSystem.existsSync(dirPath)) {
         removed.push(name)
         if (!name.endsWith(STAGING_SUFFIX)) {
@@ -443,6 +468,7 @@ module.exports = {
   UPDATE_SWAP_FLAG,
   WAIT_PID_FLAG,
   UPDATE_ROLLBACK_FLAG,
+  loadRawFs,
   isSafeVersionName,
   canStageVersion,
   resolveInstallRoot,
