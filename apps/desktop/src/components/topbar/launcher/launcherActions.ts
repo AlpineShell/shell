@@ -67,8 +67,8 @@ function windowActions(app: OpenApp, launchItem: LauncherItem | null): LauncherA
 
 function tabActions(tab: BrowserTab): LauncherAction[] {
   return [action("switch", "Switch to tab", AppWindow, () => {
-    window.shell.browserTabs.activate(tab).catch(() => {})
     window.shell.windows.activate(tab.hwnd)
+    window.shell.browserTabs.activate(tab).catch(() => {})
     hideLauncher()
   })]
 }

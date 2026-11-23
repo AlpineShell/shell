@@ -1,7 +1,9 @@
 const launcherPrefs = require('./launcherPrefs')
 const browserTabFavicons = require('./browserTabFavicons')
 const sqliteWorker = require('./sqliteWorker')
+const winFocus = require('./winFocus')
 const { browserTabsBackend } = require('./browserTabsBackend')
+const { activateBrowserTab } = require('./browserTabActivation')
 
 const WARM_DELAY_MS = 30000
 
@@ -33,17 +35,13 @@ async function listTabs() {
   }
 }
 
-async function activateTab(tab) {
-  const hwnd = Math.trunc(Number(tab?.hwnd))
-  const index = Math.trunc(Number(tab?.index))
-  const title = typeof tab?.title === 'string' ? tab.title : ''
-  if (!Number.isFinite(hwnd) || !Number.isFinite(index) || !title) return { ok: false }
-  try {
-    return { ok: await browserTabsBackend().activateTab(hwnd, index, title) }
-  } catch (e) {
-    console.error('[browserTabs] activate error:', e?.message ?? e)
-    return { ok: false }
-  }
+function activateTab(tab) {
+  return activateBrowserTab(tab, {
+    selectTab: (hwnd, index, title) => browserTabsBackend().activateTab(hwnd, index, title),
+    activateWindow: (hwnd) => winFocus.activateWindow(hwnd),
+    ensureWindowFocused: (hwnd, token) => winFocus.ensureWindowFocused(hwnd, token),
+    onError: (e) => console.error('[browserTabs] activate error:', e?.message ?? e),
+  })
 }
 
 function warmBackend() {

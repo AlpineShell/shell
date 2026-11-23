@@ -664,9 +664,9 @@ function createTopBarWindow(display) {
     state.activeRegion = null
     state.menuFocusable = false
     state.menuFocusReturnTarget = 0
-    win.setFocusable(false)
     win.watchInputWhileRegionArmed(false)
     win.setAlwaysOnTop(false)
+    if (win.isFocusable()) win.setFocusable(false)
     win.restoreFullBounds()
     sinkTopBar(shellForTopBar(win))
     state.ignoring = true

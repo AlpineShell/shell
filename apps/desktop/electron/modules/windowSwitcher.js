@@ -20,6 +20,7 @@ let generation = 0
 let pendingSteps = 0
 let activeTopBar = null
 let pendingRestore = null
+let pendingCommitTimer = null
 let altReleasePoll = null
 let launcherCloser = null
 
@@ -99,7 +100,24 @@ function isHeldOpen() {
   return gestureHolding || (altIsDown && keyState.isAltHeld())
 }
 
+function cancelPendingCommit() {
+  if (!pendingCommitTimer) return
+  clearTimeout(pendingCommitTimer)
+  pendingCommitTimer = null
+}
+
+function scheduleActivate(hwnd) {
+  cancelPendingCommit()
+  const commitGeneration = generation
+  pendingCommitTimer = setTimeout(() => {
+    pendingCommitTimer = null
+    if (commitGeneration !== generation) return
+    winFocus.activateWindow(hwnd)
+  }, 0)
+}
+
 async function open() {
+  cancelPendingCommit()
   windowThumbnails.arm()
   const showGeneration = ++generation
   building = true
@@ -133,6 +151,7 @@ async function open() {
 }
 
 function hide() {
+  cancelPendingCommit()
   generation++
   gestureHolding = false
   building = false
@@ -156,7 +175,7 @@ function hide() {
 function commitSelection() {
   const selected = windows[selectedIndex]
   hide()
-  if (selected) winFocus.activateWindow(selected.hwnd)
+  if (selected) scheduleActivate(selected.hwnd)
 }
 
 function commitIfAltReleased() {
