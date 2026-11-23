@@ -102,6 +102,7 @@ describe("NoticeStrip as a chrome surface", () => {
         await emit(notice({ confirm: { label: "Go", cancelLabel: "No" } }));
         await waitFor(() => expect(getChromeSurface()).not.toBeNull());
         const mine = getChromeSurface()?.id;
+        const noticeRegion = setActiveRegion.mock.calls.at(-1)?.[0];
 
         const other = nextSurfaceId();
         await act(async () => {
@@ -115,12 +116,35 @@ describe("NoticeStrip as a chrome surface", () => {
             });
         });
         expect(getChromeSurface()?.id).toBe(other);
-        expect(setActiveRegion).toHaveBeenLastCalledWith(null);
+        expect(setActiveRegion).not.toHaveBeenCalledWith(null);
 
         await act(async () => {
             setChromeSurface(null);
         });
         await waitFor(() => expect(getChromeSurface()?.id).toBe(mine));
+        expect(setActiveRegion).toHaveBeenLastCalledWith(noticeRegion);
+    });
+
+    it("does not clear the region when it hides while another surface owns it", async () => {
+        render(<NoticeStrip />);
+        await emit(notice({ confirm: { label: "Go", cancelLabel: "No" } }));
+        await waitFor(() => expect(getChromeSurface()).not.toBeNull());
+
+        await act(async () => {
+            setChromeSurface({
+                id: nextSurfaceId(),
+                centerX: 100,
+                bodyWidth: 100,
+                fullHeight: 100,
+                anchor: "center",
+                contentEl: null,
+            });
+        });
+        await act(async () => {
+            hideListener?.();
+        });
+
+        expect(setActiveRegion).not.toHaveBeenCalledWith(null);
     });
 
     it("ignores a notice aimed at another display", async () => {

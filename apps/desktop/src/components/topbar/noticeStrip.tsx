@@ -97,7 +97,7 @@ export default function NoticeStrip() {
     useLayoutEffect(() => {
         if (!notice || !shape) return;
         if (superseded) {
-            releaseRegion();
+            holdsRegion.current = false;
             return;
         }
         const alreadyOurs = getChromeSurface()?.id === idRef.current;
