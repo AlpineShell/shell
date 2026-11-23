@@ -47,7 +47,7 @@ function finishHide(topBar) {
   topBar.webContents.send('launcher/hide')
   if (typeof topBar.restorePassiveTopBar === 'function') topBar.restorePassiveTopBar()
   else topBar.setAlwaysOnTop(false)
-  topBar.setFocusable(false)
+  if (typeof topBar.isFocusable !== 'function' || topBar.isFocusable()) topBar.setFocusable(false)
 }
 
 function endEmojiCapture() {

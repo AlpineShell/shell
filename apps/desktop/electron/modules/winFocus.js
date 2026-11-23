@@ -1,4 +1,5 @@
 const koffi = require('koffi')
+const { createWindowActivator } = require('./winFocusPolicy')
 
 const user32 = koffi.load('user32.dll')
 const kernel32 = koffi.load('kernel32.dll')
@@ -21,7 +22,7 @@ const keybd_event = user32.func('__stdcall', 'keybd_event', 'void', ['uint8', 'u
 const SW_MAXIMIZE = 3
 const SW_MINIMIZE = 6
 const SW_RESTORE = 9
-const VK_LMENU = 0xA4
+const VK_MENU = 0x12
 const VK_CONTROL = 0x11
 const VK_V = 0x56
 const FOCUS_SETTLE_MS = 40
@@ -33,6 +34,7 @@ const SWP_NOMOVE = 0x0002
 const SWP_ASYNCWINDOWPOS = 0x4000
 
 const INPUT_KEYBOARD = 1
+const KEYEVENTF_EXTENDEDKEY = 0x0001
 const KEYEVENTF_KEYUP = 0x0002
 const KEYEVENTF_UNICODE = 0x0004
 const INPUT_STRUCT_SIZE = 40
@@ -58,9 +60,13 @@ function closeWindow(hwnd) {
   if (hwnd && IsWindow(hwnd)) PostMessageW(hwnd, WM_CLOSE, 0, 0)
 }
 
+function raiseWindowAsync(hwnd) {
+  SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_ASYNCWINDOWPOS)
+}
+
 function bringToFrontWithoutWaiting(hwnd) {
   SetForegroundWindow(hwnd)
-  SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_ASYNCWINDOWPOS)
+  raiseWindowAsync(hwnd)
 }
 
 function forceForeground(hwnd) {
@@ -84,12 +90,38 @@ function forceForeground(hwnd) {
   }
 }
 
+function allowForegroundFallback(hwnd) {
+  keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY, 0)
+  const ok = SetForegroundWindow(hwnd) !== 0
+  keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+  raiseWindowAsync(hwnd)
+  return ok
+}
+
+const windowActivator = createWindowActivator({
+  isWindow: (hwnd) => IsWindow(hwnd) !== 0,
+  isIconic: (hwnd) => IsIconic(hwnd) !== 0,
+  isHung: (hwnd) => IsHungAppWindow(hwnd) !== 0,
+  getForegroundWindow,
+  windowThreadId: (hwnd) => GetWindowThreadProcessId(hwnd, null),
+  currentThreadId: () => GetCurrentThreadId(),
+  showRestoreAsync: (hwnd) => { ShowWindowAsync(hwnd, SW_RESTORE) },
+  setForegroundWindow: (hwnd) => SetForegroundWindow(hwnd) !== 0,
+  raiseWindowAsync,
+  attachThreadInput: (fromThread, toThread, attach) => AttachThreadInput(fromThread, toThread, attach ? 1 : 0) !== 0,
+  allowForegroundFallback,
+})
+
 function activateWindow(hwnd) {
-  if (!hwnd || !IsWindow(hwnd)) return
-  if (IsIconic(hwnd)) ShowWindowAsync(hwnd, SW_RESTORE)
-  keybd_event(VK_LMENU, 0, 0, 0)
-  SetForegroundWindow(hwnd)
-  keybd_event(VK_LMENU, 0, KEYEVENTF_KEYUP, 0)
+  return windowActivator.activateWindow(hwnd)
+}
+
+function ensureWindowFocused(hwnd, token) {
+  return windowActivator.ensureWindowFocused(hwnd, token)
+}
+
+function currentActivationToken() {
+  return windowActivator.currentActivationToken()
 }
 
 function letLaunchedAppComeForward() {
@@ -161,4 +193,4 @@ function pasteInto(hwnd) {
   return sendToWindowOnceFocused(hwnd, sendPasteShortcut)
 }
 
-module.exports = { activateWindow, forceForeground, getForegroundWindow, letLaunchedAppComeForward, minimizeWindow, maximizeWindow, closeWindow, sendUnicode, insertText, pasteInto }
+module.exports = { activateWindow, ensureWindowFocused, currentActivationToken, forceForeground, getForegroundWindow, letLaunchedAppComeForward, minimizeWindow, maximizeWindow, closeWindow, sendUnicode, insertText, pasteInto }

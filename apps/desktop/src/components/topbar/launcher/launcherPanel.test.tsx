@@ -257,4 +257,22 @@ describe("LauncherPanel", () => {
     window.dispatchEvent(new Event("blur"))
     expect(launcher.hide).toHaveBeenCalledWith()
   })
+
+  it("activates the browser window before selecting a matched browser tab", async () => {
+    const order: string[] = []
+    stubBridges()
+    launcher.showBrowserTabs.mockResolvedValue(true)
+    shell.browserTabs.list.mockResolvedValue([{ hwnd: 77, browser: "chrome", index: 2, selected: false, title: "Alpine Board" }])
+    shell.windows.activate.mockImplementation(() => { order.push("window"); return Promise.resolve() })
+    shell.browserTabs.activate.mockImplementation(() => { order.push("tab"); return Promise.resolve({ ok: true }) })
+    launcher.hide.mockImplementation(() => { order.push("hide") })
+
+    const input = await openLauncher()
+    await type(input, "Alpine Board")
+    press(input, "Enter")
+
+    expect(shell.windows.activate).toHaveBeenCalledWith(77)
+    expect(shell.browserTabs.activate).toHaveBeenCalledWith({ hwnd: 77, browser: "chrome", index: 2, selected: false, title: "Alpine Board" })
+    expect(order).toEqual(["window", "tab", "hide"])
+  })
 })
