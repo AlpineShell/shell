@@ -5,6 +5,8 @@ const SWP_NOSIZE = 0x0001
 const SWP_NOMOVE = 0x0002
 const SWP_NOACTIVATE = 0x0010
 const SINK_FLAGS = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+const GW_OWNER = 4
+const GWLP_HWNDPARENT = -8
 const MONITOR_DEFAULTTONEAREST = 2
 const MONITORINFO_SIZE = 40
 const MAX_CLASS_NAME_CHARS = 256
@@ -19,7 +21,11 @@ function loadNativeBindings() {
   if (nativeBindings) return nativeBindings
   const koffi = require('koffi')
   const user32 = koffi.load('user32.dll')
+  const imm32 = koffi.load('imm32.dll')
   nativeBindings = {
+    ImmGetDefaultIMEWnd: imm32.func('__stdcall', 'ImmGetDefaultIMEWnd', 'uintptr_t', ['uintptr_t']),
+    GetWindow: user32.func('__stdcall', 'GetWindow', 'uintptr_t', ['uintptr_t', 'uint32']),
+    SetWindowLongPtrW: user32.func('__stdcall', 'SetWindowLongPtrW', 'intptr_t', ['uintptr_t', 'int', 'intptr_t']),
     SetWindowPos: user32.func('__stdcall', 'SetWindowPos', 'int', ['uintptr_t', 'uintptr_t', 'int', 'int', 'int', 'int', 'uint32']),
     GetForegroundWindow: user32.func('__stdcall', 'GetForegroundWindow', 'uintptr_t', []),
     IsWindowVisible: user32.func('__stdcall', 'IsWindowVisible', 'int', ['uintptr_t']),
@@ -111,6 +117,28 @@ function sinkPassiveTopBar(shell, shellWindowHandle = 0) {
   }
 }
 
+function releaseImeOwnership(topBarWin) {
+  const topBarHandle = windowHandleNumber(topBarWin)
+  if (!topBarHandle) return false
+  try {
+    const native = loadNativeBindings()
+    const imeWindow = toNum(native.ImmGetDefaultIMEWnd(topBarHandle))
+    if (!imeWindow || toNum(native.GetWindow(imeWindow, GW_OWNER)) !== topBarHandle) return false
+    native.SetWindowLongPtrW(imeWindow, GWLP_HWNDPARENT, 0)
+    return true
+  } catch (e) {
+    console.error('[topBarZOrder] release IME ownership error:', e && e.message)
+    return false
+  }
+}
+
+function raiseTopBar(topBarWin, releaseInputMethodWindow = releaseImeOwnership) {
+  topBarWin.setAlwaysOnTop(true, 'screen-saver')
+  if (topBarWin.isAlwaysOnTop()) return
+  releaseInputMethodWindow(topBarWin)
+  topBarWin.setAlwaysOnTop(true, 'screen-saver')
+}
+
 function isTopBarCoveredByFullscreenApp(topBarWin, isShellSurface) {
   const topBarHandle = windowHandleNumber(topBarWin)
   if (!topBarHandle) return false
@@ -140,5 +168,6 @@ module.exports = {
   planPassiveTopBarOrder,
   isFullscreenForegroundForDisplay,
   sinkPassiveTopBar,
+  raiseTopBar,
   isTopBarCoveredByFullscreenApp,
 }

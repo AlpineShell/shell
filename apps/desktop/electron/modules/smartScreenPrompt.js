@@ -1,3 +1,4 @@
+const { raiseTopBar } = require('./topBarZOrder')
 const protocol = require('./smartScreenHostProtocol')
 
 const HIDE_ANIMATION_MS = 300
@@ -68,7 +69,7 @@ function showNext() {
     try { otherSurfacesCloser() } catch (e) { console.error('[smartScreenPrompt] closing other surfaces failed:', e.message) }
   }
   topBar.webContents.send('topbar/close-menus')
-  topBar.setAlwaysOnTop(true, 'screen-saver')
+  raiseTopBar(topBar)
   topBar.setIgnoreMouseEvents(false)
   topBar.webContents.send('smartscreen/show', { id: next.id, ...next.details })
 }

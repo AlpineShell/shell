@@ -1,3 +1,4 @@
+const { raiseTopBar } = require('./topBarZOrder')
 const displayConfig = require('./displayConfig')
 const displayModePolicy = require('./displayModePolicy')
 
@@ -80,7 +81,7 @@ async function open() {
     try { otherSurfacesCloser() } catch (e) { console.error('[displayModePicker] closing other surfaces failed:', e.message) }
   }
   activeTopBar.webContents.send('topbar/close-menus')
-  activeTopBar.setAlwaysOnTop(true, 'screen-saver')
+  raiseTopBar(activeTopBar)
   activeTopBar.setIgnoreMouseEvents(false)
   setKeyCapture(true)
   sendToPicker('displaymode/show', { ...picker })

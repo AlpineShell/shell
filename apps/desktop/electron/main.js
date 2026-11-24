@@ -167,7 +167,7 @@ const fixedSurfaceKeys = require('./modules/fixedSurfaceKeys')
 const touchpadGestures = require('./modules/touchpadGestures')
 const switcherWindows = require('./modules/switcherWindows')
 const shellSurfaces = require('./modules/shellSurfaces')
-const { sinkPassiveTopBar, isTopBarCoveredByFullscreenApp } = require('./modules/topBarZOrder')
+const { sinkPassiveTopBar, raiseTopBar, isTopBarCoveredByFullscreenApp } = require('./modules/topBarZOrder')
 const activeDisplay = require('./modules/activeDisplay')
 const minimizeAll = require('./modules/minimizeAll')
 const virtualDesktops = require('./modules/virtualDesktops')
@@ -729,7 +729,7 @@ function createTopBarWindow(display) {
     if (region) {
       state.activeRegion = region
       win.setRaisedBounds(region.bottom)
-      win.setAlwaysOnTop(true, 'screen-saver')
+      raiseTopBar(win)
     } else {
       clearCloseGrace(state)
       state.activeRegion = null
