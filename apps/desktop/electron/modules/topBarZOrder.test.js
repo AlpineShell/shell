@@ -1,7 +1,40 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import topBarZOrder from './topBarZOrder.js'
 
-const { HWND_BOTTOM, planPassiveTopBarOrder, isFullscreenForegroundForDisplay } = topBarZOrder
+const { HWND_BOTTOM, planPassiveTopBarOrder, isFullscreenForegroundForDisplay, raiseTopBar } = topBarZOrder
+
+function topBarThatGoesTopmostOn(attempt) {
+  let calls = 0
+  return {
+    setAlwaysOnTop: vi.fn(() => { calls++ }),
+    isAlwaysOnTop: () => calls >= attempt,
+  }
+}
+
+describe('raiseTopBar', () => {
+  it('raises the bar above apps without touching the input method when it goes topmost', () => {
+    const win = topBarThatGoesTopmostOn(1)
+    const releaseImeOwnership = vi.fn()
+
+    raiseTopBar(win, releaseImeOwnership)
+
+    expect(win.setAlwaysOnTop).toHaveBeenCalledTimes(1)
+    expect(win.setAlwaysOnTop).toHaveBeenCalledWith(true, 'screen-saver')
+    expect(releaseImeOwnership).not.toHaveBeenCalled()
+  })
+
+  it('frees the input method window and raises again when Windows refused to make the bar topmost', () => {
+    const win = topBarThatGoesTopmostOn(2)
+    const releaseImeOwnership = vi.fn()
+
+    raiseTopBar(win, releaseImeOwnership)
+
+    expect(releaseImeOwnership).toHaveBeenCalledWith(win)
+    expect(win.setAlwaysOnTop).toHaveBeenCalledTimes(2)
+    expect(win.setAlwaysOnTop).toHaveBeenLastCalledWith(true, 'screen-saver')
+    expect(win.isAlwaysOnTop()).toBe(true)
+  })
+})
 
 const PRIMARY = { left: 0, top: 0, right: 1920, bottom: 1080 }
 const SECONDARY = { left: 1920, top: 0, right: 3840, bottom: 1080 }

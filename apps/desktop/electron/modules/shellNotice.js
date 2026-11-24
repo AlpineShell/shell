@@ -4,6 +4,8 @@
 // changes something. It renders inside the topbar window that already spans the display, so
 // there is no second always-on-top window and the reserved work area never moves.
 
+const { raiseTopBar } = require('./topBarZOrder')
+
 const DEFAULT_TIMEOUT_MS = 7000
 
 let toTopbars = null
@@ -49,7 +51,7 @@ function raiseTopbars(raised) {
         continue
       }
       if (mode !== 'topbar') continue
-      if (raised) win.setAlwaysOnTop(true, 'screen-saver')
+      if (raised) raiseTopBar(win)
       else if (typeof win.restorePassiveTopBar === 'function') win.restorePassiveTopBar()
       else win.setAlwaysOnTop(false)
     }

@@ -9,6 +9,7 @@ function fakeTopBar() {
     webContents: { send: vi.fn() },
     isDestroyed: () => false,
     setAlwaysOnTop: vi.fn(),
+    isAlwaysOnTop: () => true,
     setIgnoreMouseEvents: vi.fn(),
     restorePassiveTopBar: vi.fn(),
   }

@@ -7,6 +7,7 @@ const appActivator = require('../appActivator')
 const appCatalog = require('./appCatalog')
 const appLaunch = require('./appLaunch')
 const shellSurfaces = require('./shellSurfaces')
+const { raiseTopBar } = require('./topBarZOrder')
 
 const SEMANTIC_MODEL_PATH = path.join(__dirname, '..', 'assets', 'semanticSearchModel.bin')
 const CLOSE_ANIMATION_MS = 300
@@ -142,7 +143,7 @@ function showLauncher(displayId, mode) {
   topBar.setFocusable(true)
   topBar.setIgnoreMouseEvents(false)
   applyPanelBounds(topBar, displayId)
-  topBar.setAlwaysOnTop(true, 'screen-saver')
+  raiseTopBar(topBar)
 
   topBar.webContents.send('launcher/show', { displayId, mode: mode || 'apps' })
   try {
@@ -203,7 +204,7 @@ function showEmoji() {
   topBar.webContents.send('topbar/close-menus')
   topBar.setIgnoreMouseEvents(false)
   applyPanelBounds(topBar, display.id)
-  topBar.setAlwaysOnTop(true, 'screen-saver')
+  raiseTopBar(topBar)
   topBar.webContents.send('launcher/show', { displayId: display.id, mode: 'emoji', capture: true })
 
   activeDisplayId = display.id
