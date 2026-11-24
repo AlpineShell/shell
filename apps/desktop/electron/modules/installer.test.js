@@ -370,4 +370,27 @@ describe('revertSystemChanges', () => {
     expect(registry.has(registryKey(GPU_PREFERENCES_KEY, exePath))).toBe(false)
     expect(registry.get(registryKey(WINLOGON_KEY, 'Shell'))).toBe('explorer.exe')
   })
+
+  it('removes the Alpine cursors from the Windows cursor folder and the old app data folder', () => {
+    const previousLocalAppData = process.env.LOCALAPPDATA
+    process.env.LOCALAPPDATA = tempDir
+    const installedCursors = path.join(tempDir, 'Microsoft', 'Windows', 'Cursors', 'Alpine Shell')
+    const legacyCursors = path.join(userDataDir, 'cursors')
+    for (const directory of [installedCursors, legacyCursors]) {
+      fs.mkdirSync(directory, { recursive: true })
+      fs.writeFileSync(path.join(directory, 'Pointer.cur'), '')
+    }
+    registry.set(registryKey('HKCU\\Control Panel\\Cursors', 'Arrow'), path.join(installedCursors, 'Pointer.cur'))
+
+    try {
+      installer.revertSystemChanges()
+    } finally {
+      if (previousLocalAppData === undefined) delete process.env.LOCALAPPDATA
+      else process.env.LOCALAPPDATA = previousLocalAppData
+    }
+
+    expect(fs.existsSync(installedCursors)).toBe(false)
+    expect(fs.existsSync(legacyCursors)).toBe(false)
+    expect(registry.has(registryKey('HKCU\\Control Panel\\Cursors', 'Arrow'))).toBe(false)
+  })
 })

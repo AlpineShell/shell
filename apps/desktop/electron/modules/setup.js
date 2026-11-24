@@ -8,6 +8,7 @@ const explorerShell = require('./explorerShell')
 const shellExclusivity = require('./shellExclusivity')
 const licence = require('./licence')
 const { regQuery } = require('../registryRead')
+const cursorScheme = require('../cursorScheme')
 const { guardHandlers, SETUP_WINDOW, SETTINGS_WINDOW } = require('../trustedSenders')
 
 const LICENCE_REQUIRED = 'licence-required'
@@ -35,26 +36,6 @@ const RUN_KEY = 'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'
 const RUN_VALUE_NAME = 'AlpineShell'
 const AUTOSTART_LAUNCH_ARG = '--autostart'
 
-const CURSOR_REGISTRY_MAP = {
-  'Arrow': 'Pointer.cur',
-  'Help': 'Help.cur',
-  'AppStarting': 'Work.ani',
-  'Wait': 'Busy.ani',
-  'Crosshair': 'Cross.cur',
-  'IBeam': 'Text.cur',
-  'NWPen': 'Handwriting.cur',
-  'No': 'Unavailable.cur',
-  'SizeNS': 'Vert.cur',
-  'SizeWE': 'Horz.cur',
-  'SizeNWSE': 'Dgn1.cur',
-  'SizeNESW': 'Dgn2.cur',
-  'SizeAll': 'Move.cur',
-  'UpArrow': 'Alternate.cur',
-  'Hand': 'Link.cur',
-  'Pin': 'Pin.cur',
-  'Person': 'Person.cur',
-}
-
 function getCursorSourceDir() {
   if (electronApp().isPackaged) {
     return path.join(process.resourcesPath, 'cursor', CURSOR_VARIANT)
@@ -62,38 +43,24 @@ function getCursorSourceDir() {
   return path.join(__dirname, '..', '..', 'public', 'cursor', CURSOR_VARIANT)
 }
 
-function getCursorInstallDir() {
-  return path.join(electronApp().getPath('userData'), 'cursors')
-}
-
 function regAdd(keyPath, valueName, value, type = 'REG_SZ') {
   execFileSync('reg', ['add', keyPath, '/v', valueName, '/t', type, '/d', value, '/f'], { windowsHide: true })
 }
 
 function installCursors() {
-  const sourceDir = getCursorSourceDir()
-  const installDir = getCursorInstallDir()
+  cursorScheme.installCursorScheme({ sourceDir: getCursorSourceDir(), localAppData: process.env.LOCALAPPDATA })
+}
 
-  if (!fs.existsSync(installDir)) {
-    fs.mkdirSync(installDir, { recursive: true })
+function relocateLegacyCursors() {
+  try {
+    const relocated = cursorScheme.relocateLegacyCursorScheme({
+      userDataDir: electronApp().getPath('userData'),
+      localAppData: process.env.LOCALAPPDATA,
+    })
+    if (relocated) console.log('[setup] Moved the Alpine cursors to the Windows cursor folder')
+  } catch (e) {
+    console.error('[setup] Could not move the Alpine cursors:', e.message)
   }
-
-  for (const file of fs.readdirSync(sourceDir)) {
-    fs.copyFileSync(path.join(sourceDir, file), path.join(installDir, file))
-  }
-
-  const cursorKey = 'HKCU\\Control Panel\\Cursors'
-
-  for (const [regName, fileName] of Object.entries(CURSOR_REGISTRY_MAP)) {
-    const cursorPath = path.join(installDir, fileName)
-    if (fs.existsSync(cursorPath)) {
-      regAdd(cursorKey, regName, cursorPath)
-    }
-  }
-
-  regAdd(cursorKey, '', 'Alpine Shell')
-
-  execSync('rundll32.exe user32.dll,UpdatePerUserSystemParameters 1, True', { windowsHide: true })
 }
 
 function getShellExePath() {
@@ -334,12 +301,12 @@ function shouldLeaveShellToExplorer(argv) {
 function getSetupStatus() {
   const currentShell = regQuery('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon', 'Shell')
   const startupEntry = regQuery(RUN_KEY, RUN_VALUE_NAME)
-  const currentCursor = regQuery('HKCU\\Control Panel\\Cursors', '')
+  const currentCursor = regQuery(cursorScheme.CURSOR_KEY, '')
 
   return {
     isShell: currentShell !== null && !currentShell.toLowerCase().includes('explorer.exe'),
     hasStartup: startupEntry !== null,
-    hasCursor: currentCursor === 'Alpine Shell',
+    hasCursor: currentCursor === cursorScheme.CURSOR_SCHEME_NAME,
     gpoBlocked: hasGpoShellOverride(),
     isInstalled: installer.isInstalled(),
     installedVersion: installer.getInstalledVersion(),
@@ -621,6 +588,7 @@ module.exports = {
   takeOverFromExplorer,
   claimDesktop,
   keepExplorerOffDesktop,
+  relocateLegacyCursors,
   beginTestSession,
   startTestSession,
   setShellShutdown,

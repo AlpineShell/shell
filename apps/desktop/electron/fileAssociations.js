@@ -8,6 +8,7 @@ const { app, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { execFileSync } = require('child_process')
+const { regListValues } = require('./registryRead')
 
 const APP_NAME = 'Alpine Shell'
 const PROG_ID_PREFIX = 'AlpineShell'
@@ -64,20 +65,6 @@ function regRead(keyPath, valueName) {
     return match ? match[1].trim() : null
   } catch {
     return null
-  }
-}
-
-function regListValues(keyPath) {
-  try {
-    const output = execFileSync('reg', ['query', keyPath], { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-    const values = []
-    for (const line of String(output).split(/\r?\n/)) {
-      const match = line.match(/^\s{4}(\S.*?)\s{4}REG_\w+\s*(.*)$/)
-      if (match) values.push({ name: match[1].trim(), data: match[2].trim() })
-    }
-    return values
-  } catch {
-    return []
   }
 }
 

@@ -208,6 +208,7 @@ trustedSenders.setAppLocation(APP_LOCATION)
 
 const UPDATE_READY_TIMEOUT_MS = 10000
 const SCREENSHOT_AFTER_LAUNCHER_MS = 200
+const LEGACY_CURSOR_RELOCATION_DELAY_MS = 20000
 const settledTopBars = new Set()
 let topBarSettleListener = null
 let updateReadySignalled = false
@@ -1671,6 +1672,7 @@ function startShellMode(claimedTakeover = null) {
   }
 
   if (!isDev) gpuPreference.applyStoredGpuPreference()
+  setTimeout(setup.relocateLegacyCursors, LEGACY_CURSOR_RELOCATION_DELAY_MS)
 
   if (process.env.ALPINE_TRAY_DEBUG) {
     try {

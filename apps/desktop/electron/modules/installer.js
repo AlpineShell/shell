@@ -10,6 +10,7 @@ const shellExclusivity = require('./shellExclusivity')
 const stagedUpdate = require('./stagedUpdate')
 const logonSession = require('../logonSession')
 const { regQuery } = require('../registryRead')
+const cursorScheme = require('../cursorScheme')
 const { GPU_PREFERENCES_KEY } = require('./gpuPreference')
 
 const PRODUCT_NAME = 'Alpine Shell'
@@ -33,12 +34,6 @@ const SHELL_AUTO_RESTART_TURNED_OFF = '0x0'
 const SHELL_REVERT_FAILED = 'Could not hand the Windows shell back to Explorer.'
 const SHELL_HANDOFF_HELPER_FAILED = 'Windows Explorer could not be brought back, so nothing was changed.'
 const SHELL_HANDOFF_HELPER_MISSING = 'Windows Explorer is registered as your shell, but Alpine Shell could not close itself. Restart Windows to finish.'
-
-const CURSOR_REGISTRY_NAMES = [
-  'Arrow', 'Help', 'AppStarting', 'Wait', 'Crosshair', 'IBeam',
-  'NWPen', 'No', 'SizeNS', 'SizeWE', 'SizeNWSE', 'SizeNESW',
-  'SizeAll', 'UpArrow', 'Hand', 'Pin', 'Person',
-]
 
 function getCanonicalInstallDir() {
   return path.join(process.env.LOCALAPPDATA || '', 'Programs', INSTALL_DIR_NAME)
@@ -404,15 +399,17 @@ function getDirSize(dirPath) {
 }
 
 function restoreDefaultCursors() {
-  const cursorKey = 'HKCU\\Control Panel\\Cursors'
-  for (const name of CURSOR_REGISTRY_NAMES) {
+  const cursorKey = cursorScheme.CURSOR_KEY
+  for (const name of cursorScheme.CURSOR_ROLES) {
     try { regDelete(cursorKey, name) } catch {}
   }
   try { execSync(`reg add "${cursorKey}" /ve /d "" /f`, { windowsHide: true }) } catch {}
   try { execSync('rundll32.exe user32.dll,UpdatePerUserSystemParameters 1, True', { windowsHide: true }) } catch {}
 
-  const cursorDir = path.join(electronApp().getPath('userData'), 'cursors')
-  if (fs.existsSync(cursorDir)) fs.rmSync(cursorDir, { recursive: true, force: true })
+  cursorScheme.removeCursorFiles({
+    userDataDir: electronApp().getPath('userData'),
+    localAppData: process.env.LOCALAPPDATA,
+  })
 }
 
 function clearSetupFlag() {
