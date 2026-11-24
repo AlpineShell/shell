@@ -39,6 +39,7 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
     const regionBottomRef = useRef(0);
     const shrinkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const pendingClose = useRef(false);
+    const claimedChromeThisOpening = useRef(false);
 
     const superseded = useSurfaceSuperseded(idRef.current);
 
@@ -52,6 +53,7 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
                 clearTimeout(closeTimer.current);
                 clearTimeout(shrinkTimer.current);
                 regionBottomRef.current = 0;
+                claimedChromeThisOpening.current = false;
                 suppressReset.current = true;
                 setOpen(false);
                 setShape(null);
@@ -85,10 +87,11 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
 
     useLayoutEffect(() => {
         if (!open || !shape || pendingClose.current) return;
-        if (superseded) {
+        if (superseded && claimedChromeThisOpening.current) {
             clearTimeout(shrinkTimer.current);
             return;
         }
+        claimedChromeThisOpening.current = true;
         if (clipRef.current) {
             clipRef.current.style.height = `${shape.bodyHeight}px`;
             clipRef.current.style.clipPath = `inset(0 0 ${shape.bodyHeight}px 0 round 0 0 ${RADIUS}px ${RADIUS}px)`;
@@ -144,6 +147,7 @@ export default function PopupMenu({ trigger, children, onOpen, triggerBackground
         clearChromeSurface(idRef.current);
         clearTimeout(shrinkTimer.current);
         regionBottomRef.current = 0;
+        claimedChromeThisOpening.current = false;
         armMenuRegion(null);
         clearTimeout(closeTimer.current);
         closeTimer.current = setTimeout(() => {

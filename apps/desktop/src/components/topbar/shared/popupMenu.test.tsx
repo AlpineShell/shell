@@ -144,6 +144,40 @@ describe("PopupMenu region", () => {
         expect(lastRegion()).toEqual(noticeRegion);
     });
 
+    it("takes the chrome over when the pointer moves on from another open menu", () => {
+        const { getByText } = render(
+            <div>
+                <PopupMenu trigger={<span>First</span>}>
+                    <div>First content</div>
+                </PopupMenu>
+                <PopupMenu trigger={<span>Second</span>}>
+                    <div>Second content</div>
+                </PopupMenu>
+            </div>,
+        );
+        fireEvent.mouseEnter(getByText("First").parentElement!.parentElement!);
+        const firstSurfaceId = getChromeSurface()?.id;
+
+        fireEvent.mouseEnter(getByText("Second").parentElement!.parentElement!);
+
+        expect(getChromeSurface()?.id).not.toBe(firstSurfaceId);
+        expect(getChromeSurface()?.contentEl?.textContent).toBe("Second content");
+        expect(getChromeSurface()?.contentEl?.style.visibility).not.toBe("hidden");
+        expect(lastRegion()?.bottom).toBeLessThan(window.innerHeight);
+    });
+
+    it("takes the chrome when it opens while another surface holds it", () => {
+        act(() =>
+            setChromeSurface({ id: 9999, centerX: 100, bodyWidth: 100, fullHeight: 60, anchor: "center", contentEl: null }),
+        );
+        const trigger = renderMenu();
+
+        fireEvent.mouseEnter(trigger);
+
+        expect(getChromeSurface()?.id).not.toBe(9999);
+        expect(getChromeSurface()?.contentEl?.textContent).toBe("Menu content");
+    });
+
     it("clears the region when no menu is open to take it back", () => {
         const trigger = renderMenu();
         fireEvent.mouseEnter(trigger);
