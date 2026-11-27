@@ -13,7 +13,3 @@
 bun install
 bun start   # Windows desktop shell (Vite + Electron)
 ```
-
-## Updates
-
-An installed copy checks `https://auth.alpineshell.com/releases/` with its licence token about every six hours; the service records nothing from that call. Settings has no switch to turn these checks off. A copy whose licence was refunded, released or revoked keeps running the version it has and is simply not offered updates.
